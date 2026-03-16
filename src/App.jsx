@@ -4264,14 +4264,14 @@ function OfferteDocument({doc, settings}) {
             </div>
           </div>
           <div className="qt-meta-bar">
-            <div className="qt-meta-item"><div className="qt-meta-lbl">Datum</div><div className="qt-meta-val">{fmtDate(doc.aangemaakt)}</div></div>
-            <div className="qt-meta-item"><div className="qt-meta-lbl">Geldig tot</div><div className="qt-meta-val">{fmtDate(doc.vervaldatum)}</div></div>
-            <div className="qt-meta-item"><div className="qt-meta-lbl">BTW-regime</div><div className="qt-meta-val">{BTW_REGIMES[doc.btwRegime]?.l?.split("—")[0]?.trim()||"—"}</div></div>
-            <div className="qt-meta-item"><div className="qt-meta-lbl">Betaling</div><div className="qt-meta-val">{doc.betalingstermijn} dagen</div></div>
+            {metaBar.toonDatum!==false&&<div className="qt-meta-item"><div className="qt-meta-lbl">Datum</div><div className="qt-meta-val">{fmtDate(doc.aangemaakt)}</div></div>}
+            {metaBar.toonGeldig!==false&&<div className="qt-meta-item"><div className="qt-meta-lbl">Geldig tot</div><div className="qt-meta-val">{fmtDate(doc.vervaldatum)}</div></div>}
+            {metaBar.toonBtw!==false&&<div className="qt-meta-item"><div className="qt-meta-lbl">BTW-regime</div><div className="qt-meta-val">{BTW_REGIMES[doc.btwRegime]?.l?.split("—")[0]?.trim()||"—"}</div></div>}
+            {metaBar.toonBetaling!==false&&<div className="qt-meta-item"><div className="qt-meta-lbl">Betaling</div><div className="qt-meta-val">{doc.betalingstermijn} dagen</div></div>}
           </div>
-          <div className="qt-parties">
-            <div><div className="qt-party-name">{bed.naam}</div><div className="qt-party-info">{bed.adres}<br/>{bed.gemeente}</div><div style={{fontFamily:"JetBrains Mono,monospace",fontSize:10.5,color:"#64748b",marginTop:3}}>{fmtBtwnr(bed.btwnr)}<br/>IBAN: {bed.iban}</div></div>
-            <div><div className="qt-party-lbl">Klant</div><div className="qt-party-name">{doc.klant?.naam}</div>{doc.klant?.bedrijf&&<div style={{fontWeight:600,color:"#475569",fontSize:12.5}}>{doc.klant.bedrijf}</div>}<div className="qt-party-info">{doc.klant?.adres}<br/>{doc.klant?.gemeente}</div>{doc.klant?.btwnr&&<div style={{fontFamily:"JetBrains Mono,monospace",fontSize:10.5,color:"#64748b"}}>{fmtBtwnr(doc.klant.btwnr)}</div>}</div>
+          <div className="qt-parties" style={{direction: lyt.klant?.positie==="links" ? "rtl" : "ltr"}}>
+            <div style={{direction:"ltr"}}>{bedVelden.naam!==false&&<div className="qt-party-name">{bed.naam}</div>}{bedVelden.adres!==false&&<div className="qt-party-info">{bed.adres}</div>}{bedVelden.gemeente!==false&&<div className="qt-party-info">{bed.gemeente}</div>}<div style={{fontFamily:"JetBrains Mono,monospace",fontSize:10.5,color:"#64748b",marginTop:3}}>{bedVelden.btwnr!==false&&<>{fmtBtwnr(bed.btwnr)}<br/></>}{bedVelden.iban!==false&&<>IBAN: {bed.iban}<br/></>}{bedVelden.tel!==false&&<>{bed.tel}<br/></>}{bedVelden.email!==false&&<>{bed.email}</>}</div></div>
+            <div style={{direction:"ltr"}}><div className="qt-party-lbl">Klant</div>{klantVelden.naam!==false&&<div className="qt-party-name">{doc.klant?.naam}</div>}{klantVelden.bedrijf!==false&&doc.klant?.bedrijf&&<div style={{fontWeight:600,color:"#475569",fontSize:12.5}}>{doc.klant.bedrijf}</div>}{klantVelden.adres!==false&&<div className="qt-party-info">{doc.klant?.adres}</div>}{klantVelden.gemeente!==false&&<div className="qt-party-info">{doc.klant?.gemeente}</div>}{klantVelden.btwnr!==false&&doc.klant?.btwnr&&<div style={{fontFamily:"JetBrains Mono,monospace",fontSize:10.5,color:"#64748b"}}>{fmtBtwnr(doc.klant.btwnr)}</div>}{klantVelden.tel!==false&&doc.klant?.tel&&<div style={{fontSize:11,color:"#64748b"}}>{doc.klant.tel}</div>}{klantVelden.email!==false&&doc.klant?.email&&<div style={{fontSize:11,color:"#64748b"}}>{doc.klant.email}</div>}</div>
           </div>
           {lijnenPerGroep.map(g=>(
             <div key={g.id}>
@@ -4347,6 +4347,14 @@ function FactuurDocument({doc, settings}) {
   const totaalLijnen = (doc.lijnen||[]).length;
   const meerdereGroepen = lijnenPerGroep.length > 1;
   const overvloeit = totaalLijnen > 18 || (meerdereGroepen && totaalLijnen > 12);
+  const lyt = settings?.layout || INIT_SETTINGS.layout || {};
+  const logoOfferte = {
+    w: lyt.logo?.offerte?.breedte || lyt.logo?.breedte || sj.logoBreedte || 140,
+    h: lyt.logo?.offerte?.hoogte || lyt.logo?.hoogte || sj.logoHoogte || 52,
+    zIndex: lyt.logo?.offerte?.zIndex !== undefined ? lyt.logo.offerte.zIndex : 10,
+  };
+  const bedVelden = lyt.bedrijf?.velden || {};
+  const klantVelden = lyt.klant?.velden || {};
 
   return(
     <div className="doc-wrap">
@@ -4409,9 +4417,9 @@ function FactuurDocument({doc, settings}) {
             <div className="qt-meta-item"><div className="qt-meta-lbl">Betalingstermijn</div><div className="qt-meta-val">{doc.betalingstermijn||14} dagen</div></div>
             {doc.offerteNr&&<div className="qt-meta-item"><div className="qt-meta-lbl">Ref. offerte</div><div className="qt-meta-val" style={{fontFamily:"JetBrains Mono,monospace",fontSize:12}}>{doc.offerteNr}</div></div>}
           </div>
-          <div className="qt-parties">
-            <div><div className="qt-party-name">{bed.naam}</div><div className="qt-party-info">{bed.adres}<br/>{bed.gemeente}</div><div style={{fontFamily:"JetBrains Mono,monospace",fontSize:10.5,color:"#64748b",marginTop:3}}>{fmtBtwnr(bed.btwnr)}<br/>IBAN: {bed.iban}</div></div>
-            <div><div className="qt-party-lbl">Gefactureerd aan</div><div className="qt-party-name">{doc.klant?.naam}</div>{doc.klant?.bedrijf&&<div style={{fontWeight:600,color:"#475569",fontSize:12.5}}>{doc.klant.bedrijf}</div>}<div className="qt-party-info">{doc.klant?.adres}<br/>{doc.klant?.gemeente}</div>{doc.klant?.btwnr&&<div style={{fontFamily:"JetBrains Mono,monospace",fontSize:10.5,color:"#64748b"}}>{fmtBtwnr(doc.klant.btwnr)}</div>}</div>
+          <div className="qt-parties" style={{direction: lyt.klant?.positie==="links" ? "rtl" : "ltr"}}>
+            <div style={{direction:"ltr"}}>{bedVelden.naam!==false&&<div className="qt-party-name">{bed.naam}</div>}{bedVelden.adres!==false&&<div className="qt-party-info">{bed.adres}</div>}{bedVelden.gemeente!==false&&<div className="qt-party-info">{bed.gemeente}</div>}<div style={{fontFamily:"JetBrains Mono,monospace",fontSize:10.5,color:"#64748b",marginTop:3}}>{bedVelden.btwnr!==false&&<>{fmtBtwnr(bed.btwnr)}<br/></>}{bedVelden.iban!==false&&<>IBAN: {bed.iban}</>}</div></div>
+            <div style={{direction:"ltr"}}><div className="qt-party-lbl">Gefactureerd aan</div>{klantVelden.naam!==false&&<div className="qt-party-name">{doc.klant?.naam}</div>}{klantVelden.bedrijf!==false&&doc.klant?.bedrijf&&<div style={{fontWeight:600,color:"#475569",fontSize:12.5}}>{doc.klant.bedrijf}</div>}{klantVelden.adres!==false&&<div className="qt-party-info">{doc.klant?.adres}</div>}{klantVelden.gemeente!==false&&<div className="qt-party-info">{doc.klant?.gemeente}</div>}{klantVelden.btwnr!==false&&doc.klant?.btwnr&&<div style={{fontFamily:"JetBrains Mono,monospace",fontSize:10.5,color:"#64748b"}}>{fmtBtwnr(doc.klant.btwnr)}</div>}</div>
           </div>
           {lijnenPerGroep.map(g=>(
             <div key={g.id}>
@@ -5259,54 +5267,31 @@ function InstellingenPage({settings,setSettings,notify}) {
   const [openLyt,setOpenLyt]=useState({algemeen:true});
   const [form,setForm]=useState(JSON.parse(JSON.stringify({...INIT_SETTINGS,...settings,bedrijf:{...INIT_SETTINGS.bedrijf,...settings.bedrijf},email:{...INIT_SETTINGS.email,...settings.email},voorwaarden:{...INIT_SETTINGS.voorwaarden,...settings.voorwaarden},thema:{...INIT_SETTINGS.thema,...settings.thema},sjabloon:{...INIT_SETTINGS.sjabloon,...(settings.sjabloon||{})},layout:{...INIT_SETTINGS.layout,...(settings.layout||{}),logo:{...INIT_SETTINGS.layout.logo,...(settings.layout?.logo||{})},titel:{...INIT_SETTINGS.layout.titel,...(settings.layout?.titel||{})},bedrijf:{...INIT_SETTINGS.layout.bedrijf,...(settings.layout?.bedrijf||{}),velden:{...INIT_SETTINGS.layout.bedrijf.velden,...(settings.layout?.bedrijf?.velden||{})}},klant:{...INIT_SETTINGS.layout.klant,...(settings.layout?.klant||{}),velden:{...INIT_SETTINGS.layout.klant.velden,...(settings.layout?.klant?.velden||{})}},metaBar:{...INIT_SETTINGS.layout.metaBar,...(settings.layout?.metaBar||{})},tabel:{...INIT_SETTINGS.layout.tabel,...(settings.layout?.tabel||{})},footer:{...INIT_SETTINGS.layout.footer,...(settings.layout?.footer||{})},handtekening:{...INIT_SETTINGS.layout.handtekening,...(settings.layout?.handtekening||{})},voorwaarden:{...INIT_SETTINGS.layout.voorwaarden,...(settings.layout?.voorwaarden||{})},notitie:{...INIT_SETTINGS.layout.notitie,...(settings.layout?.notitie||{})},watermark:{...INIT_SETTINGS.layout.watermark,...(settings.layout?.watermark||{})}},productCats:settings.productCats||INIT_SETTINGS.productCats,instTypes:settings.instTypes||INIT_SETTINGS.instTypes,instTypeGroepen:settings.instTypeGroepen||{}})));
   
-  // Scroll preservation - voorkom scroll jump bij wijzigingen
-  const scrollPosRef = useRef(0);
-  const isUpdatingRef = useRef(false);
+  // Scroll preservation - voorkom scroll jump bij alle wijzigingen
+  const contentRef = useRef(null);
+  const scrollTopRef = useRef(0);
   
-  // Intercept alle scroll events tijdens updates
-  useEffect(() => {
-    const handleScroll = (e) => {
-      if (isUpdatingRef.current) {
-        e.preventDefault();
-        e.stopPropagation();
-        window.scrollTo(0, scrollPosRef.current);
-      }
-    };
-    
-    window.addEventListener('scroll', handleScroll, { passive: false, capture: true });
-    return () => window.removeEventListener('scroll', handleScroll, { capture: true });
-  }, []);
+  // Capture scroll positie VOOR elke render
+  if(contentRef.current) {
+    scrollTopRef.current = contentRef.current.scrollTop;
+  }
+  
+  // Herstel scroll positie NA elke render
+  useLayoutEffect(() => {
+    if(!contentRef.current) {
+      contentRef.current = document.querySelector('.content');
+    }
+    if(contentRef.current && scrollTopRef.current > 0) {
+      contentRef.current.scrollTop = scrollTopRef.current;
+    }
+  });
   
   const setS=updFn=>setForm(updFn);
-  const set=(sec,k,v)=>{
-    scrollPosRef.current = window.scrollY;
-    isUpdatingRef.current = true;
-    setForm(p=>({...p,[sec]:{...p[sec],[k]:v}}));
-    setTimeout(() => { isUpdatingRef.current = false; }, 100);
-  };
-  const setL=(sec,k,v)=>{
-    scrollPosRef.current = window.scrollY;
-    isUpdatingRef.current = true;
-    setForm(p=>({...p,layout:{...p.layout,[sec]:{...(p.layout[sec]||{}),[k]:v}}}));
-    setTimeout(() => { isUpdatingRef.current = false; }, 100);
-  };
-  const setLObj=(sec,obj)=>{
-    // Voor nested object updates (bijv. logo.voorblad.breedte)
-    scrollPosRef.current = window.scrollY;
-    isUpdatingRef.current = true;
-    setForm(p=>({...p,layout:{...p.layout,[sec]:obj}}));
-    setTimeout(() => { isUpdatingRef.current = false; }, 100);
-  };
-  const setLV=(sec,k,v)=>{
-    scrollPosRef.current = window.scrollY;
-    isUpdatingRef.current = true;
-    setForm(p=>({...p,layout:{...p.layout,[sec]:{...(p.layout[sec]||{}),velden:{...(p.layout[sec]?.velden||{}),[k]:v}}}}));
-    setTimeout(() => { isUpdatingRef.current = false; }, 100);
-  };
-  const handleRangeChange=(setter)=>(e)=>{
-    scrollPosRef.current = window.scrollY;
-    setter(e);
-  };
+  const set=(sec,k,v)=>setForm(p=>({...p,[sec]:{...p[sec],[k]:v}}));
+  const setL=(sec,k,v)=>setForm(p=>({...p,layout:{...p.layout,[sec]:{...(p.layout[sec]||{}),[k]:v}}}));
+  const setLObj=(sec,obj)=>setForm(p=>({...p,layout:{...p.layout,[sec]:obj}}));
+  const setLV=(sec,k,v)=>setForm(p=>({...p,layout:{...p.layout,[sec]:{...(p.layout[sec]||{}),velden:{...(p.layout[sec]?.velden||{}),[k]:v}}}}));
+  const handleRangeChange=(setter)=>(e)=>setter(e);
   const logoRef=useRef();
   const achtergrondRef=useRef();
   const handleLogo=e=>{const file=e.target.files[0];if(!file)return;const reader=new FileReader();reader.onload=ev=>set("bedrijf","logo",ev.target.result);reader.readAsDataURL(file);};
@@ -5579,7 +5564,7 @@ function InstellingenPage({settings,setSettings,notify}) {
       {tab==="thema"&&<div className="card">
         <div style={{fontWeight:700,fontSize:14,marginBottom:12}}>Kleur van de applicatie en documenten</div>
         <div className="thema-grid">
-          {THEMAS.map(t=>( <div key={t.kleur} className={`thema-item ${form.thema?.kleur===t.kleur?"on":""}`} onClick={()=>{scrollPosRef.current=window.scrollY;setForm(p=>({...p,thema:{naam:t.naam,kleur:t.kleur},bedrijf:{...p.bedrijf,kleur:t.kleur}}));}}>
+          {THEMAS.map(t=>( <div key={t.kleur} className={`thema-item ${form.thema?.kleur===t.kleur?"on":""}`} onClick={()=>{setForm(p=>({...p,thema:{naam:t.naam,kleur:t.kleur},bedrijf:{...p.bedrijf,kleur:t.kleur}}));}}>
               <div className="thema-swatch" style={{background:t.kleur}}/>
               <div className="thema-name">{t.naam}</div>
             </div>
@@ -5587,7 +5572,7 @@ function InstellingenPage({settings,setSettings,notify}) {
         </div>
         <div style={{marginTop:16,display:"flex",alignItems:"center",gap:12}}>
           <div><div style={{fontSize:12.5,fontWeight:600,marginBottom:4}}>Of kies een aangepaste kleur:</div>
-            <input type="color" value={form.thema?.kleur||"#1a2e4a"} onChange={e=>{scrollPosRef.current=window.scrollY;setForm(p=>({...p,thema:{naam:"Aangepast",kleur:e.target.value},bedrijf:{...p.bedrijf,kleur:e.target.value}}));}} style={{width:52,height:38,border:"1.5px solid var(--bdr)",borderRadius:7,cursor:"pointer"}}/></div>
+            <input type="color" value={form.thema?.kleur||"#1a2e4a"} onChange={e=>{setForm(p=>({...p,thema:{naam:"Aangepast",kleur:e.target.value},bedrijf:{...p.bedrijf,kleur:e.target.value}}));}} style={{width:52,height:38,border:"1.5px solid var(--bdr)",borderRadius:7,cursor:"pointer"}}/></div>
           <div style={{flex:1,padding:"12px 14px",borderRadius:8,background:form.thema?.kleur||"#1a2e4a",color:"#fff",fontWeight:700,textAlign:"center",fontSize:13}}>Voorbeeld: {form.thema?.naam||"Aangepast"}</div>
         </div>
         <button className="btn b2" style={{marginTop:14}} onClick={doSave}>Thema opslaan & toepassen</button>
@@ -5614,37 +5599,37 @@ function InstellingenPage({settings,setSettings,notify}) {
           );
           const FR2=({children})=><div className="fr2" style={{gap:10,marginBottom:8}}>{children}</div>;
           const FG=({label,children,hint})=>(<div style={{marginBottom:8}}><label style={{display:"block",fontSize:11.5,fontWeight:600,color:"#64748b",marginBottom:3}}>{label}</label>{children}{hint&&<div style={{fontSize:10.5,color:"#94a3b8",marginTop:2}}>{hint}</div>}</div>);
-          const Chk=({label,val,onChange})=>(<label style={{display:"flex",alignItems:"center",gap:7,cursor:"pointer",fontSize:13,marginBottom:5}}><input type="checkbox" checked={!!val} onChange={e=>{scrollPosRef.current=window.scrollY;onChange(e.target.checked);}} style={{width:15,height:15,cursor:"pointer"}}/>{label}</label>);
-          const PosBtn=({val,onChange})=>(<div style={{display:"flex",gap:6}}>{["links","rechts"].map(v=><button key={v} type="button" style={{padding:"6px 14px",borderRadius:6,border:`2px solid ${val===v?"#2563eb":"#e2e8f0"}`,background:val===v?"#2563eb":"#fff",color:val===v?"#fff":"#374151",fontSize:12.5,fontWeight:600,cursor:"pointer"}} onClick={()=>{scrollPosRef.current=window.scrollY;onChange(v);}}>{v==="links"?"⬅ Links":"Rechts ➡"}</button>)}</div>);
-          const Sld=({label,val,min,max,step=1,unit="",onChange})=>(<div style={{marginBottom:8}}><div style={{display:"flex",justifyContent:"space-between",fontSize:11.5,color:"#64748b",marginBottom:2}}><span>{label}</span><strong>{val||0}{unit}</strong></div><input type="range" min={min} max={max} step={step} value={val||0} onChange={e=>{scrollPosRef.current=window.scrollY;onChange(+e.target.value);}} style={{width:"100%"}}/></div>);
-          const Veld=({label,val,onChange})=>(<label style={{display:"flex",alignItems:"center",gap:7,cursor:"pointer",fontSize:12.5,marginBottom:4,paddingLeft:4}}><input type="checkbox" checked={val!==false} onChange={e=>{scrollPosRef.current=window.scrollY;onChange(e.target.checked);}} style={{width:14,height:14,cursor:"pointer"}}/>{label}</label>);
+          const Chk=({label,val,onChange})=>(<label style={{display:"flex",alignItems:"center",gap:7,cursor:"pointer",fontSize:13,marginBottom:5}}><input type="checkbox" checked={!!val} onChange={e=>{onChange(e.target.checked);}} style={{width:15,height:15,cursor:"pointer"}}/>{label}</label>);
+          const PosBtn=({val,onChange})=>(<div style={{display:"flex",gap:6}}>{["links","rechts"].map(v=><button key={v} type="button" style={{padding:"6px 14px",borderRadius:6,border:`2px solid ${val===v?"#2563eb":"#e2e8f0"}`,background:val===v?"#2563eb":"#fff",color:val===v?"#fff":"#374151",fontSize:12.5,fontWeight:600,cursor:"pointer"}} onClick={()=>{onChange(v);}}>{v==="links"?"⬅ Links":"Rechts ➡"}</button>)}</div>);
+          const Sld=({label,val,min,max,step=1,unit="",onChange})=>(<div style={{marginBottom:8}}><div style={{display:"flex",justifyContent:"space-between",fontSize:11.5,color:"#64748b",marginBottom:2}}><span>{label}</span><strong>{val||0}{unit}</strong></div><input type="range" min={min} max={max} step={step} value={val||0} onChange={e=>{onChange(+e.target.value);}} style={{width:"100%"}}/></div>);
+          const Veld=({label,val,onChange})=>(<label style={{display:"flex",alignItems:"center",gap:7,cursor:"pointer",fontSize:12.5,marginBottom:4,paddingLeft:4}}><input type="checkbox" checked={val!==false} onChange={e=>{onChange(e.target.checked);}} style={{width:14,height:14,cursor:"pointer"}}/>{label}</label>);
           return(<>
             <AccRow id="algemeen" title="Algemeen" icon="📄">
               <FR2>
                 <FG label="Lettertype">
-                  <select className="fc" value={lyt.font||"Inter"} onChange={e=>{scrollPosRef.current=window.scrollY;setForm(p=>({...p,layout:{...p.layout,font:e.target.value}}));}}>
+                  <select className="fc" value={lyt.font||"Inter"} onChange={e=>{setForm(p=>({...p,layout:{...p.layout,font:e.target.value}}));}}>
                     {["Inter","Arial","Helvetica","Georgia","Times New Roman"].map(f=><option key={f}>{f}</option>)}
                   </select>
                 </FG>
                 <FG label={`Tekstgrootte: ${lyt.fontSize||13}px`}>
-                  <input type="range" min={9} max={16} value={lyt.fontSize||13} onChange={e=>{scrollPosRef.current=window.scrollY;setForm(p=>({...p,layout:{...p.layout,fontSize:+e.target.value}}));}} style={{width:"100%",marginTop:8}}/>
+                  <input type="range" min={9} max={16} value={lyt.fontSize||13} onChange={e=>{setForm(p=>({...p,layout:{...p.layout,fontSize:+e.target.value}}));}} style={{width:"100%",marginTop:8}}/>
                 </FG>
               </FR2>
               <FR2>
                 <FG label="Tekstkleur">
                   <div style={{display:"flex",gap:6,alignItems:"center"}}>
-                    <input type="color" value={lyt.tekstKleur||"#1e293b"} onChange={e=>{scrollPosRef.current=window.scrollY;setForm(p=>({...p,layout:{...p.layout,tekstKleur:e.target.value}}));}} style={{width:40,height:36,border:"1.5px solid var(--bdr)",borderRadius:6,cursor:"pointer",padding:2}}/>
+                    <input type="color" value={lyt.tekstKleur||"#1e293b"} onChange={e=>{setForm(p=>({...p,layout:{...p.layout,tekstKleur:e.target.value}}));}} style={{width:40,height:36,border:"1.5px solid var(--bdr)",borderRadius:6,cursor:"pointer",padding:2}}/>
                     <span style={{fontSize:12,color:"#64748b"}}>{lyt.tekstKleur||"#1e293b"}</span>
                   </div>
                 </FG>
                 <FG label="Datumformaat">
-                  <select className="fc" value={lyt.datumFormaat||"kort"} onChange={e=>{scrollPosRef.current=window.scrollY;setForm(p=>({...p,layout:{...p.layout,datumFormaat:e.target.value}}));}}>
+                  <select className="fc" value={lyt.datumFormaat||"kort"} onChange={e=>{setForm(p=>({...p,layout:{...p.layout,datumFormaat:e.target.value}}));}}>
                     <option value="kort">14/03/2026</option>
                     <option value="lang">14 maart 2026</option>
                   </select>
                 </FG>
               </FR2>
-              <Chk label="Paginanummering bij meerdere pagina's" val={lyt.paginaNummering} onChange={v=>{scrollPosRef.current=window.scrollY;setForm(p=>({...p,layout:{...p.layout,paginaNummering:v}}));}}/>
+              <Chk label="Paginanummering bij meerdere pagina's" val={lyt.paginaNummering} onChange={v=>{setForm(p=>({...p,layout:{...p.layout,paginaNummering:v}}));}}/>
             </AccRow>
 
             <AccRow id="logo" title="Logo" icon="🖼">
