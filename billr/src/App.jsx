@@ -802,10 +802,10 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--txt);font-s
 .sb-logo-mark{width:36px;height:36px;border-radius:8px;background:rgba(255,255,255,.15);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;overflow:hidden;border:1.5px solid rgba(255,255,255,.2)}
 .sb-logo-mark img{width:100%;height:100%;object-fit:contain}
 .sb-brand{font-weight:900;font-size:20px;color:rgb(var(--sb-txt-rgb));letter-spacing:-1px;line-height:1}
-.sb-brand-sub{font-size:9.5px;color:rgba(var(--sb-txt-rgb),.4);font-weight:400;text-transform:uppercase;letter-spacing:.5px}
-.sb-sec{font-size:9.5px;text-transform:uppercase;letter-spacing:1.2px;color:rgba(var(--sb-txt-rgb),.3);padding:12px 14px 3px;font-weight:700}
+.sb-brand-sub{font-size:9.5px;color:rgba(var(--sb-txt-rgb),.5);font-weight:400;text-transform:uppercase;letter-spacing:.5px}
+.sb-sec{font-size:9.5px;text-transform:uppercase;letter-spacing:1.2px;color:rgba(var(--sb-txt-rgb),.5);padding:12px 14px 3px;font-weight:700}
 .sb-nav{padding:8px 10px;flex:1}
-.ni{display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:7px;cursor:pointer;color:rgba(var(--sb-txt-rgb),.55);font-size:13px;font-weight:500;transition:all .1s;margin-bottom:1px}
+.ni{display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:7px;cursor:pointer;color:rgba(var(--sb-txt-rgb),.7);font-size:13px;font-weight:500;transition:all .1s;margin-bottom:1px}
 .ni:hover{background:rgba(var(--sb-txt-rgb),.1);color:rgba(var(--sb-txt-rgb),.9)}
 .ni.on{background:rgba(var(--sb-txt-rgb),.18);color:rgb(var(--sb-txt-rgb));font-weight:600}
 .ni-ic{font-size:15px;width:18px;text-align:center;flex-shrink:0}
@@ -1036,7 +1036,7 @@ tr.row-active td{border-top:2px solid #2563eb}
 
 /* ─── PRINT / DOCUMENT STYLES ─── */
 .doc-wrap{background:#f0f4f8;padding:16px}
-.doc-page{background:#fff;max-width:820px;width:100%;margin:0 auto 20px;box-shadow:0 2px 12px rgba(0,0,0,.1);border-radius:4px;overflow:visible;page-break-before:always;box-sizing:border-box;display:flex;flex-direction:column;min-height:297mm;position:relative}
+.doc-page{background:#fff;max-width:820px;width:100%;margin:0 auto 20px;box-shadow:0 2px 12px rgba(0,0,0,.1);border-radius:4px;overflow:visible;box-sizing:border-box;display:flex;flex-direction:column;position:relative}
 .doc-page:first-child{page-break-before:avoid}
 .doc-page-lbl{text-align:center;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#94a3b8;margin-bottom:5px}
 
@@ -1177,80 +1177,84 @@ tr.row-active td{border-top:2px solid #2563eb}
   margin:0;  /* margin:0 verwijdert de browser-header en -footer volledig */
 }
 @media print{
-  /* Kleur en achtergrond behouden */
-  *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important}
-  /* Verberg alles behalve #print-root */
-  body>*:not(#print-root){display:none!important}
-  body{margin:0!important;padding:0!important;background:#fff!important}
-  #print-root,#print-root .doc-wrap{display:block!important;width:100%!important}
+  /* ═══ KRITIEK: margin:0 verwijdert browser URL + paginanummering ═══ */
+  @page{size:A4 portrait;margin:0}
   
-  /* Screen-only/Print-only classes */
+  /* Kleur behouden */
+  *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important;box-shadow:none!important}
+  
+  /* Verberg alles behalve #print-root */
+  body{margin:0!important;padding:0!important;background:#fff!important}
+  body>*:not(#print-root){display:none!important}
+  #print-root{display:block!important;width:100%!important}
+  #print-root .doc-wrap{display:block!important;width:100%!important;padding:0!important;background:#fff!important}
+  
   .screen-only{display:none!important}
   .print-only{display:block!important}
   .no-print{display:none!important}
   
-  /* Elke pagina = precies 1 A4 (297mm × 210mm) */
+  /* ═══ Elke doc-page = exacte A4 pagina (210×297mm) ═══ */
   .doc-page{
     box-shadow:none!important;border-radius:0!important;
-    margin:0!important;max-width:100%!important;width:100%!important;
-    display:block!important;overflow:visible!important;
-    break-before:page!important;page-break-before:always!important;
-    /* Allow overflow for long content - NO max-height constraint */
-    min-height:297mm!important;
+    margin:0!important;max-width:100%!important;width:210mm!important;
+    height:297mm!important;max-height:297mm!important;
+    overflow:hidden!important;
+    display:flex!important;flex-direction:column!important;
+    break-after:page!important;page-break-after:always!important;
     box-sizing:border-box!important;position:relative!important;
   }
-  .doc-page:first-of-type{break-before:avoid!important;page-break-before:avoid!important}
+  .doc-page:last-child{break-after:auto!important;page-break-after:auto!important}
   .doc-page-lbl{display:none!important}
   
-  /* Coverpagina: linker kleurpaneel vult volledig */
+  /* Coverpagina */
   .cov{
-    height:100%!important;
-    min-height:297mm!important;
-    max-height:297mm!important;
-    display:grid!important;
-    grid-template-columns:42% 58%!important;
+    width:100%!important;height:297mm!important;
+    min-height:297mm!important;max-height:297mm!important;
+    display:grid!important;grid-template-columns:42% 58%!important;
+    overflow:hidden!important;
   }
-  .cov-l{height:100%!important;min-height:100%!important;flex:1!important}
+  .cov-l{height:100%!important;min-height:100%!important}
   .cov-r{height:100%!important;box-sizing:border-box!important}
   
-  /* Pagina-padding (vervangt browser-marge) - REDUCED voor minder witte ruimte */
-  .prod-page{padding:8mm 12mm!important;box-sizing:border-box!important;overflow:visible!important}
-  .fct-pg{padding:8mm 12mm!important;min-height:273mm!important;box-sizing:border-box!important;overflow:visible!important}
-  .qt-pg{padding:8mm 12mm!important;min-height:275mm!important;box-sizing:border-box!important;overflow:visible!important}
-  .fct-pg2{padding:8mm 12mm!important;box-sizing:border-box!important;overflow:visible!important}
+  /* Content pagina's: interne padding (omdat @page margin=0) */
+  .prod-page{padding:8mm 12mm!important;box-sizing:border-box!important;flex:1!important;overflow:hidden!important}
+  .fct-pg{padding:8mm 12mm!important;box-sizing:border-box!important;flex:1!important;overflow:hidden!important}
+  .qt-pg{padding:8mm 12mm!important;box-sizing:border-box!important;flex:1!important;overflow:hidden!important}
+  .fct-pg2{padding:8mm 12mm!important;box-sizing:border-box!important;flex:1!important;overflow:hidden!important}
   
-  /* Verberg object/embed/iframe tags in print (werken niet) */
-  object,embed,iframe{display:none!important}
-  
-  /* Tabel niet splitsen */
-  .qt-tbl tr{break-inside:avoid!important;page-break-inside:avoid!important}
-  .qt-tbl tbody{break-inside:auto!important} /* Maar tbody mag wel splitsen over pagina's */
-  .qt-totals{break-inside:avoid!important;page-break-inside:avoid!important}
-  .qt-sign{break-inside:avoid!important;page-break-inside:avoid!important}
-  .qt-betaal{break-inside:avoid!important;page-break-inside:avoid!important}
-  .qt-voorschot{break-inside:avoid!important;page-break-inside:avoid!important}
-  .qt-notes{break-inside:avoid!important;page-break-inside:avoid!important}
-  .qt-confirm-link{break-inside:avoid!important;page-break-inside:avoid!important}
-  .qt-fiches{break-inside:avoid!important;page-break-inside:avoid!important}
-  .grp-hdr{break-after:avoid!important;page-break-after:avoid!important}
-  .grp-sub{break-inside:avoid!important;page-break-inside:avoid!important}
-  .prod-item{break-inside:avoid!important;page-break-inside:avoid!important}
-  .qt-meta-bar{break-inside:avoid!important;page-break-inside:avoid!important}
-  .qt-parties{break-inside:avoid!important;page-break-inside:avoid!important}
-  /* Footer altijd onderaan op de pagina */
+  /* Footer: altijd onderaan de pagina */
   .qt-footer{
-    position:absolute!important;bottom:0!important;left:0!important;right:0!important;
+    margin-top:auto!important;flex-shrink:0!important;
     break-inside:avoid!important;page-break-inside:avoid!important;
   }
+  
+  /* Technische fiche pagina's */
+  .fiche-print-page{
+    width:210mm!important;height:297mm!important;
+    overflow:hidden!important;box-sizing:border-box!important;
+    break-after:page!important;page-break-after:always!important;
+    display:flex!important;flex-direction:column!important;
+  }
+  .fiche-print-page:last-child{break-after:auto!important;page-break-after:auto!important}
+  .fiche-print-page img{
+    width:100%!important;height:auto!important;
+    max-height:270mm!important;
+    object-fit:contain!important;display:block!important;
+  }
+  .fiche-screen-embed{display:none!important}
+  .fiche-print-images{display:block!important}
+  
+  /* Tabel regels: niet splitsen */
+  .qt-tbl tr{break-inside:avoid!important;page-break-inside:avoid!important}
+  .qt-totals,.qt-sign,.qt-betaal,.qt-voorschot,.qt-notes,.qt-confirm-link,.qt-fiches{break-inside:avoid!important;page-break-inside:avoid!important}
+  .grp-hdr{break-after:avoid!important;page-break-after:avoid!important}
+  .grp-sub,.prod-item,.qt-meta-bar,.qt-parties{break-inside:avoid!important;page-break-inside:avoid!important}
+  
   /* Modal chrome verbergen */
   .mo{position:static!important;background:transparent!important;padding:0!important;display:block!important}
   .mdl{box-shadow:none!important;border-radius:0!important;max-width:100%!important;max-height:none!important;overflow:visible!important;height:auto!important;display:block!important}
   .mh,.mf,.bulk-bar,.mob-nav,.fab-menu,.topbar,.sb{display:none!important}
   .mb-body{padding:0!important;overflow:visible!important;max-height:none!important;height:auto!important}
-  /* PDF technische fiche */
-  object[type="application/pdf"]{height:240mm!important;width:100%!important}
-  /* Geen box-shadow of rondingen op print */
-  *{box-shadow:none!important}
 }
 
 /* ─── INSTELLINGEN PREVIEW RESPONSIVE ─── */
@@ -1532,12 +1536,14 @@ export default function App() {
   },[]);
 
   // ═══ EMAILJS INITIALISATIE ═══
+  // Re-init wanneer settings veranderen (zodat de juiste public key gebruikt wordt)
   useEffect(() => {
     if(window.emailjs) {
-      window.emailjs.init("04zsVAk5imDpo-8GJ");
-      console.log("✅ EmailJS geïnitialiseerd");
+      const pubKey = settings?.email?.emailjsPublicKey || "04zsVAk5imDpo-8GJ";
+      window.emailjs.init(pubKey);
+      console.log("✅ EmailJS geïnitialiseerd met key:", pubKey.slice(0,6) + "...");
     }
-  }, []);
+  }, [settings?.email?.emailjsPublicKey]);
 
 
   // saveKey: async, dual-write to Supabase + localStorage
@@ -1584,7 +1590,10 @@ export default function App() {
     document.documentElement.style.setProperty("--theme", kleur);
     // Contrast: lichte thema's krijgen donkere tekst, donkere thema's witte tekst
     const lum = getLuminance(kleur);
-    const rgb = lum > 0.35 ? "30,41,59" : "255,255,255";
+    // Enhanced contrast: use text-shadow for readability on any background
+    const rgb = lum > 0.4 ? "30,41,59" : "255,255,255";
+    // Add text-shadow for light themes to ensure readability
+    document.documentElement.style.setProperty("--sb-text-shadow", lum > 0.4 ? "none" : "0 1px 2px rgba(0,0,0,.3)");
     document.documentElement.style.setProperty("--sb-txt-rgb", rgb);
   }, [settings]);
 
@@ -1630,26 +1639,57 @@ export default function App() {
       return false;
     }
     
-    const serviceId = "service_qrkvr0d";
-    const templateId = type === "offerte" ? "template_5nckw9f" : "template_pe412p8";
+    // Gebruik instellingen, fallback naar hardcoded defaults
+    const emailCfg = settings?.email || {};
+    const serviceId = emailCfg.emailjsServiceId || "service_qrkvr0d";
+    const templateId = type === "offerte" 
+      ? (emailCfg.emailjsTemplateOfferte || "template_5nckw9f") 
+      : (emailCfg.emailjsTemplateFactuur || "template_pe412p8");
+    
+    // Re-init met juiste public key (voor het geval settings veranderd zijn)
+    const pubKey = emailCfg.emailjsPublicKey || "04zsVAk5imDpo-8GJ";
+    window.emailjs.init(pubKey);
     
     const klantData = klanten.find(k => k.id === doc.klantId);
     const totals = calcTotals(doc.lijnen || []);
+    const bed = settings?.bedrijf || {};
     
     const templateParams = {
+      // Standaard variabelen (voor alle templates)
+      to_email: recipientEmail,
+      to_name: klantData?.naam || doc.klant?.naam || "Klant",
       customer_name: klantData?.naam || doc.klant?.naam || "Klant",
+      from_name: bed.naam || "BILLR",
+      reply_to: emailCfg.eigen || bed.email || "",
+      subject: type === "offerte" 
+        ? `Offerte ${doc.nummer} — ${bed.naam||""}` 
+        : `Factuur ${doc.nummer} — ${bed.naam||""}`,
+      // Document specifieke variabelen
       [type === "offerte" ? "quote_number" : "invoice_number"]: doc.nummer,
       [type === "offerte" ? "quote_date" : "invoice_date"]: fmtDate(doc.datum || doc.aangemaakt),
       [type === "offerte" ? "valid_until" : "due_date"]: fmtDate(doc.vervaldatum),
-      total_amount: totals.totaal.toFixed(2).replace(".", ","),
+      total_amount: fmtEuro(totals.totaal),
       message: doc.notities || "",
-      to_email: recipientEmail
+      // Extra variabelen voor flexibele templates
+      html_body: type === "offerte"
+        ? (emailCfg.templateOfferte||"").replace("{naam}",klantData?.naam||doc.klant?.naam||"Klant").replace("{nummer}",doc.nummer).replace("{datum}",fmtDate(doc.aangemaakt)).replace("{vervaldatum}",fmtDate(doc.vervaldatum)).replace("{bedrijf}",bed.naam||"").replace("{tel}",bed.tel||"").replace("{totaal}",fmtEuro(totals.totaal)).replace("{iban}",bed.iban||"").replace("{technische_info}","")
+        : (emailCfg.templateFactuur||"").replace("{naam}",klantData?.naam||doc.klant?.naam||"Klant").replace("{nummer}",doc.nummer).replace("{datum}",fmtDate(doc.aangemaakt)).replace("{vervaldatum}",fmtDate(doc.vervaldatum)).replace("{bedrijf}",bed.naam||"").replace("{totaal}",fmtEuro(totals.totaal)).replace("{iban}",bed.iban||""),
     };
+    
+    console.log(`📧 Sending ${type} via EmailJS: service=${serviceId}, template=${templateId}, to=${recipientEmail}`);
     
     try {
       const response = await window.emailjs.send(serviceId, templateId, templateParams);
       if(response.status === 200) {
         notify(`📧 ${type === "offerte" ? "Offerte" : "Factuur"} verzonden naar ${recipientEmail}`, "ok");
+        
+        // CC naar eigen email indien ingesteld
+        if(emailCfg.cc) {
+          try {
+            await window.emailjs.send(serviceId, templateId, {...templateParams, to_email: emailCfg.cc});
+            console.log(`📧 CC verstuurd naar ${emailCfg.cc}`);
+          } catch(_) { console.warn("CC verzending mislukt"); }
+        }
         
         // Log de verzending
         if(type === "offerte") {
@@ -1667,7 +1707,7 @@ export default function App() {
       }
     } catch(error) {
       console.error("EmailJS Error:", error);
-      notify("❌ Fout bij verzenden email: " + error.text, "er");
+      notify(`❌ Email mislukt: ${error?.text || error?.message || "Controleer EmailJS instellingen"}`, "er");
       return false;
     }
   };
@@ -1753,6 +1793,7 @@ export default function App() {
     ["aanmaningen","🔔","Aanmaningen",aanmaningen.filter(a=>a.status==="openstaand").length||null],
     ["klanten","👥","Klanten",null],
     ["producten","📦","Producten",null],
+    ["agenda","📅","Agenda",null],
     ["tijdregistratie","⏱","Tijdregistratie",null],
     ["dossiers","📁","Dossiers",null],
     ["garanties","🛡","Garanties",null],
@@ -1832,6 +1873,7 @@ export default function App() {
             {pg==="facturen"&&<FacturenPage facturen={factMet} settings={settings} initFilter={pgFilter} onView={d=>setViewDoc({doc:d,type:"factuur"})} onEdit={f=>{setEditFact(f);setFactuurWizOpen(true);}} onStatus={updFact} onBulkStatus={bulkUpdFact} onDelete={id=>{setFacturen(p=>p.filter(f=>f.id!==id));notify("Verwijderd")}} notify={notify} onEmail={d=>setEmailModal({doc:d,type:"factuur"})} onBetaling={f=>setBetalingModal(f)} onAanmaning={f=>setAanmaningModal(f)} onNew={()=>{setEditFact(null);setFactuurWizOpen(true)}}/>}
             {pg==="klanten"&&<KlantenPage klanten={klanten} offertes={offertes} facturen={factMet} view={klantView} onEdit={k=>setKlantModal(k)} onDelete={id=>{setKlanten(p=>p.filter(k=>k.id!==id));notify("Klant verwijderd")}}/>}
             {pg==="producten"&&<ProductenPage producten={producten} settings={settings} onEdit={p=>setProdModal(p)} onDelete={id=>{setProducten(p=>p.filter(x=>x.id!==id));notify("Verwijderd")}} onToggle={id=>setProducten(p=>p.map(x=>x.id===id?{...x,actief:!x.actief}:x))} onEnrich={upd=>setProducten(p=>p.map(x=>x.id===upd.id?upd:x))}/>}
+            {pg==="agenda"&&<div style={{height:"calc(100vh - 70px)",margin:"-22px",overflow:"hidden"}}><iframe src={`${window.location.origin}/planner.html`} style={{width:"100%",height:"100%",border:"none"}} title="Agenda"/></div>}
             {pg==="rapportage"&&<Rapportage offertes={offertes} facturen={factMet}/>}
             {pg==="instellingen"&&<InstellingenPage settings={settings} setSettings={s=>{setSettings(s);notify("Instellingen opgeslagen ✓");}} notify={notify}/>}
             {pg==="creditnotas"&&<CreditnotasPage creditnotas={creditnotas} facturen={facturen} onDelete={id=>{setCreditnotas(p=>p.filter(c=>c.id!==id));notify("Verwijderd");}} onCreate={()=>setCreditnotaModal({})} onView={cn=>setViewDoc({doc:cn,type:"creditnota"})} settings={settings}/>}
@@ -1865,76 +1907,24 @@ export default function App() {
       {prodModal!==null&&<ProductModal prod={prodModal} settings={settings} onSave={p=>{if(p.id){setProducten(pr=>pr.map(x=>x.id===p.id?p:x));notify("Product opgeslagen");}else{setProducten(pr=>[{...p,id:uid(),actief:true},...pr]);notify("Product toegevoegd ✓");}setProdModal(null);}} onClose={()=>setProdModal(null)}/>}
       {klantImportOpen&&<KlantImportModal onImport={nieuweKlanten=>{setKlanten(p=>[...nieuweKlanten.map(k=>({...k,id:uid(),aangemaakt:new Date().toISOString()})),...p]);notify(`${nieuweKlanten.length} klanten geïmporteerd ✓`);setKlantImportOpen(false);}} onClose={()=>setKlantImportOpen(false)} notify={notify}/>}
       {importModal&&<ImportModal onImport={nieuweProds=>{setProducten(p=>[...nieuweProds.map(x=>({...x,id:uid(),actief:true})),...p]);notify(`${nieuweProds.length} producten geïmporteerd ✓`);setImportModal(false);}} onClose={()=>setImportModal(false)} notify={notify}/>}
-      {emailModal&&(
-        <div className="modal-bg" onClick={() => setEmailModal(null)}>
-          <div className="modal" style={{maxWidth: 500}} onClick={e => e.stopPropagation()}>
-            <div className="modal-h">
-              <div className="mh-ic">📧</div>
-              <div className="mh-txt">
-                <div className="mh-t">Email Versturen</div>
-                <div className="mh-sub">{emailModal.type === "offerte" ? "Offerte" : "Factuur"} {emailModal.doc.nummer}</div>
-              </div>
-              <button className="modal-x" onClick={() => setEmailModal(null)}>✕</button>
-            </div>
-            
-            <div className="modal-b">
-              <div style={{marginBottom: 20}}>
-                <label className="lbl">Naar (email adres)</label>
-                <input 
-                  type="email" 
-                  className="fc" 
-                  id="email-recipient"
-                  defaultValue={klanten.find(k => k.id === emailModal.doc.klantId)?.email || emailModal.doc.klant?.email || ""}
-                  placeholder="klant@email.be"
-                />
-              </div>
-              
-              <div style={{
-                background: "#f0f9ff", 
-                border: "1px solid #bfdbfe", 
-                borderRadius: 8, 
-                padding: 15,
-                marginBottom: 20,
-                fontSize: 13,
-                color: "#1e40af"
-              }}>
-                <div style={{fontWeight: 600, marginBottom: 5}}>Template gebruikt:</div>
-                <div>✉️ Professionele HTML email met W-Charge branding</div>
-                {emailModal.type === "offerte" && (
-                  <div style={{marginTop: 5}}>
-                    ✅ Inclusief link naar bevestigingspagina
-                  </div>
-                )}
-              </div>
-              
-              <div className="flex gap2">
-                <button 
-                  className="btn-sec" 
-                  onClick={() => setEmailModal(null)}
-                  style={{flex: 1}}
-                >
-                  Annuleren
-                </button>
-                <button 
-                  className="btn" 
-                  style={{flex: 1}}
-                  onClick={async () => {
-                    const email = document.getElementById("email-recipient").value;
-                    if(!email || !email.includes("@")) {
-                      notify("Voer een geldig email adres in", "er");
-                      return;
-                    }
-                    const success = await sendEmail(emailModal.type, emailModal.doc, email);
-                    if(success) setEmailModal(null);
-                  }}
-                >
-                  📧 Verstuur Email
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      {emailModal&&<EmailModal 
+        doc={emailModal.doc} 
+        type={emailModal.type} 
+        settings={settings} 
+        onClose={()=>setEmailModal(null)} 
+        onSend={(success)=>{
+          if(success) {
+            if(emailModal.type==="offerte") {
+              updOff(emailModal.doc.id, {status:"verstuurd", logActie:`📧 Verzonden`});
+            } else {
+              updFact(emailModal.doc.id, {status:"verstuurd", logActie:`📧 Verzonden`});
+            }
+            notify(`📧 ${emailModal.type==="offerte"?"Offerte":"Factuur"} ${emailModal.doc.nummer} verzonden!`);
+            setEmailModal(null);
+          }
+        }}
+        onAcceptToken={(docId, token) => setAcceptTokens(p=>({...p,[docId]:token}))}
+      />}
       {creditnotaModal!==null&&<CreditnotaModal facturen={facturen} creditnota={creditnotaModal} settings={settings} onSave={cn=>{if(cn.id){setCreditnotas(p=>p.map(x=>x.id===cn.id?cn:x));}else{const n={...cn,id:uid(),nummer:nextNr("CN",creditnotas,"nummer"),aangemaakt:new Date().toISOString(),type:"creditnota"};setCreditnotas(p=>[n,...p]);if(cn.factuurId){updFact(cn.factuurId,{gecrediteerd:true});}}notify("Creditnota opgeslagen ✓");setCreditnotaModal(null);}} onClose={()=>setCreditnotaModal(null)}/>}
       {betalingModal&&<BetalingModal factuur={betalingModal} betalingen={betalingen.filter(b=>b.factuurId===betalingModal.id)} onSave={b=>{const nb={...b,id:uid(),factuurId:betalingModal.id,datum:b.datum||today(),aangemaakt:new Date().toISOString()};setBetalingen(p=>[nb,...p]);const totBet=betalingen.filter(x=>x.factuurId===betalingModal.id).reduce((s,x)=>s+x.bedrag,0)+nb.bedrag;const factTot=calcTotals(betalingModal.lijnen||[]).totaal;if(totBet>=factTot-0.01)updFact(betalingModal.id,{status:"betaald"});else updFact(betalingModal.id,{status:"gedeeltelijk"});notify("Betaling geregistreerd ✓");setBetalingModal(null);}} onClose={()=>setBetalingModal(null)}/>}
       {aanmaningModal&&<AanmaningModal factuur={aanmaningModal} settings={settings} onSend={(am)=>{setAanmaningen(p=>[{...am,id:uid(),aangemaakt:new Date().toISOString(),status:"verzonden",verzonden:today()},...p]);notify("Aanmaning verzonden ✓");setAanmaningModal(null);}} onClose={()=>setAanmaningModal(null)}/>}
@@ -2051,13 +2041,13 @@ function Dashboard({offertes, facturen, onGoto, onNew, onFactuur, settings}) {
           </div>}
           {settings.dashboardWidgets?.agenda!==false&&<div className="card">
             <div className="card-h" style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-              <div className="card-t">📅 Planningsagenda</div>
+              <div className="card-t">📅 Agenda</div>
               <button className="btn btn-sm" onClick={()=>window.open(`${window.location.origin}/planner.html`,'_blank')}>↗ Open volledig</button>
             </div>
             <iframe 
               src="./planner.html" 
               style={{width:"100%",height:"500px",border:"1px solid #e2e8f0",borderRadius:8,marginTop:10}}
-              title="W-Charge Planner"
+              title="Agenda"
             />
           </div>}
         </div>
@@ -2556,9 +2546,12 @@ async function fetchAIImageUrl(naam, merk) {
 
 function ProductenPage({producten,settings,onEdit,onDelete,onToggle,onEnrich}) {
   const [q,setQ]=useState("");const [cat,setCat]=useState("alle");const [enriching,setEnriching]=useState(null);
+  const [prodView,setProdView]=useState(settings?.prodView||"tile");
   const [sel,setSel]=useState(new Set());
   const [bulkPrijsPct,setBulkPrijsPct]=useState("");
   const [showBulkPrijs,setShowBulkPrijs]=useState(false);
+  const [showBulkCat,setShowBulkCat]=useState(false);
+  const [bulkCat,setBulkCat]=useState("");
   const toggleSel=id=>setSel(p=>{const s=new Set(p);s.has(id)?s.delete(id):s.add(id);return s;});
   const selAll=()=>setSel(q2=>{if(q2.size===list.length&&q2.size>0)return new Set();return new Set(list.map(p=>p.id));});
   const doBulkDelete=()=>{ if(window.confirm(`${sel.size} producten verwijderen?`)){[...sel].forEach(id=>onDelete(id));setSel(new Set());}};
@@ -2573,7 +2566,7 @@ function ProductenPage({producten,settings,onEdit,onDelete,onToggle,onEnrich}) {
   const doEnrich = async(prod) => {
     setEnriching(prod.id);
     try {
-      const r=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:600,tools:[{type:"web_search_20250305",name:"web_search"}],messages:[{role:"user",content:`Product: "${prod.naam}" merk "${prod.merk||"onbekend"}". Geef als JSON (geen markdown): {"omschr":"NL beschrijving max 100 tekens","specs":["spec1","spec2","spec3","spec4"],"imageUrl":"directe afbeeldings-url van fabrikant"}`}]})});
+      const r=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","anthropic-dangerous-direct-browser-access":"true"},body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:600,tools:[{type:"web_search_20250305",name:"web_search"}],messages:[{role:"user",content:`Product: "${prod.naam}" merk "${prod.merk||"onbekend"}". Zoek op het web naar dit product. Geef als JSON (geen markdown): {"omschr":"NL beschrijving max 100 tekens","specs":["spec1","spec2","spec3","spec4"],"imageUrl":"directe afbeeldings-url van fabrikant website"}`}]})});
       const data=await r.json();const txt=data.content?.filter(c=>c.type==="text").map(c=>c.text).join("")||"";
       const clean=txt.replace(/```json|```/g,"").trim();const parsed=JSON.parse(clean);
       onEnrich({...prod,omschr:parsed.omschr||prod.omschr,specs:parsed.specs||prod.specs||[],imageUrl:parsed.imageUrl||prod.imageUrl||""});
@@ -2583,7 +2576,7 @@ function ProductenPage({producten,settings,onEdit,onDelete,onToggle,onEnrich}) {
 
   // Group by brand for display
   const grouped = {};
-  list.forEach(p=>{const g=p.merk||p.cat||"Overige";if(!grouped[g])grouped[g]=[];grouped[g].push(p);});
+  list.forEach(p=>{const g=p.merk||p.cat||"Producten";if(!grouped[g])grouped[g]=[];grouped[g].push(p);});
 
   return(
     <div>
@@ -2592,14 +2585,25 @@ function ProductenPage({producten,settings,onEdit,onDelete,onToggle,onEnrich}) {
           <div className="bulk-cnt">{sel.size} geselecteerd</div>
           <div className="bulk-actions">
             <button className="bulk-act-btn" onClick={doBulkDelete}>🗑 Verwijderen</button>
-            <button className="bulk-act-btn" onClick={()=>setShowBulkPrijs(!showBulkPrijs)}>💰 Prijs aanpassen %</button>
+            <button className="bulk-act-btn" onClick={()=>setShowBulkPrijs(!showBulkPrijs)}>💰 Prijs %</button>
+            <button className="bulk-act-btn" onClick={()=>setShowBulkCat(!showBulkCat)}>📁 Categorie</button>
+            <button className="bulk-act-btn" onClick={()=>{[...sel].forEach(id=>{const p=producten.find(x=>x.id===id);if(p)onEnrich({...p,btw:p.btw===6?21:6});});setSel(new Set());}}>🔄 BTW wissel</button>
+            <button className="bulk-act-btn" onClick={async()=>{for(const id of [...sel]){const p=producten.find(x=>x.id===id);if(p){setEnriching(id);try{await doEnrich(p);}catch(_){}setEnriching(null);}}setSel(new Set());}}>✨ AI Bulk</button>
           </div>
           {showBulkPrijs&&(
             <div style={{display:"flex",gap:6,alignItems:"center",width:"100%",marginTop:4}}>
               <input type="number" placeholder="% (bijv. +10 of -5)" value={bulkPrijsPct} onChange={e=>setBulkPrijsPct(e.target.value)}
                 style={{width:160,padding:"5px 9px",border:"1.5px solid rgba(255,255,255,.4)",borderRadius:6,background:"rgba(255,255,255,.15)",color:"#fff",fontSize:12,outline:"none"}}/>
               <button className="bulk-act-btn" onClick={doBulkPrijs}>✓ Toepassen</button>
-              <span style={{fontSize:11,opacity:.7}}>Huidige prijs × (1 + %/100)</span>
+            </div>
+          )}
+          {showBulkCat&&(
+            <div style={{display:"flex",gap:6,alignItems:"center",width:"100%",marginTop:4}}>
+              <select value={bulkCat} onChange={e=>setBulkCat(e.target.value)} style={{padding:"5px 9px",border:"1.5px solid rgba(255,255,255,.4)",borderRadius:6,background:"rgba(255,255,255,.15)",color:"#fff",fontSize:12}}>
+                <option value="">— Kies categorie —</option>
+                {catNamen.map(c=><option key={c} value={c}>{c}</option>)}
+              </select>
+              <button className="bulk-act-btn" onClick={()=>{if(!bulkCat)return;[...sel].forEach(id=>{const p=producten.find(x=>x.id===id);if(p)onEnrich({...p,cat:bulkCat});});setSel(new Set());setShowBulkCat(false);setBulkCat("");}}>✓ Verplaats</button>
             </div>
           )}
           <button className="bulk-act-btn" style={{marginLeft:"auto"}} onClick={()=>setSel(new Set())}>✕</button>
@@ -2613,8 +2617,41 @@ function ProductenPage({producten,settings,onEdit,onDelete,onToggle,onEnrich}) {
             return <button key={c} className={`btn btn-sm ${cat===c?"bp":"bs"}`} onClick={()=>setCat(c)}>{c==="alle"?"Alle":<>{dynC?.icoon||"📦"} {c}</>}</button>;
           })}
         </div>
-        <span className="mla" style={{color:"#94a3b8",fontSize:12}}>{list.length} producten</span>
+        <div style={{display:"flex",gap:4,marginLeft:"auto",alignItems:"center"}}>
+          <button className={`btn btn-sm ${prodView==="list"?"bp":"bs"}`} onClick={()=>setProdView("list")} title="Lijstweergave">📋</button>
+          <button className={`btn btn-sm ${prodView==="tile"?"bp":"bs"}`} onClick={()=>setProdView("tile")} title="Tegelweergave">🔲</button>
+          <span style={{color:"#94a3b8",fontSize:12,marginLeft:4}}>{list.length}</span>
+        </div>
       </div>
+
+      {/* TILE VIEW */}
+      {prodView==="tile"&&(
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))",gap:12}}>
+          {list.map(p=>(
+            <div key={p.id} style={{background:"#fff",borderRadius:10,border:sel.has(p.id)?"2px solid #2563eb":"1px solid #e2e8f0",padding:12,cursor:"pointer",opacity:p.actief?1:.45,transition:"all .15s",position:"relative"}} onClick={()=>onEdit(p)}>
+              <div style={{position:"absolute",top:8,left:8,zIndex:2}} onClick={e=>e.stopPropagation()}><input type="checkbox" className="chk" checked={sel.has(p.id)} onChange={()=>toggleSel(p.id)}/></div>
+              <div style={{height:100,display:"flex",alignItems:"center",justifyContent:"center",background:"#f8fafc",borderRadius:8,marginBottom:8,overflow:"hidden"}}>
+                {p.imageUrl?<img src={p.imageUrl} alt="" style={{maxWidth:"100%",maxHeight:"100%",objectFit:"contain"}} onError={e=>{e.target.style.display="none"}}/>:<div style={{fontSize:36}}>{getCatIcon(p.cat)}</div>}
+              </div>
+              <div style={{fontSize:10,color:"#94a3b8",fontWeight:600}}>{p.merk||p.cat}</div>
+              <div style={{fontWeight:700,fontSize:13,marginTop:2,lineHeight:1.3,minHeight:34}}>{p.naam}</div>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:6}}>
+                <strong style={{fontFamily:"JetBrains Mono,monospace",fontSize:14,color:"#1e293b"}}>{fmtEuro(p.prijs)}</strong>
+                <span style={{fontSize:11,color:p.btw===6?"#059669":"#2563eb",fontWeight:600}}>{p.btw}%</span>
+              </div>
+              <div style={{display:"flex",gap:4,marginTop:8}} onClick={e=>e.stopPropagation()}>
+                <button className="btn bs btn-sm" style={{flex:1,fontSize:10}} onClick={()=>doEnrich(p)} disabled={enriching===p.id}>{enriching===p.id?"⟳":"✨ AI"}</button>
+                <button className="btn bs btn-sm" style={{fontSize:10}} onClick={()=>{if(window.confirm("Verwijderen?"))onDelete(p.id)}}>🗑</button>
+              </div>
+              {(p.technischeFiches||[]).length>0&&<div style={{fontSize:10,color:"#3b82f6",marginTop:4}}>📎 {p.technischeFiches.length} fiche(s)</div>}
+              {p.technischeFiche&&!(p.technischeFiches||[]).length&&<div style={{fontSize:10,color:"#3b82f6",marginTop:4}}>📎 1 fiche</div>}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* LIST VIEW */}
+      {prodView==="list"&&(
       <div className="tw"><table>
         <thead><tr>
           <th><input type="checkbox" className="chk" checked={sel.size===list.length&&list.length>0} onChange={()=>selAll()}/></th>
@@ -2653,6 +2690,7 @@ function ProductenPage({producten,settings,onEdit,onDelete,onToggle,onEnrich}) {
           </tr>
         ))}</tbody>
       </table></div>
+      )}
     </div>
   );
 }
@@ -3007,7 +3045,7 @@ function ImportModal({onImport, onClose, notify}) {
 
   // ── Group parsed products by brand/category ──
   const grouped = parsed ? Object.entries(
-    parsed.reduce((g,p) => { const k=p.merk||p.cat||"Overige"; if(!g[k])g[k]=[]; g[k].push(p); return g; }, {})
+    parsed.reduce((g,p) => { const k=p.merk||p.cat||"Producten"; if(!g[k])g[k]=[]; g[k].push(p); return g; }, {})
   ) : [];
 
   return (
@@ -3478,7 +3516,7 @@ function OfferteWizard({klanten,producten,offertes,editData,settings,onSave,onCl
       const instTypeGroepen = settings?.instTypeGroepen?.[instType];
       const dg = instTypeGroepen
         ? instTypeGroepen.split(",").map(s=>s.trim()).filter(Boolean)
-        : (instType==="laadpaal"?["Laadstation","Installatie","Energie monitoring","Keuring"]:instType==="zon"?["Zonnepanelen","Omvormer & Montage","Keuring"]:instType==="batterij"?["Batterij","Installatie"]:instType==="combo"?["Laadstation","Zonnepanelen","Batterij","Installatie","Keuring"]:["Materiaal","Installatie","Overige"]);
+        : (instType==="laadpaal"?["Laadstation","Installatie","Energie monitoring","Keuring"]:instType==="zon"?["Zonnepanelen","Omvormer & Montage","Keuring"]:instType==="batterij"?["Batterij","Installatie"]:instType==="combo"?["Laadstation","Zonnepanelen","Batterij","Installatie","Keuring"]:["Materiaal","Installatie","Producten"]);
       const ng=dg.map(n=>({id:uid(),naam:n}));setGroepen(ng);setActiveGroepId(ng[0]?.id);
       const cats=[...new Set(producten.filter(p=>p.actief).map(p=>p.cat))];if(cats.length)setActiveCat(cats[0]);
     }
@@ -3779,61 +3817,210 @@ function OfferteWizard({klanten,producten,offertes,editData,settings,onSave,onCl
 // ─── OFFERTE DOCUMENT (4 pages) ───────────────────────────────────
 // ─── TECHNISCHE FICHE PDF EMBED ──────────────────────────────────
 // Technische Fiche - Static placeholder (GEEN scrollbare PDF!)
-// Print-friendly: Altijd zichtbaar, simpel groen kader
+// Print-friendly: Renders PDF pages as images using PDF.js (printable!)
+// Screen: shows object embed for interactive PDF viewing
+// Print: shows rendered canvas images (browsers can't print embedded PDFs)
 function FichePDFEmbed({fiche, naam, fichNaam, fullPage = false}) {
   if(!fiche) return null;
 
   const pdfSrc = fiche.startsWith('data:') ? fiche : `data:application/pdf;base64,${fiche}`;
+  const [pageImages, setPageImages] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  // Render PDF pages to images using PDF.js
+  useEffect(() => {
+    if(!window.pdfjsLib) {
+      setError("PDF.js niet geladen");
+      setLoading(false);
+      return;
+    }
+
+    const renderPdf = async () => {
+      try {
+        // Extract base64 data
+        let pdfData;
+        if(fiche.startsWith('data:')) {
+          const base64 = fiche.split(',')[1];
+          pdfData = atob(base64);
+        } else {
+          pdfData = atob(fiche);
+        }
+        
+        const uint8 = new Uint8Array(pdfData.length);
+        for(let i = 0; i < pdfData.length; i++) uint8[i] = pdfData.charCodeAt(i);
+        
+        const pdf = await window.pdfjsLib.getDocument({data: uint8}).promise;
+        const images = [];
+        
+        // Render each page at 2x scale for sharp print quality (A4 = 210x297mm)
+        for(let i = 1; i <= pdf.numPages; i++) {
+          const page = await pdf.getPage(i);
+          const scale = 2.0; // 2x for print quality
+          const viewport = page.getViewport({scale});
+          
+          const canvas = document.createElement('canvas');
+          canvas.width = viewport.width;
+          canvas.height = viewport.height;
+          const ctx = canvas.getContext('2d');
+          
+          await page.render({canvasContext: ctx, viewport}).promise;
+          images.push(canvas.toDataURL('image/png'));
+        }
+        
+        setPageImages(images);
+        setLoading(false);
+      } catch(e) {
+        console.error("PDF render error:", e);
+        setError("Kan PDF niet renderen");
+        setLoading(false);
+      }
+    };
+
+    renderPdf();
+  }, [fiche]);
+
+  if(loading) return (
+    <div style={{padding:24,textAlign:"center",color:"#64748b"}}>
+      <div style={{fontSize:24,marginBottom:8}}>⟳</div>
+      <div style={{fontSize:12}}>Technische fiche laden...</div>
+    </div>
+  );
+
+  if(error || pageImages.length === 0) return (
+    <div style={{background:"#f0fdf4",border:"2px solid #86efac",borderRadius:8,padding:24,textAlign:"center",minHeight:140}}>
+      <div style={{fontSize:32,marginBottom:12}}>📋</div>
+      <div style={{fontWeight:700,fontSize:16,color:"#166534",marginBottom:8}}>{naam}</div>
+      <div style={{fontSize:14,color:"#64748b",marginBottom:16}}>Technische fiche ({fichNaam || "PDF"})</div>
+      <a href={pdfSrc} download={fichNaam || `${naam}-fiche.pdf`}
+        style={{fontSize:12,color:"#059669",background:"#dcfce7",padding:"8px 16px",borderRadius:6,display:"inline-block",textDecoration:"none",fontWeight:600}}>
+        📥 Download PDF
+      </a>
+    </div>
+  );
 
   return(
-    <div style={{
-      flex: fullPage ? 1 : "none",
-      display: "flex",
-      flexDirection: "column",
-      width: "100%",
-      height: fullPage ? "100%" : "auto",
-      minHeight: fullPage ? "100%" : "400px"
-    }}>
-      <object
-        data={pdfSrc}
-        type="application/pdf"
-        style={{
-          width: "100%",
-          height: "100%",
-          border: "none"
-        }}
-      >
-        <div style={{
-          background:"#f0fdf4",
-          border:"2px solid #86efac",
-          borderRadius:"8px",
-          padding:"24px",
-          textAlign:"center",
-          minHeight:"140px"
-        }}>
-          <div style={{fontSize:"32px",marginBottom:"12px"}}>📋</div>
-          <div style={{fontWeight:"700",fontSize:"16px",color:"#166534",marginBottom:"8px"}}>{naam}</div>
-          <div style={{fontSize:"14px",color:"#64748b",marginBottom:"16px"}}>
-            Technische fiche (PDF kan niet worden weergegeven in deze browser)
+    <div style={{width:"100%"}}>
+      {/* SCREEN: interactive PDF embed */}
+      <div className="fiche-screen-embed" style={{width:"100%",height:fullPage?"100%":"auto",minHeight:fullPage?"100%":"500px"}}>
+        <object data={pdfSrc} type="application/pdf" style={{width:"100%",height:"100%",minHeight:500,border:"none"}}>
+          {/* Fallback: toon gerenderde pagina's */}
+          {pageImages.map((img, i) => (
+            <img key={i} src={img} alt={`${naam} p${i+1}`} style={{width:"100%",height:"auto",display:"block",marginBottom:i<pageImages.length-1?8:0}}/>
+          ))}
+        </object>
+      </div>
+      {/* PRINT: gerenderde images (browsers kunnen geen embedded PDFs printen) */}
+      <div className="fiche-print-images" style={{display:"none"}}>
+        {pageImages.map((img, i) => (
+          <img key={i} src={img} alt={`${naam} pagina ${i+1}`} style={{width:"100%",height:"auto",maxHeight:"265mm",objectFit:"contain",display:"block"}}/>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// Renders each page of a PDF fiche as its own A4 doc-page (for proper print pagination)
+function FichePages({fiche, naam, fichNaam, omschr, dc, bed, docNummer}) {
+  const [pageImages, setPageImages] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if(!fiche || !window.pdfjsLib) { setLoading(false); return; }
+
+    const render = async () => {
+      try {
+        let pdfData;
+        if(fiche.startsWith('data:')) {
+          pdfData = atob(fiche.split(',')[1]);
+        } else {
+          pdfData = atob(fiche);
+        }
+        const uint8 = new Uint8Array(pdfData.length);
+        for(let i = 0; i < pdfData.length; i++) uint8[i] = pdfData.charCodeAt(i);
+
+        const pdf = await window.pdfjsLib.getDocument({data: uint8}).promise;
+        const imgs = [];
+        for(let i = 1; i <= pdf.numPages; i++) {
+          const page = await pdf.getPage(i);
+          const scale = 2.5; // High-res for sharp A4 print
+          const viewport = page.getViewport({scale});
+          const canvas = document.createElement('canvas');
+          canvas.width = viewport.width;
+          canvas.height = viewport.height;
+          await page.render({canvasContext: canvas.getContext('2d'), viewport}).promise;
+          imgs.push(canvas.toDataURL('image/png'));
+        }
+        setPageImages(imgs);
+      } catch(e) { console.error("Fiche render error:", e); }
+      setLoading(false);
+    };
+    render();
+  }, [fiche]);
+
+  if(loading) return (
+    <div className="doc-page" style={{pageBreakBefore:"always",display:"flex",alignItems:"center",justifyContent:"center",minHeight:200}}>
+      <div style={{textAlign:"center",color:"#64748b",padding:40}}>
+        <div style={{fontSize:24,marginBottom:8}}>⟳</div>
+        <div style={{fontSize:13}}>Technische fiche laden: {naam}...</div>
+      </div>
+    </div>
+  );
+
+  // No images rendered — show download fallback
+  if(pageImages.length === 0) {
+    const pdfSrc = fiche.startsWith('data:') ? fiche : `data:application/pdf;base64,${fiche}`;
+    return (
+      <div>
+        <div className="doc-page-lbl">Technische fiche — {naam}</div>
+        <div className="doc-page" style={{pageBreakBefore:"always"}}>
+          <div style={{height:5,background:dc,flexShrink:0}}/>
+          <div style={{padding:"30mm 20mm",textAlign:"center"}}>
+            <div style={{fontSize:36,marginBottom:16}}>📋</div>
+            <div style={{fontWeight:800,fontSize:20,color:"#1e293b",marginBottom:8}}>{naam}</div>
+            {omschr&&<div style={{fontSize:13,color:"#64748b",marginBottom:20}}>{omschr}</div>}
+            <div style={{fontSize:13,color:"#94a3b8",marginBottom:20}}>Technische fiche: {fichNaam||"document.pdf"}</div>
+            <a href={pdfSrc} download={fichNaam||`${naam}-fiche.pdf`}
+              style={{fontSize:13,color:"#059669",background:"#dcfce7",padding:"10px 20px",borderRadius:8,textDecoration:"none",fontWeight:600}}>
+              📥 Download PDF
+            </a>
           </div>
-          <a 
-            href={pdfSrc} 
-            download={fichNaam || `${naam}-fiche.pdf`}
-            style={{
-              fontSize:"12px",
-              color:"#059669",
-              background:"#dcfce7",
-              padding:"8px 16px",
-              borderRadius:"6px",
-              display:"inline-block",
-              textDecoration:"none",
-              fontWeight:600
-            }}
-          >
-            📥 Download PDF
-          </a>
+          <div className="qt-footer" style={{background:dc}}>
+            <div className="qt-footer-txt"><strong>{bed.naam}</strong> · {bed.adres}, {bed.gemeente}</div>
+            <div className="qt-footer-txt">{fichNaam||"technische-fiche.pdf"}</div>
+          </div>
         </div>
-      </object>
+      </div>
+    );
+  }
+
+  // Each PDF page = its own A4 doc-page (perfect for print)
+  return (
+    <div>
+      {pageImages.map((img, i) => (
+        <div key={`fp-${i}`}>
+          <div className="doc-page-lbl">Technische fiche — {naam} (pagina {i+1}/{pageImages.length})</div>
+          <div className="doc-page fiche-print-page" style={{pageBreakBefore:"always",breakBefore:"page"}}>
+            <div style={{height:5,background:dc,flexShrink:0}}/>
+            {i === 0 && (
+              <div style={{padding:"4mm 8mm 2mm",display:"flex",justifyContent:"space-between",alignItems:"center",borderBottom:"1px solid #e2e8f0"}}>
+                <div>
+                  <div style={{fontSize:9,fontWeight:700,color:"#94a3b8",textTransform:"uppercase",letterSpacing:.6}}>Technische fiche</div>
+                  <div style={{fontWeight:800,fontSize:14,color:"#1e293b"}}>{naam}</div>
+                </div>
+                <div style={{textAlign:"right",fontSize:9,color:"#94a3b8"}}>{bed.naam} · {docNummer}</div>
+              </div>
+            )}
+            <div style={{padding:i===0?"2mm 6mm 4mm":"4mm 6mm",flex:1,display:"flex",alignItems:"flex-start",justifyContent:"center",overflow:"hidden"}}>
+              <img src={img} alt={`${naam} p${i+1}`} style={{width:"100%",height:"auto",maxHeight:i===0?"250mm":"270mm",objectFit:"contain",display:"block"}}/>
+            </div>
+            <div style={{padding:"2mm 8mm",display:"flex",justifyContent:"space-between",alignItems:"center",fontSize:9,color:"#94a3b8",borderTop:"1px solid #e2e8f0"}}>
+              <span>{bed.naam}</span>
+              <span>{fichNaam||"technische-fiche.pdf"} · pagina {i+1}/{pageImages.length}</span>
+            </div>
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
@@ -3884,7 +4071,7 @@ function OfferteDocument({doc, settings}) {
   const eindTot = doc.korting>0 ? tot.totaal - kortingBedrag*(1+0.21) : tot.totaal;
   const inst = INST_TYPES.find(t=>t.id===doc.installatieType);
   const groepen = doc.groepen||[];
-  const lijnenPerGroep = [...groepen.map(g=>({...g,items:(doc.lijnen||[]).filter(l=>l.groepId===g.id)})).filter(g=>g.items.length>0), {id:"rest",naam:"Overige",items:(doc.lijnen||[]).filter(l=>!l.groepId||!groepen.find(g=>g.id===l.groepId))}.items.length>0?{id:"rest",naam:"Overige",items:(doc.lijnen||[]).filter(l=>!l.groepId||!groepen.find(g=>g.id===l.groepId))}:null].filter(Boolean);
+  const lijnenPerGroep = [...groepen.map(g=>({...g,items:(doc.lijnen||[]).filter(l=>l.groepId===g.id)})).filter(g=>g.items.length>0), {id:"rest",naam:"Producten",items:(doc.lijnen||[]).filter(l=>!l.groepId||!groepen.find(g=>g.id===l.groepId))}.items.length>0?{id:"rest",naam:"Producten",items:(doc.lijnen||[]).filter(l=>!l.groepId||!groepen.find(g=>g.id===l.groepId))}:null].filter(Boolean);
   const uniqueProds = [...new Map((doc.lijnen||[]).filter(l=>l.naam).map(l=>[l.productId||l.id,l])).values()];
   const confirmLink = `mailto:?subject=Akkoord offerte ${doc.nummer||""}%20—%20${encodeURIComponent(bed.naam)}&body=Geachte%20${encodeURIComponent(bed.naam)}%2C%0A%0AHierbij%20bevestig%20ik%20mijn%20akkoord%20met%20offerte%20${doc.nummer||""}%20d.d.%20${fmtDate(doc.aangemaakt)}%20voor%20een%20totaalbedrag%20van%20${encodeURIComponent(fmtEuro(eindTot))}.%0A%0AMet%20vriendelijke%20groeten%2C%0A${encodeURIComponent(doc.klant?.naam||"")}`;
 
@@ -4042,7 +4229,7 @@ function OfferteDocument({doc, settings}) {
       {sj.toonProductpagina!==false&&uniqueProds.length>0&&<>
         <div className="doc-page-lbl">Pagina 2 — Productinformatie & Technische fiches</div>
         <div className="doc-page">
-          <div style={{height:6,background:dc,borderRadius:"4px 4px 0 0"}}/>
+          <div style={{height:6,background:dc,borderRadius:"4px 4px 0 0",flexShrink:0}}/>
           <div className="prod-page">
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end",marginBottom:6}}>
               <div>
@@ -4117,7 +4304,7 @@ function OfferteDocument({doc, settings}) {
       {/* PAGE 3: OFFERTEDETAIL */}
       <div className="doc-page-lbl">Pagina 3 — Offertedetail</div>
       <div className="doc-page">
-        <div style={{height:5,background:dc}}/>
+        <div style={{height:5,background:dc,flexShrink:0}}/>
         <div className="qt-pg">
           <div className="qt-header">
             <div>
@@ -4130,14 +4317,14 @@ function OfferteDocument({doc, settings}) {
             </div>
           </div>
           <div className="qt-meta-bar">
-            <div className="qt-meta-item"><div className="qt-meta-lbl">Datum</div><div className="qt-meta-val">{fmtDate(doc.aangemaakt)}</div></div>
-            <div className="qt-meta-item"><div className="qt-meta-lbl">Geldig tot</div><div className="qt-meta-val">{fmtDate(doc.vervaldatum)}</div></div>
-            <div className="qt-meta-item"><div className="qt-meta-lbl">BTW-regime</div><div className="qt-meta-val">{BTW_REGIMES[doc.btwRegime]?.l?.split("—")[0]?.trim()||"—"}</div></div>
-            <div className="qt-meta-item"><div className="qt-meta-lbl">Betaling</div><div className="qt-meta-val">{doc.betalingstermijn} dagen</div></div>
+            {metaBar.toonDatum!==false&&<div className="qt-meta-item"><div className="qt-meta-lbl">Datum</div><div className="qt-meta-val">{fmtDate(doc.aangemaakt)}</div></div>}
+            {metaBar.toonGeldig!==false&&<div className="qt-meta-item"><div className="qt-meta-lbl">Geldig tot</div><div className="qt-meta-val">{fmtDate(doc.vervaldatum)}</div></div>}
+            {metaBar.toonBtw!==false&&<div className="qt-meta-item"><div className="qt-meta-lbl">BTW-regime</div><div className="qt-meta-val">{BTW_REGIMES[doc.btwRegime]?.l?.split("—")[0]?.trim()||"—"}</div></div>}
+            {metaBar.toonBetaling!==false&&<div className="qt-meta-item"><div className="qt-meta-lbl">Betaling</div><div className="qt-meta-val">{doc.betalingstermijn} dagen</div></div>}
           </div>
-          <div className="qt-parties">
-            <div><div className="qt-party-name">{bed.naam}</div><div className="qt-party-info">{bed.adres}<br/>{bed.gemeente}</div><div style={{fontFamily:"JetBrains Mono,monospace",fontSize:10.5,color:"#64748b",marginTop:3}}>{fmtBtwnr(bed.btwnr)}<br/>IBAN: {bed.iban}</div></div>
-            <div><div className="qt-party-lbl">Klant</div><div className="qt-party-name">{doc.klant?.naam}</div>{doc.klant?.bedrijf&&<div style={{fontWeight:600,color:"#475569",fontSize:12.5}}>{doc.klant.bedrijf}</div>}<div className="qt-party-info">{doc.klant?.adres}<br/>{doc.klant?.gemeente}</div>{doc.klant?.btwnr&&<div style={{fontFamily:"JetBrains Mono,monospace",fontSize:10.5,color:"#64748b"}}>{fmtBtwnr(doc.klant.btwnr)}</div>}</div>
+          <div className="qt-parties" style={{direction: lyt.klant?.positie==="links" ? "rtl" : "ltr"}}>
+            <div style={{direction:"ltr"}}>{bedVelden.naam!==false&&<div className="qt-party-name">{bed.naam}</div>}{bedVelden.adres!==false&&<div className="qt-party-info">{bed.adres}</div>}{bedVelden.gemeente!==false&&<div className="qt-party-info">{bed.gemeente}</div>}<div style={{fontFamily:"JetBrains Mono,monospace",fontSize:10.5,color:"#64748b",marginTop:3}}>{bedVelden.btwnr!==false&&<>{fmtBtwnr(bed.btwnr)}<br/></>}{bedVelden.iban!==false&&<>IBAN: {bed.iban}<br/></>}{bedVelden.tel!==false&&<>{bed.tel}<br/></>}{bedVelden.email!==false&&<>{bed.email}</>}</div></div>
+            <div style={{direction:"ltr"}}><div className="qt-party-lbl">Klant</div>{klantVelden.naam!==false&&<div className="qt-party-name">{doc.klant?.naam}</div>}{klantVelden.bedrijf!==false&&doc.klant?.bedrijf&&<div style={{fontWeight:600,color:"#475569",fontSize:12.5}}>{doc.klant.bedrijf}</div>}{klantVelden.adres!==false&&<div className="qt-party-info">{doc.klant?.adres}</div>}{klantVelden.gemeente!==false&&<div className="qt-party-info">{doc.klant?.gemeente}</div>}{klantVelden.btwnr!==false&&doc.klant?.btwnr&&<div style={{fontFamily:"JetBrains Mono,monospace",fontSize:10.5,color:"#64748b"}}>{fmtBtwnr(doc.klant.btwnr)}</div>}{klantVelden.tel!==false&&doc.klant?.tel&&<div style={{fontSize:11,color:"#64748b"}}>{doc.klant.tel}</div>}{klantVelden.email!==false&&doc.klant?.email&&<div style={{fontSize:11,color:"#64748b"}}>{doc.klant.email}</div>}</div>
           </div>
           {lijnenPerGroep.map(g=>(
             <div key={g.id}>
@@ -4184,37 +4371,17 @@ function OfferteDocument({doc, settings}) {
       {/* PAGE 4: VOORWAARDEN */}
       <div className="doc-page-lbl">Pagina 4 — Voorwaarden</div>
       <div className="doc-page">
-        <div style={{height:5,background:dc}}/>
-        <div style={{padding:"40px 44px"}}>
-          <div style={{fontWeight:900,fontSize:20,color:dc,marginBottom:20,letterSpacing:"-.4px"}}>Algemene Verkoopsvoorwaarden & Verklaringen</div>
-          <div className="legal-txt">{settings?.voorwaarden?.tekst||INIT_SETTINGS.voorwaarden.tekst}</div>
+        <div style={{height:5,background:dc,flexShrink:0}}/>
+        <div style={{padding:"30px 36px",flex:1,overflow:"hidden"}}>
+          <div style={{fontWeight:900,fontSize:18,color:dc,marginBottom:16,letterSpacing:"-.4px"}}>Algemene Verkoopsvoorwaarden & Verklaringen</div>
+          <div className="legal-txt" style={{fontSize:11,lineHeight:1.6}}>{settings?.voorwaarden?.tekst||INIT_SETTINGS.voorwaarden.tekst}</div>
         </div>
         <div className="qt-footer" style={{background:dc}}><div className="qt-footer-txt"><strong>{bed.naam}</strong> · {bed.adres}, {bed.gemeente}</div><div className="qt-footer-txt">BTW: <strong>{fmtBtwnr(bed.btwnr)}</strong> · {bed.website}</div></div>
       </div>
 
-      {/* TECHNISCHE FICHES — AAN HET EINDE */}
+      {/* TECHNISCHE FICHES — AAN HET EINDE, elke PDF-pagina = eigen A4 */}
       {uniqueProds.filter(l=>l.technischeFiche).map((l,fi)=>(
-        <div key={`fiche-${fi}`}>
-          <div className="doc-page-lbl">Technische fiche — {l.naam}</div>
-          <div className="doc-page" style={{pageBreakBefore:"always",breakBefore:"page"}}>
-            <div style={{height:5,background:dc}}/>
-            <div style={{padding:"8mm",height:"calc(100% - 5px)",boxSizing:"border-box",display:"flex",flexDirection:"column"}}>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10,paddingBottom:8,borderBottom:"1px solid #e2e8f0"}}>
-                <div>
-                  <div style={{fontSize:10,fontWeight:700,color:"#94a3b8",textTransform:"uppercase",letterSpacing:.6,marginBottom:2}}>Technische fiche</div>
-                  <div style={{fontWeight:800,fontSize:16,color:"#1e293b"}}>{l.naam}</div>
-                  {l.omschr&&<div style={{fontSize:11.5,color:"#64748b",marginTop:1}}>{l.omschr}</div>}
-                </div>
-                <div style={{textAlign:"right",fontSize:10,color:"#94a3b8"}}>{bed.naam} · {doc.nummer}</div>
-              </div>
-              <FichePDFEmbed fiche={l.technischeFiche} naam={l.naam} fichNaam={l.fichNaam} fullPage={true}/>
-            </div>
-            <div className="qt-footer" style={{background:dc}}>
-              <div className="qt-footer-txt"><strong>{bed.naam}</strong> · {bed.adres}, {bed.gemeente}</div>
-              <div className="qt-footer-txt">{l.fichNaam||"technische-fiche.pdf"}</div>
-            </div>
-          </div>
-        </div>
+        <FichePages key={`fiche-${fi}`} fiche={l.technischeFiche} naam={l.naam} fichNaam={l.fichNaam} omschr={l.omschr} dc={dc} bed={bed} docNummer={doc.nummer}/>
       ))}
     </div>
   );
@@ -4228,11 +4395,19 @@ function FactuurDocument({doc, settings}) {
   const ontwerp = sj.ontwerpFactuur || "classic";
   const tot = calcTotals(doc.lijnen||[]);
   const groepen = doc.groepen||[];
-  const lijnenPerGroep = [...groepen.map(g=>({...g,items:(doc.lijnen||[]).filter(l=>l.groepId===g.id)})).filter(g=>g.items.length>0),{id:"rest",naam:"Overige",items:(doc.lijnen||[]).filter(l=>!groepen.find(g=>g.id===l.groepId))}].filter(g=>g.items.length>0);
+  const lijnenPerGroep = [...groepen.map(g=>({...g,items:(doc.lijnen||[]).filter(l=>l.groepId===g.id)})).filter(g=>g.items.length>0),{id:"rest",naam:"Producten",items:(doc.lijnen||[]).filter(l=>!groepen.find(g=>g.id===l.groepId))}].filter(g=>g.items.length>0);
   // Schat of inhoud past op 1 pagina (heuristiek: max ~22 productlijnen per pagina)
   const totaalLijnen = (doc.lijnen||[]).length;
   const meerdereGroepen = lijnenPerGroep.length > 1;
   const overvloeit = totaalLijnen > 18 || (meerdereGroepen && totaalLijnen > 12);
+  const lyt = settings?.layout || INIT_SETTINGS.layout || {};
+  const logoOfferte = {
+    w: lyt.logo?.offerte?.breedte || lyt.logo?.breedte || sj.logoBreedte || 140,
+    h: lyt.logo?.offerte?.hoogte || lyt.logo?.hoogte || sj.logoHoogte || 52,
+    zIndex: lyt.logo?.offerte?.zIndex !== undefined ? lyt.logo.offerte.zIndex : 10,
+  };
+  const bedVelden = lyt.bedrijf?.velden || {};
+  const klantVelden = lyt.klant?.velden || {};
 
   return(
     <div className="doc-wrap">
@@ -4240,7 +4415,7 @@ function FactuurDocument({doc, settings}) {
       <div className="doc-page-lbl">Pagina 1 — Factuur</div>
       <div className="doc-page">
         {/* Kleurband: alleen bij classic/modern/colored */}
-        {(ontwerp==="classic"||ontwerp==="modern"||ontwerp==="colored")&&<div style={{height:6,background:dc,borderRadius:"4px 4px 0 0"}}/>}
+        {(ontwerp==="classic"||ontwerp==="modern"||ontwerp==="colored")&&<div style={{height:6,background:dc,borderRadius:"4px 4px 0 0",flexShrink:0}}/>}
 
         <div className="fct-pg">
           {/* ONTWERP: classic (default) */}
@@ -4295,9 +4470,9 @@ function FactuurDocument({doc, settings}) {
             <div className="qt-meta-item"><div className="qt-meta-lbl">Betalingstermijn</div><div className="qt-meta-val">{doc.betalingstermijn||14} dagen</div></div>
             {doc.offerteNr&&<div className="qt-meta-item"><div className="qt-meta-lbl">Ref. offerte</div><div className="qt-meta-val" style={{fontFamily:"JetBrains Mono,monospace",fontSize:12}}>{doc.offerteNr}</div></div>}
           </div>
-          <div className="qt-parties">
-            <div><div className="qt-party-name">{bed.naam}</div><div className="qt-party-info">{bed.adres}<br/>{bed.gemeente}</div><div style={{fontFamily:"JetBrains Mono,monospace",fontSize:10.5,color:"#64748b",marginTop:3}}>{fmtBtwnr(bed.btwnr)}<br/>IBAN: {bed.iban}</div></div>
-            <div><div className="qt-party-lbl">Gefactureerd aan</div><div className="qt-party-name">{doc.klant?.naam}</div>{doc.klant?.bedrijf&&<div style={{fontWeight:600,color:"#475569",fontSize:12.5}}>{doc.klant.bedrijf}</div>}<div className="qt-party-info">{doc.klant?.adres}<br/>{doc.klant?.gemeente}</div>{doc.klant?.btwnr&&<div style={{fontFamily:"JetBrains Mono,monospace",fontSize:10.5,color:"#64748b"}}>{fmtBtwnr(doc.klant.btwnr)}</div>}</div>
+          <div className="qt-parties" style={{direction: lyt.klant?.positie==="links" ? "rtl" : "ltr"}}>
+            <div style={{direction:"ltr"}}>{bedVelden.naam!==false&&<div className="qt-party-name">{bed.naam}</div>}{bedVelden.adres!==false&&<div className="qt-party-info">{bed.adres}</div>}{bedVelden.gemeente!==false&&<div className="qt-party-info">{bed.gemeente}</div>}<div style={{fontFamily:"JetBrains Mono,monospace",fontSize:10.5,color:"#64748b",marginTop:3}}>{bedVelden.btwnr!==false&&<>{fmtBtwnr(bed.btwnr)}<br/></>}{bedVelden.iban!==false&&<>IBAN: {bed.iban}</>}</div></div>
+            <div style={{direction:"ltr"}}><div className="qt-party-lbl">Gefactureerd aan</div>{klantVelden.naam!==false&&<div className="qt-party-name">{doc.klant?.naam}</div>}{klantVelden.bedrijf!==false&&doc.klant?.bedrijf&&<div style={{fontWeight:600,color:"#475569",fontSize:12.5}}>{doc.klant.bedrijf}</div>}{klantVelden.adres!==false&&<div className="qt-party-info">{doc.klant?.adres}</div>}{klantVelden.gemeente!==false&&<div className="qt-party-info">{doc.klant?.gemeente}</div>}{klantVelden.btwnr!==false&&doc.klant?.btwnr&&<div style={{fontFamily:"JetBrains Mono,monospace",fontSize:10.5,color:"#64748b"}}>{fmtBtwnr(doc.klant.btwnr)}</div>}</div>
           </div>
           {lijnenPerGroep.map(g=>(
             <div key={g.id}>
@@ -4329,7 +4504,7 @@ function FactuurDocument({doc, settings}) {
       {/* PAGINA VOORWAARDEN — pagina 2 of 3 afhankelijk van inhoud */}
       <div className="doc-page-lbl">{overvloeit?"Pagina 3":"Pagina 2"} — Verkoopsvoorwaarden</div>
       <div className="doc-page">
-        <div style={{height:5,background:dc}}/>
+        <div style={{height:5,background:dc,flexShrink:0}}/>
         <div className="fct-pg2">
           <div className="fct-pg2-title" style={{color:dc}}>Algemene Verkoopsvoorwaarden</div>
           <div className="legal-txt">{settings?.voorwaarden?.tekst||INIT_SETTINGS.voorwaarden.tekst}</div>
@@ -4348,17 +4523,26 @@ function buildPrintHtml(docWrapHtml, docNummer) {
   return `<!DOCTYPE html><html lang="nl"><head>
 <meta charset="UTF-8"><title>${docNummer||"document"}</title>
 <style>
-*{box-sizing:border-box}
+*{box-sizing:border-box;margin:0;padding:0}
 body{margin:0;padding:0;background:#fff;font-family:Inter,Arial,sans-serif;font-size:13px;color:#1e293b}
 ${styles}
 .printbar{padding:8px 12px;background:#f0f4f8;display:flex;gap:10px;align-items:center;font-family:Arial;font-size:12px;border-bottom:1px solid #e2e8f0}
 .doc-wrap{padding:0!important;background:#fff!important}
-.doc-page{box-shadow:none!important;border-radius:0!important;margin:0!important;padding:0!important;max-width:100%!important;width:100%!important;display:block!important;overflow:visible!important;page-break-before:always;break-before:page}
-.doc-page:first-child{page-break-before:avoid!important;break-before:avoid!important}
+.doc-page{box-shadow:none!important;border-radius:0!important;margin:0!important;width:210mm!important;height:297mm!important;max-height:297mm!important;display:flex!important;flex-direction:column!important;overflow:hidden!important;break-after:page;page-break-after:always}
+.doc-page:last-child{break-after:auto!important;page-break-after:auto!important}
 .doc-page-lbl{display:none!important}
-.cov{height:auto!important}
-@page{size:A4 portrait;margin:10mm 12mm 12mm 12mm}
-@media print{*{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}body>*{display:block!important}.printbar{display:none!important}.doc-page{page-break-before:always!important;break-before:page!important}.doc-page:first-child{page-break-before:avoid!important;break-before:avoid!important}}
+.cov{width:100%!important;height:297mm!important;max-height:297mm!important;overflow:hidden!important}
+.qt-footer{margin-top:auto!important;flex-shrink:0!important}
+.prod-page,.qt-pg,.fct-pg,.fct-pg2{padding:8mm 12mm!important;flex:1!important;overflow:hidden!important}
+.fiche-screen-embed{display:none!important}
+.fiche-print-images{display:block!important}
+.fiche-print-page{width:210mm!important;height:297mm!important;overflow:hidden!important;display:flex!important;flex-direction:column!important;break-after:page!important}
+.fiche-print-page img{width:100%;height:auto;max-height:270mm;object-fit:contain;display:block}
+@page{size:A4 portrait;margin:0}
+@media print{
+  *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;box-shadow:none!important}
+  .printbar{display:none!important}
+}
 </style></head><body>
 <div class="printbar">
   <strong style="color:#1e293b">${docNummer}</strong>
@@ -4677,7 +4861,7 @@ function KlantModal({klant,onSave,onClose}) {
 
 // ─── PRODUCT MODAL ────────────────────────────────────────────────
 function ProductModal({prod,onSave,onClose,settings}) {
-  const [form,setForm]=useState({naam:"",cat:"Laadstation",merk:"",omschr:"",prijs:0,btw:21,eenheid:"stuk",imageUrl:"",specs:[],technischeFiche:null,fichNaam:"",...prod});
+  const [form,setForm]=useState({naam:"",cat:"Laadstation",merk:"",omschr:"",prijs:0,btw:21,eenheid:"stuk",imageUrl:"",specs:[],technischeFiches:[],technischeFiche:null,fichNaam:"",...prod,technischeFiches:prod?.technischeFiches||((prod?.technischeFiche)?[{data:prod.technischeFiche,naam:prod.fichNaam||"fiche.pdf"}]:[])});
   const [specsStr,setSpecsStr]=useState((prod?.specs||[]).join("\n"));
   const [ficheLoad,setFicheLoad]=useState(false);
   const set=(k,v)=>setForm(p=>({...p,[k]:v}));
@@ -4685,12 +4869,23 @@ function ProductModal({prod,onSave,onClose,settings}) {
   const cats=[...dynCats.map(c=>c.naam),"Aangepast"];
 
   const handleFiche=(e)=>{
-    const file=e.target.files[0];
-    if(!file)return;
+    const files=Array.from(e.target.files);
+    if(!files.length)return;
     setFicheLoad(true);
-    const reader=new FileReader();
-    reader.onload=(ev)=>{set("technischeFiche",ev.target.result);set("fichNaam",file.name);setFicheLoad(false);};
-    reader.readAsDataURL(file);
+    let loaded=0;
+    const newFiches=[...(form.technischeFiches||[])];
+    files.forEach(file=>{
+      const reader=new FileReader();
+      reader.onload=(ev)=>{
+        newFiches.push({data:ev.target.result,naam:file.name});
+        loaded++;
+        if(loaded===files.length){
+          setForm(p=>({...p,technischeFiches:newFiches,technischeFiche:newFiches[0]?.data||null,fichNaam:newFiches[0]?.naam||""}));
+          setFicheLoad(false);
+        }
+      };
+      reader.readAsDataURL(file);
+    });
   };
 
   return(
@@ -4741,13 +4936,18 @@ function ProductModal({prod,onSave,onClose,settings}) {
           <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
             <label style={{cursor:"pointer",padding:"6px 12px",background:"#f1f5f9",border:"1px solid #cbd5e1",borderRadius:6,fontSize:12.5,color:"#475569",display:"inline-flex",alignItems:"center",gap:5}}>
               📂 {ficheLoad?"Laden…":"PDF uploaden"}
-              <input type="file" accept=".pdf" style={{display:"none"}} onChange={handleFiche}/>
+              <input type="file" accept=".pdf" multiple style={{display:"none"}} onChange={handleFiche}/>
             </label>
-            {form.technischeFiche&&<>
-              <span style={{fontSize:12,color:"#10b981",fontWeight:600}}>✓ {form.fichNaam||"fiche.pdf"}</span>
-              <a href={form.technischeFiche} download={form.fichNaam||"technische-fiche.pdf"} style={{fontSize:12,color:"#3b82f6",textDecoration:"underline"}}>⬇ Download</a>
-              <button className="btn bs btn-sm" style={{padding:"3px 8px",fontSize:11}} onClick={()=>{set("technischeFiche",null);set("fichNaam","");}}>✕ Verwijder</button>
-            </>}
+            {(form.technischeFiches||[]).length>0&&<div style={{display:"flex",flexDirection:"column",gap:4}}>
+              {(form.technischeFiches||[]).map((f,i)=>(
+                <div key={i} style={{display:"flex",alignItems:"center",gap:6,fontSize:12}}>
+                  <span style={{color:"#10b981",fontWeight:600}}>✓ {f.naam}</span>
+                  <a href={f.data} download={f.naam} style={{color:"#3b82f6",textDecoration:"underline"}}>⬇</a>
+                  <button className="btn bs btn-sm" style={{padding:"2px 6px",fontSize:10}} onClick={()=>{const nf=(form.technischeFiches||[]).filter((_,j)=>j!==i);setForm(p=>({...p,technischeFiches:nf,technischeFiche:nf[0]?.data||null,fichNaam:nf[0]?.naam||""}));}}>✕</button>
+                </div>
+              ))}
+            </div>}
+            {!form.technischeFiche&&form.technischeFiches?.length===0&&null}
           </div>
         </div>
       </div>
@@ -4774,131 +4974,65 @@ const genToken = () => Math.random().toString(36).slice(2,10) + Date.now().toStr
 // Bouw HTML email body voor offerte
 function buildOfferteHtml(doc, bed, tot, acceptUrl, rejectUrl, customHtml, extraVars={}) {
   const dc = extraVars.dc || "#1a2e4a";
-  if(customHtml) {
-    return customHtml
-      .replace(/{naam}/g, doc.klant?.naam||"")
-      .replace(/{nummer}/g, doc.nummer||"")
-      .replace(/{datum}/g, fmtDate(doc.aangemaakt))
-      .replace(/{vervaldatum}/g, fmtDate(doc.vervaldatum))
-      .replace(/{bedrijf}/g, bed.naam||"")
-      .replace(/{totaal}/g, fmtEuro(tot.totaal))
-      .replace(/{tel}/g, bed.tel||"")
-      .replace(/{email}/g, bed.email||"")
-      .replace(/{accept_url}/g, acceptUrl)
-      .replace(/{reject_url}/g, rejectUrl);
-  }
-  return `<!DOCTYPE html>
-<html><head><meta charset="UTF-8"><style>
-body{font-family:Arial,sans-serif;margin:0;padding:0;background:#f0f4f8;color:#1e293b}
-.wrap{max-width:600px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,.1)}
-.header{background:${dc};padding:28px 32px;text-align:center}
-.logo{max-height:52px;max-width:160px;object-fit:contain;margin-bottom:10px}
-.header h1{color:#fff;margin:0;font-size:26px;font-weight:900;letter-spacing:-1px}
-.header p{color:rgba(255,255,255,.7);margin:4px 0 0;font-size:13px}
-.body{padding:28px 32px}
-.body p{line-height:1.7;font-size:14px;margin:0 0 12px}
-.meta{background:#f8fafc;border-radius:8px;padding:16px 18px;margin:18px 0;display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.meta-item .lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:#94a3b8;margin-bottom:2px}
-.meta-item .val{font-size:14px;font-weight:700;color:#1e293b}
-.meta-item .val.big{font-size:18px;color:${dc}}
-.actions{display:flex;gap:12px;margin:24px 0;flex-wrap:wrap}
-.btn-accept{flex:1;background:#10b981;color:#fff;text-decoration:none;padding:14px 20px;border-radius:8px;font-weight:700;font-size:15px;text-align:center;display:block;min-width:120px}
-.btn-reject{flex:1;background:#f1f5f9;color:#64748b;text-decoration:none;padding:14px 20px;border-radius:8px;font-weight:700;font-size:15px;text-align:center;display:block;border:2px solid #e2e8f0;min-width:120px}
-.footer{background:#f8fafc;padding:18px 32px;border-top:1px solid #e2e8f0;font-size:11px;color:#94a3b8;text-align:center;line-height:1.7}
-</style></head><body>
-<div class="wrap">
-  <div class="header">
-    ${bed.logo?`<img src="${bed.logo}" class="logo" alt="${bed.naam}"/><br/>`:""}
-    <h1>${doc.nummer||"OFFERTE"}</h1>
-    <p>${bed.naam||""}</p>
+  const logoUrl = bed.logo && !bed.logo.startsWith('data:') ? bed.logo : '';
+  return `<div style="font-family:Arial,sans-serif;max-width:640px;margin:0 auto;background:#f8fafc">
+<div style="background:${dc};padding:28px 32px;text-align:center;border-radius:8px 8px 0 0">
+  ${logoUrl ? `<img src="${logoUrl}" alt="${bed.naam}" style="max-height:48px;margin-bottom:10px"/>` : ''}
+  <h1 style="color:#fff;margin:0;font-size:22px">${doc.nummer||''}</h1>
+  <p style="color:rgba(255,255,255,.8);margin:6px 0 0;font-size:14px">${bed.naam||''}</p>
+</div>
+<div style="background:#fff;padding:28px 32px;border:1px solid #e2e8f0;border-top:0">
+  <p style="font-size:15px;color:#1e293b">Beste <strong>${doc.klant?.naam||''}</strong>,</p>
+  <p style="font-size:14px;color:#475569;line-height:1.6">Bedankt voor uw interesse. Hieronder vindt u de samenvatting van onze offerte.</p>
+  <table style="width:100%;border-collapse:collapse;margin:20px 0;font-size:14px">
+    <tr style="background:#f1f5f9"><td style="padding:10px 14px;border:1px solid #e2e8f0;font-weight:600">Offerte nr</td><td style="padding:10px 14px;border:1px solid #e2e8f0">${doc.nummer||''}</td></tr>
+    <tr><td style="padding:10px 14px;border:1px solid #e2e8f0;font-weight:600">Datum</td><td style="padding:10px 14px;border:1px solid #e2e8f0">${fmtDate(doc.datum||doc.aangemaakt)}</td></tr>
+    <tr style="background:#f1f5f9"><td style="padding:10px 14px;border:1px solid #e2e8f0;font-weight:600">Geldig tot</td><td style="padding:10px 14px;border:1px solid #e2e8f0">${fmtDate(doc.vervaldatum)}</td></tr>
+    <tr><td style="padding:10px 14px;border:1px solid #e2e8f0;font-weight:600;font-size:16px">Totaal incl. BTW</td><td style="padding:10px 14px;border:1px solid #e2e8f0;font-size:16px;font-weight:700;color:${dc}">${fmtEuro(tot.totaal)}</td></tr>
+  </table>
+  <div style="text-align:center;margin:28px 0">
+    <a href="${acceptUrl}" style="display:inline-block;background:${dc};color:#fff;padding:14px 36px;border-radius:8px;text-decoration:none;font-weight:700;font-size:15px">📄 Bekijk uw offerte</a>
   </div>
-  <div class="body">
-    <p>Beste <strong>${doc.klant?.naam||""}</strong>,</p>
-    <p>Bedankt voor uw interesse. In bijlage vindt u onze offerte voor de gevraagde installatie.</p>
-    <div class="meta">
-      <div class="meta-item"><div class="lbl">Offerte nr</div><div class="val">${doc.nummer||""}</div></div>
-      <div class="meta-item"><div class="lbl">Datum</div><div class="val">${fmtDate(doc.aangemaakt)}</div></div>
-      <div class="meta-item"><div class="lbl">Geldig tot</div><div class="val">${fmtDate(doc.vervaldatum)}</div></div>
-      <div class="meta-item"><div class="lbl">Totaal incl. BTW</div><div class="val big">${fmtEuro(tot.totaal)}</div></div>
-    </div>
-    <p>Gelieve de offerte te bevestigen of af te wijzen via onderstaande knoppen:</p>
-    <div class="actions">
-      <a href="${acceptUrl}" class="btn-accept">✓ Offerte goedkeuren</a>
-      <a href="${rejectUrl}" class="btn-reject">✗ Offerte afwijzen</a>
-    </div>
-    <p style="font-size:12px;color:#94a3b8">U kunt ook antwoorden op deze email. Bij vragen contacteer ons via ${bed.tel||""} of ${bed.email||""}.</p>
-  </div>
-  <div class="footer">
-    <strong>${bed.naam||""}</strong> · ${bed.adres||""}, ${bed.gemeente||""}<br/>
-    BTW: ${fmtBtwnr(bed.btwnr||"")} · IBAN: ${bed.iban||""} · ${bed.email||""}
+  ${''}
+  <div style="margin-top:24px;padding-top:16px;border-top:1px solid #e2e8f0;font-size:13px;color:#64748b;line-height:1.6">
+    <p style="margin:0"><strong>${bed.naam}</strong></p>
+    <p style="margin:4px 0">${bed.adres||''} · ${bed.gemeente||''}</p>
+    <p style="margin:4px 0">${bed.tel||''} · ${bed.email||''}</p>
+    ${bed.btwnr ? `<p style="margin:4px 0">BTW: ${fmtBtwnr(bed.btwnr)}</p>` : ''}
   </div>
 </div>
-</body></html>`;
+<div style="text-align:center;padding:16px;font-size:11px;color:#94a3b8">${bed.naam} · ${bed.website||''}</div>
+</div>`;
 }
-
-// Bouw HTML email body voor factuur
 function buildFactuurHtml(doc, bed, tot, customHtml, extraVars={}) {
   const dc = extraVars.dc || "#1a2e4a";
-  if(customHtml) {
-    return customHtml
-      .replace(/{naam}/g, doc.klant?.naam||"")
-      .replace(/{nummer}/g, doc.nummer||"")
-      .replace(/{datum}/g, fmtDate(doc.datum||doc.aangemaakt))
-      .replace(/{vervaldatum}/g, fmtDate(doc.vervaldatum))
-      .replace(/{bedrijf}/g, bed.naam||"")
-      .replace(/{totaal}/g, fmtEuro(tot.totaal))
-      .replace(/{iban}/g, bed.iban||"")
-      .replace(/{tel}/g, bed.tel||"");
-  }
-  return `<!DOCTYPE html>
-<html><head><meta charset="UTF-8"><style>
-body{font-family:Arial,sans-serif;margin:0;padding:0;background:#f0f4f8;color:#1e293b}
-.wrap{max-width:600px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,.1)}
-.header{background:${dc};padding:24px 32px;display:flex;justify-content:space-between;align-items:center}
-.header .company{color:#fff}
-.header .company strong{font-size:17px;display:block}
-.header .company span{font-size:12px;opacity:.7}
-.header .docnr{text-align:right;color:#fff}
-.header .docnr .type{font-size:22px;font-weight:900}
-.header .docnr .nr{font-size:12px;opacity:.8;font-family:monospace}
-.body{padding:24px 32px}
-.body p{line-height:1.7;font-size:14px;margin:0 0 10px}
-.betaal-box{background:#eff6ff;border:2px solid #3b82f6;border-radius:10px;padding:18px 20px;margin:18px 0}
-.betaal-box .amount{font-size:22px;font-weight:900;color:#1d4ed8;margin-bottom:6px}
-.betaal-box .detail{font-size:12.5px;color:#1e40af;line-height:1.8}
-.betaal-box .detail strong{font-family:monospace}
-.footer{background:#f8fafc;padding:16px 32px;border-top:1px solid #e2e8f0;font-size:11px;color:#94a3b8;text-align:center}
-</style></head><body>
-<div class="wrap">
-  <div class="header">
-    <div class="company">
-      ${bed.logo?`<img src="${bed.logo}" style="max-height:36px;max-width:120px;object-fit:contain;filter:brightness(0) invert(1);margin-bottom:4px;display:block;" alt="${bed.naam}"/>`:`<strong>${bed.naam||""}</strong>`}
-      <span>${bed.adres||""}, ${bed.gemeente||""}</span>
-    </div>
-    <div class="docnr">
-      <div class="type">FACTUUR</div>
-      <div class="nr">${doc.nummer||""}</div>
-    </div>
+  return `<div style="font-family:Arial,sans-serif;max-width:640px;margin:0 auto;background:#f8fafc">
+<div style="background:${dc};padding:28px 32px;text-align:center;border-radius:8px 8px 0 0">
+  <h1 style="color:#fff;margin:0;font-size:22px">FACTUUR ${doc.nummer||''}</h1>
+  <p style="color:rgba(255,255,255,.8);margin:6px 0 0;font-size:14px">${bed.naam||''}</p>
+</div>
+<div style="background:#fff;padding:28px 32px;border:1px solid #e2e8f0;border-top:0">
+  <p style="font-size:15px;color:#1e293b">Beste <strong>${doc.klant?.naam||''}</strong>,</p>
+  <p style="font-size:14px;color:#475569;line-height:1.6">Hierbij uw factuur. Gelieve te betalen vóór de vervaldatum.</p>
+  <table style="width:100%;border-collapse:collapse;margin:20px 0;font-size:14px">
+    <tr style="background:#f1f5f9"><td style="padding:10px 14px;border:1px solid #e2e8f0;font-weight:600">Factuur nr</td><td style="padding:10px 14px;border:1px solid #e2e8f0">${doc.nummer||''}</td></tr>
+    <tr><td style="padding:10px 14px;border:1px solid #e2e8f0;font-weight:600">Datum</td><td style="padding:10px 14px;border:1px solid #e2e8f0">${fmtDate(doc.datum||doc.aangemaakt)}</td></tr>
+    <tr style="background:#f1f5f9"><td style="padding:10px 14px;border:1px solid #e2e8f0;font-weight:600;color:#ef4444">Vervaldatum</td><td style="padding:10px 14px;border:1px solid #e2e8f0;font-weight:600;color:#ef4444">${fmtDate(doc.vervaldatum)}</td></tr>
+    <tr><td style="padding:10px 14px;border:1px solid #e2e8f0;font-weight:600;font-size:16px">Totaal incl. BTW</td><td style="padding:10px 14px;border:1px solid #e2e8f0;font-size:18px;font-weight:700;color:${dc}">${fmtEuro(tot.totaal)}</td></tr>
+  </table>
+  <div style="background:#f1f5f9;padding:16px;border-radius:8px;margin:20px 0;font-size:13px">
+    <p style="margin:0;font-weight:700;color:#1e293b">Betalingsgegevens</p>
+    <p style="margin:8px 0 0;color:#475569">IBAN: <strong>${bed.iban||''}</strong></p>
+    <p style="margin:4px 0 0;color:#475569">BIC: ${bed.bic||''}</p>
+    <p style="margin:4px 0 0;color:#475569">Mededeling: <strong>${doc.nummer||''}</strong></p>
   </div>
-  <div class="body">
-    <p>Beste <strong>${doc.klant?.naam||""}</strong>,</p>
-    <p>In bijlage vindt u factuur <strong>${doc.nummer||""}</strong> d.d. <strong>${fmtDate(doc.datum||doc.aangemaakt)}</strong>.</p>
-    <div class="betaal-box">
-      <div class="amount">💶 ${fmtEuro(tot.totaal)}</div>
-      <div class="detail">
-        <strong>Betalen voor:</strong> ${fmtDate(doc.vervaldatum)}<br/>
-        <strong>IBAN:</strong> <strong>${bed.iban||""}</strong><br/>
-        <strong>Mededeling:</strong> <strong>${doc.nummer||""}</strong><br/>
-        <strong>BIC:</strong> ${bed.bic||""}
-      </div>
-    </div>
-    <p style="font-size:12px;color:#94a3b8">Vragen? ${bed.tel||""} · ${bed.email||""}</p>
-  </div>
-  <div class="footer">
-    ${bed.naam||""} · BTW: ${fmtBtwnr(bed.btwnr||"")} · ${bed.email||""}
+  <div style="margin-top:24px;padding-top:16px;border-top:1px solid #e2e8f0;font-size:13px;color:#64748b;line-height:1.6">
+    <p style="margin:0"><strong>${bed.naam}</strong> · ${bed.adres||''} · ${bed.gemeente||''}</p>
+    <p style="margin:4px 0">${bed.tel||''} · ${bed.email||''} · BTW: ${fmtBtwnr(bed.btwnr||'')}</p>
   </div>
 </div>
-</body></html>`;
+<div style="text-align:center;padding:16px;font-size:11px;color:#94a3b8">${bed.naam} · ${bed.website||''}</div>
+</div>`;
 }
 
 function EmailModal({doc,type,settings,onClose,onSend,onAcceptToken}) {
@@ -4910,8 +5044,28 @@ function EmailModal({doc,type,settings,onClose,onSend,onAcceptToken}) {
 
   // Accept/reject tokens voor offerte
   const token = useRef(genToken());
-  const acceptUrl = type==="offerte" ? `${window.location.origin}${window.location.pathname}?action=accept&token=${token.current}&id=${doc.id}` : "";
-  const rejectUrl = type==="offerte" ? `${window.location.origin}${window.location.pathname}?action=reject&token=${token.current}&id=${doc.id}` : "";
+  // Encode offerte data for the public offerte.html page
+  const offertePageData = type==="offerte" ? (() => {
+    try {
+      // Strip base64 fiches to keep URL size manageable
+      const cleanLijnen = (doc.lijnen||[]).map(l => ({
+        ...l,
+        technischeFiche: null, // Too large for URL
+        technischeFiches: (l.technischeFiches||[]).map(f => ({naam: f.naam})), // Keep names only
+        imageUrl: (l.imageUrl||"").startsWith("data:") ? "" : l.imageUrl // Strip base64 images
+      }));
+      const payload = {
+        id: doc.id, nummer: doc.nummer, aangemaakt: doc.aangemaakt, vervaldatum: doc.vervaldatum,
+        klant: doc.klant, lijnen: cleanLijnen, notities: doc.notities,
+        installatieType: doc.installatieType, btwRegime: doc.btwRegime,
+        groepen: doc.groepen, voorschot: doc.voorschot,
+        _dc: dc, _bed: {naam:bed.naam,adres:bed.adres,gemeente:bed.gemeente,tel:bed.tel,email:bed.email,btwnr:bed.btwnr,website:bed.website,iban:bed.iban}
+      };
+      return btoa(encodeURIComponent(JSON.stringify(payload)));
+    } catch(e) { console.error("Offerte encode error:",e); return ""; }
+  })() : "";
+  const acceptUrl = type==="offerte" ? `${window.location.origin}/offerte.html?data=${offertePageData}` : "";
+  const rejectUrl = ""; // Reject happens on the offerte.html page, not via separate link
 
   // Email modus: automatisch (EmailJS), handmatig (mailto), of PEPPOL
   const hasEmailJS = !!(ejCfg.emailjsServiceId && ejCfg.emailjsPublicKey);
@@ -4945,12 +5099,53 @@ function EmailModal({doc,type,settings,onClose,onSend,onAcceptToken}) {
     setSending(true); setError("");
     try {
       await loadEmailJS();
-      window.emailjs.init(ejCfg.emailjsPublicKey);
-      await window.emailjs.send(ejCfg.emailjsServiceId, type==="offerte" ? (ejCfg.emailjsTemplateOfferte||"template_billr_off") : (ejCfg.emailjsTemplateFactuur||"template_billr_fct"), {
+      const pubKey = ejCfg.emailjsPublicKey || "04zsVAk5imDpo-8GJ";
+      const svcId = ejCfg.emailjsServiceId || "service_qrkvr0d";
+      const tmplId = type==="offerte" 
+        ? (ejCfg.emailjsTemplateOfferte || "template_5nckw9f") 
+        : (ejCfg.emailjsTemplateFactuur || "template_pe412p8");
+      
+      window.emailjs.init(pubKey);
+      
+      // Strip base64 images uit HTML (anders overschrijdt het de 50KB EmailJS limiet)
+      let cleanHtml = bodyMode==="html" ? htmlBody : `<pre style="font-family:Arial">${txtBody}</pre>`;
+      cleanHtml = cleanHtml.replace(/src="data:image\/[^"]+"/g, 'src=""');
+      // Also strip very long inline styles with base64 backgrounds
+      cleanHtml = cleanHtml.replace(/url\(data:image\/[^)]+\)/g, 'url()');
+      
+      // Check size - EmailJS limit is 50KB total for all variables
+      const totalSize = new Blob([JSON.stringify({
+        to_email: to, to_name: doc.klant?.naam||"", subject, 
+        html_body: cleanHtml, text_body: txtBody||"",
+        from_name: bed.naam||"", reply_to: ejCfg.eigen||bed.email||""
+      })]).size;
+      
+      if(totalSize > 48000) {
+        // Nog steeds te groot - gebruik simpele tekst versie
+        console.warn(`Email body te groot (${Math.round(totalSize/1024)}KB), fallback naar tekst`);
+        cleanHtml = `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px">
+          <div style="background:${dc};color:#fff;padding:20px;text-align:center;border-radius:8px 8px 0 0">
+            <h2 style="margin:0">${bed.naam||"BILLR"}</h2>
+          </div>
+          <div style="padding:20px;background:#fff;border:1px solid #e2e8f0">
+            <p>Beste <strong>${doc.klant?.naam||""}</strong>,</p>
+            <p>${type==="offerte"?"In bijlage vindt u onze offerte":"Hierbij uw factuur"} <strong>${doc.nummer||""}</strong> d.d. ${fmtDate(doc.datum||doc.aangemaakt)}.</p>
+            <table style="width:100%;border-collapse:collapse;margin:16px 0">
+              <tr><td style="padding:8px;border:1px solid #e2e8f0;font-weight:600">${type==="offerte"?"Offerte":"Factuur"} nr</td><td style="padding:8px;border:1px solid #e2e8f0">${doc.nummer||""}</td></tr>
+              <tr><td style="padding:8px;border:1px solid #e2e8f0;font-weight:600">${type==="offerte"?"Geldig tot":"Vervaldatum"}</td><td style="padding:8px;border:1px solid #e2e8f0">${fmtDate(doc.vervaldatum)}</td></tr>
+              <tr><td style="padding:8px;border:1px solid #e2e8f0;font-weight:600">Totaal incl. BTW</td><td style="padding:8px;border:1px solid #e2e8f0"><strong>${fmtEuro(tot.totaal)}</strong></td></tr>
+            </table>
+            ${type==="offerte"&&acceptUrl?`<p><a href="${acceptUrl}" style="background:${dc};color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;display:inline-block;font-weight:600">📄 Bekijk uw offerte</a></p>`:""}
+            <p>Met vriendelijke groeten,<br/><strong>${bed.naam||""}</strong><br/>${bed.tel||""} · ${bed.email||""}</p>
+          </div>
+        </div>`;
+      }
+      
+      await window.emailjs.send(svcId, tmplId, {
         to_email: to,
         to_name: doc.klant?.naam||"",
         subject: subject,
-        html_body: bodyMode==="html" ? htmlBody : `<pre style="font-family:Arial">${txtBody}</pre>`,
+        html_body: cleanHtml,
         text_body: txtBody||"",
         from_name: bed.naam||"",
         reply_to: ejCfg.eigen||bed.email||"",
@@ -5116,7 +5311,7 @@ function Rapportage({offertes,facturen}) {
   return(
     <div>
       <div className="flex fca gap2 mb5">{[["maand","Deze maand"],["kwartaal","Dit kwartaal"],["jaar","Dit jaar"],["alle","Alles"]].map(([v,l])=><button key={v} className={`period-btn ${period===v?"on":""}`} onClick={()=>setPeriod(v)}>{l}</button>)}</div>
-      <div className="sg">{[{l:"Gefactureerd",v:ff.length,s:"stuks",ic:"🧾",c:"#2563eb"},{l:"Totaal gefactureerd",v:fmtEuro(ff.reduce((s,f)=>s+calcTotals(f.lijnen||[]).totaal,0)),s:"incl. BTW",ic:"💶",c:"#f59e0b"},{l:"Betaald",v:fmtEuro(ff.filter(f=>f.status==="betaald").reduce((s,f)=>s+calcTotals(f.lijnen||[]).totaal,0)),s:"ontvangen",ic:"✅",c:"#10b981"},{l:"Offertes",v:fo.length,s:"aangemaakt",ic:"📋",c:"#7c3aed"}].map((s,i)=><div key={i} className="sc" style={{"--sc":s.c,"cursor":"default"}}><div className="sl">{s.l}</div><div className="sv">{s.v}</div><div className="ss">{s.s}</div><div className="si">{s.ic}</div></div>)}</div>
+      <div className="sg">{[{l:"Gefactureerd",v:ff.length,s:"stuks",ic:"🧾",c:"#2563eb"},{l:"Totaal gefactureerd",v:fmtEuro(ff.reduce((s,f)=>s+calcTotals(f.lijnen||[]).totaal,0)),s:"incl. BTW",ic:"💶",c:"#f59e0b"},{l:"Betaald",v:fmtEuro(ff.filter(f=>f.status==="betaald").reduce((s,f)=>s+calcTotals(f.lijnen||[]).totaal,0)),s:"ontvangen",ic:"✅",c:"#10b981"},{l:"Offertes",v:fo.length,s:"aangemaakt",ic:"📋",c:"#7c3aed"}].map((s,i)=><div key={i} className="sc" style={{"--sc":s.c,"cursor":"pointer"}}><div className="sl">{s.l}</div><div className="sv">{s.v}</div><div className="ss">{s.s}</div><div className="si">{s.ic}</div></div>)}</div>
       <div className="g2">
         <div className="card"><div className="card-t" style={{marginBottom:12}}>Maandelijkse omzet {now.getFullYear()}</div>
           <ResponsiveContainer width="100%" height={220}><BarChart data={chartData}><CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9"/><XAxis dataKey="naam" tick={{fontSize:11}}/><YAxis tick={{fontSize:11}} tickFormatter={v=>"€"+v}/><Tooltip formatter={v=>fmtEuro(v)}/><Bar dataKey="omzet" fill="#2563eb" radius={[4,4,0,0]} name="Omzet"/></BarChart></ResponsiveContainer>
@@ -5136,59 +5331,48 @@ function InstellingenPage({settings,setSettings,notify}) {
   const [openLyt,setOpenLyt]=useState({algemeen:true});
   const [form,setForm]=useState(JSON.parse(JSON.stringify({...INIT_SETTINGS,...settings,bedrijf:{...INIT_SETTINGS.bedrijf,...settings.bedrijf},email:{...INIT_SETTINGS.email,...settings.email},voorwaarden:{...INIT_SETTINGS.voorwaarden,...settings.voorwaarden},thema:{...INIT_SETTINGS.thema,...settings.thema},sjabloon:{...INIT_SETTINGS.sjabloon,...(settings.sjabloon||{})},layout:{...INIT_SETTINGS.layout,...(settings.layout||{}),logo:{...INIT_SETTINGS.layout.logo,...(settings.layout?.logo||{})},titel:{...INIT_SETTINGS.layout.titel,...(settings.layout?.titel||{})},bedrijf:{...INIT_SETTINGS.layout.bedrijf,...(settings.layout?.bedrijf||{}),velden:{...INIT_SETTINGS.layout.bedrijf.velden,...(settings.layout?.bedrijf?.velden||{})}},klant:{...INIT_SETTINGS.layout.klant,...(settings.layout?.klant||{}),velden:{...INIT_SETTINGS.layout.klant.velden,...(settings.layout?.klant?.velden||{})}},metaBar:{...INIT_SETTINGS.layout.metaBar,...(settings.layout?.metaBar||{})},tabel:{...INIT_SETTINGS.layout.tabel,...(settings.layout?.tabel||{})},footer:{...INIT_SETTINGS.layout.footer,...(settings.layout?.footer||{})},handtekening:{...INIT_SETTINGS.layout.handtekening,...(settings.layout?.handtekening||{})},voorwaarden:{...INIT_SETTINGS.layout.voorwaarden,...(settings.layout?.voorwaarden||{})},notitie:{...INIT_SETTINGS.layout.notitie,...(settings.layout?.notitie||{})},watermark:{...INIT_SETTINGS.layout.watermark,...(settings.layout?.watermark||{})}},productCats:settings.productCats||INIT_SETTINGS.productCats,instTypes:settings.instTypes||INIT_SETTINGS.instTypes,instTypeGroepen:settings.instTypeGroepen||{}})));
   
-  // Scroll preservation - voorkom scroll jump bij wijzigingen
-  const scrollPosRef = useRef(0);
-  const isUpdatingRef = useRef(false);
+  // Scroll preservation - voorkom scroll jump bij alle wijzigingen
+  const contentRef = useRef(null);
+  const scrollTopRef = useRef(0);
   
-  // Intercept alle scroll events tijdens updates
-  useEffect(() => {
-    const handleScroll = (e) => {
-      if (isUpdatingRef.current) {
-        e.preventDefault();
-        e.stopPropagation();
-        window.scrollTo(0, scrollPosRef.current);
-      }
-    };
-    
-    window.addEventListener('scroll', handleScroll, { passive: false, capture: true });
-    return () => window.removeEventListener('scroll', handleScroll, { capture: true });
-  }, []);
+  // Capture scroll positie VOOR elke render
+  if(contentRef.current) {
+    scrollTopRef.current = contentRef.current.scrollTop;
+  }
+  
+  // Herstel scroll positie NA elke render
+  useLayoutEffect(() => {
+    if(!contentRef.current) {
+      contentRef.current = document.querySelector('.content');
+    }
+    if(contentRef.current && scrollTopRef.current > 0) {
+      contentRef.current.scrollTop = scrollTopRef.current;
+    }
+  });
   
   const setS=updFn=>setForm(updFn);
-  const set=(sec,k,v)=>{
-    scrollPosRef.current = window.scrollY;
-    isUpdatingRef.current = true;
-    setForm(p=>({...p,[sec]:{...p[sec],[k]:v}}));
-    setTimeout(() => { isUpdatingRef.current = false; }, 100);
-  };
-  const setL=(sec,k,v)=>{
-    scrollPosRef.current = window.scrollY;
-    isUpdatingRef.current = true;
-    setForm(p=>({...p,layout:{...p.layout,[sec]:{...(p.layout[sec]||{}),[k]:v}}}));
-    setTimeout(() => { isUpdatingRef.current = false; }, 100);
-  };
-  const setLObj=(sec,obj)=>{
-    // Voor nested object updates (bijv. logo.voorblad.breedte)
-    scrollPosRef.current = window.scrollY;
-    isUpdatingRef.current = true;
-    setForm(p=>({...p,layout:{...p.layout,[sec]:obj}}));
-    setTimeout(() => { isUpdatingRef.current = false; }, 100);
-  };
-  const setLV=(sec,k,v)=>{
-    scrollPosRef.current = window.scrollY;
-    isUpdatingRef.current = true;
-    setForm(p=>({...p,layout:{...p.layout,[sec]:{...(p.layout[sec]||{}),velden:{...(p.layout[sec]?.velden||{}),[k]:v}}}}));
-    setTimeout(() => { isUpdatingRef.current = false; }, 100);
-  };
-  const handleRangeChange=(setter)=>(e)=>{
-    scrollPosRef.current = window.scrollY;
-    setter(e);
-  };
+  const set=(sec,k,v)=>setForm(p=>({...p,[sec]:{...p[sec],[k]:v}}));
+  const setL=(sec,k,v)=>setForm(p=>({...p,layout:{...p.layout,[sec]:{...(p.layout[sec]||{}),[k]:v}}}));
+  const setLObj=(sec,obj)=>setForm(p=>({...p,layout:{...p.layout,[sec]:obj}}));
+  const setLV=(sec,k,v)=>setForm(p=>({...p,layout:{...p.layout,[sec]:{...(p.layout[sec]||{}),velden:{...(p.layout[sec]?.velden||{}),[k]:v}}}}));
+  const handleRangeChange=(setter)=>(e)=>setter(e);
   const logoRef=useRef();
   const achtergrondRef=useRef();
   const handleLogo=e=>{const file=e.target.files[0];if(!file)return;const reader=new FileReader();reader.onload=ev=>set("bedrijf","logo",ev.target.result);reader.readAsDataURL(file);};
   const handleAchtergrond=e=>{const file=e.target.files[0];if(!file)return;const reader=new FileReader();reader.onload=ev=>set("sjabloon","achtergrondImg",ev.target.result);reader.readAsDataURL(file);};
   const doSave=()=>setSettings(form);
+
+  // ═══ AUTO-SAVE: sla instellingen automatisch op na elke wijziging (debounced) ═══
+  const isInitialMount = useRef(true);
+  useEffect(() => {
+    // Skip eerste render (initialisatie vanuit settings)
+    if(isInitialMount.current) { isInitialMount.current = false; return; }
+    const timer = setTimeout(() => {
+      setSettings(form);
+      console.log("💾 Auto-saved instellingen");
+    }, 1500); // 1.5s debounce
+    return () => clearTimeout(timer);
+  }, [form]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Boekhouder link for facturen
   const boekhouderLink=form.email.boekhouder1?`mailto:${form.email.boekhouder1}?subject=Verkoopfacturen%20${new Date().getFullYear()}%20—%20${encodeURIComponent(form.bedrijf.naam)}&body=Geachte%20boekhouder%2C%0A%0AIn%20bijlage%20de%20verkoopfacturen.`:null;
@@ -5444,7 +5628,7 @@ function InstellingenPage({settings,setSettings,notify}) {
       {tab==="thema"&&<div className="card">
         <div style={{fontWeight:700,fontSize:14,marginBottom:12}}>Kleur van de applicatie en documenten</div>
         <div className="thema-grid">
-          {THEMAS.map(t=>( <div key={t.kleur} className={`thema-item ${form.thema?.kleur===t.kleur?"on":""}`} onClick={()=>{scrollPosRef.current=window.scrollY;setForm(p=>({...p,thema:{naam:t.naam,kleur:t.kleur},bedrijf:{...p.bedrijf,kleur:t.kleur}}));}}>
+          {THEMAS.map(t=>( <div key={t.kleur} className={`thema-item ${form.thema?.kleur===t.kleur?"on":""}`} onClick={()=>{setForm(p=>({...p,thema:{naam:t.naam,kleur:t.kleur},bedrijf:{...p.bedrijf,kleur:t.kleur}}));}}>
               <div className="thema-swatch" style={{background:t.kleur}}/>
               <div className="thema-name">{t.naam}</div>
             </div>
@@ -5452,7 +5636,7 @@ function InstellingenPage({settings,setSettings,notify}) {
         </div>
         <div style={{marginTop:16,display:"flex",alignItems:"center",gap:12}}>
           <div><div style={{fontSize:12.5,fontWeight:600,marginBottom:4}}>Of kies een aangepaste kleur:</div>
-            <input type="color" value={form.thema?.kleur||"#1a2e4a"} onChange={e=>{scrollPosRef.current=window.scrollY;setForm(p=>({...p,thema:{naam:"Aangepast",kleur:e.target.value},bedrijf:{...p.bedrijf,kleur:e.target.value}}));}} style={{width:52,height:38,border:"1.5px solid var(--bdr)",borderRadius:7,cursor:"pointer"}}/></div>
+            <input type="color" value={form.thema?.kleur||"#1a2e4a"} onChange={e=>{setForm(p=>({...p,thema:{naam:"Aangepast",kleur:e.target.value},bedrijf:{...p.bedrijf,kleur:e.target.value}}));}} style={{width:52,height:38,border:"1.5px solid var(--bdr)",borderRadius:7,cursor:"pointer"}}/></div>
           <div style={{flex:1,padding:"12px 14px",borderRadius:8,background:form.thema?.kleur||"#1a2e4a",color:"#fff",fontWeight:700,textAlign:"center",fontSize:13}}>Voorbeeld: {form.thema?.naam||"Aangepast"}</div>
         </div>
         <button className="btn b2" style={{marginTop:14}} onClick={doSave}>Thema opslaan & toepassen</button>
@@ -5479,37 +5663,37 @@ function InstellingenPage({settings,setSettings,notify}) {
           );
           const FR2=({children})=><div className="fr2" style={{gap:10,marginBottom:8}}>{children}</div>;
           const FG=({label,children,hint})=>(<div style={{marginBottom:8}}><label style={{display:"block",fontSize:11.5,fontWeight:600,color:"#64748b",marginBottom:3}}>{label}</label>{children}{hint&&<div style={{fontSize:10.5,color:"#94a3b8",marginTop:2}}>{hint}</div>}</div>);
-          const Chk=({label,val,onChange})=>(<label style={{display:"flex",alignItems:"center",gap:7,cursor:"pointer",fontSize:13,marginBottom:5}}><input type="checkbox" checked={!!val} onChange={e=>{scrollPosRef.current=window.scrollY;onChange(e.target.checked);}} style={{width:15,height:15,cursor:"pointer"}}/>{label}</label>);
-          const PosBtn=({val,onChange})=>(<div style={{display:"flex",gap:6}}>{["links","rechts"].map(v=><button key={v} type="button" style={{padding:"6px 14px",borderRadius:6,border:`2px solid ${val===v?"#2563eb":"#e2e8f0"}`,background:val===v?"#2563eb":"#fff",color:val===v?"#fff":"#374151",fontSize:12.5,fontWeight:600,cursor:"pointer"}} onClick={()=>{scrollPosRef.current=window.scrollY;onChange(v);}}>{v==="links"?"⬅ Links":"Rechts ➡"}</button>)}</div>);
-          const Sld=({label,val,min,max,step=1,unit="",onChange})=>(<div style={{marginBottom:8}}><div style={{display:"flex",justifyContent:"space-between",fontSize:11.5,color:"#64748b",marginBottom:2}}><span>{label}</span><strong>{val||0}{unit}</strong></div><input type="range" min={min} max={max} step={step} value={val||0} onChange={e=>{scrollPosRef.current=window.scrollY;onChange(+e.target.value);}} style={{width:"100%"}}/></div>);
-          const Veld=({label,val,onChange})=>(<label style={{display:"flex",alignItems:"center",gap:7,cursor:"pointer",fontSize:12.5,marginBottom:4,paddingLeft:4}}><input type="checkbox" checked={val!==false} onChange={e=>{scrollPosRef.current=window.scrollY;onChange(e.target.checked);}} style={{width:14,height:14,cursor:"pointer"}}/>{label}</label>);
+          const Chk=({label,val,onChange})=>(<label style={{display:"flex",alignItems:"center",gap:7,cursor:"pointer",fontSize:13,marginBottom:5}}><input type="checkbox" checked={!!val} onChange={e=>{onChange(e.target.checked);}} style={{width:15,height:15,cursor:"pointer"}}/>{label}</label>);
+          const PosBtn=({val,onChange})=>(<div style={{display:"flex",gap:6}}>{["links","rechts"].map(v=><button key={v} type="button" style={{padding:"6px 14px",borderRadius:6,border:`2px solid ${val===v?"#2563eb":"#e2e8f0"}`,background:val===v?"#2563eb":"#fff",color:val===v?"#fff":"#374151",fontSize:12.5,fontWeight:600,cursor:"pointer"}} onClick={()=>{onChange(v);}}>{v==="links"?"⬅ Links":"Rechts ➡"}</button>)}</div>);
+          const Sld=({label,val,min,max,step=1,unit="",onChange})=>(<div style={{marginBottom:8}}><div style={{display:"flex",justifyContent:"space-between",fontSize:11.5,color:"#64748b",marginBottom:2}}><span>{label}</span><strong>{val||0}{unit}</strong></div><input type="range" min={min} max={max} step={step} value={val||0} onChange={e=>{onChange(+e.target.value);}} style={{width:"100%"}}/></div>);
+          const Veld=({label,val,onChange})=>(<label style={{display:"flex",alignItems:"center",gap:7,cursor:"pointer",fontSize:12.5,marginBottom:4,paddingLeft:4}}><input type="checkbox" checked={val!==false} onChange={e=>{onChange(e.target.checked);}} style={{width:14,height:14,cursor:"pointer"}}/>{label}</label>);
           return(<>
             <AccRow id="algemeen" title="Algemeen" icon="📄">
               <FR2>
                 <FG label="Lettertype">
-                  <select className="fc" value={lyt.font||"Inter"} onChange={e=>{scrollPosRef.current=window.scrollY;setForm(p=>({...p,layout:{...p.layout,font:e.target.value}}));}}>
+                  <select className="fc" value={lyt.font||"Inter"} onChange={e=>{setForm(p=>({...p,layout:{...p.layout,font:e.target.value}}));}}>
                     {["Inter","Arial","Helvetica","Georgia","Times New Roman"].map(f=><option key={f}>{f}</option>)}
                   </select>
                 </FG>
                 <FG label={`Tekstgrootte: ${lyt.fontSize||13}px`}>
-                  <input type="range" min={9} max={16} value={lyt.fontSize||13} onChange={e=>{scrollPosRef.current=window.scrollY;setForm(p=>({...p,layout:{...p.layout,fontSize:+e.target.value}}));}} style={{width:"100%",marginTop:8}}/>
+                  <input type="range" min={9} max={16} value={lyt.fontSize||13} onChange={e=>{setForm(p=>({...p,layout:{...p.layout,fontSize:+e.target.value}}));}} style={{width:"100%",marginTop:8}}/>
                 </FG>
               </FR2>
               <FR2>
                 <FG label="Tekstkleur">
                   <div style={{display:"flex",gap:6,alignItems:"center"}}>
-                    <input type="color" value={lyt.tekstKleur||"#1e293b"} onChange={e=>{scrollPosRef.current=window.scrollY;setForm(p=>({...p,layout:{...p.layout,tekstKleur:e.target.value}}));}} style={{width:40,height:36,border:"1.5px solid var(--bdr)",borderRadius:6,cursor:"pointer",padding:2}}/>
+                    <input type="color" value={lyt.tekstKleur||"#1e293b"} onChange={e=>{setForm(p=>({...p,layout:{...p.layout,tekstKleur:e.target.value}}));}} style={{width:40,height:36,border:"1.5px solid var(--bdr)",borderRadius:6,cursor:"pointer",padding:2}}/>
                     <span style={{fontSize:12,color:"#64748b"}}>{lyt.tekstKleur||"#1e293b"}</span>
                   </div>
                 </FG>
                 <FG label="Datumformaat">
-                  <select className="fc" value={lyt.datumFormaat||"kort"} onChange={e=>{scrollPosRef.current=window.scrollY;setForm(p=>({...p,layout:{...p.layout,datumFormaat:e.target.value}}));}}>
+                  <select className="fc" value={lyt.datumFormaat||"kort"} onChange={e=>{setForm(p=>({...p,layout:{...p.layout,datumFormaat:e.target.value}}));}}>
                     <option value="kort">14/03/2026</option>
                     <option value="lang">14 maart 2026</option>
                   </select>
                 </FG>
               </FR2>
-              <Chk label="Paginanummering bij meerdere pagina's" val={lyt.paginaNummering} onChange={v=>{scrollPosRef.current=window.scrollY;setForm(p=>({...p,layout:{...p.layout,paginaNummering:v}}));}}/>
+              <Chk label="Paginanummering bij meerdere pagina's" val={lyt.paginaNummering} onChange={v=>{setForm(p=>({...p,layout:{...p.layout,paginaNummering:v}}));}}/>
             </AccRow>
 
             <AccRow id="logo" title="Logo" icon="🖼">
@@ -5726,7 +5910,7 @@ function InstellingenPage({settings,setSettings,notify}) {
               {key:'openFacturen',label:'💶 Openstaande Facturen',desc:'Facturen die nog betaald moeten worden'},
               {key:'goedgekeurdeOffertes',label:'✅ Goedgekeurde Offertes',desc:'Offertes die door klant zijn goedgekeurd (met Plan knop)'},
               {key:'snelleActies',label:'⚡ Snelle Acties',desc:'4 knoppen voor snel nieuwe offerte aanmaken per type'},
-              {key:'agenda',label:'📅 Planningsagenda',desc:'W-Charge Planner agenda voor afspraken en planning'}
+              {key:'agenda',label:'📅 Agenda',desc:'Agenda agenda voor afspraken en planning'}
             ].map(w=>(
               <label key={w.key} style={{display:"flex",alignItems:"flex-start",gap:12,padding:12,background:"#f8f9fa",borderRadius:8,cursor:"pointer",border:"2px solid "+(form.dashboardWidgets?.[w.key]!==false?"#10b981":"#e2e8f0"),transition:"all 0.2s"}}>
                 <input 
@@ -5746,11 +5930,11 @@ function InstellingenPage({settings,setSettings,notify}) {
           <div style={{marginTop:16,padding:12,background:"#eff6ff",borderRadius:8,border:"1px solid #bfdbfe"}}>
             <div style={{display:"flex",gap:8,marginBottom:6}}>
               <span style={{fontSize:16}}>💡</span>
-              <span style={{fontWeight:600,fontSize:13,color:"#1e40af"}}>Tip: W-Charge Planner integratie</span>
+              <span style={{fontWeight:600,fontSize:13,color:"#1e40af"}}>Tip: Agenda integratie</span>
             </div>
             <p style={{fontSize:12,color:"#1e40af",lineHeight:1.5}}>
               De "📅 Plan" knop verschijnt bij goedgekeurde offertes als je de widget <strong>Goedgekeurde Offertes</strong> inschakelt. 
-              Klik op "Plan" om een afspraak direct in te plannen in de W-Charge Planner met alle klantgegevens al ingevuld!
+              Klik op "Plan" om een afspraak direct in te plannen in de Agenda met alle klantgegevens al ingevuld!
             </p>
           </div>
         </div>

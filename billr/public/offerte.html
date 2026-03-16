@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Offerte bekijken</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:Inter,Arial,sans-serif;background:#f0f4f8;color:#1e293b}
+.sticky-bar{position:sticky;top:0;z-index:100;background:#fff;border-bottom:2px solid #e2e8f0;padding:12px 20px;display:flex;align-items:center;justify-content:space-between;gap:12px;box-shadow:0 2px 12px rgba(0,0,0,.08);flex-wrap:wrap}
+.sticky-bar h2{font-size:16px;color:#1e293b;flex:1}
+.btn{padding:12px 24px;border:none;border-radius:8px;font-weight:700;font-size:14px;cursor:pointer;transition:all .2s}
+.btn-accept{background:#10b981;color:#fff}.btn-accept:hover{background:#059669}
+.btn-reject{background:#f1f5f9;color:#64748b;border:1px solid #e2e8f0}.btn-reject:hover{background:#fef2f2;color:#ef4444}
+.container{max-width:900px;margin:0 auto;padding:20px}
+.card{background:#fff;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,.06);padding:28px;margin-bottom:20px}
+.header-band{padding:32px;text-align:center;border-radius:12px 12px 0 0;color:#fff;margin:-28px -28px 24px}
+.meta-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin:20px 0}
+.meta-item{background:#f8fafc;padding:12px 16px;border-radius:8px;border:1px solid #e2e8f0}
+.meta-label{font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.5px}
+.meta-value{font-size:16px;font-weight:700;color:#1e293b;margin-top:2px}
+.product-row{display:flex;gap:16px;padding:16px 0;border-bottom:1px solid #f1f5f9;align-items:center}
+.product-img{width:64px;height:64px;border-radius:8px;object-fit:contain;background:#f8fafc;border:1px solid #e2e8f0;flex-shrink:0}
+.product-info{flex:1}
+.product-name{font-weight:700;font-size:15px}
+.product-desc{font-size:13px;color:#64748b;margin-top:2px}
+.product-price{font-weight:800;font-size:16px;text-align:right;white-space:nowrap}
+.total-bar{padding:16px 20px;border-radius:8px;display:flex;justify-content:space-between;align-items:center;margin-top:20px;color:#fff;font-weight:800;font-size:18px}
+.spec-tag{display:inline-block;background:#f1f5f9;border-radius:4px;padding:2px 8px;font-size:11px;color:#475569;margin:2px 2px 0 0}
+.fiche-link{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;color:#2563eb;text-decoration:none;font-weight:600;font-size:13px;margin:6px 4px 0 0}
+/* Modal */
+.modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:200;align-items:center;justify-content:center}
+.modal-bg.active{display:flex}
+.modal{background:#fff;border-radius:16px;max-width:500px;width:95%;padding:32px;max-height:90vh;overflow-y:auto}
+.fg{margin-bottom:16px}
+.fl{display:block;font-weight:600;font-size:13px;margin-bottom:6px;color:#1e293b}
+.fc{width:100%;padding:10px 14px;border:2px solid #e2e8f0;border-radius:8px;font-size:14px;font-family:inherit}
+.fc:focus{outline:none;border-color:#2563eb}
+.status-msg{text-align:center;padding:40px 20px}
+.status-msg .icon{font-size:64px;margin-bottom:16px}
+.status-msg h2{font-size:24px;margin-bottom:8px}
+.status-msg p{color:#64748b;font-size:15px}
+@media(max-width:640px){.sticky-bar{padding:10px 14px}.sticky-bar h2{font-size:14px}.btn{padding:10px 16px;font-size:13px}.card{padding:16px}.product-row{flex-wrap:wrap}}
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="status-msg"><div class="icon">⏳</div><h2>Offerte laden...</h2><p>Even geduld</p></div>
+</div>
+
+<script>
+const SB_URL="https://qxnxbqkdvvblfkihmjxy.supabase.co";
+const SB_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF4bnhicWtkdnZibGZraWhtanh5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMzNTI3MTMsImV4cCI6MjA4ODkyODcxM30.1JDvrHgxLpU1GZqSjDVGtfnFJg8PHuD-aFpHOxAY1To";
+
+const params=new URLSearchParams(window.location.search);
+const offerteData=params.get('data');
+const action=params.get('action');
+const offId=params.get('id');
+
+const fmtEuro=n=>"€\u00A0"+Number(n||0).toFixed(2).replace(".",",").replace(/\B(?=(\d{3})+(?!\d))/g,".");
+const fmtDate=d=>d?new Date(d).toLocaleDateString("nl-BE",{day:"2-digit",month:"2-digit",year:"numeric"}):"—";
+
+// Track offerte view
+async function trackView(offerteId){
+  try{
+    const sb=window.supabase.createClient(SB_URL,SB_KEY);
+    await sb.from('offerte_views').insert({offerte_id:offerteId,viewed_at:new Date().toISOString(),user_agent:navigator.userAgent.slice(0,200)});
+    console.log('📊 View tracked');
+  }catch(e){console.warn('View tracking failed:',e)}
+}
+
+// Submit response (accept/reject)
+async function submitResponse(offerteId,status,data={}){
+  try{
+    const sb=window.supabase.createClient(SB_URL,SB_KEY);
+    await sb.from('offerte_responses').insert({offerte_id:offerteId,status,periode:data.periode||'',opmerkingen:data.opmerkingen||'',submitted_at:new Date().toISOString()});
+    // Update offerte status via URL redirect
+    const baseUrl=window.location.origin;
+    window.location.href=`${baseUrl}?action=${status==='goedgekeurd'?'accept':'reject'}&id=${offerteId}`;
+  }catch(e){
+    console.error('Submit failed:',e);
+    // Fallback: redirect with params
+    const baseUrl=window.location.origin;
+    window.location.href=`${baseUrl}?action=${status==='goedgekeurd'?'accept':'reject'}&id=${offerteId}`;
+  }
+}
+
+function renderOfferte(doc){
+  const dc=doc._dc||'#1a2e4a';
+  const bed=doc._bed||{};
+  const lijnen=doc.lijnen||[];
+  const sub=lijnen.reduce((s,l)=>s+(l.prijs*l.aantal),0);
+  const btw=lijnen.reduce((s,l)=>s+(l.prijs*l.aantal*(l.btw||21)/100),0);
+  const totaal=sub+btw;
+
+  trackView(doc.id);
+
+  document.getElementById('app').innerHTML=`
+  <div class="sticky-bar">
+    <h2>📋 ${doc.nummer||'Offerte'} — ${bed.naam||''}</h2>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-accept" onclick="showAcceptModal()">✅ Goedkeuren</button>
+      <button class="btn btn-reject" onclick="showRejectModal()">❌ Afwijzen</button>
+    </div>
+  </div>
+  <div class="container">
+    <div class="card">
+      <div class="header-band" style="background:${dc}">
+        <h1 style="font-size:28px;margin-bottom:4px">${doc.nummer||'OFFERTE'}</h1>
+        <p style="opacity:.8">${bed.naam||''}</p>
+      </div>
+      <div class="meta-grid">
+        <div class="meta-item"><div class="meta-label">Datum</div><div class="meta-value">${fmtDate(doc.aangemaakt)}</div></div>
+        <div class="meta-item"><div class="meta-label">Geldig tot</div><div class="meta-value">${fmtDate(doc.vervaldatum)}</div></div>
+        <div class="meta-item"><div class="meta-label">Klant</div><div class="meta-value">${doc.klant?.naam||''}</div></div>
+        <div class="meta-item"><div class="meta-label">Totaal incl. BTW</div><div class="meta-value" style="color:${dc};font-size:20px">${fmtEuro(totaal)}</div></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3 style="margin-bottom:16px">Producten & Diensten</h3>
+      ${lijnen.map(l=>`
+        <div class="product-row">
+          ${l.imageUrl?`<img class="product-img" src="${l.imageUrl}" alt="" onerror="this.style.display='none'"/>`:'<div class="product-img" style="display:flex;align-items:center;justify-content:center;font-size:24px">📦</div>'}
+          <div class="product-info">
+            <div class="product-name">${l.naam||''}</div>
+            <div class="product-desc">${l.omschr||''}</div>
+            ${(l.specs||[]).length?`<div style="margin-top:4px">${l.specs.map(s=>`<span class="spec-tag">✓ ${s}</span>`).join('')}</div>`:''}
+            ${(l.technischeFiches||[]).length?`<div style="margin-top:6px">${l.technischeFiches.map(f=>`<a class="fiche-link" href="${f.data}" download="${f.naam}">📎 ${f.naam}</a>`).join('')}</div>`:''}
+            ${l.technischeFiche&&!(l.technischeFiches||[]).length?`<a class="fiche-link" href="${l.technischeFiche}" download="${l.fichNaam||'fiche.pdf'}">📎 Technische fiche</a>`:''}
+          </div>
+          <div class="product-price">
+            <div>${fmtEuro(l.prijs*l.aantal)}</div>
+            <div style="font-size:11px;color:#94a3b8;font-weight:400">${l.aantal}× ${fmtEuro(l.prijs)}</div>
+          </div>
+        </div>
+      `).join('')}
+      <div class="total-bar" style="background:${dc}">
+        <span>TOTAAL incl. BTW</span>
+        <span>${fmtEuro(totaal)}</span>
+      </div>
+    </div>
+
+    ${doc.notities?`<div class="card"><h3>Opmerking</h3><p style="margin-top:8px;color:#475569">${doc.notities}</p></div>`:''}
+
+    <div class="card" style="text-align:center;padding:32px">
+      <h3 style="margin-bottom:16px">Uw beslissing</h3>
+      <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap">
+        <button class="btn btn-accept" style="font-size:16px;padding:16px 40px" onclick="showAcceptModal()">✅ Offerte goedkeuren</button>
+        <button class="btn btn-reject" style="font-size:16px;padding:16px 40px" onclick="showRejectModal()">❌ Offerte afwijzen</button>
+      </div>
+    </div>
+
+    <div style="text-align:center;padding:24px;font-size:12px;color:#94a3b8">
+      ${bed.naam||''} · ${bed.adres||''} · ${bed.gemeente||''}<br/>
+      ${bed.tel||''} · ${bed.email||''} · BTW: ${bed.btwnr||''}
+    </div>
+  </div>
+
+  <!-- Accept Modal -->
+  <div class="modal-bg" id="acceptModal">
+    <div class="modal">
+      <h2 style="margin-bottom:20px;color:#10b981">✅ Offerte goedkeuren</h2>
+      <p style="margin-bottom:20px;color:#64748b">Bevestig uw akkoord met offerte <strong>${doc.nummer}</strong> voor <strong>${fmtEuro(totaal)}</strong>.</p>
+      <div class="fg">
+        <label class="fl">Gewenste installatieperiode</label>
+        <select class="fc" id="acceptPeriode">
+          <option value="">— Kies een periode —</option>
+          <option>Zo snel mogelijk</option>
+          <option>Binnen 2 weken</option>
+          <option>Binnen 1 maand</option>
+          <option>Binnen 2 maanden</option>
+          <option>Na overleg</option>
+        </select>
+      </div>
+      <div class="fg">
+        <label class="fl">Extra informatie / opmerkingen</label>
+        <textarea class="fc" id="acceptNotes" rows="3" placeholder="Bijv: bij voorkeur 's morgens, parkeerplaats beschikbaar..."></textarea>
+      </div>
+      <div style="display:flex;gap:10px;margin-top:20px">
+        <button class="btn btn-reject" style="flex:1" onclick="closeModals()">Annuleren</button>
+        <button class="btn btn-accept" style="flex:1" onclick="doAccept()">✅ Bevestig</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Reject Modal -->
+  <div class="modal-bg" id="rejectModal">
+    <div class="modal">
+      <h2 style="margin-bottom:20px;color:#ef4444">❌ Offerte afwijzen</h2>
+      <div class="fg">
+        <label class="fl">Reden (optioneel)</label>
+        <textarea class="fc" id="rejectReason" rows="3" placeholder="Bijv: prijs te hoog, ander aanbod gekozen..."></textarea>
+      </div>
+      <div style="display:flex;gap:10px;margin-top:20px">
+        <button class="btn" style="flex:1;background:#f1f5f9;color:#64748b" onclick="closeModals()">Annuleren</button>
+        <button class="btn" style="flex:1;background:#ef4444;color:#fff" onclick="doReject()">❌ Afwijzen</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+window.showAcceptModal=()=>{document.getElementById('acceptModal').classList.add('active')};
+window.showRejectModal=()=>{document.getElementById('rejectModal').classList.add('active')};
+window.closeModals=()=>{document.querySelectorAll('.modal-bg').forEach(m=>m.classList.remove('active'))};
+window.doAccept=()=>{
+  const periode=document.getElementById('acceptPeriode')?.value||'';
+  const notes=document.getElementById('acceptNotes')?.value||'';
+  submitResponse(window._offId,'goedgekeurd',{periode,opmerkingen:notes});
+};
+window.doReject=()=>{
+  const reason=document.getElementById('rejectReason')?.value||'';
+  submitResponse(window._offId,'afgewezen',{opmerkingen:reason});
+};
+
+// Init
+if(offerteData){
+  try{
+    const doc=JSON.parse(decodeURIComponent(atob(offerteData)));
+    window._offId=doc.id;
+    renderOfferte(doc);
+  }catch(e){
+    document.getElementById('app').innerHTML='<div class="status-msg"><div class="icon">❌</div><h2>Ongeldige offerte link</h2><p>'+e.message+'</p></div>';
+  }
+}else if(action&&offId){
+  const status=action==='accept'?'goedgekeurd':'afgewezen';
+  document.getElementById('app').innerHTML=`<div class="status-msg"><div class="icon">${status==='goedgekeurd'?'✅':'❌'}</div><h2>Offerte ${status}</h2><p>Uw respons is ontvangen. ${bed?.naam||'Wij'} nemen contact met u op.</p></div>`;
+}else{
+  document.getElementById('app').innerHTML='<div class="status-msg"><div class="icon">📋</div><h2>Geen offerte opgegeven</h2><p>Gebruik de link uit uw email om de offerte te bekijken.</p></div>';
+}
+</script>
+</body>
+</html>
