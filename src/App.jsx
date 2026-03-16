@@ -1191,11 +1191,11 @@ tr.row-active td{border-top:2px solid #2563eb}
   .print-only{display:block!important}
   .no-print{display:none!important}
   
-  /* Elke pagina = precies 1 A4 */
+  /* Elke doc-page = pagina-eenheid */
   .doc-page{
     box-shadow:none!important;border-radius:0!important;
     margin:0!important;max-width:100%!important;width:100%!important;
-    display:block!important;overflow:hidden!important;
+    display:block!important;overflow:visible!important;
     break-before:page!important;page-break-before:always!important;
     min-height:auto!important;height:auto!important;
     box-sizing:border-box!important;position:relative!important;
@@ -1203,7 +1203,7 @@ tr.row-active td{border-top:2px solid #2563eb}
   .doc-page:first-of-type{break-before:avoid!important;page-break-before:avoid!important}
   .doc-page-lbl{display:none!important}
   
-  /* Coverpagina: linker kleurpaneel vult volledig */
+  /* Coverpagina: exact 1 A4, geen overflow */
   .cov{
     height:277mm!important;
     min-height:277mm!important;
@@ -1215,13 +1215,13 @@ tr.row-active td{border-top:2px solid #2563eb}
   .cov-l{height:100%!important;min-height:100%!important;flex:1!important}
   .cov-r{height:100%!important;box-sizing:border-box!important}
   
-  /* Pagina-padding */
-  .prod-page{padding:6mm 10mm!important;box-sizing:border-box!important;overflow:hidden!important}
-  .fct-pg{padding:6mm 10mm!important;box-sizing:border-box!important;overflow:hidden!important}
-  .qt-pg{padding:6mm 10mm!important;box-sizing:border-box!important;overflow:hidden!important}
-  .fct-pg2{padding:6mm 10mm!important;box-sizing:border-box!important;overflow:hidden!important}
+  /* Content pagina's — overflow visible zodat browser kan pagineren */
+  .prod-page{padding:6mm 10mm!important;box-sizing:border-box!important;overflow:visible!important}
+  .fct-pg{padding:6mm 10mm!important;box-sizing:border-box!important;overflow:visible!important}
+  .qt-pg{padding:6mm 10mm!important;box-sizing:border-box!important;overflow:visible!important}
+  .fct-pg2{padding:6mm 10mm!important;box-sizing:border-box!important;overflow:visible!important}
   
-  /* PDF fiche pagina's: volle pagina, geen overflow */
+  /* PDF fiche pagina's: eigen page break */
   .fiche-print-page{
     break-before:page!important;page-break-before:always!important;
     width:100%!important;box-sizing:border-box!important;
@@ -1229,7 +1229,7 @@ tr.row-active td{border-top:2px solid #2563eb}
   }
   .fiche-print-page img{
     width:100%!important;height:auto!important;
-    max-height:265mm!important;
+    max-height:260mm!important;
     object-fit:contain!important;
     display:block!important;
   }
@@ -1238,7 +1238,7 @@ tr.row-active td{border-top:2px solid #2563eb}
   .fiche-screen-embed{display:none!important}
   .fiche-print-images{display:block!important}
   
-  /* Tabel niet splitsen */
+  /* Tabel regels: niet splitsen */
   .qt-tbl tr{break-inside:avoid!important;page-break-inside:avoid!important}
   .qt-tbl tbody{break-inside:auto!important}
   .qt-totals{break-inside:avoid!important;page-break-inside:avoid!important}
@@ -1253,9 +1253,10 @@ tr.row-active td{border-top:2px solid #2563eb}
   .prod-item{break-inside:avoid!important;page-break-inside:avoid!important}
   .qt-meta-bar{break-inside:avoid!important;page-break-inside:avoid!important}
   .qt-parties{break-inside:avoid!important;page-break-inside:avoid!important}
-  /* Footer onderaan */
+  /* Footer: break-inside avoid, maar NIET absolute positioned */
   .qt-footer{
     break-inside:avoid!important;page-break-inside:avoid!important;
+    margin-top:auto!important;
   }
   /* Modal chrome verbergen */
   .mo{position:static!important;background:transparent!important;padding:0!important;display:block!important}
@@ -2596,7 +2597,7 @@ function ProductenPage({producten,settings,onEdit,onDelete,onToggle,onEnrich}) {
 
   // Group by brand for display
   const grouped = {};
-  list.forEach(p=>{const g=p.merk||p.cat||"Overige";if(!grouped[g])grouped[g]=[];grouped[g].push(p);});
+  list.forEach(p=>{const g=p.merk||p.cat||"Producten";if(!grouped[g])grouped[g]=[];grouped[g].push(p);});
 
   return(
     <div>
@@ -3020,7 +3021,7 @@ function ImportModal({onImport, onClose, notify}) {
 
   // ── Group parsed products by brand/category ──
   const grouped = parsed ? Object.entries(
-    parsed.reduce((g,p) => { const k=p.merk||p.cat||"Overige"; if(!g[k])g[k]=[]; g[k].push(p); return g; }, {})
+    parsed.reduce((g,p) => { const k=p.merk||p.cat||"Producten"; if(!g[k])g[k]=[]; g[k].push(p); return g; }, {})
   ) : [];
 
   return (
@@ -3491,7 +3492,7 @@ function OfferteWizard({klanten,producten,offertes,editData,settings,onSave,onCl
       const instTypeGroepen = settings?.instTypeGroepen?.[instType];
       const dg = instTypeGroepen
         ? instTypeGroepen.split(",").map(s=>s.trim()).filter(Boolean)
-        : (instType==="laadpaal"?["Laadstation","Installatie","Energie monitoring","Keuring"]:instType==="zon"?["Zonnepanelen","Omvormer & Montage","Keuring"]:instType==="batterij"?["Batterij","Installatie"]:instType==="combo"?["Laadstation","Zonnepanelen","Batterij","Installatie","Keuring"]:["Materiaal","Installatie","Overige"]);
+        : (instType==="laadpaal"?["Laadstation","Installatie","Energie monitoring","Keuring"]:instType==="zon"?["Zonnepanelen","Omvormer & Montage","Keuring"]:instType==="batterij"?["Batterij","Installatie"]:instType==="combo"?["Laadstation","Zonnepanelen","Batterij","Installatie","Keuring"]:["Materiaal","Installatie","Producten"]);
       const ng=dg.map(n=>({id:uid(),naam:n}));setGroepen(ng);setActiveGroepId(ng[0]?.id);
       const cats=[...new Set(producten.filter(p=>p.actief).map(p=>p.cat))];if(cats.length)setActiveCat(cats[0]);
     }
@@ -4046,7 +4047,7 @@ function OfferteDocument({doc, settings}) {
   const eindTot = doc.korting>0 ? tot.totaal - kortingBedrag*(1+0.21) : tot.totaal;
   const inst = INST_TYPES.find(t=>t.id===doc.installatieType);
   const groepen = doc.groepen||[];
-  const lijnenPerGroep = [...groepen.map(g=>({...g,items:(doc.lijnen||[]).filter(l=>l.groepId===g.id)})).filter(g=>g.items.length>0), {id:"rest",naam:"Overige",items:(doc.lijnen||[]).filter(l=>!l.groepId||!groepen.find(g=>g.id===l.groepId))}.items.length>0?{id:"rest",naam:"Overige",items:(doc.lijnen||[]).filter(l=>!l.groepId||!groepen.find(g=>g.id===l.groepId))}:null].filter(Boolean);
+  const lijnenPerGroep = [...groepen.map(g=>({...g,items:(doc.lijnen||[]).filter(l=>l.groepId===g.id)})).filter(g=>g.items.length>0), {id:"rest",naam:"Producten",items:(doc.lijnen||[]).filter(l=>!l.groepId||!groepen.find(g=>g.id===l.groepId))}.items.length>0?{id:"rest",naam:"Producten",items:(doc.lijnen||[]).filter(l=>!l.groepId||!groepen.find(g=>g.id===l.groepId))}:null].filter(Boolean);
   const uniqueProds = [...new Map((doc.lijnen||[]).filter(l=>l.naam).map(l=>[l.productId||l.id,l])).values()];
   const confirmLink = `mailto:?subject=Akkoord offerte ${doc.nummer||""}%20—%20${encodeURIComponent(bed.naam)}&body=Geachte%20${encodeURIComponent(bed.naam)}%2C%0A%0AHierbij%20bevestig%20ik%20mijn%20akkoord%20met%20offerte%20${doc.nummer||""}%20d.d.%20${fmtDate(doc.aangemaakt)}%20voor%20een%20totaalbedrag%20van%20${encodeURIComponent(fmtEuro(eindTot))}.%0A%0AMet%20vriendelijke%20groeten%2C%0A${encodeURIComponent(doc.klant?.naam||"")}`;
 
@@ -4370,7 +4371,7 @@ function FactuurDocument({doc, settings}) {
   const ontwerp = sj.ontwerpFactuur || "classic";
   const tot = calcTotals(doc.lijnen||[]);
   const groepen = doc.groepen||[];
-  const lijnenPerGroep = [...groepen.map(g=>({...g,items:(doc.lijnen||[]).filter(l=>l.groepId===g.id)})).filter(g=>g.items.length>0),{id:"rest",naam:"Overige",items:(doc.lijnen||[]).filter(l=>!groepen.find(g=>g.id===l.groepId))}].filter(g=>g.items.length>0);
+  const lijnenPerGroep = [...groepen.map(g=>({...g,items:(doc.lijnen||[]).filter(l=>l.groepId===g.id)})).filter(g=>g.items.length>0),{id:"rest",naam:"Producten",items:(doc.lijnen||[]).filter(l=>!groepen.find(g=>g.id===l.groepId))}].filter(g=>g.items.length>0);
   // Schat of inhoud past op 1 pagina (heuristiek: max ~22 productlijnen per pagina)
   const totaalLijnen = (doc.lijnen||[]).length;
   const meerdereGroepen = lijnenPerGroep.length > 1;
@@ -4495,19 +4496,20 @@ body{margin:0;padding:0;background:#fff;font-family:Inter,Arial,sans-serif;font-
 ${styles}
 .printbar{padding:8px 12px;background:#f0f4f8;display:flex;gap:10px;align-items:center;font-family:Arial;font-size:12px;border-bottom:1px solid #e2e8f0}
 .doc-wrap{padding:0!important;background:#fff!important}
-.doc-page{box-shadow:none!important;border-radius:0!important;margin:0!important;max-width:100%!important;width:100%!important;display:block!important;overflow:hidden!important;page-break-before:always;break-before:page}
+.doc-page{box-shadow:none!important;border-radius:0!important;margin:0!important;max-width:100%!important;width:100%!important;display:block!important;overflow:visible!important;page-break-before:always;break-before:page}
 .doc-page:first-child{page-break-before:avoid!important;break-before:avoid!important}
 .doc-page-lbl{display:none!important}
 .cov{height:277mm!important;max-height:277mm!important;overflow:hidden!important}
 .fiche-screen-embed{display:none!important}
 .fiche-print-images{display:block!important}
-.fiche-print-page img{width:100%;height:auto;max-height:265mm;object-fit:contain;display:block}
+.fiche-print-page img{width:100%;height:auto;max-height:260mm;object-fit:contain;display:block}
+.qt-footer{margin-top:auto!important;break-inside:avoid!important;page-break-inside:avoid!important}
 @page{size:A4 portrait;margin:8mm 10mm 10mm 10mm}
 @media print{
   *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;box-shadow:none!important}
   body>*{display:block!important}
   .printbar{display:none!important}
-  .doc-page{page-break-before:always!important;break-before:page!important;overflow:hidden!important}
+  .doc-page{page-break-before:always!important;break-before:page!important;overflow:visible!important}
   .doc-page:first-child{page-break-before:avoid!important;break-before:avoid!important}
   .fiche-screen-embed{display:none!important}
   .fiche-print-images{display:block!important}
