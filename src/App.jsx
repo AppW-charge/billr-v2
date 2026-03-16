@@ -1036,7 +1036,7 @@ tr.row-active td{border-top:2px solid #2563eb}
 
 /* ─── PRINT / DOCUMENT STYLES ─── */
 .doc-wrap{background:#f0f4f8;padding:16px}
-.doc-page{background:#fff;max-width:820px;width:100%;margin:0 auto 20px;box-shadow:0 2px 12px rgba(0,0,0,.1);border-radius:4px;overflow:visible;page-break-before:always;box-sizing:border-box;display:flex;flex-direction:column;min-height:297mm;position:relative}
+.doc-page{background:#fff;max-width:820px;width:100%;margin:0 auto 20px;box-shadow:0 2px 12px rgba(0,0,0,.1);border-radius:4px;overflow:visible;box-sizing:border-box;display:flex;flex-direction:column;position:relative}
 .doc-page:first-child{page-break-before:avoid}
 .doc-page-lbl{text-align:center;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#94a3b8;margin-bottom:5px}
 
@@ -1177,94 +1177,84 @@ tr.row-active td{border-top:2px solid #2563eb}
   margin:0;  /* margin:0 verwijdert de browser-header en -footer volledig */
 }
 @media print{
-  /* Kleur en achtergrond behouden */
-  *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important}
-  /* A4 pagina instelling */
-  @page{size:A4 portrait;margin:8mm 10mm 10mm 10mm}
-  /* Verberg alles behalve #print-root */
-  body>*:not(#print-root){display:none!important}
-  body{margin:0!important;padding:0!important;background:#fff!important}
-  #print-root,#print-root .doc-wrap{display:block!important;width:100%!important}
+  /* ═══ KRITIEK: margin:0 verwijdert browser URL + paginanummering ═══ */
+  @page{size:A4 portrait;margin:0}
   
-  /* Screen-only/Print-only classes */
+  /* Kleur behouden */
+  *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important;box-shadow:none!important}
+  
+  /* Verberg alles behalve #print-root */
+  body{margin:0!important;padding:0!important;background:#fff!important}
+  body>*:not(#print-root){display:none!important}
+  #print-root{display:block!important;width:100%!important}
+  #print-root .doc-wrap{display:block!important;width:100%!important;padding:0!important;background:#fff!important}
+  
   .screen-only{display:none!important}
   .print-only{display:block!important}
   .no-print{display:none!important}
   
-  /* Elke doc-page = pagina-eenheid */
+  /* ═══ Elke doc-page = exacte A4 pagina (210×297mm) ═══ */
   .doc-page{
     box-shadow:none!important;border-radius:0!important;
-    margin:0!important;max-width:100%!important;width:100%!important;
-    display:block!important;overflow:visible!important;
-    break-before:page!important;page-break-before:always!important;
-    min-height:auto!important;height:auto!important;
+    margin:0!important;max-width:100%!important;width:210mm!important;
+    height:297mm!important;max-height:297mm!important;
+    overflow:hidden!important;
+    display:flex!important;flex-direction:column!important;
+    break-after:page!important;page-break-after:always!important;
     box-sizing:border-box!important;position:relative!important;
   }
-  .doc-page:first-of-type{break-before:avoid!important;page-break-before:avoid!important}
+  .doc-page:last-child{break-after:auto!important;page-break-after:auto!important}
   .doc-page-lbl{display:none!important}
   
-  /* Coverpagina: exact 1 A4, geen overflow */
+  /* Coverpagina */
   .cov{
-    height:277mm!important;
-    min-height:277mm!important;
-    max-height:277mm!important;
-    display:grid!important;
-    grid-template-columns:42% 58%!important;
+    width:100%!important;height:297mm!important;
+    min-height:297mm!important;max-height:297mm!important;
+    display:grid!important;grid-template-columns:42% 58%!important;
     overflow:hidden!important;
   }
-  .cov-l{height:100%!important;min-height:100%!important;flex:1!important}
+  .cov-l{height:100%!important;min-height:100%!important}
   .cov-r{height:100%!important;box-sizing:border-box!important}
   
-  /* Content pagina's — overflow visible zodat browser kan pagineren */
-  .prod-page{padding:6mm 10mm!important;box-sizing:border-box!important;overflow:visible!important}
-  .fct-pg{padding:6mm 10mm!important;box-sizing:border-box!important;overflow:visible!important}
-  .qt-pg{padding:6mm 10mm!important;box-sizing:border-box!important;overflow:visible!important}
-  .fct-pg2{padding:6mm 10mm!important;box-sizing:border-box!important;overflow:visible!important}
+  /* Content pagina's: interne padding (omdat @page margin=0) */
+  .prod-page{padding:8mm 12mm!important;box-sizing:border-box!important;flex:1!important;overflow:hidden!important}
+  .fct-pg{padding:8mm 12mm!important;box-sizing:border-box!important;flex:1!important;overflow:hidden!important}
+  .qt-pg{padding:8mm 12mm!important;box-sizing:border-box!important;flex:1!important;overflow:hidden!important}
+  .fct-pg2{padding:8mm 12mm!important;box-sizing:border-box!important;flex:1!important;overflow:hidden!important}
   
-  /* PDF fiche pagina's: eigen page break */
-  .fiche-print-page{
-    break-before:page!important;page-break-before:always!important;
-    width:100%!important;box-sizing:border-box!important;
-    overflow:hidden!important;
+  /* Footer: altijd onderaan de pagina */
+  .qt-footer{
+    margin-top:auto!important;flex-shrink:0!important;
+    break-inside:avoid!important;page-break-inside:avoid!important;
   }
+  
+  /* Technische fiche pagina's */
+  .fiche-print-page{
+    width:210mm!important;height:297mm!important;
+    overflow:hidden!important;box-sizing:border-box!important;
+    break-after:page!important;page-break-after:always!important;
+    display:flex!important;flex-direction:column!important;
+  }
+  .fiche-print-page:last-child{break-after:auto!important;page-break-after:auto!important}
   .fiche-print-page img{
     width:100%!important;height:auto!important;
-    max-height:260mm!important;
-    object-fit:contain!important;
-    display:block!important;
+    max-height:270mm!important;
+    object-fit:contain!important;display:block!important;
   }
-  
-  /* Screen PDF embeds: verberg op print, toon gerenderde images */
   .fiche-screen-embed{display:none!important}
   .fiche-print-images{display:block!important}
   
   /* Tabel regels: niet splitsen */
   .qt-tbl tr{break-inside:avoid!important;page-break-inside:avoid!important}
-  .qt-tbl tbody{break-inside:auto!important}
-  .qt-totals{break-inside:avoid!important;page-break-inside:avoid!important}
-  .qt-sign{break-inside:avoid!important;page-break-inside:avoid!important}
-  .qt-betaal{break-inside:avoid!important;page-break-inside:avoid!important}
-  .qt-voorschot{break-inside:avoid!important;page-break-inside:avoid!important}
-  .qt-notes{break-inside:avoid!important;page-break-inside:avoid!important}
-  .qt-confirm-link{break-inside:avoid!important;page-break-inside:avoid!important}
-  .qt-fiches{break-inside:avoid!important;page-break-inside:avoid!important}
+  .qt-totals,.qt-sign,.qt-betaal,.qt-voorschot,.qt-notes,.qt-confirm-link,.qt-fiches{break-inside:avoid!important;page-break-inside:avoid!important}
   .grp-hdr{break-after:avoid!important;page-break-after:avoid!important}
-  .grp-sub{break-inside:avoid!important;page-break-inside:avoid!important}
-  .prod-item{break-inside:avoid!important;page-break-inside:avoid!important}
-  .qt-meta-bar{break-inside:avoid!important;page-break-inside:avoid!important}
-  .qt-parties{break-inside:avoid!important;page-break-inside:avoid!important}
-  /* Footer: break-inside avoid, maar NIET absolute positioned */
-  .qt-footer{
-    break-inside:avoid!important;page-break-inside:avoid!important;
-    margin-top:auto!important;
-  }
+  .grp-sub,.prod-item,.qt-meta-bar,.qt-parties{break-inside:avoid!important;page-break-inside:avoid!important}
+  
   /* Modal chrome verbergen */
   .mo{position:static!important;background:transparent!important;padding:0!important;display:block!important}
   .mdl{box-shadow:none!important;border-radius:0!important;max-width:100%!important;max-height:none!important;overflow:visible!important;height:auto!important;display:block!important}
   .mh,.mf,.bulk-bar,.mob-nav,.fab-menu,.topbar,.sb{display:none!important}
   .mb-body{padding:0!important;overflow:visible!important;max-height:none!important;height:auto!important}
-  /* Geen box-shadow op print */
-  *{box-shadow:none!important}
 }
 
 /* ─── INSTELLINGEN PREVIEW RESPONSIVE ─── */
@@ -3983,7 +3973,7 @@ function FichePages({fiche, naam, fichNaam, omschr, dc, bed, docNummer}) {
       <div>
         <div className="doc-page-lbl">Technische fiche — {naam}</div>
         <div className="doc-page" style={{pageBreakBefore:"always"}}>
-          <div style={{height:5,background:dc}}/>
+          <div style={{height:5,background:dc,flexShrink:0}}/>
           <div style={{padding:"30mm 20mm",textAlign:"center"}}>
             <div style={{fontSize:36,marginBottom:16}}>📋</div>
             <div style={{fontWeight:800,fontSize:20,color:"#1e293b",marginBottom:8}}>{naam}</div>
@@ -4010,7 +4000,7 @@ function FichePages({fiche, naam, fichNaam, omschr, dc, bed, docNummer}) {
         <div key={`fp-${i}`}>
           <div className="doc-page-lbl">Technische fiche — {naam} (pagina {i+1}/{pageImages.length})</div>
           <div className="doc-page fiche-print-page" style={{pageBreakBefore:"always",breakBefore:"page"}}>
-            <div style={{height:5,background:dc}}/>
+            <div style={{height:5,background:dc,flexShrink:0}}/>
             {i === 0 && (
               <div style={{padding:"4mm 8mm 2mm",display:"flex",justifyContent:"space-between",alignItems:"center",borderBottom:"1px solid #e2e8f0"}}>
                 <div>
@@ -4238,7 +4228,7 @@ function OfferteDocument({doc, settings}) {
       {sj.toonProductpagina!==false&&uniqueProds.length>0&&<>
         <div className="doc-page-lbl">Pagina 2 — Productinformatie & Technische fiches</div>
         <div className="doc-page">
-          <div style={{height:6,background:dc,borderRadius:"4px 4px 0 0"}}/>
+          <div style={{height:6,background:dc,borderRadius:"4px 4px 0 0",flexShrink:0}}/>
           <div className="prod-page">
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end",marginBottom:6}}>
               <div>
@@ -4313,7 +4303,7 @@ function OfferteDocument({doc, settings}) {
       {/* PAGE 3: OFFERTEDETAIL */}
       <div className="doc-page-lbl">Pagina 3 — Offertedetail</div>
       <div className="doc-page">
-        <div style={{height:5,background:dc}}/>
+        <div style={{height:5,background:dc,flexShrink:0}}/>
         <div className="qt-pg">
           <div className="qt-header">
             <div>
@@ -4380,10 +4370,10 @@ function OfferteDocument({doc, settings}) {
       {/* PAGE 4: VOORWAARDEN */}
       <div className="doc-page-lbl">Pagina 4 — Voorwaarden</div>
       <div className="doc-page">
-        <div style={{height:5,background:dc}}/>
-        <div style={{padding:"40px 44px"}}>
-          <div style={{fontWeight:900,fontSize:20,color:dc,marginBottom:20,letterSpacing:"-.4px"}}>Algemene Verkoopsvoorwaarden & Verklaringen</div>
-          <div className="legal-txt">{settings?.voorwaarden?.tekst||INIT_SETTINGS.voorwaarden.tekst}</div>
+        <div style={{height:5,background:dc,flexShrink:0}}/>
+        <div style={{padding:"30px 36px",flex:1,overflow:"hidden"}}>
+          <div style={{fontWeight:900,fontSize:18,color:dc,marginBottom:16,letterSpacing:"-.4px"}}>Algemene Verkoopsvoorwaarden & Verklaringen</div>
+          <div className="legal-txt" style={{fontSize:11,lineHeight:1.6}}>{settings?.voorwaarden?.tekst||INIT_SETTINGS.voorwaarden.tekst}</div>
         </div>
         <div className="qt-footer" style={{background:dc}}><div className="qt-footer-txt"><strong>{bed.naam}</strong> · {bed.adres}, {bed.gemeente}</div><div className="qt-footer-txt">BTW: <strong>{fmtBtwnr(bed.btwnr)}</strong> · {bed.website}</div></div>
       </div>
@@ -4416,7 +4406,7 @@ function FactuurDocument({doc, settings}) {
       <div className="doc-page-lbl">Pagina 1 — Factuur</div>
       <div className="doc-page">
         {/* Kleurband: alleen bij classic/modern/colored */}
-        {(ontwerp==="classic"||ontwerp==="modern"||ontwerp==="colored")&&<div style={{height:6,background:dc,borderRadius:"4px 4px 0 0"}}/>}
+        {(ontwerp==="classic"||ontwerp==="modern"||ontwerp==="colored")&&<div style={{height:6,background:dc,borderRadius:"4px 4px 0 0",flexShrink:0}}/>}
 
         <div className="fct-pg">
           {/* ONTWERP: classic (default) */}
@@ -4505,7 +4495,7 @@ function FactuurDocument({doc, settings}) {
       {/* PAGINA VOORWAARDEN — pagina 2 of 3 afhankelijk van inhoud */}
       <div className="doc-page-lbl">{overvloeit?"Pagina 3":"Pagina 2"} — Verkoopsvoorwaarden</div>
       <div className="doc-page">
-        <div style={{height:5,background:dc}}/>
+        <div style={{height:5,background:dc,flexShrink:0}}/>
         <div className="fct-pg2">
           <div className="fct-pg2-title" style={{color:dc}}>Algemene Verkoopsvoorwaarden</div>
           <div className="legal-txt">{settings?.voorwaarden?.tekst||INIT_SETTINGS.voorwaarden.tekst}</div>
@@ -4524,28 +4514,25 @@ function buildPrintHtml(docWrapHtml, docNummer) {
   return `<!DOCTYPE html><html lang="nl"><head>
 <meta charset="UTF-8"><title>${docNummer||"document"}</title>
 <style>
-*{box-sizing:border-box}
+*{box-sizing:border-box;margin:0;padding:0}
 body{margin:0;padding:0;background:#fff;font-family:Inter,Arial,sans-serif;font-size:13px;color:#1e293b}
 ${styles}
 .printbar{padding:8px 12px;background:#f0f4f8;display:flex;gap:10px;align-items:center;font-family:Arial;font-size:12px;border-bottom:1px solid #e2e8f0}
 .doc-wrap{padding:0!important;background:#fff!important}
-.doc-page{box-shadow:none!important;border-radius:0!important;margin:0!important;max-width:100%!important;width:100%!important;display:block!important;overflow:visible!important;page-break-before:always;break-before:page}
-.doc-page:first-child{page-break-before:avoid!important;break-before:avoid!important}
+.doc-page{box-shadow:none!important;border-radius:0!important;margin:0!important;width:210mm!important;height:297mm!important;max-height:297mm!important;display:flex!important;flex-direction:column!important;overflow:hidden!important;break-after:page;page-break-after:always}
+.doc-page:last-child{break-after:auto!important;page-break-after:auto!important}
 .doc-page-lbl{display:none!important}
-.cov{height:277mm!important;max-height:277mm!important;overflow:hidden!important}
+.cov{width:100%!important;height:297mm!important;max-height:297mm!important;overflow:hidden!important}
+.qt-footer{margin-top:auto!important;flex-shrink:0!important}
+.prod-page,.qt-pg,.fct-pg,.fct-pg2{padding:8mm 12mm!important;flex:1!important;overflow:hidden!important}
 .fiche-screen-embed{display:none!important}
 .fiche-print-images{display:block!important}
-.fiche-print-page img{width:100%;height:auto;max-height:260mm;object-fit:contain;display:block}
-.qt-footer{margin-top:auto!important;break-inside:avoid!important;page-break-inside:avoid!important}
-@page{size:A4 portrait;margin:8mm 10mm 10mm 10mm}
+.fiche-print-page{width:210mm!important;height:297mm!important;overflow:hidden!important;display:flex!important;flex-direction:column!important;break-after:page!important}
+.fiche-print-page img{width:100%;height:auto;max-height:270mm;object-fit:contain;display:block}
+@page{size:A4 portrait;margin:0}
 @media print{
   *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;box-shadow:none!important}
-  body>*{display:block!important}
   .printbar{display:none!important}
-  .doc-page{page-break-before:always!important;break-before:page!important;overflow:visible!important}
-  .doc-page:first-child{page-break-before:avoid!important;break-before:avoid!important}
-  .fiche-screen-embed{display:none!important}
-  .fiche-print-images{display:block!important}
 }
 </style></head><body>
 <div class="printbar">
