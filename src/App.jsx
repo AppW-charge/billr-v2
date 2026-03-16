@@ -1902,76 +1902,24 @@ export default function App() {
       {prodModal!==null&&<ProductModal prod={prodModal} settings={settings} onSave={p=>{if(p.id){setProducten(pr=>pr.map(x=>x.id===p.id?p:x));notify("Product opgeslagen");}else{setProducten(pr=>[{...p,id:uid(),actief:true},...pr]);notify("Product toegevoegd ✓");}setProdModal(null);}} onClose={()=>setProdModal(null)}/>}
       {klantImportOpen&&<KlantImportModal onImport={nieuweKlanten=>{setKlanten(p=>[...nieuweKlanten.map(k=>({...k,id:uid(),aangemaakt:new Date().toISOString()})),...p]);notify(`${nieuweKlanten.length} klanten geïmporteerd ✓`);setKlantImportOpen(false);}} onClose={()=>setKlantImportOpen(false)} notify={notify}/>}
       {importModal&&<ImportModal onImport={nieuweProds=>{setProducten(p=>[...nieuweProds.map(x=>({...x,id:uid(),actief:true})),...p]);notify(`${nieuweProds.length} producten geïmporteerd ✓`);setImportModal(false);}} onClose={()=>setImportModal(false)} notify={notify}/>}
-      {emailModal&&(
-        <div className="modal-bg" onClick={() => setEmailModal(null)}>
-          <div className="modal" style={{maxWidth: 500}} onClick={e => e.stopPropagation()}>
-            <div className="modal-h">
-              <div className="mh-ic">📧</div>
-              <div className="mh-txt">
-                <div className="mh-t">Email Versturen</div>
-                <div className="mh-sub">{emailModal.type === "offerte" ? "Offerte" : "Factuur"} {emailModal.doc.nummer}</div>
-              </div>
-              <button className="modal-x" onClick={() => setEmailModal(null)}>✕</button>
-            </div>
-            
-            <div className="modal-b">
-              <div style={{marginBottom: 20}}>
-                <label className="lbl">Naar (email adres)</label>
-                <input 
-                  type="email" 
-                  className="fc" 
-                  id="email-recipient"
-                  defaultValue={klanten.find(k => k.id === emailModal.doc.klantId)?.email || emailModal.doc.klant?.email || ""}
-                  placeholder="klant@email.be"
-                />
-              </div>
-              
-              <div style={{
-                background: "#f0f9ff", 
-                border: "1px solid #bfdbfe", 
-                borderRadius: 8, 
-                padding: 15,
-                marginBottom: 20,
-                fontSize: 13,
-                color: "#1e40af"
-              }}>
-                <div style={{fontWeight: 600, marginBottom: 5}}>Template gebruikt:</div>
-                <div>✉️ Professionele HTML email met W-Charge branding</div>
-                {emailModal.type === "offerte" && (
-                  <div style={{marginTop: 5}}>
-                    ✅ Inclusief link naar bevestigingspagina
-                  </div>
-                )}
-              </div>
-              
-              <div className="flex gap2">
-                <button 
-                  className="btn-sec" 
-                  onClick={() => setEmailModal(null)}
-                  style={{flex: 1}}
-                >
-                  Annuleren
-                </button>
-                <button 
-                  className="btn" 
-                  style={{flex: 1}}
-                  onClick={async () => {
-                    const email = document.getElementById("email-recipient").value;
-                    if(!email || !email.includes("@")) {
-                      notify("Voer een geldig email adres in", "er");
-                      return;
-                    }
-                    const success = await sendEmail(emailModal.type, emailModal.doc, email);
-                    if(success) setEmailModal(null);
-                  }}
-                >
-                  📧 Verstuur Email
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      {emailModal&&<EmailModal 
+        doc={emailModal.doc} 
+        type={emailModal.type} 
+        settings={settings} 
+        onClose={()=>setEmailModal(null)} 
+        onSend={(success)=>{
+          if(success) {
+            if(emailModal.type==="offerte") {
+              updOff(emailModal.doc.id, {status:"verstuurd", logActie:`📧 Verzonden`});
+            } else {
+              updFact(emailModal.doc.id, {status:"verstuurd", logActie:`📧 Verzonden`});
+            }
+            notify(`📧 ${emailModal.type==="offerte"?"Offerte":"Factuur"} ${emailModal.doc.nummer} verzonden!`);
+            setEmailModal(null);
+          }
+        }}
+        onAcceptToken={(docId, token) => setAcceptTokens(p=>({...p,[docId]:token}))}
+      />}
       {creditnotaModal!==null&&<CreditnotaModal facturen={facturen} creditnota={creditnotaModal} settings={settings} onSave={cn=>{if(cn.id){setCreditnotas(p=>p.map(x=>x.id===cn.id?cn:x));}else{const n={...cn,id:uid(),nummer:nextNr("CN",creditnotas,"nummer"),aangemaakt:new Date().toISOString(),type:"creditnota"};setCreditnotas(p=>[n,...p]);if(cn.factuurId){updFact(cn.factuurId,{gecrediteerd:true});}}notify("Creditnota opgeslagen ✓");setCreditnotaModal(null);}} onClose={()=>setCreditnotaModal(null)}/>}
       {betalingModal&&<BetalingModal factuur={betalingModal} betalingen={betalingen.filter(b=>b.factuurId===betalingModal.id)} onSave={b=>{const nb={...b,id:uid(),factuurId:betalingModal.id,datum:b.datum||today(),aangemaakt:new Date().toISOString()};setBetalingen(p=>[nb,...p]);const totBet=betalingen.filter(x=>x.factuurId===betalingModal.id).reduce((s,x)=>s+x.bedrag,0)+nb.bedrag;const factTot=calcTotals(betalingModal.lijnen||[]).totaal;if(totBet>=factTot-0.01)updFact(betalingModal.id,{status:"betaald"});else updFact(betalingModal.id,{status:"gedeeltelijk"});notify("Betaling geregistreerd ✓");setBetalingModal(null);}} onClose={()=>setBetalingModal(null)}/>}
       {aanmaningModal&&<AanmaningModal factuur={aanmaningModal} settings={settings} onSend={(am)=>{setAanmaningen(p=>[{...am,id:uid(),aangemaakt:new Date().toISOString(),status:"verzonden",verzonden:today()},...p]);notify("Aanmaning verzonden ✓");setAanmaningModal(null);}} onClose={()=>setAanmaningModal(null)}/>}
