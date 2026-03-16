@@ -1546,12 +1546,14 @@ export default function App() {
   },[]);
 
   // ═══ EMAILJS INITIALISATIE ═══
+  // Re-init wanneer settings veranderen (zodat de juiste public key gebruikt wordt)
   useEffect(() => {
     if(window.emailjs) {
-      window.emailjs.init("04zsVAk5imDpo-8GJ");
-      console.log("✅ EmailJS geïnitialiseerd");
+      const pubKey = settings?.email?.emailjsPublicKey || "04zsVAk5imDpo-8GJ";
+      window.emailjs.init(pubKey);
+      console.log("✅ EmailJS geïnitialiseerd met key:", pubKey.slice(0,6) + "...");
     }
-  }, []);
+  }, [settings?.email?.emailjsPublicKey]);
 
 
   // saveKey: async, dual-write to Supabase + localStorage
@@ -1644,26 +1646,57 @@ export default function App() {
       return false;
     }
     
-    const serviceId = "service_qrkvr0d";
-    const templateId = type === "offerte" ? "template_5nckw9f" : "template_pe412p8";
+    // Gebruik instellingen, fallback naar hardcoded defaults
+    const emailCfg = settings?.email || {};
+    const serviceId = emailCfg.emailjsServiceId || "service_qrkvr0d";
+    const templateId = type === "offerte" 
+      ? (emailCfg.emailjsTemplateOfferte || "template_5nckw9f") 
+      : (emailCfg.emailjsTemplateFactuur || "template_pe412p8");
+    
+    // Re-init met juiste public key (voor het geval settings veranderd zijn)
+    const pubKey = emailCfg.emailjsPublicKey || "04zsVAk5imDpo-8GJ";
+    window.emailjs.init(pubKey);
     
     const klantData = klanten.find(k => k.id === doc.klantId);
     const totals = calcTotals(doc.lijnen || []);
+    const bed = settings?.bedrijf || {};
     
     const templateParams = {
+      // Standaard variabelen (voor alle templates)
+      to_email: recipientEmail,
+      to_name: klantData?.naam || doc.klant?.naam || "Klant",
       customer_name: klantData?.naam || doc.klant?.naam || "Klant",
+      from_name: bed.naam || "BILLR",
+      reply_to: emailCfg.eigen || bed.email || "",
+      subject: type === "offerte" 
+        ? `Offerte ${doc.nummer} — ${bed.naam||""}` 
+        : `Factuur ${doc.nummer} — ${bed.naam||""}`,
+      // Document specifieke variabelen
       [type === "offerte" ? "quote_number" : "invoice_number"]: doc.nummer,
       [type === "offerte" ? "quote_date" : "invoice_date"]: fmtDate(doc.datum || doc.aangemaakt),
       [type === "offerte" ? "valid_until" : "due_date"]: fmtDate(doc.vervaldatum),
-      total_amount: totals.totaal.toFixed(2).replace(".", ","),
+      total_amount: fmtEuro(totals.totaal),
       message: doc.notities || "",
-      to_email: recipientEmail
+      // Extra variabelen voor flexibele templates
+      html_body: type === "offerte"
+        ? (emailCfg.templateOfferte||"").replace("{naam}",klantData?.naam||doc.klant?.naam||"Klant").replace("{nummer}",doc.nummer).replace("{datum}",fmtDate(doc.aangemaakt)).replace("{vervaldatum}",fmtDate(doc.vervaldatum)).replace("{bedrijf}",bed.naam||"").replace("{tel}",bed.tel||"").replace("{totaal}",fmtEuro(totals.totaal)).replace("{iban}",bed.iban||"").replace("{technische_info}","")
+        : (emailCfg.templateFactuur||"").replace("{naam}",klantData?.naam||doc.klant?.naam||"Klant").replace("{nummer}",doc.nummer).replace("{datum}",fmtDate(doc.aangemaakt)).replace("{vervaldatum}",fmtDate(doc.vervaldatum)).replace("{bedrijf}",bed.naam||"").replace("{totaal}",fmtEuro(totals.totaal)).replace("{iban}",bed.iban||""),
     };
+    
+    console.log(`📧 Sending ${type} via EmailJS: service=${serviceId}, template=${templateId}, to=${recipientEmail}`);
     
     try {
       const response = await window.emailjs.send(serviceId, templateId, templateParams);
       if(response.status === 200) {
         notify(`📧 ${type === "offerte" ? "Offerte" : "Factuur"} verzonden naar ${recipientEmail}`, "ok");
+        
+        // CC naar eigen email indien ingesteld
+        if(emailCfg.cc) {
+          try {
+            await window.emailjs.send(serviceId, templateId, {...templateParams, to_email: emailCfg.cc});
+            console.log(`📧 CC verstuurd naar ${emailCfg.cc}`);
+          } catch(_) { console.warn("CC verzending mislukt"); }
+        }
         
         // Log de verzending
         if(type === "offerte") {
@@ -1681,7 +1714,7 @@ export default function App() {
       }
     } catch(error) {
       console.error("EmailJS Error:", error);
-      notify("❌ Fout bij verzenden email: " + error.text, "er");
+      notify(`❌ Email mislukt: ${error?.text || error?.message || "Controleer EmailJS instellingen"}`, "er");
       return false;
     }
   };
