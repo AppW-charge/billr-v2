@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Offerte {{quote_number}} - W-Charge BV</title>
+    <style>
+        /* Reset */
+        body, table, td, p, a, h1, h2, h3 { margin: 0; padding: 0; }
+        img { border: 0; }
+        
+        /* Responsive */
+        @media only screen and (max-width: 620px) {
+            .container { width: 100% !important; }
+            .mobile-padding { padding: 20px !important; }
+            .mobile-padding-sm { padding: 15px !important; }
+            .mobile-font-lg { font-size: 26px !important; }
+            .mobile-font-md { font-size: 20px !important; }
+            .mobile-font-sm { font-size: 14px !important; }
+            .mobile-font-xs { font-size: 12px !important; }
+            .mobile-block { display: block !important; width: 100% !important; }
+            .mobile-text-center { text-align: center !important; }
+            .mobile-btn { padding: 12px 20px !important; font-size: 14px !important; }
+        }
+    </style>
+</head>
+<body style="margin: 0; padding: 0; font-family: Arial, sans-serif; background-color: #f4f4f4;">
+    <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f4f4f4; padding: 20px 10px;">
+        <tr>
+            <td align="center">
+                <table class="container" width="600" cellpadding="0" cellspacing="0" style="max-width: 600px; background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
+                    
+                    <!-- Header met W-Charge branding -->
+                    <tr>
+                        <td class="mobile-padding" style="background: linear-gradient(135deg, #1a2e4c 0%, #2a4e7c 100%); padding: 40px 30px; text-align: center;">
+                            <h1 class="mobile-font-lg" style="margin: 0; color: #d4ff00; font-size: 32px; font-weight: bold; text-transform: uppercase; letter-spacing: 2px;">
+                                W-CHARGE
+                            </h1>
+                            <p class="mobile-font-xs" style="margin: 10px 0 0 0; color: #ffffff; font-size: 14px; opacity: 0.9;">
+                                Elektrische installaties & Laadpalen
+                            </p>
+                        </td>
+                    </tr>
+
+                    <!-- Offerte banner -->
+                    <tr>
+                        <td class="mobile-padding-sm" style="background-color: #d4ff00; padding: 15px 30px; text-align: center;">
+                            <h2 class="mobile-font-md" style="margin: 0; color: #1a2e4c; font-size: 24px; font-weight: bold;">
+                                OFFERTE {{quote_number}}
+                            </h2>
+                        </td>
+                    </tr>
+
+                    <!-- Inhoud -->
+                    <tr>
+                        <td class="mobile-padding" style="padding: 40px 30px;">
+                            <p class="mobile-font-sm" style="margin: 0 0 20px 0; color: #333333; font-size: 16px; line-height: 1.6;">
+                                Beste <strong>{{customer_name}}</strong>,
+                            </p>
+                            
+                            <p class="mobile-font-sm" style="margin: 0 0 30px 0; color: #555555; font-size: 15px; line-height: 1.6;">
+                                Hierbij ontvangt u offerte <strong>{{quote_number}}</strong> van W-Charge BV voor de gevraagde werkzaamheden.
+                            </p>
+
+                            <!-- Offerte details box -->
+                            <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f8f9fa; border-left: 4px solid #d4ff00; margin-bottom: 30px;">
+                                <tr>
+                                    <td class="mobile-padding-sm" style="padding: 20px;">
+                                        <table width="100%" cellpadding="8" cellspacing="0">
+                                            <tr>
+                                                <td class="mobile-font-xs" style="color: #666666; font-size: 14px; width: 50%;">Offertedatum:</td>
+                                                <td class="mobile-font-xs" style="color: #1a2e4c; font-size: 14px; font-weight: bold;">{{quote_date}}</td>
+                                            </tr>
+                                            <tr>
+                                                <td class="mobile-font-xs" style="color: #666666; font-size: 14px;">Geldig tot:</td>
+                                                <td class="mobile-font-xs" style="color: #1a2e4c; font-size: 14px; font-weight: bold;">{{valid_until}}</td>
+                                            </tr>
+                                            <tr>
+                                                <td class="mobile-font-xs" style="color: #666666; font-size: 14px; padding-top: 10px; border-top: 1px solid #e0e0e0;">Totaalbedrag:</td>
+                                                <td class="mobile-font-md" style="color: #1a2e4c; font-size: 20px; font-weight: bold; padding-top: 10px; border-top: 1px solid #e0e0e0;">€{{total_amount}}</td>
+                                            </tr>
+                                        </table>
+                                    </td>
+                                </tr>
+                            </table>
+
+                            <!-- Eventueel bericht -->
+                            {{#if message}}
+                            <div style="background-color: #fff9e6; border-left: 4px solid #ffc107; padding: 15px; margin-bottom: 30px;">
+                                <p class="mobile-font-xs" style="margin: 0; color: #333333; font-size: 14px; line-height: 1.6;">
+                                    {{message}}
+                                </p>
+                            </div>
+                            {{/if}}
+
+                            <!-- Call to action -->
+                            <div style="background: linear-gradient(135deg, #e8f5e9 0%, #f1f8f4 100%); border-radius: 6px; padding: 25px; margin-bottom: 30px; text-align: center;">
+                                <h3 class="mobile-font-md" style="margin: 0 0 15px 0; color: #1a2e4c; font-size: 18px;">Akkoord met deze offerte?</h3>
+                                <p class="mobile-font-xs" style="margin: 0 0 20px 0; color: #555555; font-size: 14px; line-height: 1.6;">
+                                    Klik op onderstaande knop om uw aanvraag te bevestigen.
+                                </p>
+                                <table cellpadding="0" cellspacing="0" style="margin: 0 auto;">
+                                    <tr>
+                                        <td class="mobile-btn" style="background-color: #d4ff00; border-radius: 4px; padding: 12px 30px;">
+                                            <a href="https://JOUW-WEBSITE.com/bevestiging.html?quote={{quote_number}}" style="color: #1a2e4c; text-decoration: none; font-weight: bold; font-size: 15px; display: block;">
+                                                ✅ Bevestig Offerte
+                                            </a>
+                                        </td>
+                                    </tr>
+                                </table>
+                                <p class="mobile-font-xs" style="margin: 20px 0 0 0; color: #999999; font-size: 12px;">
+                                    Of neem rechtstreeks contact op via <a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="dbbaabab9bacf6b8b3baa9bcbef5b9be">[email&#160;protected]</a>
+                                </p>
+                            </div>
+
+                            <!-- Wat te verwachten -->
+                            <div style="border: 1px solid #e0e0e0; border-radius: 6px; padding: 20px; margin-bottom: 30px;">
+                                <h3 class="mobile-font-sm" style="margin: 0 0 15px 0; color: #1a2e4c; font-size: 16px;">Volgende stappen</h3>
+                                <table width="100%" cellpadding="8" cellspacing="0">
+                                    <tr>
+                                        <td style="color: #d4ff00; font-size: 20px; width: 40px; vertical-align: top;">✓</td>
+                                        <td class="mobile-font-xs" style="color: #555555; font-size: 13px; line-height: 1.5;">
+                                            <strong>Bevestiging:</strong> Laat ons weten dat u akkoord gaat
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td style="color: #d4ff00; font-size: 20px; vertical-align: top;">✓</td>
+                                        <td class="mobile-font-xs" style="color: #555555; font-size: 13px; line-height: 1.5;">
+                                            <strong>Planning:</strong> We plannen de werkzaamheden in
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td style="color: #d4ff00; font-size: 20px; vertical-align: top;">✓</td>
+                                        <td class="mobile-font-xs" style="color: #555555; font-size: 13px; line-height: 1.5;">
+                                            <strong>Uitvoering:</strong> Professionele installatie door ervaren technici
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td style="color: #d4ff00; font-size: 20px; vertical-align: top;">✓</td>
+                                        <td class="mobile-font-xs" style="color: #555555; font-size: 13px; line-height: 1.5;">
+                                            <strong>Nazorg:</strong> Service en garantie op alle werkzaamheden
+                                        </td>
+                                    </tr>
+                                </table>
+                            </div>
+
+                            <p class="mobile-font-xs" style="margin: 0 0 10px 0; color: #555555; font-size: 14px; line-height: 1.6;">
+                                Heeft u vragen over deze offerte?
+                            </p>
+                            <p class="mobile-font-xs" style="margin: 0; color: #1a2e4c; font-size: 14px; line-height: 1.8;">
+                                📧 <a href="/cdn-cgi/l/email-protection#a9c8d9d9e9de84cac1c8dbcecc87cbcc" style="color: #1a2e4c; text-decoration: none; font-weight: bold;"><span class="__cf_email__" data-cfemail="7312030333045e101b120114165d1116">[email&#160;protected]</span></a><br>
+                                🌐 <a href="https://www.w-charge.be" style="color: #1a2e4c; text-decoration: none; font-weight: bold;">www.w-charge.be</a>
+                            </p>
+                        </td>
+                    </tr>
+
+                    <!-- Footer -->
+                    <tr>
+                        <td class="mobile-padding" style="background-color: #1a2e4c; padding: 30px; text-align: center;">
+                            <p class="mobile-font-sm" style="margin: 0 0 10px 0; color: #d4ff00; font-size: 16px; font-weight: bold;">
+                                Met vriendelijke groet,
+                            </p>
+                            <p class="mobile-font-xs" style="margin: 0 0 20px 0; color: #ffffff; font-size: 14px;">
+                                W-Charge BV<br>
+                                Oostakker
+                            </p>
+                            <div style="border-top: 1px solid rgba(212, 255, 0, 0.3); padding-top: 20px; margin-top: 20px;">
+                                <p class="mobile-font-xs" style="margin: 0; color: #999999; font-size: 11px; line-height: 1.6;">
+                                    W-Charge BV | BTW: BE0XXX.XXX.XXX<br>
+                                    Smappee Certified Partner | 12+ jaar ervaring<br>
+                        

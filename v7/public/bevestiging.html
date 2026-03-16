@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Offerte Bevestigen - W-Charge BV</title>
+    <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(135deg, #1a2e4c 0%, #2a4e7c 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            max-width: 600px;
+            width: 100%;
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #1a2e4c 0%, #2a4e7c 100%);
+            padding: 40px 30px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            color: #d4ff00;
+            font-size: 32px;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-bottom: 8px;
+        }
+        
+        .header p {
+            color: rgba(255,255,255,0.9);
+            font-size: 14px;
+        }
+        
+        .banner {
+            background-color: #d4ff00;
+            padding: 15px 30px;
+            text-align: center;
+        }
+        
+        .banner h2 {
+            color: #1a2e4c;
+            font-size: 24px;
+            font-weight: bold;
+        }
+        
+        .content {
+            padding: 40px 30px;
+        }
+        
+        .quote-info {
+            background-color: #f8f9fa;
+            border-left: 4px solid #d4ff00;
+            padding: 20px;
+            margin-bottom: 30px;
+            border-radius: 4px;
+        }
+        
+        .quote-info h3 {
+            color: #1a2e4c;
+            font-size: 18px;
+            margin-bottom: 15px;
+        }
+        
+        .quote-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            color: #555;
+            font-size: 14px;
+        }
+        
+        .quote-row strong {
+            color: #1a2e4c;
+        }
+        
+        .form-group {
+            margin-bottom: 25px;
+        }
+        
+        .form-group label {
+            display: block;
+            color: #1a2e4c;
+            font-weight: 600;
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+        
+        .form-group input,
+        .form-group textarea {
+            width: 100%;
+            padding: 12px 15px;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 15px;
+            font-family: Arial, sans-serif;
+            transition: border-color 0.2s;
+        }
+        
+        .form-group input:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: #d4ff00;
+        }
+        
+        .form-group textarea {
+            resize: vertical;
+            min-height: 100px;
+        }
+        
+        .btn-container {
+            text-align: center;
+            margin-top: 30px;
+        }
+        
+        .btn {
+            background-color: #d4ff00;
+            color: #1a2e4c;
+            border: none;
+            padding: 15px 40px;
+            font-size: 16px;
+            font-weight: bold;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            display: inline-block;
+            text-decoration: none;
+        }
+        
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(212, 255, 0, 0.4);
+        }
+        
+        .btn:active {
+            transform: translateY(0);
+        }
+        
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .success-message,
+        .error-message {
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 20px;
+            text-align: center;
+            font-weight: 600;
+            display: none;
+        }
+        
+        .success-message {
+            background-color: #f0fdf4;
+            color: #059669;
+            border: 2px solid #10b981;
+        }
+        
+        .error-message {
+            background-color: #fef2f2;
+            color: #dc2626;
+            border: 2px solid #ef4444;
+        }
+        
+        .info-box {
+            background: linear-gradient(135deg, #e8f5e9 0%, #f1f8f4 100%);
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 30px;
+            text-align: center;
+        }
+        
+        .info-box h3 {
+            color: #1a2e4c;
+            font-size: 18px;
+            margin-bottom: 10px;
+        }
+        
+        .info-box p {
+            color: #555;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+        
+        .footer {
+            background-color: #1a2e4c;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        .footer p {
+            color: #999;
+            font-size: 11px;
+            line-height: 1.6;
+        }
+        
+        @media (max-width: 600px) {
+            .header h1 { font-size: 24px; }
+            .banner h2 { font-size: 20px; }
+            .content { padding: 30px 20px; }
+            .btn { padding: 12px 30px; font-size: 14px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <h1>W-CHARGE</h1>
+            <p>Elektrische installaties & Laadpalen</p>
+        </div>
+        
+        <!-- Banner -->
+        <div class="banner">
+            <h2 id="quote-number">OFFERTE BEVESTIGEN</h2>
+        </div>
+        
+        <!-- Content -->
+        <div class="content">
+            <div class="info-box">
+                <h3>✅ Akkoord met deze offerte?</h3>
+                <p>Bevestig hieronder uw aanvraag en geef eventueel uw gewenste datum van uitvoering door.</p>
+            </div>
+            
+            <div class="quote-info">
+                <h3>Offerte Details</h3>
+                <div class="quote-row">
+                    <span>Offerte nummer:</span>
+                    <strong id="display-quote-number">—</strong>
+                </div>
+                <div class="quote-row">
+                    <span>Status:</span>
+                    <strong style="color: #10b981;">Te bevestigen</strong>
+                </div>
+            </div>
+            
+            <form id="confirm-form">
+                <div class="form-group">
+                    <label for="execution-date">
+                        📅 Gewenste datum van uitvoering (optioneel)
+                    </label>
+                    <input 
+                        type="date" 
+                        id="execution-date" 
+                        name="execution-date"
+                        min=""
+                    >
+                </div>
+                
+                <div class="form-group">
+                    <label for="comments">
+                        💬 Opmerkingen of vragen (optioneel)
+                    </label>
+                    <textarea 
+                        id="comments" 
+                        name="comments"
+                        placeholder="Bijv.: Bij voorkeur 's morgens tussen 8u-12u..."
+                    ></textarea>
+                </div>
+                
+                <div class="btn-container">
+                    <button type="submit" class="btn" id="submit-btn">
+                        ✅ Bevestig Aanvraag
+                    </button>
+                </div>
+                
+                <div class="success-message" id="success-msg"></div>
+                <div class="error-message" id="error-msg"></div>
+            </form>
+        </div>
+        
+        <!-- Footer -->
+        <div class="footer">
+            <p>
+                W-Charge BV | BTW: BE0XXX.XXX.XXX<br>
+                Oostakker, België<br>
+                <strong style="color: #d4ff00;">📧 info@w-charge.be</strong>
+            </p>
+        </div>
+    </div>
+
+    <script>
+        // EmailJS initialisatie
+        emailjs.init("04zsVAk5imDpo-8GJ"); // Jouw Public Key
+        
+        // Haal quote nummer uit URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const quoteNumber = urlParams.get('quote');
+        
+        if(quoteNumber) {
+            document.getElementById('quote-number').textContent = `OFFERTE ${quoteNumber}`;
+            document.getElementById('display-quote-number').textContent = quoteNumber;
+        } else {
+            document.getElementById('quote-number').textContent = 'GEEN OFFERTE OPGEGEVEN';
+            document.getElementById('submit-btn').disabled = true;
+        }
+        
+        // Zet minimum datum op vandaag
+        const today = new Date().toISOString().split('T')[0];
+        document.getElementById('execution-date').setAttribute('min', today);
+        
+        // Form submit handler
+        document.getElementById('confirm-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            if(!quoteNumber) {
+                showError('Geen geldig offerte nummer gevonden.');
+                return;
+            }
+            
+            const submitBtn = document.getElementById('submit-btn');
+            const originalText = submitBtn.textContent;
+            submitBtn.disabled = true;
+            submitBtn.textContent = '⏳ Bevestigen...';
+            
+            const executionDate = document.getElementById('execution-date').value;
+            const comments = document.getElementById('comments').value;
+            
+            try {
+                // Verstuur bevestiging naar Wouter via EmailJS
+                const response = await emailjs.send(
+                    'service_qrkvr0d',  // Jouw Service ID
+                    'template_CONFIRM',  // NIEUW TEMPLATE - maak dit aan!
+                    {
+                        quote_number: quoteNumber,
+                        execution_date: executionDate || 'Niet opgegeven',
+                        comments: comments || 'Geen opmerkingen',
+                        confirmation_time: new Date().toLocaleString('nl-BE')
+                    }
+                );
+                
+                if(response.status === 200) {
+                    showSuccess('✅ Uw bevestiging is verzonden! U wordt automatisch doorgestuurd...');
+                    
+                    // Redirect naar BILLR met confirm parameter
+                    // PAS DIT AAN naar jouw BILLR URL!
+                    setTimeout(() => {
+                        // Redirect naar BILLR met confirm parameter
+                        const billrUrl = window.location.origin;
+                        window.location.href = `${billrUrl}?confirm=${quoteNumber}`;
+                    }, 2000);
+                } else {
+                    throw new Error('Verzending mislukt');
+                }
+                
+            } catch(error) {
+                console.error('Email error:', error);
+                showError('Er ging iets mis. Probeer opnieuw of neem contact op via email.');
+                submitBtn.disabled = false;
+                submitBtn.textContent = originalText;
+            }
+        });
+        
+        function showSuccess(message) {
+            const successMsg = document.getElementById('success-msg');
+            successMsg.textContent = message;
+            successMsg.style.display = 'block';
+            document.getElementById('error-msg').style.display = 'none';
+        }
+        
+        function showError(message) {
+            const errorMsg = 

@@ -1,0 +1,856 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>W-Charge Planner - Planning & Agenda</title>
+    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: 'Rajdhani', sans-serif;
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+            color: #e2e8f0;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+        }
+        
+        header {
+            background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+            padding: 30px;
+            border-radius: 16px;
+            margin-bottom: 30px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+        }
+        
+        h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            color: #d4ff00;
+            font-weight: 900;
+            letter-spacing: -1px;
+        }
+        
+        h1::before { content: '⚡ '; }
+        
+        .header-subtitle {
+            font-size: 1.1rem;
+            color: #94a3b8;
+            font-weight: 600;
+        }
+        
+        .nav-bar {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        
+        .btn {
+            background: #d4ff00;
+            border: none;
+            padding: 12px 24px;
+            font-family: 'Rajdhani', sans-serif;
+            font-size: 1rem;
+            font-weight: 700;
+            cursor: pointer;
+            border-radius: 8px;
+            color: #0f172a;
+            transition: all 0.3s;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .btn:hover {
+            background: #bfe600;
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(212, 255, 0, 0.3);
+        }
+        
+        .btn-secondary {
+            background: #334155;
+            color: #d4ff00;
+        }
+        
+        .btn-secondary:hover {
+            background: #475569;
+        }
+        
+        .card {
+            background: rgba(30, 41, 59, 0.8);
+            backdrop-filter: blur(10px);
+            padding: 30px;
+            border-radius: 16px;
+            margin-bottom: 25px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+            border: 1px solid rgba(148, 163, 184, 0.1);
+        }
+        
+        .card h2 {
+            font-size: 1.8rem;
+            margin-bottom: 20px;
+            color: #d4ff00;
+            font-weight: 900;
+            letter-spacing: -0.5px;
+        }
+        
+        .week-nav {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 25px;
+            padding: 20px;
+            background: rgba(15, 23, 42, 0.6);
+            border-radius: 12px;
+        }
+        
+        .week-title {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #d4ff00;
+        }
+        
+        .calendar-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+        
+        .calendar-header {
+            text-align: center;
+            padding: 12px;
+            font-weight: 700;
+            color: #d4ff00;
+            font-size: 1.1rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        .calendar-day {
+            background: rgba(51, 65, 85, 0.6);
+            border: 2px solid rgba(148, 163, 184, 0.2);
+            border-radius: 12px;
+            padding: 15px;
+            min-height: 140px;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .calendar-day:hover {
+            border-color: #d4ff00;
+            transform: translateY(-4px);
+            box-shadow: 0 12px 30px rgba(212, 255, 0, 0.2);
+            background: rgba(51, 65, 85, 0.9);
+        }
+        
+        .calendar-day.today {
+            border: 3px solid #d4ff00;
+            background: rgba(212, 255, 0, 0.1);
+            box-shadow: 0 0 20px rgba(212, 255, 0, 0.3);
+        }
+        
+        .calendar-day.other-month {
+            opacity: 0.3;
+            cursor: default;
+        }
+        
+        .calendar-day.other-month:hover {
+            transform: none;
+            border-color: rgba(148, 163, 184, 0.2);
+        }
+        
+        .day-number {
+            font-size: 1.3rem;
+            font-weight: 700;
+            margin-bottom: 10px;
+            color: #d4ff00;
+        }
+        
+        .day-appointment {
+            font-size: 0.85rem;
+            padding: 5px 8px;
+            background: #d4ff00;
+            border-radius: 6px;
+            margin-top: 6px;
+            font-weight: 700;
+            color: #0f172a;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.85);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+            backdrop-filter: blur(5px);
+        }
+        
+        .modal.active {
+            display: flex;
+        }
+        
+        .modal-content {
+            background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+            border-radius: 16px;
+            padding: 40px;
+            max-width: 600px;
+            width: 90%;
+            box-shadow: 0 25px 50px rgba(0,0,0,0.5);
+            border: 2px solid rgba(212, 255, 0, 0.3);
+        }
+        
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 25px;
+        }
+        
+        .modal-title {
+            font-size: 1.8rem;
+            font-weight: 900;
+            color: #d4ff00;
+        }
+        
+        .close-btn {
+            background: none;
+            border: none;
+            color: #94a3b8;
+            font-size: 2rem;
+            cursor: pointer;
+            padding: 0;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 8px;
+            transition: all 0.3s;
+        }
+        
+        .close-btn:hover {
+            background: rgba(212, 255, 0, 0.1);
+            color: #d4ff00;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        .form-label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 700;
+            color: #d4ff00;
+            font-size: 0.95rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .form-input,
+        .form-select,
+        .form-textarea {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid rgba(148, 163, 184, 0.2);
+            border-radius: 8px;
+            font-family: 'Rajdhani', sans-serif;
+            font-size: 1rem;
+            background: rgba(15, 23, 42, 0.6);
+            color: #e2e8f0;
+            font-weight: 600;
+        }
+        
+        .form-input:focus,
+        .form-select:focus,
+        .form-textarea:focus {
+            outline: none;
+            border-color: #d4ff00;
+            box-shadow: 0 0 0 3px rgba(212, 255, 0, 0.1);
+        }
+        
+        .form-textarea {
+            resize: vertical;
+            min-height: 100px;
+        }
+        
+        .appointment-list {
+            margin-top: 20px;
+        }
+        
+        .appointment-item {
+            background: rgba(51, 65, 85, 0.6);
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 12px;
+            border-left: 4px solid #d4ff00;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+        }
+        
+        .appointment-info {
+            flex: 1;
+        }
+        
+        .appointment-time {
+            font-weight: 700;
+            color: #d4ff00;
+            margin-bottom: 6px;
+            font-size: 1.1rem;
+        }
+        
+        .appointment-client {
+            font-weight: 700;
+            color: #e2e8f0;
+            margin-bottom: 4px;
+        }
+        
+        .appointment-type {
+            color: #94a3b8;
+            font-size: 0.9rem;
+        }
+        
+        .delete-btn {
+            background: rgba(239, 68, 68, 0.2);
+            border: 1px solid rgba(239, 68, 68, 0.4);
+            color: #fca5a5;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-family: 'Rajdhani', sans-serif;
+            font-weight: 700;
+            transition: all 0.3s;
+        }
+        
+        .delete-btn:hover {
+            background: rgba(239, 68, 68, 0.4);
+            color: #fee2e2;
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .stat-card {
+            background: rgba(51, 65, 85, 0.6);
+            padding: 20px;
+            border-radius: 12px;
+            border-left: 4px solid #d4ff00;
+        }
+        
+        .stat-value {
+            font-size: 2.5rem;
+            font-weight: 900;
+            color: #d4ff00;
+            margin-bottom: 8px;
+        }
+        
+        .stat-label {
+            color: #94a3b8;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-size: 0.9rem;
+        }
+        
+        @media (max-width: 768px) {
+            .calendar-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .calendar-header {
+                display: none;
+            }
+            
+            .calendar-day {
+                min-height: auto;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>W-Charge Planner</h1>
+            <div class="header-subtitle">Volledige planning voor W-Charge installaties & afspraken</div>
+        </header>
+        
+        <div class="nav-bar">
+            <button class="btn" onclick="goToToday()">📅 Vandaag</button>
+            <button class="btn btn-secondary" onclick="exportData()">💾 Exporteer Data</button>
+            <button class="btn btn-secondary" onclick="importData()">📥 Importeer Data</button>
+        </div>
+        
+        <div class="card">
+            <div class="stats-grid" id="stats"></div>
+        </div>
+        
+        <div class="card">
+            <div class="week-nav">
+                <button class="btn btn-secondary" onclick="changeMonth(-1)">◀ Vorige</button>
+                <div class="week-title" id="monthTitle"></div>
+                <button class="btn btn-secondary" onclick="changeMonth(1)">Volgende ▶</button>
+            </div>
+            
+            <div class="calendar-grid">
+                <div class="calendar-header">Ma</div>
+                <div class="calendar-header">Di</div>
+                <div class="calendar-header">Wo</div>
+                <div class="calendar-header">Do</div>
+                <div class="calendar-header">Vr</div>
+                <div class="calendar-header">Za</div>
+                <div class="calendar-header">Zo</div>
+            </div>
+            
+            <div class="calendar-grid" id="calendar"></div>
+        </div>
+    </div>
+    
+    <!-- Modal voor afspraak toevoegen -->
+    <div class="modal" id="appointmentModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div class="modal-title">Afspraak Toevoegen</div>
+                <button class="close-btn" onclick="closeModal()">&times;</button>
+            </div>
+            
+            <form onsubmit="saveAppointment(event)">
+                <div class="form-group">
+                    <label class="form-label">Datum</label>
+                    <input type="date" class="form-input" id="aptDate" required>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Tijd</label>
+                    <input type="time" class="form-input" id="aptTime" required>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Klant Naam</label>
+                    <input type="text" class="form-input" id="aptClient" required>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Type Installatie</label>
+                    <select class="form-select" id="aptType">
+                        <option value="EV Lader">EV Lader</option>
+                        <option value="Zonnepanelen">Zonnepanelen</option>
+                        <option value="Batterij">Batterij</option>
+                        <option value="Combo">Combo (EV + Zon)</option>
+                        <option value="Andere">Andere</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Locatie / Adres</label>
+                    <input type="text" class="form-input" id="aptLocation">
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Notities</label>
+                    <textarea class="form-textarea" id="aptNotes"></textarea>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Offerte Nummer</label>
+                    <input type="text" class="form-input" id="aptOfferteNr">
+                </div>
+                
+                <div style="display: flex; gap: 15px; margin-top: 30px;">
+                    <button type="submit" class="btn" style="flex: 1;">💾 Opslaan</button>
+                    <button type="button" class="btn btn-secondary" onclick="closeModal()">Annuleren</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <!-- Modal voor dag details -->
+    <div class="modal" id="dayModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div class="modal-title" id="dayTitle"></div>
+                <button class="close-btn" onclick="closeDayModal()">&times;</button>
+            </div>
+            
+            <div class="appointment-list" id="dayAppointments"></div>
+            
+            <button class="btn" onclick="openAppointmentModalForDay()" style="width: 100%; margin-top: 20px;">➕ Nieuwe Afspraak</button>
+        </div>
+    </div>
+    
+    <script>
+        // ═══════════════════════════════════════════════════════════════
+        // BILLR INTEGRATIE API - Global beschikbaar voor BILLR app
+        // ═══════════════════════════════════════════════════════════════
+        window.WChargePlanner = {
+            addFromBILLR: function(data) {
+                console.log('✅ Afspraak ontvangen van BILLR:', data);
+                
+                const appointments = getAppointments();
+                const newApt = {
+                    id: Date.now().toString(),
+                    date: data.date || new Date().toISOString().split('T')[0],
+                    time: data.time || '09:00',
+                    client: data.client || '',
+                    type: data.type || 'EV Lader',
+                    location: data.location || '',
+                    notes: data.notes || '',
+                    offerteNummer: data.offerteNummer || '',
+                    fromBILLR: true
+                };
+                
+                appointments.push(newApt);
+                saveAppointments(appointments);
+                
+                renderCalendar();
+                renderStats();
+                
+                alert('✅ Afspraak toegevoegd!\\n\\n' + 
+                      'Klant: ' + newApt.client + '\\n' +
+                      'Datum: ' + newApt.date + ' om ' + newApt.time + '\\n' +
+                      'Type: ' + newApt.type);
+                
+                return true;
+            },
+            
+            getAppointments: function() {
+                return getAppointments();
+            }
+        };
+        
+        const STORAGE_KEY = 'wcharge_appointments';
+        
+        function getAppointments() {
+            try {
+                const data = localStorage.getItem(STORAGE_KEY);
+                return data ? JSON.parse(data) : [];
+            } catch(e) {
+                console.error('Error loading appointments:', e);
+                return [];
+            }
+        }
+        
+        function saveAppointments(appointments) {
+            try {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(appointments));
+                console.log('✅ Afspraken opgeslagen:', appointments.length);
+            } catch(e) {
+                console.error('❌ Error saving appointments:', e);
+            }
+        }
+        
+        let currentDate = new Date();
+        let selectedDate = null;
+        
+        function renderCalendar() {
+            const year = currentDate.getFullYear();
+            const month = currentDate.getMonth();
+            
+            const monthNames = ['Januari', 'Februari', 'Maart', 'April', 'Mei', 'Juni',
+                               'Juli', 'Augustus', 'September', 'Oktober', 'November', 'December'];
+            document.getElementById('monthTitle').textContent = `${monthNames[month]} ${year}`;
+            
+            const firstDay = new Date(year, month, 1);
+            const lastDay = new Date(year, month + 1, 0);
+            
+            let startDay = firstDay.getDay();
+            startDay = startDay === 0 ? 6 : startDay - 1;
+            
+            const daysInMonth = lastDay.getDate();
+            const appointments = getAppointments();
+            
+            const calendar = document.getElementById('calendar');
+            calendar.innerHTML = '';
+            
+            const prevMonthDays = new Date(year, month, 0).getDate();
+            for(let i = startDay - 1; i >= 0; i--) {
+                const day = prevMonthDays - i;
+                const dayDiv = createDayDiv(day, true, null, appointments);
+                calendar.appendChild(dayDiv);
+            }
+            
+            const today = new Date();
+            for(let day = 1; day <= daysInMonth; day++) {
+                const date = new Date(year, month, day);
+                const isToday = date.toDateString() === today.toDateString();
+                const dayDiv = createDayDiv(day, false, isToday, appointments, date);
+                calendar.appendChild(dayDiv);
+            }
+            
+            const totalCells = calendar.children.length;
+            const cellsNeeded = Math.ceil(totalCells / 7) * 7;
+            for(let day = 1; day <= cellsNeeded - totalCells; day++) {
+                const dayDiv = createDayDiv(day, true, null, appointments);
+                calendar.appendChild(dayDiv);
+            }
+        }
+        
+        function createDayDiv(day, otherMonth, isToday, appointments, date) {
+            const div = document.createElement('div');
+            div.className = 'calendar-day';
+            
+            if(otherMonth) {
+                div.classList.add('other-month');
+            }
+            
+            if(isToday) {
+                div.classList.add('today');
+            }
+            
+            const dayNumber = document.createElement('div');
+            dayNumber.className = 'day-number';
+            dayNumber.textContent = day;
+            div.appendChild(dayNumber);
+            
+            if(date && !otherMonth) {
+                const dateStr = date.toISOString().split('T')[0];
+                const dayAppointments = appointments.filter(apt => apt.date === dateStr);
+                
+                dayAppointments.forEach(apt => {
+                    const aptDiv = document.createElement('div');
+                    aptDiv.className = 'day-appointment';
+                    aptDiv.textContent = `${apt.time} ${apt.client}`;
+                    aptDiv.title = `${apt.type} - ${apt.location}`;
+                    div.appendChild(aptDiv);
+                });
+                
+                div.onclick = () => openDayModal(date);
+            }
+            
+            return div;
+        }
+        
+        function changeMonth(delta) {
+            currentDate.setMonth(currentDate.getMonth() + delta);
+            renderCalendar();
+        }
+        
+        function goToToday() {
+            currentDate = new Date();
+            renderCalendar();
+        }
+        
+        function openAppointmentModal(date = null) {
+            selectedDate = date || new Date();
+            
+            document.getElementById('aptDate').value = selectedDate.toISOString().split('T')[0];
+            document.getElementById('aptTime').value = '09:00';
+            document.getElementById('aptClient').value = '';
+            document.getElementById('aptType').value = 'EV Lader';
+            document.getElementById('aptLocation').value = '';
+            document.getElementById('aptNotes').value = '';
+            document.getElementById('aptOfferteNr').value = '';
+            
+            document.getElementById('appointmentModal').classList.add('active');
+        }
+        
+        function closeModal() {
+            document.getElementById('appointmentModal').classList.remove('active');
+        }
+        
+        function saveAppointment(event) {
+            event.preventDefault();
+            
+            const newApt = {
+                id: Date.now().toString(),
+                date: document.getElementById('aptDate').value,
+                time: document.getElementById('aptTime').value,
+                client: document.getElementById('aptClient').value,
+                type: document.getElementById('aptType').value,
+                location: document.getElementById('aptLocation').value,
+                notes: document.getElementById('aptNotes').value,
+                offerteNummer: document.getElementById('aptOfferteNr').value
+            };
+            
+            const appointments = getAppointments();
+            appointments.push(newApt);
+            saveAppointments(appointments);
+            
+            closeModal();
+            renderCalendar();
+            renderStats();
+        }
+        
+        function openDayModal(date) {
+            selectedDate = date;
+            const dateStr = date.toISOString().split('T')[0];
+            const dayNames = ['Zondag', 'Maandag', 'Dinsdag', 'Woensdag', 'Donderdag', 'Vrijdag', 'Zaterdag'];
+            
+            document.getElementById('dayTitle').textContent = 
+                `${dayNames[date.getDay()]} ${date.getDate()}/${date.getMonth() + 1}/${date.getFullYear()}`;
+            
+            const appointments = getAppointments().filter(apt => apt.date === dateStr);
+            const container = document.getElementById('dayAppointments');
+            
+            if(appointments.length === 0) {
+                container.innerHTML = '<p style="text-align: center; color: #94a3b8; padding: 20px;">Geen afspraken voor deze dag</p>';
+            } else {
+                container.innerHTML = appointments.map(apt => `
+                    <div class="appointment-item">
+                        <div class="appointment-info">
+                            <div class="appointment-time">🕐 ${apt.time}</div>
+                            <div class="appointment-client">👤 ${apt.client}</div>
+                            <div class="appointment-type">⚡ ${apt.type}</div>
+                            ${apt.location ? `<div class="appointment-type">📍 ${apt.location}</div>` : ''}
+                            ${apt.offerteNummer ? `<div class="appointment-type">📄 ${apt.offerteNummer}</div>` : ''}
+                            ${apt.notes ? `<div class="appointment-type" style="margin-top: 8px;">📝 ${apt.notes}</div>` : ''}
+                        </div>
+                        <button class="delete-btn" onclick="deleteAppointment('${apt.id}')">🗑️</button>
+                    </div>
+                `).join('');
+            }
+            
+            document.getElementById('dayModal').classList.add('active');
+        }
+        
+        function closeDayModal() {
+            document.getElementById('dayModal').classList.remove('active');
+        }
+        
+        function openAppointmentModalForDay() {
+            closeDayModal();
+            openAppointmentModal(selectedDate);
+        }
+        
+        function deleteAppointment(id) {
+            if(!confirm('Weet je zeker dat je deze afspraak wilt verwijderen?')) return;
+            
+            const appointments = getAppointments().filter(apt => apt.id !== id);
+            saveAppointments(appointments);
+            
+            renderCalendar();
+            renderStats();
+            
+            if(selectedDate) {
+                openDayModal(selectedDate);
+            }
+        }
+        
+        function renderStats() {
+            const appointments = getAppointments();
+            const today = new Date().toISOString().split('T')[0];
+            
+            const stats = {
+                total: appointments.length,
+                today: appointments.filter(apt => apt.date === today).length,
+                thisWeek: appointments.filter(apt => {
+                    const aptDate = new Date(apt.date);
+                    const startOfWeek = new Date();
+                    startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay() + 1);
+                    return aptDate >= startOfWeek;
+                }).length,
+                types: {}
+            };
+            
+            appointments.forEach(apt => {
+                stats.types[apt.type] = (stats.types[apt.type] || 0) + 1;
+            });
+            
+            const container = document.getElementById('stats');
+            container.innerHTML = `
+                <div class="stat-card">
+                    <div class="stat-value">${stats.total}</div>
+                    <div class="stat-label">Totaal Afspraken</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">${stats.today}</div>
+                    <div class="stat-label">Vandaag</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">${stats.thisWeek}</div>
+                    <div class="stat-label">Deze Week</div>
+                </div>
+                ${Object.entries(stats.types).map(([type, count]) => `
+                    <div class="stat-card">
+                        <div class="stat-value">${count}</div>
+                        <div class="stat-label">${type}</div>
+                    </div>
+                `).join('')}
+            `;
+        }
+        
+        function exportData() {
+            const appointments = getAppointments();
+            const dataStr = JSON.stringify(appointments, null, 2);
+            const dataBlob = new Blob([dataStr], { type: 'application/json' });
+            const url = URL.createObjectURL(dataBlob);
+            
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `wcharge-planning-${new Date().toISOString().split('T')[0]}.json`;
+            a.click();
+            
+            URL.revokeObjectURL(url);
+        }
+        
+        function importData() {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = 'application/json';
+            
+            input.onchange = (e) => {
+                const file = e.target.files[0];
+                const reader = new FileReader();
+                
+                reader.onload = (event) => {
+                    try {
+                        const data = JSON.parse(event.target.result);
+                        saveAppointments(data);
+                        renderCalendar();
+                        renderStats();
+                        alert('✅ Data succesvol geïmporteerd!');
+                    } catch(err) {
+                        alert('❌ Error bij importeren: ' + err.message);
+                    }
+                };
+                
+                reader.readAsText(file);
+            };
+            
+            input.click();
+        }
+        
+        window.addEventListener('DOMContentLoaded', () => {
+            const urlParams = new URLSearchParams(window.location.search);
+            const billrData = urlParams.get('billr');
+            
+            if(billrData) {
+                try {
+                    const decoded = JSON.parse(decodeURIComponent(atob(billrData)));
+                    window.WChargePlanner.addFromBILLR(decoded);
+                } catch(e) {
+                    console.error('Error parsing BILLR data:', e);
+                }
+            }
+            
+            renderCalendar();
+            renderStats();
+            
+            console.log('✅ W-Charge Planner geladen - BILLR API beschikbaar');
+            console.log('📍 Gebruik: window.WChargePlanner.addFromBILLR(data)');
+        });
+    </script>
+</body>
+</html>
