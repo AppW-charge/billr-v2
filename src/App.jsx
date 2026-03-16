@@ -2,8 +2,8 @@
 import * as XLSX from 'xlsx';
 import { createClient } from '@supabase/supabase-js';
 // ═══════════════════════════════════════════════════════════════════
-//  BILLR v6.3 — Volledige build met alle features
-//  Volledig boekhoudprogramma — Supabase editie
+//  BILLR v7.2 — Definitieve build — Alle fixes
+//  Volledig boekhoudprogramma — Supabase + Billit Peppol editie
 // ═══════════════════════════════════════════════════════════════════
 import { useState, useEffect, useLayoutEffect, useRef, useCallback } from "react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
@@ -106,9 +106,10 @@ const stripBe = s => (s||"").replace(/[^0-9]/g,"");
 const fmtBtwnr = n => { const c=stripBe(n); return c.length>=9?"BE "+c.slice(0,4)+"."+c.slice(4,7)+"."+c.slice(7):(n||""); };
 
 function calcTotals(lijnen=[]) {
-  const sub = lijnen.reduce((s,l)=>s+(l.prijs*l.aantal),0);
+  const items = lijnen.filter(l=>!l.isInfo);
+  const sub = items.reduce((s,l)=>s+(l.prijs*l.aantal),0);
   const gr={};
-  lijnen.forEach(l=>{const r=l.btw||21;if(!gr[r])gr[r]=0;gr[r]+=l.prijs*l.aantal*(r/100);});
+  items.forEach(l=>{const r=l.btw||21;if(!gr[r])gr[r]=0;gr[r]+=l.prijs*l.aantal*(r/100);});
   const btw=Object.values(gr).reduce((s,v)=>s+v,0);
   return {subtotaal:sub,btw,totaal:sub+btw,btwGroepen:gr};
 }
@@ -225,49 +226,76 @@ async function kboLookup(vatNumber, cbeApiKey = null) {
   }
 }
 
-// PEPPOL Status Check via e-invoice.be
-async function checkPeppol(cbeNr, apiKey) {
-  if(!apiKey) return false;
+// ─── BILLIT PEPPOL INTEGRATIE ────────────────────────────────────
+const BILLIT_API = { production: "https://api.billit.be", sandbox: "https://api.sandbox.billit.be" };
+function getBillitUrl(settings) { return BILLIT_API[settings?.integraties?.billitEnv||"production"]||BILLIT_API.production; }
+function getBillitKey(settings) { return settings?.integraties?.billitApiKey||""; }
+function billitHeaders(settings) { return {'Authorization':`Bearer ${getBillitKey(settings)}`,'Content-Type':'application/json','Accept':'application/json'}; }
+
+// PEPPOL Status Check via Billit
+async function checkPeppol(vatNumber, settings) {
+  const apiKey = getBillitKey(settings);
+  if(!apiKey) return {registered:false, reason:"Geen Billit API key"};
+  const cleaned = String(vatNumber||"").replace(/\s/g,"").replace(/\./g,"");
+  const query = cleaned.startsWith("BE") ? cleaned : `BE${cleaned}`;
   try {
-    const response = await fetch(
-      `https://api.e-invoice.be/api/lookup?peppol_id=0208:${cbeNr}`,
-      { headers: { 'Authorization': `Bearer ${apiKey}` }}
-    );
-    return response.ok;
-  } catch(err) {
-    console.error("PEPPOL check error:", err);
-    return false;
-  }
+    const resp = await fetch(`${getBillitUrl(settings)}/v1/peppol/participantInformation/${query}`, {headers:billitHeaders(settings)});
+    if(resp.ok) {
+      const data = await resp.json();
+      console.log("[PEPPOL] ✓ Billit lookup:", query, data);
+      return {registered: data.Registered===true, identifier: data.Identifier||"", documentTypes: data.DocumentTypes||[]};
+    }
+    if(resp.status===404) return {registered:false, reason:"Niet op Peppol"};
+    return {registered:false, reason:`HTTP ${resp.status}`};
+  } catch(err) { console.error("[PEPPOL] Check failed:", err); return {registered:false, reason:err.message}; }
 }
 
-// PEPPOL Verzending via e-invoice.be
+// Billit: Factuur verzenden via Peppol
 async function sendViaPeppol(invoice, settings) {
-  const apiKey = settings.integraties?.eInvoiceApiKey;
-  if(!apiKey) throw new Error("E-Invoice API key niet geconfigureerd");
-  
+  const apiKey = getBillitKey(settings);
+  if(!apiKey) throw new Error("Billit API key niet geconfigureerd. Ga naar Instellingen → Integraties.");
+  const bed = settings?.bedrijf||{};
+  const klant = invoice.klant||{};
+  const totals = calcTotals(invoice.lijnen||[]);
+  // Billit Order format
+  const order = {
+    Type: "SalesInvoice",
+    Date: invoice.datum||new Date().toISOString().split("T")[0],
+    DueDate: invoice.vervaldatum,
+    YourRef: invoice.nummer,
+    Currency: "EUR",
+    Lines: (invoice.lijnen||[]).filter(l=>!l.isInfo).map((l,i)=>({
+      LineNumber: i+1,
+      Description: l.naam + (l.omschr ? ` - ${l.omschr}` : ""),
+      Quantity: l.aantal,
+      UnitPrice: l.prijs,
+      VatPercentage: l.btw||21
+    })),
+    Supplier: {Name:bed.naam, VatNumber:String(bed.btwnr||"").replace(/[^0-9BE]/g,""), Street:bed.adres, City:bed.gemeente?.replace(/^\d+\s*/,""), ZipCode:bed.gemeente?.match(/^\d+/)?.[0]||"", Country:"BE"},
+    Customer: {Name:klant.naam||klant.bedrijf, VatNumber:String(klant.btwnr||"").replace(/[^0-9BE]/g,""), Street:klant.adres, City:klant.gemeente?.replace(/^\d+\s*/,""), ZipCode:klant.gemeente?.match(/^\d+/)?.[0]||"", Country:"BE"}
+  };
   try {
-    // Converteer BILLR factuur naar UBL format
-    const ublInvoice = convertToUBL(invoice, settings);
-    
-    const response = await fetch('https://api.e-invoice.be/api/documents/', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(ublInvoice)
-    });
-    
-    if(!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message || "PEPPOL verzending mislukt");
-    }
-    
-    return await response.json();
-  } catch(err) {
-    console.error("PEPPOL send error:", err);
-    throw err;
-  }
+    // Stap 1: Factuur aanmaken
+    const createResp = await fetch(`${getBillitUrl(settings)}/v1/order`, {method:"POST", headers:billitHeaders(settings), body:JSON.stringify(order)});
+    if(!createResp.ok) { const err = await createResp.text(); throw new Error(`Billit aanmaken mislukt: ${err}`); }
+    const created = await createResp.json();
+    console.log("[BILLIT] Order created:", created.Id);
+    // Stap 2: Verstuur via Peppol
+    const sendResp = await fetch(`${getBillitUrl(settings)}/v1/order/commands/send`, {method:"POST", headers:billitHeaders(settings), body:JSON.stringify({OrderId:created.Id, TransportType:"Peppol"})});
+    if(!sendResp.ok) { const err = await sendResp.text(); throw new Error(`Peppol verzending mislukt: ${err}`); }
+    return await sendResp.json();
+  } catch(err) { console.error("[BILLIT] Send error:", err); throw err; }
+}
+
+// Test Billit API verbinding
+async function testBillitConnection(settings) {
+  const apiKey = getBillitKey(settings);
+  if(!apiKey) return {ok:false, error:"Geen API key"};
+  try {
+    const resp = await fetch(`${getBillitUrl(settings)}/v1/account`, {headers:billitHeaders(settings)});
+    if(resp.ok) { const data = await resp.json(); return {ok:true, account:data}; }
+    return {ok:false, error:`HTTP ${resp.status}`};
+  } catch(err) { return {ok:false, error:err.message}; }
 }
 
 // Converteer BILLR factuur naar UBL (Universal Business Language)
@@ -530,7 +558,7 @@ const INIT_KLANTEN = [
 const INIT_SETTINGS = {
   bedrijf:{naam:"",tagline:"",adres:"",gemeente:"",tel:"",email:"",btwnr:"",iban:"",bic:"",website:"",kleur:"#1a2e4a",logo:""},
   email:{eigen:"info@wcharge.be",boekhouder1:"",boekhouder2:"",cc:"",emailjsServiceId:"",emailjsTemplateOfferte:"",emailjsTemplateFactuur:"",emailjsPublicKey:"",templateOfferte:"Beste {naam},\n\nIn bijlage vindt u onze offerte {nummer} d.d. {datum}, geldig tot {vervaldatum}.\n\nWat mag u verwachten?\n{technische_info}\n\nBij akkoord kunt u de offerte bevestigen via onderstaande link.\nBij vragen staan we steeds voor u klaar.\n\nMet vriendelijke groeten,\n{bedrijf}\n{tel}",templateFactuur:"Beste {naam},\n\nIn bijlage vindt u factuur {nummer} d.d. {datum}.\nGelieve te betalen vóór {vervaldatum}.\n\nBedrag: {totaal}\nIBAN: {iban} · Mededeling: {nummer}\n\nMet vriendelijke groeten,\n{bedrijf}"},
-  integraties:{kboEnabled:true,peppolEnabled:false,peppolApiKey:"",eInvoiceApiKey:"",cbeApiKey:"OqzgVJ8I5wqgA8QjB0Aotu446pn7xqVI"},
+  integraties:{kboEnabled:true,peppolEnabled:false,peppolApiKey:"",eInvoiceApiKey:"",cbeApiKey:"OqzgVJ8I5wqgA8QjB0Aotu446pn7xqVI",billitApiKey:"",billitEnv:"production"},
   dashboardWidgets:{omzetGrafiek:true,recenteOffertes:true,openFacturen:true,goedgekeurdeOffertes:true,snelleActies:true,statistieken:true,agenda:true},
   voorwaarden:{betalingstermijn:14,voorschot:"50%",boekjaarStart:"01-01",nummerPrefix_off:"OFF",nummerPrefix_fct:"FACT",tegenNummer_off:null,tegenNummer_fct:null,tekst:`1. Al onze facturen zijn contant betaalbaar op de bankrekening vermeld op de factuur en zullen na verloop van 14 dagen van rechtswege een intrest van 1% per maand meebrengen, zonder aangetekende ingebrekestelling of dagvaarding te noodzaken.\n\n2. Op onze facturen dienen binnen de 8 dagen na ontvangst eventuele opmerkingen te geschieden.\n\n3. Het bedrag van de onbetaald gebleven facturen zal ten titel van schadevergoeding, van rechtswege verhoogd worden met 15% met een minimum van €65,00 vanaf de dag volgend op de vervaldag.\n\n4. Onze facturen zijn betaalbaar te Lochristi, zodat in geval van betwisting enkel de Rechtbanken van het arrondissement Gent bevoegd zijn.\n\nBTW 6% verklaring: Bij gebrek aan schriftelijke betwisting binnen een termijn van één maand vanaf de ontvangst van de factuur, wordt de klant geacht te erkennen dat (1) de werken worden verricht aan een woning waarvan de eerste ingebruikneming heeft plaatsgevonden in een kalenderjaar dat ten minste tien jaar voorafgaat aan de datum van de eerste factuur, (2) de woning na uitvoering uitsluitend of hoofdzakelijk als privéwoning wordt gebruikt en (3) de werken worden gefactureerd aan een eindverbruiker.\n\nBTW verlegd: Verlegging van heffing. Bij gebrek aan schriftelijke betwisting binnen één maand na ontvangst wordt de afnemer geacht te erkennen dat hij een belastingplichtige is gehouden tot periodieke BTW-aangiften.`},
   thema:{kleur:"#1a2e4a",naam:"Elektrisch Blauw"},
@@ -1197,8 +1225,8 @@ tr.row-active td{border-top:2px solid #2563eb}
   .doc-page{
     box-shadow:none!important;border-radius:0!important;
     margin:0!important;max-width:100%!important;width:210mm!important;
-    height:297mm!important;max-height:297mm!important;
-    overflow:hidden!important;
+    min-height:297mm!important;max-height:none!important;
+    overflow:visible!important;
     display:flex!important;flex-direction:column!important;
     break-after:page!important;page-break-after:always!important;
     box-sizing:border-box!important;position:relative!important;
@@ -1217,10 +1245,10 @@ tr.row-active td{border-top:2px solid #2563eb}
   .cov-r{height:100%!important;box-sizing:border-box!important}
   
   /* Content pagina's: interne padding (omdat @page margin=0) */
-  .prod-page{padding:8mm 12mm!important;box-sizing:border-box!important;flex:1!important;overflow:hidden!important}
-  .fct-pg{padding:8mm 12mm!important;box-sizing:border-box!important;flex:1!important;overflow:hidden!important}
-  .qt-pg{padding:8mm 12mm!important;box-sizing:border-box!important;flex:1!important;overflow:hidden!important}
-  .fct-pg2{padding:8mm 12mm!important;box-sizing:border-box!important;flex:1!important;overflow:hidden!important}
+  .prod-page{padding:8mm 12mm!important;box-sizing:border-box!important;flex:1!important;overflow:visible!important}
+  .fct-pg{padding:8mm 12mm!important;box-sizing:border-box!important;flex:1!important;overflow:visible!important}
+  .qt-pg{padding:8mm 12mm!important;box-sizing:border-box!important;flex:1!important;overflow:visible!important}
+  .fct-pg2{padding:8mm 12mm!important;box-sizing:border-box!important;flex:1!important;overflow:visible!important}
   
   /* Footer: altijd onderaan de pagina */
   .qt-footer{
@@ -1374,7 +1402,8 @@ function openPlannerWithOfferte(offerte) {
 // ─── MAIN APP ────────────────────────────────────────────────────
 export default function App() {
   const [user, setUser] = useState(null);
-  const [pg, setPg] = useState("dashboard");
+  const [pg, setPgRaw] = useState(()=>{try{return sessionStorage.getItem("billr_pg")||"dashboard"}catch(_){return "dashboard"}});
+  const setPg = useCallback((v)=>{setPgRaw(v);try{sessionStorage.setItem("billr_pg",v)}catch(_){};},[]);
   const [pgFilter, setPgFilter] = useState(null); // filter when clicking dashboard
   const [klanten, setKlanten] = useState(INIT_KLANTEN);
   const [producten, setProducten] = useState(INIT_PRODUCTS);
@@ -1535,6 +1564,31 @@ export default function App() {
     };
   },[]);
 
+  // ═══ MOBIELE DATA SYNC: herlaad bij tab-switch (visibilitychange) ═══
+  const lastSyncRef = useRef(0);
+  useEffect(()=>{
+    const handler = async () => {
+      if(document.visibilityState==="visible" && user && Date.now()-lastSyncRef.current > 30000) {
+        lastSyncRef.current = Date.now();
+        console.log("📱 Tab zichtbaar — data herladen...");
+        try {
+          const allData = await sbGetAll(user.id);
+          if(allData && Object.keys(allData).length > 0) {
+            const parse=(k,fb)=>{try{return allData[k]?JSON.parse(allData[k]):fb}catch(_){return fb}};
+            if(allData["b4_off"]) setOffertes(parse("b4_off",[]));
+            if(allData["b4_fct"]) setFacturen(parse("b4_fct",[]));
+            if(allData["b4_kln"]) setKlanten(parse("b4_kln",INIT_KLANTEN));
+            if(allData["b4_prd"]) setProducten(parse("b4_prd",INIT_PRODUCTS));
+            if(allData["b4_set"]) setSettings(parse("b4_set",INIT_SETTINGS));
+            console.log("📱 ✓ Data herladen");
+          }
+        } catch(e) { console.warn("📱 Sync mislukt:",e); }
+      }
+    };
+    document.addEventListener("visibilitychange",handler);
+    return ()=>document.removeEventListener("visibilitychange",handler);
+  },[user]);
+
   // ═══ EMAILJS INITIALISATIE ═══
   // Re-init wanneer settings veranderen (zodat de juiste public key gebruikt wordt)
   useEffect(() => {
@@ -1618,10 +1672,31 @@ export default function App() {
   const bulkUpdFact = (ids,upd) => setFacturen(p=>p.map(f=>ids.includes(f.id)?{...f,...upd,log:[...(f.log||[]),logEntry(upd.status?"Bulk → "+(FACT_STATUS[upd.status]?.l||upd.status):"Bulk gewijzigd")]}:f));
 
   const saveOff = (data) => {
-    if(data.id && offertes.find(o=>o.id===data.id)){
-      setOffertes(p=>p.map(o=>o.id===data.id?data:o)); notify("Offerte opgeslagen ✓");
+    // Auto-create producten van vrije lijnen (zonder productId en niet isInfo)
+    const newProds = [];
+    const updatedLijnen = (data.lijnen||[]).map(l=>{
+      if(!l.productId && l.naam && l.prijs > 0 && !l.isInfo) {
+        // Zoek bestaand product op naam
+        const existing = producten.find(p=>(p.naam||"").toLowerCase()===l.naam.toLowerCase());
+        if(existing) {
+          return {...l, productId: existing.id};
+        } else {
+          const newId = uid();
+          newProds.push({id:newId, naam:l.naam, omschr:l.omschr||"", prijs:l.prijs, btw:l.btw||21, eenheid:l.eenheid||"stuk", cat:"Overige", actief:true, imageUrl:"", specs:[], merk:""});
+          return {...l, productId: newId};
+        }
+      }
+      return l;
+    });
+    if(newProds.length > 0) {
+      setProducten(p=>[...newProds,...p]);
+      notify(`${newProds.length} nieuw${newProds.length>1?"e":""} product${newProds.length>1?"en":""} aangemaakt`);
+    }
+    const finalData = {...data, lijnen: updatedLijnen};
+    if(finalData.id && offertes.find(o=>o.id===finalData.id)){
+      setOffertes(p=>p.map(o=>o.id===finalData.id?finalData:o)); notify("Offerte opgeslagen ✓");
     } else {
-      const n={...data,id:uid(),nummer:nextNr("OFF",offertes,"nummer"),aangemaakt:new Date().toISOString(),status:"concept"};
+      const n={...finalData,id:uid(),nummer:nextNr("OFF",offertes,"nummer"),aangemaakt:new Date().toISOString(),status:"concept"};
       setOffertes(p=>[n,...p]); notify("Offerte aangemaakt ✓");
     }
     setWizOpen(false); setEditOff(null);
@@ -1707,7 +1782,13 @@ export default function App() {
       }
     } catch(error) {
       console.error("EmailJS Error:", error);
-      notify(`❌ Email mislukt: ${error?.text || error?.message || "Controleer EmailJS instellingen"}`, "er");
+      const errMsg = error?.text || error?.message || "Onbekende fout";
+      const hint = errMsg.includes("service_id") ? " → Controleer Service ID in Instellingen → Email" 
+        : errMsg.includes("template_id") ? " → Controleer Template ID in Instellingen → Email"
+        : errMsg.includes("publicKey") || errMsg.includes("public_key") ? " → Controleer Public Key in Instellingen → Email"
+        : errMsg.includes("recipients") ? " → Klant heeft geen geldig e-mailadres"
+        : " → Controleer EmailJS instellingen (Instellingen → Email)";
+      notify(`❌ Email mislukt: ${errMsg}${hint}`, "er");
       return false;
     }
   };
@@ -1872,7 +1953,7 @@ export default function App() {
             {pg==="offertes"&&<OffertesPage offertes={offertes} initFilter={pgFilter} onView={d=>setViewDoc({doc:d,type:"offerte"})} onEdit={d=>{setEditOff(d);setWizOpen(true)}} onStatus={updOff} onBulkStatus={bulkUpdOff} onFactuur={d=>setFactModal(d)} onDelete={id=>{setOffertes(p=>p.filter(o=>o.id!==id));notify("Verwijderd")}} onNew={()=>{setEditOff(null);setWizOpen(true)}} onEmail={d=>setEmailModal({doc:d,type:"offerte"})} settings={settings}/>}
             {pg==="facturen"&&<FacturenPage facturen={factMet} settings={settings} initFilter={pgFilter} onView={d=>setViewDoc({doc:d,type:"factuur"})} onEdit={f=>{setEditFact(f);setFactuurWizOpen(true);}} onStatus={updFact} onBulkStatus={bulkUpdFact} onDelete={id=>{setFacturen(p=>p.filter(f=>f.id!==id));notify("Verwijderd")}} notify={notify} onEmail={d=>setEmailModal({doc:d,type:"factuur"})} onBetaling={f=>setBetalingModal(f)} onAanmaning={f=>setAanmaningModal(f)} onNew={()=>{setEditFact(null);setFactuurWizOpen(true)}}/>}
             {pg==="klanten"&&<KlantenPage klanten={klanten} offertes={offertes} facturen={factMet} view={klantView} onEdit={k=>setKlantModal(k)} onDelete={id=>{setKlanten(p=>p.filter(k=>k.id!==id));notify("Klant verwijderd")}}/>}
-            {pg==="producten"&&<ProductenPage producten={producten} settings={settings} onEdit={p=>setProdModal(p)} onDelete={id=>{setProducten(p=>p.filter(x=>x.id!==id));notify("Verwijderd")}} onToggle={id=>setProducten(p=>p.map(x=>x.id===id?{...x,actief:!x.actief}:x))} onEnrich={upd=>setProducten(p=>p.map(x=>x.id===upd.id?upd:x))}/>}
+            {pg==="producten"&&<ProductenPage producten={producten} settings={settings} onEdit={p=>setProdModal(p)} onDelete={id=>{setProducten(p=>p.filter(x=>x.id!==id));notify("Verwijderd")}} onToggle={id=>setProducten(p=>p.map(x=>x.id===id?{...x,actief:!x.actief}:x))} onEnrich={upd=>setProducten(p=>p.map(x=>x.id===upd.id?upd:x))} onDuplicate={p=>{const dup={...p,id:uid(),naam:p.naam+" (kopie)"};setProducten(pr=>[dup,...pr]);notify("Product gedupliceerd ✓");setProdModal(dup);}}/>}
             {pg==="agenda"&&<div style={{height:"calc(100vh - 70px)",margin:"-22px",overflow:"hidden"}}><iframe src={`${window.location.origin}/planner.html`} style={{width:"100%",height:"100%",border:"none"}} title="Agenda"/></div>}
             {pg==="rapportage"&&<Rapportage offertes={offertes} facturen={factMet}/>}
             {pg==="instellingen"&&<InstellingenPage settings={settings} setSettings={s=>{setSettings(s);notify("Instellingen opgeslagen ✓");}} notify={notify}/>}
@@ -1903,7 +1984,7 @@ export default function App() {
       }} onClose={()=>{setFactuurWizOpen(false);setEditFact(null);}} notify={notify}/>}
       {viewDoc&&<DocModal doc={viewDoc.doc} type={viewDoc.type} settings={settings} producten={producten} onClose={()=>setViewDoc(null)} onFactuur={d=>{setFactModal(d);setViewDoc(null);}} onStatusOff={s=>{updOff(viewDoc.doc.id,{status:s});notify("Status: "+OFF_STATUS[s]?.l);}} onStatusFact={s=>{updFact(viewDoc.doc.id,{status:s});notify("Status: "+FACT_STATUS[s]?.l);}} onEmail={()=>setEmailModal({doc:viewDoc.doc,type:viewDoc.type})}/>}
       {factModal&&<FactuurModal off={factModal} settings={settings} onMaak={maakFactuur} onClose={()=>setFactModal(null)}/>}
-      {klantModal!==null&&<KlantModal klant={klantModal} onSave={k=>{if(k.id){setKlanten(p=>p.map(x=>x.id===k.id?k:x));notify("Klant opgeslagen");}else{setKlanten(p=>[{...k,id:uid(),aangemaakt:new Date().toISOString()},...p]);notify("Klant toegevoegd ✓");}setKlantModal(null);}} onClose={()=>setKlantModal(null)}/>}
+      {klantModal!==null&&<KlantModal klant={klantModal} settings={settings} onSave={k=>{if(k.id){setKlanten(p=>p.map(x=>x.id===k.id?k:x));notify("Klant opgeslagen");}else{setKlanten(p=>[{...k,id:uid(),aangemaakt:new Date().toISOString()},...p]);notify("Klant toegevoegd ✓");}setKlantModal(null);}} onClose={()=>setKlantModal(null)}/>}
       {prodModal!==null&&<ProductModal prod={prodModal} settings={settings} onSave={p=>{if(p.id){setProducten(pr=>pr.map(x=>x.id===p.id?p:x));notify("Product opgeslagen");}else{setProducten(pr=>[{...p,id:uid(),actief:true},...pr]);notify("Product toegevoegd ✓");}setProdModal(null);}} onClose={()=>setProdModal(null)}/>}
       {klantImportOpen&&<KlantImportModal onImport={nieuweKlanten=>{setKlanten(p=>[...nieuweKlanten.map(k=>({...k,id:uid(),aangemaakt:new Date().toISOString()})),...p]);notify(`${nieuweKlanten.length} klanten geïmporteerd ✓`);setKlantImportOpen(false);}} onClose={()=>setKlantImportOpen(false)} notify={notify}/>}
       {importModal&&<ImportModal onImport={nieuweProds=>{setProducten(p=>[...nieuweProds.map(x=>({...x,id:uid(),actief:true})),...p]);notify(`${nieuweProds.length} producten geïmporteerd ✓`);setImportModal(false);}} onClose={()=>setImportModal(false)} notify={notify}/>}
@@ -2544,7 +2625,7 @@ async function fetchAIImageUrl(naam, merk) {
   } catch(e) { return null; }
 }
 
-function ProductenPage({producten,settings,onEdit,onDelete,onToggle,onEnrich}) {
+function ProductenPage({producten,settings,onEdit,onDelete,onToggle,onEnrich,onDuplicate}) {
   const [q,setQ]=useState("");const [cat,setCat]=useState("alle");const [enriching,setEnriching]=useState(null);
   const [prodView,setProdView]=useState(settings?.prodView||"tile");
   const [sel,setSel]=useState(new Set());
@@ -2641,6 +2722,7 @@ function ProductenPage({producten,settings,onEdit,onDelete,onToggle,onEnrich}) {
               </div>
               <div style={{display:"flex",gap:4,marginTop:8}} onClick={e=>e.stopPropagation()}>
                 <button className="btn bs btn-sm" style={{flex:1,fontSize:10}} onClick={()=>doEnrich(p)} disabled={enriching===p.id}>{enriching===p.id?"⟳":"✨ AI"}</button>
+                <button className="btn bs btn-sm" style={{fontSize:10}} title="Dupliceren" onClick={()=>onDuplicate(p)}>📋</button>
                 <button className="btn bs btn-sm" style={{fontSize:10}} onClick={()=>{if(window.confirm("Verwijderen?"))onDelete(p.id)}}>🗑</button>
               </div>
               {(p.technischeFiches||[]).length>0&&<div style={{fontSize:10,color:"#3b82f6",marginTop:4}}>📎 {p.technischeFiches.length} fiche(s)</div>}
@@ -2684,6 +2766,7 @@ function ProductenPage({producten,settings,onEdit,onDelete,onToggle,onEnrich}) {
                 else alert("Geen afbeelding gevonden. Vul de URL manueel in via het bewerk-formulier.");
               }}>🖼 Beeld</button>
               <button className="btn bs btn-sm" onClick={()=>onEdit(p)}>✏️</button>
+              <button className="btn bs btn-sm" title="Dupliceren" onClick={()=>onDuplicate(p)}>📋</button>
               <button className="btn bgh btn-sm" onClick={()=>{if(window.confirm("Verwijderen?"))onDelete(p.id)}}>🗑</button>
               {p.technischeFiche&&<a href={p.technischeFiche} download={p.fichNaam||"fiche.pdf"} title="Technische fiche" style={{padding:"3px 7px",background:"#eff6ff",border:"1px solid #bfdbfe",borderRadius:5,fontSize:11,color:"#3b82f6",textDecoration:"none"}} onClick={e=>e.stopPropagation()}>📎</a>}
             </div></td>
@@ -2696,18 +2779,24 @@ function ProductenPage({producten,settings,onEdit,onDelete,onToggle,onEnrich}) {
 }
 
 // ─── KLANT IMPORT MODAL ───────────────────────────────────────────
-async function checkPeppolDirectory(btwnr) {
+async function checkPeppolDirectory(btwnr, settings) {
   if(!btwnr) return false;
   const clean = (btwnr||"").replace(/[^0-9]/g,"");
   if(clean.length < 9) return false;
-  // Simpele heuristiek: Belgische BTW nummers >= 0500000000 hebben kans op PEPPOL
-  // In productie kan je de echte PEPPOL SMP lookup doen
+  // Eerst: probeer Billit API als key beschikbaar
+  const billitKey = settings?.integraties?.billitApiKey || getBillitKey(settings||{});
+  if(billitKey) {
+    try {
+      const result = await checkPeppol(btwnr, settings);
+      return result?.registered || false;
+    } catch(_){}
+  }
+  // Fallback: PEPPOL directory lookup
   try {
     const resp = await fetch(`https://directory.peppol.eu/public/search/2.0/json?participant=iso6523-actorid-upis%3A%3A0208%3A${clean}`);
     if(resp.ok){ const d=await resp.json(); return (d.total_result_count||0)>0; }
   } catch(_){}
-  // Fallback: grote bedrijven (KBO > 0600000000) heuristic
-  return parseInt(clean) > 600000000;
+  return false;
 }
 
 function KlantImportModal({onImport, onClose, notify}) {
@@ -3214,11 +3303,16 @@ function ImportModal({onImport, onClose, notify}) {
 }
 // ─── OFFERTE WIZARD ──────────────────────────────────────────────
 // ─── FACTUUR WIZARD (directe factuur zonder offerte) ─────────────
-function ProductAutocomplete({producten, value, onChange, onSelect, placeholder="Productnaam…"}) {
+function ProductAutocomplete({producten, value, onChange, onSelect, placeholder="Productnaam…", compact=false}) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState(value||"");
   const ref = useRef();
-  const matches = q.length>0 ? producten.filter(p=>p.actief&&(p.naam||"").toLowerCase().includes(q.toLowerCase())).slice(0,8) : [];
+  useEffect(()=>{setQ(value||"")},[value]);
+  const matches = q.length>1 ? producten.filter(p=>p.actief&&(
+    (p.naam||"").toLowerCase().includes(q.toLowerCase())||
+    (p.omschr||"").toLowerCase().includes(q.toLowerCase())||
+    (p.merk||"").toLowerCase().includes(q.toLowerCase())
+  )).slice(0,10) : [];
 
   useEffect(()=>{
     const handler = e => { if(ref.current&&!ref.current.contains(e.target)) setOpen(false); };
@@ -3230,18 +3324,24 @@ function ProductAutocomplete({producten, value, onChange, onSelect, placeholder=
     <div ref={ref} style={{position:"relative",flex:1}}>
       <input className="fc" placeholder={placeholder} value={q}
         onChange={e=>{setQ(e.target.value);onChange(e.target.value);setOpen(true);}}
-        onFocus={()=>setOpen(true)}
-        style={{width:"100%",boxSizing:"border-box"}}
+        onFocus={()=>{if(q.length>1)setOpen(true);}}
+        style={{width:"100%",boxSizing:"border-box",fontSize:compact?12.5:undefined}}
       />
       {open&&matches.length>0&&(
-        <div style={{position:"absolute",top:"100%",left:0,right:0,background:"#fff",border:"1.5px solid #2563eb",borderRadius:8,boxShadow:"0 8px 24px rgba(0,0,0,.15)",zIndex:999,maxHeight:260,overflowY:"auto"}}>
+        <div style={{position:"absolute",top:"100%",left:0,right:0,background:"#fff",border:"1.5px solid #2563eb",borderRadius:8,boxShadow:"0 8px 24px rgba(0,0,0,.15)",zIndex:999,maxHeight:300,overflowY:"auto"}}>
           {matches.map(p=>(
-            <div key={p.id} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",cursor:"pointer",borderBottom:"1px solid #f1f5f9"}}
+            <div key={p.id} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",cursor:"pointer",borderBottom:"1px solid #f1f5f9",transition:"background .1s"}}
+              onMouseEnter={e=>e.currentTarget.style.background="#f0f9ff"}
+              onMouseLeave={e=>e.currentTarget.style.background="transparent"}
               onMouseDown={e=>{e.preventDefault();setQ(p.naam);setOpen(false);onSelect(p);}}>
-              {p.imageUrl?<img src={p.imageUrl} style={{width:28,height:28,objectFit:"contain",borderRadius:4,flexShrink:0}} onError={e=>e.target.style.display="none"} alt=""/>:<span style={{fontSize:18,flexShrink:0}}>{getCatIcon(p.cat)}</span>}
+              {p.imageUrl?<img src={p.imageUrl} style={{width:40,height:40,objectFit:"contain",borderRadius:6,flexShrink:0,border:"1px solid #e2e8f0"}} onError={e=>e.target.style.display="none"} alt=""/>:<span style={{fontSize:22,flexShrink:0,width:40,textAlign:"center"}}>{getCatIcon(p.cat)}</span>}
               <div style={{flex:1,minWidth:0}}>
-                <div style={{fontWeight:600,fontSize:13,overflow:"hidden",whiteSpace:"nowrap",textOverflow:"ellipsis"}}>{p.naam}</div>
-                <div style={{fontSize:11,color:"#64748b"}}>{p.merk||p.cat||""} · {fmtEuro(p.prijs)}/{p.eenheid||"stuk"}</div>
+                <div style={{fontWeight:700,fontSize:13,overflow:"hidden",whiteSpace:"nowrap",textOverflow:"ellipsis",color:"#1e293b"}}>{p.naam}</div>
+                <div style={{fontSize:11,color:"#64748b",overflow:"hidden",whiteSpace:"nowrap",textOverflow:"ellipsis"}}>{p.merk?p.merk+" · ":""}{p.omschr||p.cat||""}</div>
+              </div>
+              <div style={{textAlign:"right",flexShrink:0}}>
+                <div style={{fontWeight:800,fontSize:14,color:"#2563eb",fontFamily:"JetBrains Mono,monospace"}}>{fmtEuro(p.prijs)}</div>
+                <div style={{fontSize:10,color:"#94a3b8"}}>{p.btw}% · /{p.eenheid||"stuk"}</div>
               </div>
             </div>
           ))}
@@ -3704,7 +3804,7 @@ function OfferteWizard({klanten,producten,offertes,editData,settings,onSave,onCl
                     <div className={`ptile ${qty>0?"sel":""}`} onClick={()=>setQty(p,activeGroepId,qty+1)}>
                       {qty>0&&<div className="ptile-badge">{qty}</div>}
                       {p.imageUrl
-                        ?<img src={p.imageUrl} alt="" className="ptile-img" crossOrigin="anonymous"
+                        ?<img src={p.imageUrl} alt="" className="ptile-img"
                            onError={e=>{e.target.style.display="none";const ph=e.target.nextSibling;if(ph)ph.style.display="flex";}}
                          />
                         :<></>}
@@ -3787,8 +3887,11 @@ function OfferteWizard({klanten,producten,offertes,editData,settings,onSave,onCl
             {["Naam","Aantal","Prijs","BTW",""].map((h,i)=><div key={i} style={{fontSize:10,fontWeight:700,color:"#94a3b8",textTransform:"uppercase",letterSpacing:".5px",textAlign:i>=1?"center":"left"}}>{h}</div>)}
           </div>
           {lijnen.map((l,i)=>(
-            <div key={l.id} style={{display:"grid",gridTemplateColumns:"3fr 60px 80px 55px 26px",gap:5,marginBottom:4}}>
-              <input className="fc" style={{fontSize:12.5}} value={l.naam} onChange={e=>setLijnen(p=>p.map((x,j)=>j===i?{...x,naam:e.target.value}:x))}/>
+            <div key={l.id} style={{display:"grid",gridTemplateColumns:"3fr 60px 80px 55px 26px",gap:5,marginBottom:4,alignItems:"start"}}>
+              <ProductAutocomplete producten={actProds} value={l.naam} compact
+                onChange={v=>setLijnen(p=>p.map((x,j)=>j===i?{...x,naam:v}:x))}
+                onSelect={p=>setLijnen(prev=>prev.map((x,j)=>j===i?{...x,productId:p.id,naam:p.naam,omschr:p.omschr||"",prijs:p.prijs,btw:btwRegime==="verlegd"?0:btwRegime==="btw6"?6:(p.btw||21),eenheid:p.eenheid||"stuk",imageUrl:p.imageUrl||"",specs:p.specs||[],technischeFiche:p.technischeFiche||null,fichNaam:p.fichNaam||""}:x))}
+                placeholder="Typ productnaam…"/>
               <input type="number" className="fc" style={{fontSize:12.5,textAlign:"center"}} value={l.aantal} min={1} onChange={e=>setLijnen(p=>p.map((x,j)=>j===i?{...x,aantal:Number(e.target.value)}:x))}/>
               <input type="number" className="fc" style={{fontSize:12.5,textAlign:"right"}} value={l.prijs} step="0.01" onChange={e=>setLijnen(p=>p.map((x,j)=>j===i?{...x,prijs:Number(e.target.value)}:x))}/>
               <select className="fc" style={{fontSize:11.5,padding:"8px 4px"}} value={l.btw} onChange={e=>setLijnen(p=>p.map((x,j)=>j===i?{...x,btw:Number(e.target.value)}:x))}>
@@ -3797,7 +3900,10 @@ function OfferteWizard({klanten,producten,offertes,editData,settings,onSave,onCl
               <button style={{border:"none",background:"none",cursor:"pointer",color:"#ef4444",fontSize:16}} onClick={()=>setLijnen(p=>p.filter((_,j)=>j!==i))}>×</button>
             </div>
           ))}
-          <button className="btn bs btn-sm" onClick={()=>setLijnen(p=>[...p,{id:uid(),productId:null,naam:"",omschr:"",prijs:0,btw:btwRegime==="verlegd"?0:btwRegime==="btw6"?6:21,aantal:1,eenheid:"stuk",groepId:groepen[0]?.id}])}>+ Vrije lijn</button>
+          <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+            <button className="btn bs btn-sm" onClick={()=>setLijnen(p=>[...p,{id:uid(),productId:null,naam:"",omschr:"",prijs:0,btw:btwRegime==="verlegd"?0:btwRegime==="btw6"?6:21,aantal:1,eenheid:"stuk",groepId:groepen[0]?.id}])}>+ Vrije lijn</button>
+            <button className="btn bs btn-sm" onClick={()=>setLijnen(p=>[...p,{id:uid(),productId:null,naam:"",omschr:"",prijs:0,btw:0,aantal:0,eenheid:"",groepId:groepen[0]?.id,isInfo:true}])} title="Informatieve regel zonder prijs">+ Info lijn</button>
+          </div>
         </div>}
 
         {/* STAP 5 — VOORBEELD */}
@@ -3806,7 +3912,7 @@ function OfferteWizard({klanten,producten,offertes,editData,settings,onSave,onCl
             👁 Voorontwerp — zo ziet uw offerte eruit (alle pagina's). Scroll om alles te bekijken.
           </div>
           <div style={{border:"1px solid #e2e8f0",borderRadius:10,overflow:"hidden",boxShadow:"0 2px 12px rgba(0,0,0,.08)"}}>
-            <OfferteDocument doc={{klant,installatieType:instType,groepen,lijnen,notities,btwRegime,voorschot,vervaldatum,betalingstermijn,korting:Number(korting),kortingType,nummer:"VOORBEELD",aangemaakt:new Date().toISOString()}} settings={{}}/>
+            <OfferteDocument doc={{klant,installatieType:instType,groepen,lijnen,notities,btwRegime,voorschot,vervaldatum,betalingstermijn,korting:Number(korting),kortingType,nummer:"VOORBEELD",aangemaakt:new Date().toISOString()}} settings={settings}/>
           </div>
         </div>}
       </div>
@@ -4250,10 +4356,10 @@ function OfferteDocument({doc, settings}) {
                 <div key={i} style={{marginBottom:28,pageBreakInside:"avoid"}}>
                   {/* Product header with image + naam */}
                   <div style={{display:"flex",gap:16,alignItems:"flex-start",marginBottom:10}}>
-                    <div style={{flexShrink:0,width:90,height:90,borderRadius:10,overflow:"hidden",border:"1px solid #e2e8f0",background:"#f8fafc",display:"flex",alignItems:"center",justifyContent:"center"}}>
+                    <div style={{flexShrink:0,width:90,height:90,borderRadius:10,overflow:"hidden",border:"1px solid #e2e8f0",background:"#f8fafc",display:l.imageUrl?"flex":"none",alignItems:"center",justifyContent:"center"}}>
                       {l.imageUrl
-                        ?<img src={l.imageUrl} alt="" style={{width:"100%",height:"100%",objectFit:"contain"}} onError={e=>e.target.style.display="none"}/>
-                        :<div style={{fontSize:36,textAlign:"center"}}>{getCatIcon(l.cat||"")}</div>
+                        ?<img src={l.imageUrl} alt="" style={{width:"100%",height:"100%",objectFit:"contain"}} onError={e=>{e.target.parentElement.style.display="none"}}/>
+                        :null
                       }
                     </div>
                     <div style={{flex:1}}>
@@ -4262,7 +4368,7 @@ function OfferteDocument({doc, settings}) {
                         <span style={{fontSize:11,color:"#94a3b8"}}>×{l.aantal} {l.eenheid}</span>
                       </div>
                       <div style={{fontWeight:800,fontSize:16,color:"#1e293b",lineHeight:1.3,marginBottom:4}}>{l.naam}</div>
-                      <div style={{fontSize:12.5,color:"#475569",lineHeight:1.6}}>{l.omschr||"Professioneel product, vakkundig geïnstalleerd conform AREI."}</div>
+                      <div style={{fontSize:12.5,color:"#475569",lineHeight:1.6}}>{l.omschr||""}</div>
                     </div>
                     <div style={{flexShrink:0,textAlign:"right",background:"#f8fafc",borderRadius:8,padding:"10px 14px",border:"1px solid #e2e8f0"}}>
                       <div style={{fontSize:10,color:"#94a3b8",fontWeight:600}}>EENHEIDSPRIJS</div>
@@ -4332,7 +4438,9 @@ function OfferteDocument({doc, settings}) {
               <table className="qt-tbl">
                 <thead><tr><th>Omschrijving</th><th>Eenh.</th><th className="c">Aantal</th><th className="r">Prijs excl.</th><th className="r">BTW</th><th className="r">Totaal</th></tr></thead>
                 <tbody>{g.items.map((l,i)=>(
-                  <tr key={i} style={l.prijs<0?{color:"#ef4444",fontStyle:"italic"}:{}}>
+                  l.isInfo
+                    ?<tr key={i} style={{background:"#f8fafc"}}><td colSpan={6} style={{fontStyle:"italic",color:"#64748b",fontSize:12,padding:"6px 8px"}}>{l.naam}{l.omschr?` — ${l.omschr}`:""}</td></tr>
+                    :<tr key={i} style={l.prijs<0?{color:"#ef4444",fontStyle:"italic"}:{}}>
                     <td><div className="qt-item-main">{l.naam}</div>{l.omschr&&<div className="qt-item-sub">{l.omschr}</div>}</td>
                     <td>{l.eenheid||"stuk"}</td><td className="c">{l.aantal}</td>
                     <td className="r">{fmtEuro(l.prijs)}</td>
@@ -4480,7 +4588,7 @@ function FactuurDocument({doc, settings}) {
               <table className="qt-tbl">
                 <thead><tr><th>Omschrijving</th><th>Eenh.</th><th className="c">Aantal</th><th className="r">Prijs excl.</th><th className="r">BTW</th><th className="r">Totaal</th></tr></thead>
                 <tbody>{g.items.map((l,i)=>(
-                  <tr key={i}><td><div className="qt-item-main">{l.naam}</div>{l.omschr&&<div className="qt-item-sub">{l.omschr}</div>}</td><td>{l.eenheid}</td><td className="c">{l.aantal}</td><td className="r">{fmtEuro(l.prijs)}</td><td className="r">{l.btw}%</td><td className="r"><strong>{fmtEuro(l.prijs*l.aantal)}</strong></td></tr>
+                  <tr key={i}>{l.isInfo?<td colSpan={6} style={{fontStyle:"italic",color:"#64748b",fontSize:12,padding:"6px 8px"}}>{l.naam}{l.omschr?` — ${l.omschr}`:""}</td>:<><td><div className="qt-item-main">{l.naam}</div>{l.omschr&&<div className="qt-item-sub">{l.omschr}</div>}</td><td>{l.eenheid}</td><td className="c">{l.aantal}</td><td className="r">{fmtEuro(l.prijs)}</td><td className="r">{l.btw}%</td><td className="r"><strong>{fmtEuro(l.prijs*l.aantal)}</strong></td></>}</tr>
                 ))}</tbody>
               </table>
             </div>
@@ -4622,6 +4730,10 @@ function DocModal({doc,type,settings,onClose,onFactuur,onStatusOff,onStatusFact,
           )}
           {type==="offerte"&&doc.status==="goedgekeurd"&&!doc.factuurId&&<button className="btn bg btn-sm" onClick={()=>onFactuur(doc)}>🧾 Factuur</button>}
           <button className="btn bs btn-sm" onClick={onEmail}>📧 Verzenden</button>
+          {type==="factuur"&&getBillitKey(settings)&&doc.klant?.peppolActief&&<button className="btn bs btn-sm" style={{background:"#059669",color:"#fff",border:"none"}} onClick={async()=>{
+            if(!window.confirm(`Factuur ${doc.nummer} verzenden via PEPPOL naar ${doc.klant?.naam}?`))return;
+            try{await sendViaPeppol(doc,settings);alert("✓ Factuur verzonden via PEPPOL!");onStatusFact("verstuurd");}catch(e){alert("PEPPOL fout: "+e.message);}
+          }}>📨 Peppol</button>}
           <button id="doc-print-btn" className="btn bs btn-sm" title="Afdrukken — kies in printerinstellingen: Koptekst en voettekst UIT" onClick={doPrint}>🖨 Afdrukken</button>
           <button className="btn bs btn-sm" title="Download als HTML (open in browser → Afdrukken → PDF)" onClick={()=>{
             const docWrap=document.querySelector(".mb-body .doc-wrap");
@@ -4673,7 +4785,7 @@ function FactuurModal({off,settings,onMaak,onClose}) {
 }
 
 // ─── KLANT MODAL ─────────────────────────────────────────────────
-function KlantModal({klant,onSave,onClose}) {
+function KlantModal({klant,onSave,onClose,settings}) {
   const [form,setForm]=useState({naam:"",bedrijf:"",email:"",tel:"",adres:"",gemeente:"",btwnr:"",type:"particulier",btwRegime:"btw6",peppolActief:false,...klant});
   const [kboLoading,setKboLoading]=useState(false);const [kboError,setKboError]=useState("");
   const [addrSug,setAddrSug]=useState([]);const addrTimer=useRef();
@@ -4732,18 +4844,18 @@ function KlantModal({klant,onSave,onClose}) {
       }
       
       // Scenario 3: Success met data
-      // Check PEPPOL status if enabled
+      // Check PEPPOL status via Billit or public directory
       let peppolStatus = false;
-      if(settings.integraties?.peppolEnabled && settings.integraties?.eInvoiceApiKey) {
+      if(getBillitKey(settings)) {
         try {
-          peppolStatus = await checkPeppol(nr, settings.integraties.eInvoiceApiKey);
+          const result = await checkPeppol(`BE${nr}`, settings);
+          peppolStatus = result?.registered || false;
         } catch(e) {
-          console.log("PEPPOL check failed, using fallback");
-          peppolStatus = await checkPeppolDirectory(`BE${nr}`);
+          console.log("Billit PEPPOL check failed, using fallback");
+          peppolStatus = await checkPeppolDirectory(`BE${nr}`, settings);
         }
       } else {
-        // Fallback to public directory
-        peppolStatus = await checkPeppolDirectory(`BE${nr}`);
+        peppolStatus = await checkPeppolDirectory(`BE${nr}`, settings);
       }
       
       setForm(p=>({
@@ -5069,7 +5181,7 @@ function EmailModal({doc,type,settings,onClose,onSend,onAcceptToken}) {
 
   // Email modus: automatisch (EmailJS), handmatig (mailto), of PEPPOL
   const hasEmailJS = !!(ejCfg.emailjsServiceId && ejCfg.emailjsPublicKey);
-  const hasPeppol = type==="factuur" && settings?.integraties?.peppolEnabled && settings?.integraties?.eInvoiceApiKey && doc.klant?.peppolActief;
+  const hasPeppol = type==="factuur" && getBillitKey(settings) && doc.klant?.peppolActief;
   const [modus, setModus] = useState(hasPeppol ? "peppol" : hasEmailJS ? "auto" : "handmatig");
   const [tab, setTab] = useState("bewerk"); // "bewerk" | "preview"
   const [sending, setSending] = useState(false);
@@ -5503,47 +5615,57 @@ function InstellingenPage({settings,setSettings,notify}) {
                   style={{fontFamily:"JetBrains Mono,monospace"}}
                 />
                 <div style={{fontSize:11,color:"#16a34a",marginTop:4}}>
-                  Optioneel: Registreer op <a href="https://cbeapi.be" target="_blank" rel="noopener noreferrer" style={{color:"#15803d",fontWeight:600}}>cbeapi.be</a> voor een gratis API key. Werkt ook zonder key (beperkte toegang).
+                  Optioneel: Registreer op <a href="https://cbeapi.be" target="_blank" rel="noopener noreferrer" style={{color:"#15803d",fontWeight:600}}>cbeapi.be</a> voor een gratis API key.
                 </div>
               </div>
               <div style={{fontSize:11,color:"#15803d",padding:"8px 10px",background:"rgba(34,197,94,.1)",borderRadius:6,marginTop:8}}>
-                <strong>KBO Status:</strong> {form.integraties?.cbeApiKey ? "✓ API key ingesteld (beste resultaten)" : "⚠ Geen API key (beperkte toegang, kan CORS errors geven)"}
+                <strong>KBO Status:</strong> {form.integraties?.cbeApiKey ? "✓ API key ingesteld" : "⚠ Geen API key (beperkte toegang)"}
               </div>
             </div>
           )}
 
-          <div style={{marginBottom:12}}>
-            <label style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer",fontSize:13,fontWeight:600,color:"#15803d"}}>
-              <input type="checkbox" checked={form.integraties?.peppolEnabled||false} onChange={e=>set("integraties","peppolEnabled",e.target.checked)} style={{width:16,height:16}}/>
-              PEPPOL E-invoicing inschakelen
-            </label>
-            <div style={{fontSize:11,color:"#4ade80",marginTop:4,marginLeft:24}}>
-              ✓ Elektronische facturen via PEPPOL netwerk<br/>
-              ✓ Verplicht voor B2G facturen vanaf 2026 in België
+          {/* BILLIT PEPPOL */}
+          <div style={{borderTop:"1px solid #86efac",paddingTop:12,marginTop:12}}>
+            <div style={{fontWeight:700,fontSize:13,color:"#15803d",marginBottom:8}}>📨 Billit — PEPPOL E-invoicing</div>
+            <div className="fg">
+              <label className="fl">Billit API Key</label>
+              <input 
+                className="fc" 
+                type="password"
+                value={form.integraties?.billitApiKey||""} 
+                onChange={e=>set("integraties","billitApiKey",e.target.value)} 
+                placeholder="Voer uw Billit API key in"
+                style={{fontFamily:"JetBrains Mono,monospace"}}
+              />
+              <div style={{fontSize:11,color:"#16a34a",marginTop:4}}>
+                Haal uw API key op via <a href="https://app.billit.eu" target="_blank" rel="noopener noreferrer" style={{color:"#15803d",fontWeight:600}}>app.billit.eu</a> → My Profile → API
+              </div>
             </div>
+            <div className="fg" style={{marginTop:8}}>
+              <label className="fl">Omgeving</label>
+              <select className="fc" value={form.integraties?.billitEnv||"production"} onChange={e=>set("integraties","billitEnv",e.target.value)}>
+                <option value="production">Productie (live facturen)</option>
+                <option value="sandbox">Sandbox (test)</option>
+              </select>
+            </div>
+            {form.integraties?.billitApiKey&&(
+              <div style={{marginTop:8,display:"flex",gap:8,alignItems:"center"}}>
+                <button className="btn bs btn-sm" onClick={async()=>{
+                  const result = await testBillitConnection({...form});
+                  if(result.ok) alert("✓ Billit verbinding OK! Account: "+(result.account?.Name||"Verbonden"));
+                  else alert("✗ Billit verbinding mislukt: "+result.error);
+                }}>🔌 Test verbinding</button>
+                <div style={{fontSize:11,color:"#15803d",padding:"6px 10px",background:"rgba(34,197,94,.1)",borderRadius:6}}>
+                  ✓ API key ingesteld · {form.integraties?.billitEnv==="sandbox"?"🧪 Sandbox":"🟢 Productie"}
+                </div>
+              </div>
+            )}
+            {!form.integraties?.billitApiKey&&(
+              <div style={{fontSize:11,color:"#94a3b8",padding:"8px 10px",background:"#f8fafc",borderRadius:6,marginTop:8}}>
+                ⚠ Zonder Billit API key is PEPPOL verzending niet mogelijk. Klant PEPPOL-status wordt via de openbare directory gecontroleerd.
+              </div>
+            )}
           </div>
-
-          {form.integraties?.peppolEnabled&&(
-            <div style={{marginTop:12,padding:12,background:"rgba(255,255,255,.6)",borderRadius:8}}>
-              <div className="fg">
-                <label className="fl">E-Invoice.be API Key</label>
-                <input 
-                  className="fc" 
-                  type="password"
-                  value={form.integraties?.eInvoiceApiKey||""} 
-                  onChange={e=>set("integraties","eInvoiceApiKey",e.target.value)} 
-                  placeholder="Voer uw e-invoice.be API key in"
-                  style={{fontFamily:"JetBrains Mono,monospace"}}
-                />
-                <div style={{fontSize:11,color:"#16a34a",marginTop:4}}>
-                  Registreer op <a href="https://e-invoice.be" target="_blank" rel="noopener noreferrer" style={{color:"#15803d",fontWeight:600}}>e-invoice.be</a> voor een API key
-                </div>
-              </div>
-              <div style={{fontSize:11,color:"#15803d",padding:"8px 10px",background:"rgba(34,197,94,.1)",borderRadius:6,marginTop:8}}>
-                <strong>PEPPOL Status:</strong> {form.integraties?.eInvoiceApiKey ? "✓ Geconfigureerd" : "⚠ API key vereist"}
-              </div>
-            </div>
-          )}
         </div>
 
         {/* BOEKHOUDER */}
