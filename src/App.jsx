@@ -4991,9 +4991,9 @@ function buildOfferteHtml(doc, bed, tot, acceptUrl, rejectUrl, customHtml, extra
     <tr><td style="padding:10px 14px;border:1px solid #e2e8f0;font-weight:600;font-size:16px">Totaal incl. BTW</td><td style="padding:10px 14px;border:1px solid #e2e8f0;font-size:16px;font-weight:700;color:${dc}">${fmtEuro(tot.totaal)}</td></tr>
   </table>
   <div style="text-align:center;margin:28px 0">
-    <a href="${acceptUrl}" style="display:inline-block;background:${dc};color:#fff;padding:14px 36px;border-radius:8px;text-decoration:none;font-weight:700;font-size:15px">✅ Offerte goedkeuren</a>
+    <a href="${acceptUrl}" style="display:inline-block;background:${dc};color:#fff;padding:14px 36px;border-radius:8px;text-decoration:none;font-weight:700;font-size:15px">📄 Bekijk uw offerte</a>
   </div>
-  ${rejectUrl ? `<div style="text-align:center;margin:12px 0"><a href="${rejectUrl}" style="color:#94a3b8;font-size:13px;text-decoration:underline">Offerte afwijzen</a></div>` : ''}
+  ${''}
   <div style="margin-top:24px;padding-top:16px;border-top:1px solid #e2e8f0;font-size:13px;color:#64748b;line-height:1.6">
     <p style="margin:0"><strong>${bed.naam}</strong></p>
     <p style="margin:4px 0">${bed.adres||''} · ${bed.gemeente||''}</p>
@@ -5044,8 +5044,28 @@ function EmailModal({doc,type,settings,onClose,onSend,onAcceptToken}) {
 
   // Accept/reject tokens voor offerte
   const token = useRef(genToken());
-  const acceptUrl = type==="offerte" ? `${window.location.origin}${window.location.pathname}?action=accept&token=${token.current}&id=${doc.id}` : "";
-  const rejectUrl = type==="offerte" ? `${window.location.origin}${window.location.pathname}?action=reject&token=${token.current}&id=${doc.id}` : "";
+  // Encode offerte data for the public offerte.html page
+  const offertePageData = type==="offerte" ? (() => {
+    try {
+      // Strip base64 fiches to keep URL size manageable
+      const cleanLijnen = (doc.lijnen||[]).map(l => ({
+        ...l,
+        technischeFiche: null, // Too large for URL
+        technischeFiches: (l.technischeFiches||[]).map(f => ({naam: f.naam})), // Keep names only
+        imageUrl: (l.imageUrl||"").startsWith("data:") ? "" : l.imageUrl // Strip base64 images
+      }));
+      const payload = {
+        id: doc.id, nummer: doc.nummer, aangemaakt: doc.aangemaakt, vervaldatum: doc.vervaldatum,
+        klant: doc.klant, lijnen: cleanLijnen, notities: doc.notities,
+        installatieType: doc.installatieType, btwRegime: doc.btwRegime,
+        groepen: doc.groepen, voorschot: doc.voorschot,
+        _dc: dc, _bed: {naam:bed.naam,adres:bed.adres,gemeente:bed.gemeente,tel:bed.tel,email:bed.email,btwnr:bed.btwnr,website:bed.website,iban:bed.iban}
+      };
+      return btoa(encodeURIComponent(JSON.stringify(payload)));
+    } catch(e) { console.error("Offerte encode error:",e); return ""; }
+  })() : "";
+  const acceptUrl = type==="offerte" ? `${window.location.origin}/offerte.html?data=${offertePageData}` : "";
+  const rejectUrl = ""; // Reject happens on the offerte.html page, not via separate link
 
   // Email modus: automatisch (EmailJS), handmatig (mailto), of PEPPOL
   const hasEmailJS = !!(ejCfg.emailjsServiceId && ejCfg.emailjsPublicKey);
@@ -5115,7 +5135,7 @@ function EmailModal({doc,type,settings,onClose,onSend,onAcceptToken}) {
               <tr><td style="padding:8px;border:1px solid #e2e8f0;font-weight:600">${type==="offerte"?"Geldig tot":"Vervaldatum"}</td><td style="padding:8px;border:1px solid #e2e8f0">${fmtDate(doc.vervaldatum)}</td></tr>
               <tr><td style="padding:8px;border:1px solid #e2e8f0;font-weight:600">Totaal incl. BTW</td><td style="padding:8px;border:1px solid #e2e8f0"><strong>${fmtEuro(tot.totaal)}</strong></td></tr>
             </table>
-            ${type==="offerte"&&acceptUrl?`<p><a href="${acceptUrl}" style="background:${dc};color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;display:inline-block;font-weight:600">✅ Offerte goedkeuren</a></p>`:""}
+            ${type==="offerte"&&acceptUrl?`<p><a href="${acceptUrl}" style="background:${dc};color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;display:inline-block;font-weight:600">📄 Bekijk uw offerte</a></p>`:""}
             <p>Met vriendelijke groeten,<br/><strong>${bed.naam||""}</strong><br/>${bed.tel||""} · ${bed.email||""}</p>
           </div>
         </div>`;
