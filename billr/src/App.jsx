@@ -1179,8 +1179,6 @@ tr.row-active td{border-top:2px solid #2563eb}
 @media print{
   /* Kleur en achtergrond behouden */
   *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important}
-  /* A4 pagina instelling */
-  @page{size:A4 portrait;margin:8mm 10mm 10mm 10mm}
   /* Verberg alles behalve #print-root */
   body>*:not(#print-root){display:none!important}
   body{margin:0!important;padding:0!important;background:#fff!important}
@@ -1191,13 +1189,14 @@ tr.row-active td{border-top:2px solid #2563eb}
   .print-only{display:block!important}
   .no-print{display:none!important}
   
-  /* Elke pagina = precies 1 A4 */
+  /* Elke pagina = precies 1 A4 (297mm × 210mm) */
   .doc-page{
     box-shadow:none!important;border-radius:0!important;
     margin:0!important;max-width:100%!important;width:100%!important;
-    display:block!important;overflow:hidden!important;
+    display:block!important;overflow:visible!important;
     break-before:page!important;page-break-before:always!important;
-    min-height:auto!important;height:auto!important;
+    /* Allow overflow for long content - NO max-height constraint */
+    min-height:297mm!important;
     box-sizing:border-box!important;position:relative!important;
   }
   .doc-page:first-of-type{break-before:avoid!important;page-break-before:avoid!important}
@@ -1205,42 +1204,27 @@ tr.row-active td{border-top:2px solid #2563eb}
   
   /* Coverpagina: linker kleurpaneel vult volledig */
   .cov{
-    height:277mm!important;
-    min-height:277mm!important;
-    max-height:277mm!important;
+    height:100%!important;
+    min-height:297mm!important;
+    max-height:297mm!important;
     display:grid!important;
     grid-template-columns:42% 58%!important;
-    overflow:hidden!important;
   }
   .cov-l{height:100%!important;min-height:100%!important;flex:1!important}
   .cov-r{height:100%!important;box-sizing:border-box!important}
   
-  /* Pagina-padding */
-  .prod-page{padding:6mm 10mm!important;box-sizing:border-box!important;overflow:hidden!important}
-  .fct-pg{padding:6mm 10mm!important;box-sizing:border-box!important;overflow:hidden!important}
-  .qt-pg{padding:6mm 10mm!important;box-sizing:border-box!important;overflow:hidden!important}
-  .fct-pg2{padding:6mm 10mm!important;box-sizing:border-box!important;overflow:hidden!important}
+  /* Pagina-padding (vervangt browser-marge) - REDUCED voor minder witte ruimte */
+  .prod-page{padding:8mm 12mm!important;box-sizing:border-box!important;overflow:visible!important}
+  .fct-pg{padding:8mm 12mm!important;min-height:273mm!important;box-sizing:border-box!important;overflow:visible!important}
+  .qt-pg{padding:8mm 12mm!important;min-height:275mm!important;box-sizing:border-box!important;overflow:visible!important}
+  .fct-pg2{padding:8mm 12mm!important;box-sizing:border-box!important;overflow:visible!important}
   
-  /* PDF fiche pagina's: volle pagina, geen overflow */
-  .fiche-print-page{
-    break-before:page!important;page-break-before:always!important;
-    width:100%!important;box-sizing:border-box!important;
-    overflow:hidden!important;
-  }
-  .fiche-print-page img{
-    width:100%!important;height:auto!important;
-    max-height:265mm!important;
-    object-fit:contain!important;
-    display:block!important;
-  }
-  
-  /* Screen PDF embeds: verberg op print, toon gerenderde images */
-  .fiche-screen-embed{display:none!important}
-  .fiche-print-images{display:block!important}
+  /* Verberg object/embed/iframe tags in print (werken niet) */
+  object,embed,iframe{display:none!important}
   
   /* Tabel niet splitsen */
   .qt-tbl tr{break-inside:avoid!important;page-break-inside:avoid!important}
-  .qt-tbl tbody{break-inside:auto!important}
+  .qt-tbl tbody{break-inside:auto!important} /* Maar tbody mag wel splitsen over pagina's */
   .qt-totals{break-inside:avoid!important;page-break-inside:avoid!important}
   .qt-sign{break-inside:avoid!important;page-break-inside:avoid!important}
   .qt-betaal{break-inside:avoid!important;page-break-inside:avoid!important}
@@ -1253,8 +1237,9 @@ tr.row-active td{border-top:2px solid #2563eb}
   .prod-item{break-inside:avoid!important;page-break-inside:avoid!important}
   .qt-meta-bar{break-inside:avoid!important;page-break-inside:avoid!important}
   .qt-parties{break-inside:avoid!important;page-break-inside:avoid!important}
-  /* Footer onderaan */
+  /* Footer altijd onderaan op de pagina */
   .qt-footer{
+    position:absolute!important;bottom:0!important;left:0!important;right:0!important;
     break-inside:avoid!important;page-break-inside:avoid!important;
   }
   /* Modal chrome verbergen */
@@ -1262,7 +1247,9 @@ tr.row-active td{border-top:2px solid #2563eb}
   .mdl{box-shadow:none!important;border-radius:0!important;max-width:100%!important;max-height:none!important;overflow:visible!important;height:auto!important;display:block!important}
   .mh,.mf,.bulk-bar,.mob-nav,.fab-menu,.topbar,.sb{display:none!important}
   .mb-body{padding:0!important;overflow:visible!important;max-height:none!important;height:auto!important}
-  /* Geen box-shadow op print */
+  /* PDF technische fiche */
+  object[type="application/pdf"]{height:240mm!important;width:100%!important}
+  /* Geen box-shadow of rondingen op print */
   *{box-shadow:none!important}
 }
 
@@ -3792,210 +3779,61 @@ function OfferteWizard({klanten,producten,offertes,editData,settings,onSave,onCl
 // ─── OFFERTE DOCUMENT (4 pages) ───────────────────────────────────
 // ─── TECHNISCHE FICHE PDF EMBED ──────────────────────────────────
 // Technische Fiche - Static placeholder (GEEN scrollbare PDF!)
-// Print-friendly: Renders PDF pages as images using PDF.js (printable!)
-// Screen: shows object embed for interactive PDF viewing
-// Print: shows rendered canvas images (browsers can't print embedded PDFs)
+// Print-friendly: Altijd zichtbaar, simpel groen kader
 function FichePDFEmbed({fiche, naam, fichNaam, fullPage = false}) {
   if(!fiche) return null;
 
   const pdfSrc = fiche.startsWith('data:') ? fiche : `data:application/pdf;base64,${fiche}`;
-  const [pageImages, setPageImages] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-
-  // Render PDF pages to images using PDF.js
-  useEffect(() => {
-    if(!window.pdfjsLib) {
-      setError("PDF.js niet geladen");
-      setLoading(false);
-      return;
-    }
-
-    const renderPdf = async () => {
-      try {
-        // Extract base64 data
-        let pdfData;
-        if(fiche.startsWith('data:')) {
-          const base64 = fiche.split(',')[1];
-          pdfData = atob(base64);
-        } else {
-          pdfData = atob(fiche);
-        }
-        
-        const uint8 = new Uint8Array(pdfData.length);
-        for(let i = 0; i < pdfData.length; i++) uint8[i] = pdfData.charCodeAt(i);
-        
-        const pdf = await window.pdfjsLib.getDocument({data: uint8}).promise;
-        const images = [];
-        
-        // Render each page at 2x scale for sharp print quality (A4 = 210x297mm)
-        for(let i = 1; i <= pdf.numPages; i++) {
-          const page = await pdf.getPage(i);
-          const scale = 2.0; // 2x for print quality
-          const viewport = page.getViewport({scale});
-          
-          const canvas = document.createElement('canvas');
-          canvas.width = viewport.width;
-          canvas.height = viewport.height;
-          const ctx = canvas.getContext('2d');
-          
-          await page.render({canvasContext: ctx, viewport}).promise;
-          images.push(canvas.toDataURL('image/png'));
-        }
-        
-        setPageImages(images);
-        setLoading(false);
-      } catch(e) {
-        console.error("PDF render error:", e);
-        setError("Kan PDF niet renderen");
-        setLoading(false);
-      }
-    };
-
-    renderPdf();
-  }, [fiche]);
-
-  if(loading) return (
-    <div style={{padding:24,textAlign:"center",color:"#64748b"}}>
-      <div style={{fontSize:24,marginBottom:8}}>⟳</div>
-      <div style={{fontSize:12}}>Technische fiche laden...</div>
-    </div>
-  );
-
-  if(error || pageImages.length === 0) return (
-    <div style={{background:"#f0fdf4",border:"2px solid #86efac",borderRadius:8,padding:24,textAlign:"center",minHeight:140}}>
-      <div style={{fontSize:32,marginBottom:12}}>📋</div>
-      <div style={{fontWeight:700,fontSize:16,color:"#166534",marginBottom:8}}>{naam}</div>
-      <div style={{fontSize:14,color:"#64748b",marginBottom:16}}>Technische fiche ({fichNaam || "PDF"})</div>
-      <a href={pdfSrc} download={fichNaam || `${naam}-fiche.pdf`}
-        style={{fontSize:12,color:"#059669",background:"#dcfce7",padding:"8px 16px",borderRadius:6,display:"inline-block",textDecoration:"none",fontWeight:600}}>
-        📥 Download PDF
-      </a>
-    </div>
-  );
 
   return(
-    <div style={{width:"100%"}}>
-      {/* SCREEN: interactive PDF embed */}
-      <div className="fiche-screen-embed" style={{width:"100%",height:fullPage?"100%":"auto",minHeight:fullPage?"100%":"500px"}}>
-        <object data={pdfSrc} type="application/pdf" style={{width:"100%",height:"100%",minHeight:500,border:"none"}}>
-          {/* Fallback: toon gerenderde pagina's */}
-          {pageImages.map((img, i) => (
-            <img key={i} src={img} alt={`${naam} p${i+1}`} style={{width:"100%",height:"auto",display:"block",marginBottom:i<pageImages.length-1?8:0}}/>
-          ))}
-        </object>
-      </div>
-      {/* PRINT: gerenderde images (browsers kunnen geen embedded PDFs printen) */}
-      <div className="fiche-print-images" style={{display:"none"}}>
-        {pageImages.map((img, i) => (
-          <img key={i} src={img} alt={`${naam} pagina ${i+1}`} style={{width:"100%",height:"auto",maxHeight:"265mm",objectFit:"contain",display:"block"}}/>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-// Renders each page of a PDF fiche as its own A4 doc-page (for proper print pagination)
-function FichePages({fiche, naam, fichNaam, omschr, dc, bed, docNummer}) {
-  const [pageImages, setPageImages] = useState([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    if(!fiche || !window.pdfjsLib) { setLoading(false); return; }
-
-    const render = async () => {
-      try {
-        let pdfData;
-        if(fiche.startsWith('data:')) {
-          pdfData = atob(fiche.split(',')[1]);
-        } else {
-          pdfData = atob(fiche);
-        }
-        const uint8 = new Uint8Array(pdfData.length);
-        for(let i = 0; i < pdfData.length; i++) uint8[i] = pdfData.charCodeAt(i);
-
-        const pdf = await window.pdfjsLib.getDocument({data: uint8}).promise;
-        const imgs = [];
-        for(let i = 1; i <= pdf.numPages; i++) {
-          const page = await pdf.getPage(i);
-          const scale = 2.5; // High-res for sharp A4 print
-          const viewport = page.getViewport({scale});
-          const canvas = document.createElement('canvas');
-          canvas.width = viewport.width;
-          canvas.height = viewport.height;
-          await page.render({canvasContext: canvas.getContext('2d'), viewport}).promise;
-          imgs.push(canvas.toDataURL('image/png'));
-        }
-        setPageImages(imgs);
-      } catch(e) { console.error("Fiche render error:", e); }
-      setLoading(false);
-    };
-    render();
-  }, [fiche]);
-
-  if(loading) return (
-    <div className="doc-page" style={{pageBreakBefore:"always",display:"flex",alignItems:"center",justifyContent:"center",minHeight:200}}>
-      <div style={{textAlign:"center",color:"#64748b",padding:40}}>
-        <div style={{fontSize:24,marginBottom:8}}>⟳</div>
-        <div style={{fontSize:13}}>Technische fiche laden: {naam}...</div>
-      </div>
-    </div>
-  );
-
-  // No images rendered — show download fallback
-  if(pageImages.length === 0) {
-    const pdfSrc = fiche.startsWith('data:') ? fiche : `data:application/pdf;base64,${fiche}`;
-    return (
-      <div>
-        <div className="doc-page-lbl">Technische fiche — {naam}</div>
-        <div className="doc-page" style={{pageBreakBefore:"always"}}>
-          <div style={{height:5,background:dc}}/>
-          <div style={{padding:"30mm 20mm",textAlign:"center"}}>
-            <div style={{fontSize:36,marginBottom:16}}>📋</div>
-            <div style={{fontWeight:800,fontSize:20,color:"#1e293b",marginBottom:8}}>{naam}</div>
-            {omschr&&<div style={{fontSize:13,color:"#64748b",marginBottom:20}}>{omschr}</div>}
-            <div style={{fontSize:13,color:"#94a3b8",marginBottom:20}}>Technische fiche: {fichNaam||"document.pdf"}</div>
-            <a href={pdfSrc} download={fichNaam||`${naam}-fiche.pdf`}
-              style={{fontSize:13,color:"#059669",background:"#dcfce7",padding:"10px 20px",borderRadius:8,textDecoration:"none",fontWeight:600}}>
-              📥 Download PDF
-            </a>
+    <div style={{
+      flex: fullPage ? 1 : "none",
+      display: "flex",
+      flexDirection: "column",
+      width: "100%",
+      height: fullPage ? "100%" : "auto",
+      minHeight: fullPage ? "100%" : "400px"
+    }}>
+      <object
+        data={pdfSrc}
+        type="application/pdf"
+        style={{
+          width: "100%",
+          height: "100%",
+          border: "none"
+        }}
+      >
+        <div style={{
+          background:"#f0fdf4",
+          border:"2px solid #86efac",
+          borderRadius:"8px",
+          padding:"24px",
+          textAlign:"center",
+          minHeight:"140px"
+        }}>
+          <div style={{fontSize:"32px",marginBottom:"12px"}}>📋</div>
+          <div style={{fontWeight:"700",fontSize:"16px",color:"#166534",marginBottom:"8px"}}>{naam}</div>
+          <div style={{fontSize:"14px",color:"#64748b",marginBottom:"16px"}}>
+            Technische fiche (PDF kan niet worden weergegeven in deze browser)
           </div>
-          <div className="qt-footer" style={{background:dc}}>
-            <div className="qt-footer-txt"><strong>{bed.naam}</strong> · {bed.adres}, {bed.gemeente}</div>
-            <div className="qt-footer-txt">{fichNaam||"technische-fiche.pdf"}</div>
-          </div>
+          <a 
+            href={pdfSrc} 
+            download={fichNaam || `${naam}-fiche.pdf`}
+            style={{
+              fontSize:"12px",
+              color:"#059669",
+              background:"#dcfce7",
+              padding:"8px 16px",
+              borderRadius:"6px",
+              display:"inline-block",
+              textDecoration:"none",
+              fontWeight:600
+            }}
+          >
+            📥 Download PDF
+          </a>
         </div>
-      </div>
-    );
-  }
-
-  // Each PDF page = its own A4 doc-page (perfect for print)
-  return (
-    <div>
-      {pageImages.map((img, i) => (
-        <div key={`fp-${i}`}>
-          <div className="doc-page-lbl">Technische fiche — {naam} (pagina {i+1}/{pageImages.length})</div>
-          <div className="doc-page fiche-print-page" style={{pageBreakBefore:"always",breakBefore:"page"}}>
-            <div style={{height:5,background:dc}}/>
-            {i === 0 && (
-              <div style={{padding:"4mm 8mm 2mm",display:"flex",justifyContent:"space-between",alignItems:"center",borderBottom:"1px solid #e2e8f0"}}>
-                <div>
-                  <div style={{fontSize:9,fontWeight:700,color:"#94a3b8",textTransform:"uppercase",letterSpacing:.6}}>Technische fiche</div>
-                  <div style={{fontWeight:800,fontSize:14,color:"#1e293b"}}>{naam}</div>
-                </div>
-                <div style={{textAlign:"right",fontSize:9,color:"#94a3b8"}}>{bed.naam} · {docNummer}</div>
-              </div>
-            )}
-            <div style={{padding:i===0?"2mm 6mm 4mm":"4mm 6mm",flex:1,display:"flex",alignItems:"flex-start",justifyContent:"center",overflow:"hidden"}}>
-              <img src={img} alt={`${naam} p${i+1}`} style={{width:"100%",height:"auto",maxHeight:i===0?"250mm":"270mm",objectFit:"contain",display:"block"}}/>
-            </div>
-            <div style={{padding:"2mm 8mm",display:"flex",justifyContent:"space-between",alignItems:"center",fontSize:9,color:"#94a3b8",borderTop:"1px solid #e2e8f0"}}>
-              <span>{bed.naam}</span>
-              <span>{fichNaam||"technische-fiche.pdf"} · pagina {i+1}/{pageImages.length}</span>
-            </div>
-          </div>
-        </div>
-      ))}
+      </object>
     </div>
   );
 }
@@ -4354,9 +4192,29 @@ function OfferteDocument({doc, settings}) {
         <div className="qt-footer" style={{background:dc}}><div className="qt-footer-txt"><strong>{bed.naam}</strong> · {bed.adres}, {bed.gemeente}</div><div className="qt-footer-txt">BTW: <strong>{fmtBtwnr(bed.btwnr)}</strong> · {bed.website}</div></div>
       </div>
 
-      {/* TECHNISCHE FICHES — AAN HET EINDE, elke PDF-pagina = eigen A4 */}
+      {/* TECHNISCHE FICHES — AAN HET EINDE */}
       {uniqueProds.filter(l=>l.technischeFiche).map((l,fi)=>(
-        <FichePages key={`fiche-${fi}`} fiche={l.technischeFiche} naam={l.naam} fichNaam={l.fichNaam} omschr={l.omschr} dc={dc} bed={bed} docNummer={doc.nummer}/>
+        <div key={`fiche-${fi}`}>
+          <div className="doc-page-lbl">Technische fiche — {l.naam}</div>
+          <div className="doc-page" style={{pageBreakBefore:"always",breakBefore:"page"}}>
+            <div style={{height:5,background:dc}}/>
+            <div style={{padding:"8mm",height:"calc(100% - 5px)",boxSizing:"border-box",display:"flex",flexDirection:"column"}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10,paddingBottom:8,borderBottom:"1px solid #e2e8f0"}}>
+                <div>
+                  <div style={{fontSize:10,fontWeight:700,color:"#94a3b8",textTransform:"uppercase",letterSpacing:.6,marginBottom:2}}>Technische fiche</div>
+                  <div style={{fontWeight:800,fontSize:16,color:"#1e293b"}}>{l.naam}</div>
+                  {l.omschr&&<div style={{fontSize:11.5,color:"#64748b",marginTop:1}}>{l.omschr}</div>}
+                </div>
+                <div style={{textAlign:"right",fontSize:10,color:"#94a3b8"}}>{bed.naam} · {doc.nummer}</div>
+              </div>
+              <FichePDFEmbed fiche={l.technischeFiche} naam={l.naam} fichNaam={l.fichNaam} fullPage={true}/>
+            </div>
+            <div className="qt-footer" style={{background:dc}}>
+              <div className="qt-footer-txt"><strong>{bed.naam}</strong> · {bed.adres}, {bed.gemeente}</div>
+              <div className="qt-footer-txt">{l.fichNaam||"technische-fiche.pdf"}</div>
+            </div>
+          </div>
+        </div>
       ))}
     </div>
   );
@@ -4495,23 +4353,12 @@ body{margin:0;padding:0;background:#fff;font-family:Inter,Arial,sans-serif;font-
 ${styles}
 .printbar{padding:8px 12px;background:#f0f4f8;display:flex;gap:10px;align-items:center;font-family:Arial;font-size:12px;border-bottom:1px solid #e2e8f0}
 .doc-wrap{padding:0!important;background:#fff!important}
-.doc-page{box-shadow:none!important;border-radius:0!important;margin:0!important;max-width:100%!important;width:100%!important;display:block!important;overflow:hidden!important;page-break-before:always;break-before:page}
+.doc-page{box-shadow:none!important;border-radius:0!important;margin:0!important;padding:0!important;max-width:100%!important;width:100%!important;display:block!important;overflow:visible!important;page-break-before:always;break-before:page}
 .doc-page:first-child{page-break-before:avoid!important;break-before:avoid!important}
 .doc-page-lbl{display:none!important}
-.cov{height:277mm!important;max-height:277mm!important;overflow:hidden!important}
-.fiche-screen-embed{display:none!important}
-.fiche-print-images{display:block!important}
-.fiche-print-page img{width:100%;height:auto;max-height:265mm;object-fit:contain;display:block}
-@page{size:A4 portrait;margin:8mm 10mm 10mm 10mm}
-@media print{
-  *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;box-shadow:none!important}
-  body>*{display:block!important}
-  .printbar{display:none!important}
-  .doc-page{page-break-before:always!important;break-before:page!important;overflow:hidden!important}
-  .doc-page:first-child{page-break-before:avoid!important;break-before:avoid!important}
-  .fiche-screen-embed{display:none!important}
-  .fiche-print-images{display:block!important}
-}
+.cov{height:auto!important}
+@page{size:A4 portrait;margin:10mm 12mm 12mm 12mm}
+@media print{*{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}body>*{display:block!important}.printbar{display:none!important}.doc-page{page-break-before:always!important;break-before:page!important}.doc-page:first-child{page-break-before:avoid!important;break-before:avoid!important}}
 </style></head><body>
 <div class="printbar">
   <strong style="color:#1e293b">${docNummer}</strong>
@@ -5342,18 +5189,6 @@ function InstellingenPage({settings,setSettings,notify}) {
   const handleLogo=e=>{const file=e.target.files[0];if(!file)return;const reader=new FileReader();reader.onload=ev=>set("bedrijf","logo",ev.target.result);reader.readAsDataURL(file);};
   const handleAchtergrond=e=>{const file=e.target.files[0];if(!file)return;const reader=new FileReader();reader.onload=ev=>set("sjabloon","achtergrondImg",ev.target.result);reader.readAsDataURL(file);};
   const doSave=()=>setSettings(form);
-
-  // ═══ AUTO-SAVE: sla instellingen automatisch op na elke wijziging (debounced) ═══
-  const isInitialMount = useRef(true);
-  useEffect(() => {
-    // Skip eerste render (initialisatie vanuit settings)
-    if(isInitialMount.current) { isInitialMount.current = false; return; }
-    const timer = setTimeout(() => {
-      setSettings(form);
-      console.log("💾 Auto-saved instellingen");
-    }, 1500); // 1.5s debounce
-    return () => clearTimeout(timer);
-  }, [form]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Boekhouder link for facturen
   const boekhouderLink=form.email.boekhouder1?`mailto:${form.email.boekhouder1}?subject=Verkoopfacturen%20${new Date().getFullYear()}%20—%20${encodeURIComponent(form.bedrijf.naam)}&body=Geachte%20boekhouder%2C%0A%0AIn%20bijlage%20de%20verkoopfacturen.`:null;

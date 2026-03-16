@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Offerte Bevestigd - {{quote_number}}</title>
+    <style>
+        body, table, td, p, a, h1, h2, h3 { margin: 0; padding: 0; }
+        img { border: 0; }
+        
+        @media only screen and (max-width: 620px) {
+            .container { width: 100% !important; }
+            .mobile-padding { padding: 20px !important; }
+            .mobile-font-lg { font-size: 26px !important; }
+            .mobile-font-md { font-size: 20px !important; }
+            .mobile-font-sm { font-size: 14px !important; }
+            .mobile-font-xs { font-size: 12px !important; }
+        }
+    </style>
+</head>
+<body style="margin: 0; padding: 0; font-family: Arial, sans-serif; background-color: #f4f4f4;">
+    <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f4f4f4; padding: 20px 10px;">
+        <tr>
+            <td align="center">
+                <table class="container" width="600" cellpadding="0" cellspacing="0" style="max-width: 600px; background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
+                    
+                    <!-- Header -->
+                    <tr>
+                        <td class="mobile-padding" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); padding: 40px 30px; text-align: center;">
+                            <h1 class="mobile-font-lg" style="margin: 0; color: #ffffff; font-size: 32px; font-weight: bold;">
+                                ✅ OFFERTE BEVESTIGD
+                            </h1>
+                            <p class="mobile-font-xs" style="margin: 10px 0 0 0; color: rgba(255,255,255,0.9); font-size: 14px;">
+                                Een klant heeft zojuist een offerte bevestigd
+                            </p>
+                        </td>
+                    </tr>
+
+                    <!-- Offerte nummer banner -->
+                    <tr>
+                        <td class="mobile-padding" style="background-color: #d4ff00; padding: 15px 30px; text-align: center;">
+                            <h2 class="mobile-font-md" style="margin: 0; color: #1a2e4c; font-size: 24px; font-weight: bold;">
+                                {{quote_number}}
+                            </h2>
+                        </td>
+                    </tr>
+
+                    <!-- Inhoud -->
+                    <tr>
+                        <td class="mobile-padding" style="padding: 40px 30px;">
+                            
+                            <!-- Belangrijke info box -->
+                            <table width="100%" cellpadding="0" cellspacing="0" style="background: linear-gradient(135deg, #f0fdf4 0%, #ecfdf5 100%); border-left: 4px solid #10b981; margin-bottom: 30px; border-radius: 4px;">
+                                <tr>
+                                    <td class="mobile-padding" style="padding: 25px;">
+                                        <h3 class="mobile-font-sm" style="margin: 0 0 15px 0; color: #059669; font-size: 18px; font-weight: bold;">
+                                            🎉 Actie vereist!
+                                        </h3>
+                                        <p class="mobile-font-xs" style="margin: 0; color: #065f46; font-size: 14px; line-height: 1.6;">
+                                            De klant heeft de offerte geaccepteerd via de bevestigingspagina. 
+                                            De status in BILLR is automatisch bijgewerkt naar "Bevestigd". 
+                                            Je kunt nu de planning opstarten.
+                                        </p>
+                                    </td>
+                                </tr>
+                            </table>
+
+                            <!-- Details -->
+                            <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f8f9fa; border-radius: 8px; margin-bottom: 30px;">
+                                <tr>
+                                    <td class="mobile-padding" style="padding: 20px;">
+                                        <table width="100%" cellpadding="8" cellspacing="0">
+                                            <tr>
+                                                <td class="mobile-font-xs" style="color: #666666; font-size: 14px; width: 50%;">
+                                                    Offerte nummer:
+                                                </td>
+                                                <td class="mobile-font-xs" style="color: #1a2e4c; font-size: 14px; font-weight: bold;">
+                                                    {{quote_number}}
+                                                </td>
+                                            </tr>
+                                            <tr>
+                                                <td class="mobile-font-xs" style="color: #666666; font-size: 14px;">
+                                                    Gewenste uitvoeringsdatum:
+                                                </td>
+                                                <td class="mobile-font-xs" style="color: #1a2e4c; font-size: 14px; font-weight: bold;">
+                                                    {{execution_date}}
+                                                </td>
+                                            </tr>
+                                            <tr>
+                                                <td class="mobile-font-xs" style="color: #666666; font-size: 14px;">
+                                                    Bevestigd op:
+                                                </td>
+                                                <td class="mobile-font-xs" style="color: #1a2e4c; font-size: 14px; font-weight: bold;">
+                                                    {{confirmation_time}}
+                                                </td>
+                                            </tr>
+                                        </table>
+                                    </td>
+                                </tr>
+                            </table>
+
+                            <!-- Opmerkingen -->
+                            {{#if comments}}
+                            <div style="background-color: #fff9e6; border-left: 4px solid #f59e0b; border-radius: 4px; padding: 20px; margin-bottom: 30px;">
+                                <h3 class="mobile-font-sm" style="margin: 0 0 10px 0; color: #92400e; font-size: 16px; font-weight: bold;">
+                                    💬 Opmerkingen van de klant
+                                </h3>
+                                <p class="mobile-font-xs" style="margin: 0; color: #78350f; font-size: 14px; line-height: 1.6; white-space: pre-wrap;">{{comments}}</p>
+                            </div>
+                            {{/if}}
+
+                            <!-- Volgende stappen -->
+                            <div style="background-color: #eff6ff; border-radius: 8px; padding: 20px; margin-bottom: 20px;">
+                                <h3 class="mobile-font-sm" style="margin: 0 0 15px 0; color: #1e40af; font-size: 16px; font-weight: bold;">
+                                    📋 Volgende stappen
+                                </h3>
+                                <table width="100%" cellpadding="8" cellspacing="0">
+                                    <tr>
+                                        <td style="color: #2563eb; font-size: 18px; width: 30px; vertical-align: top;">1.</td>
+                                        <td class="mobile-font-xs" style="color: #1e3a8a; font-size: 13px; line-height: 1.5;">
+                                            Open BILLR en bekijk de offerte (status is automatisch "Bevestigd")
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td style="color: #2563eb; font-size: 18px; vertical-align: top;">2.</td>
+                                        <td class="mobile-font-xs" style="color: #1e3a8a; font-size: 13px; line-height: 1.5;">
+                                            Neem contact op met de klant voor planning/details
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td style="color: #2563eb; font-size: 18px; vertical-align: top;">3.</td>
+                                        <td class="mobile-font-xs" style="color: #1e3a8a; font-size: 13px; line-height: 1.5;">
+                                            Plan de werkzaamheden in en maak eventueel een factuur aan
+                                        </td>
+                                    </tr>
+                                </table>
+                            </div>
+                            
+                            <p class="mobile-font-xs" style="margin: 20px 0 0 0; color: #999999; font-size: 12px; text-align: center; line-height: 1.6;">
+                                Deze mail is automatisch gegenereerd door het BILLR systeem.<br>
+                                Offerte bevestigd via bevestigingspagina.
+                            </p>
+                        </td>
+                    </tr>
+
+                    <!-- Footer -->
+                    <tr>
+                        <td class="mobile-padding" style="background-color: #1a2e4c; padding: 20px; text-align: center;">
+                            <p class="mobile-font-xs" style="margin: 0; color: #999999; font-size: 11px; line-height: 1.6;">
+                                W-Charge BV | BILLR Systeem<br>
+                                Oostakker, België
+                            </p>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>
