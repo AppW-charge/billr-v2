@@ -5190,6 +5190,18 @@ function InstellingenPage({settings,setSettings,notify}) {
   const handleAchtergrond=e=>{const file=e.target.files[0];if(!file)return;const reader=new FileReader();reader.onload=ev=>set("sjabloon","achtergrondImg",ev.target.result);reader.readAsDataURL(file);};
   const doSave=()=>setSettings(form);
 
+  // ═══ AUTO-SAVE: sla instellingen automatisch op na elke wijziging (debounced) ═══
+  const isInitialMount = useRef(true);
+  useEffect(() => {
+    // Skip eerste render (initialisatie vanuit settings)
+    if(isInitialMount.current) { isInitialMount.current = false; return; }
+    const timer = setTimeout(() => {
+      setSettings(form);
+      console.log("💾 Auto-saved instellingen");
+    }, 1500); // 1.5s debounce
+    return () => clearTimeout(timer);
+  }, [form]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Boekhouder link for facturen
   const boekhouderLink=form.email.boekhouder1?`mailto:${form.email.boekhouder1}?subject=Verkoopfacturen%20${new Date().getFullYear()}%20—%20${encodeURIComponent(form.bedrijf.naam)}&body=Geachte%20boekhouder%2C%0A%0AIn%20bijlage%20de%20verkoopfacturen.`:null;
 
