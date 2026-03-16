@@ -73,7 +73,39 @@ const fE=n=>"€\u00A0"+Number(n||0).toFixed(2).replace(".",",").replace(/\B(?=(
 const fD=d=>d?new Date(d).toLocaleDateString("nl-BE",{day:"2-digit",month:"2-digit",year:"numeric"}):"—";
 const fB=n=>{const c=(n||"").replace(/[^0-9]/g,"");return c.length>=9?"BE "+c.slice(0,4)+"."+c.slice(4,7)+"."+c.slice(7):(n||"")};
 async function tV(id){try{const s=window.supabase.createClient(SB_URL,SB_KEY);await s.from('offerte_views').insert({offerte_id:id,viewed_at:new Date().toISOString(),user_agent:navigator.userAgent.slice(0,200)});}catch(e){}}
-async function sR(id,st,d={}){try{const s=window.supabase.createClient(SB_URL,SB_KEY);await s.from('offerte_responses').insert({offerte_id:id,status:st,periode:d.periode||'',opmerkingen:d.opmerkingen||'',submitted_at:new Date().toISOString()});}catch(e){}location.href=location.origin+"?action="+(st==='goedgekeurd'?'accept':'reject')+"&id="+id;}
+async function sR(id,st,d={}){
+  try{
+    const s=window.supabase.createClient(SB_URL,SB_KEY);
+    // 1. Store in offerte_responses table
+    await s.from('offerte_responses').insert({offerte_id:id,status:st,periode:d.periode||'',opmerkingen:d.opmerkingen||'',submitted_at:new Date().toISOString()});
+    // 2. Also store in user_data so the app picks it up automatically
+    // Find the offerte owner's data and update the offerte status
+    const {data:rows}=await s.from('user_data').select('user_id,value').eq('key','b4_off');
+    if(rows){
+      for(const row of rows){
+        try{
+          const offs=JSON.parse(row.value);
+          const idx=offs.findIndex(o=>o.id===id);
+          if(idx>=0){
+            offs[idx].status=st==='goedgekeurd'?'goedgekeurd':'afgewezen';
+            offs[idx].klantReactie={status:st,periode:d.periode||'',opmerkingen:d.opmerkingen||'',datum:new Date().toISOString()};
+            offs[idx].log=[...(offs[idx].log||[]),{ts:new Date().toISOString(),actie:st==='goedgekeurd'?'✅ Klant heeft goedgekeurd'+(d.periode?' — Periode: '+d.periode:''):'❌ Klant heeft afgewezen'+(d.opmerkingen?' — '+d.opmerkingen:'')}];
+            await s.from('user_data').update({value:JSON.stringify(offs),updated_at:new Date().toISOString()}).eq('user_id',row.user_id).eq('key','b4_off');
+            break;
+          }
+        }catch(_){}
+      }
+    }
+  }catch(e){console.error('Response save error:',e);}
+  // Show inline confirmation instead of redirect
+  document.querySelectorAll('.modal-bg').forEach(m=>m.classList.remove('active'));
+  const app=document.getElementById('app');
+  if(st==='goedgekeurd'){
+    app.innerHTML='<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#f0fdf4,#ecfdf5)"><div style="background:#fff;border-radius:16px;box-shadow:0 4px 24px rgba(0,0,0,.1);max-width:560px;width:95%;padding:48px 40px;text-align:center"><div style="font-size:80px;margin-bottom:20px">✅</div><h1 style="font-size:28px;color:#059669;margin-bottom:12px">Offerte goedgekeurd!</h1><p style="color:#475569;font-size:16px;line-height:1.6;margin-bottom:8px">Bedankt voor uw bevestiging. Wij nemen zo snel mogelijk contact met u op'+(d.periode?' voor een afspraak <strong>'+d.periode.toLowerCase()+'</strong>.':'.')+'</p>'+(d.opmerkingen?'<div style="background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:12px 16px;margin-top:16px;font-size:14px;color:#166534;text-align:left"><strong>Uw opmerking:</strong> '+d.opmerkingen+'</div>':'')+'<p style="color:#94a3b8;font-size:13px;margin-top:24px">U kunt dit venster sluiten.</p></div></div>';
+  }else{
+    app.innerHTML='<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#fef2f2,#fff1f2)"><div style="background:#fff;border-radius:16px;box-shadow:0 4px 24px rgba(0,0,0,.1);max-width:560px;width:95%;padding:48px 40px;text-align:center"><div style="font-size:80px;margin-bottom:20px">📋</div><h1 style="font-size:28px;color:#dc2626;margin-bottom:12px">Offerte afgewezen</h1><p style="color:#475569;font-size:16px;line-height:1.6">Uw reactie is geregistreerd. Mocht u vragen hebben, neem gerust contact op.</p>'+(d.opmerkingen?'<div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:12px 16px;margin-top:16px;font-size:14px;color:#991b1b;text-align:left"><strong>Uw opmerking:</strong> '+d.opmerkingen+'</div>':'')+'<p style="color:#94a3b8;font-size:13px;margin-top:24px">U kunt dit venster sluiten.</p></div></div>';
+  }
+}
 function R(doc){const dc=doc._dc||'#1a2e4a';const b=doc._bed||{};const L=doc.lijnen||[];const G=doc.groepen||[];
 const sub=L.reduce((s,l)=>s+(l.prijs*l.aantal),0);const bg={};L.forEach(l=>{const r=l.btw||21;if(!bg[r])bg[r]=0;bg[r]+=l.prijs*l.aantal*(r/100);});const btw=Object.values(bg).reduce((s,v)=>s+v,0);const tot=sub+btw;
 const gr=[...G.map(g=>({...g,items:L.filter(l=>l.groepId===g.id)})).filter(g=>g.items.length>0)];const rest=L.filter(l=>!l.groepId||!G.find(g=>g.id===l.groepId));if(rest.length)gr.push({id:'r',naam:'Producten',items:rest});
