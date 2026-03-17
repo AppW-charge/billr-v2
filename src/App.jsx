@@ -1509,67 +1509,45 @@ export default function App() {
     };
 
     const applyCloudData = (allData) => {
-      // SLIM MERGE: vergelijk localStorage vs Supabase PER KEY
-      // Wie meer/nieuwere data heeft, wint
+      // SUPABASE = AUTORITEIT als je ingelogd bent
+      // localStorage is alleen een snelle cache voor eerste render
       const parse = (key, fallback) => {
         try { return allData[key] ? JSON.parse(allData[key]) : fallback; }
         catch(_) { return fallback; }
       };
-      const lsGet = (key, fallback) => {
-        try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; }
-        catch(_) { return fallback; }
+      
+      const apply = (key, setter, fallback) => {
+        if(!allData[key]) return; // Geen cloud data voor deze key → localStorage behouden
+        const cloud = parse(key, fallback);
+        setter(cloud);
+        // Sync localStorage cache — strip base64 om quota te voorkomen
+        try {
+          if(key === "b4_off" || key === "b4_fct" || key === "b4_prd") {
+            const stripped = (Array.isArray(cloud) ? cloud : []).map(item => ({
+              ...item, technischeFiche: null,
+              technischeFiches: (item.technischeFiches||[]).map(f => ({naam: f.naam})),
+              lijnen: (item.lijnen||[]).map(l => ({...l, technischeFiche: null, technischeFiches: (l.technischeFiches||[]).map(f => ({naam: f.naam}))}))
+            }));
+            localStorage.setItem(key, JSON.stringify(stripped));
+          } else {
+            localStorage.setItem(key, allData[key]);
+          }
+        } catch(_){}
+        console.log(`  ☁️→ ${key}: cloud data geladen${Array.isArray(cloud) ? ` (${cloud.length} items)` : ''}`);
       };
       
-      const smartMerge = (key, setter, fallback) => {
-        const cloud = allData[key] ? parse(key, fallback) : null;
-        const local = lsGet(key, fallback);
-        
-        if(!cloud && !local) return; // Beide leeg
-        if(!cloud) return; // Geen cloud data, localStorage staat al geladen
-        if(!local || (Array.isArray(local) && local.length === 0)) {
-          // localStorage leeg maar cloud heeft data → cloud wint (nieuw toestel)
-          setter(cloud);
-          console.log(`  ☁️→ ${key}: cloud data gebruikt (localStorage was leeg)`);
-          return;
-        }
-        
-        // Beide hebben data: localStorage wint (is altijd nieuwer door instant saves)
-        // TENZIJ cloud méér items heeft (= localStorage was corrupt/gereset)
-        if(Array.isArray(cloud) && Array.isArray(local)) {
-          if(cloud.length > local.length) {
-            setter(cloud);
-            try { localStorage.setItem(key, allData[key]); } catch(_){}
-            console.log(`  ☁️→ ${key}: cloud wint (${cloud.length} > ${local.length} items)`);
-          } else {
-            console.log(`  💾→ ${key}: localStorage behouden (${local.length} items, cloud had ${cloud.length})`);
-          }
-        } else if(key === "b4_set") {
-          // Settings: check of cloud meer ingevulde velden heeft
-          const cloudNaam = cloud?.bedrijf?.naam || "";
-          const localNaam = local?.bedrijf?.naam || "";
-          if(cloudNaam && !localNaam) {
-            setter(cloud);
-            try { localStorage.setItem(key, allData[key]); } catch(_){}
-            console.log(`  ☁️→ ${key}: cloud settings gebruikt (lokaal was leeg)`);
-          } else {
-            console.log(`  💾→ ${key}: localStorage settings behouden`);
-          }
-        }
-        // Default: localStorage blijft staan (al geladen in stap 1)
-      };
-      
-      smartMerge("b4_set", setSettings, INIT_SETTINGS);
-      smartMerge("b4_kln", setKlanten, INIT_KLANTEN);
-      smartMerge("b4_prd", setProducten, INIT_PRODUCTS);
-      smartMerge("b4_off", setOffertes, []);
-      smartMerge("b4_fct", setFacturen, []);
-      smartMerge("b4_cn",  setCreditnotas, []);
-      smartMerge("b4_am",  setAanmaningen, []);
-      smartMerge("b4_bt",  setBetalingen, []);
-      smartMerge("b4_ti",  setTijdslots, []);
-      smartMerge("b4_do",  setDossiers, []);
-      smartMerge("b4_ga",  setGaranties, []);
-      smartMerge("b4_at",  setAcceptTokens, {});
+      apply("b4_set", setSettings, INIT_SETTINGS);
+      apply("b4_kln", setKlanten, INIT_KLANTEN);
+      apply("b4_prd", setProducten, INIT_PRODUCTS);
+      apply("b4_off", setOffertes, []);
+      apply("b4_fct", setFacturen, []);
+      apply("b4_cn",  setCreditnotas, []);
+      apply("b4_am",  setAanmaningen, []);
+      apply("b4_bt",  setBetalingen, []);
+      apply("b4_ti",  setTijdslots, []);
+      apply("b4_do",  setDossiers, []);
+      apply("b4_ga",  setGaranties, []);
+      apply("b4_at",  setAcceptTokens, {});
     };
 
     const loadUserData = async (u) => {
@@ -1609,20 +1587,6 @@ export default function App() {
       await new Promise(r => setTimeout(r, 300));
       dataReady.current = true;
       console.log("✅ dataReady = true — saves zijn nu toegestaan");
-      
-      // STAP 3: Push lokale data die nieuwer was TERUG naar Supabase (achtergrond)
-      if(supabaseVerified.current) {
-        setTimeout(async () => {
-          const keys = ["b4_set","b4_kln","b4_prd","b4_off","b4_fct","b4_cn","b4_am","b4_bt","b4_ti","b4_do","b4_ga","b4_at"];
-          for(const key of keys) {
-            const lsVal = localStorage.getItem(key);
-            if(lsVal) {
-              await sbSet(key, lsVal, u.id);
-            }
-          }
-          console.log("☁️ ✓ localStorage → Supabase sync voltooid");
-        }, 5000); // 5s na laden, zodat de UI niet geblokkeerd wordt
-      }
     };
 
     // Sessie check
