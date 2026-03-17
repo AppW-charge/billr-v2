@@ -57,9 +57,8 @@ async function tV(id){try{await sb.from('offerte_views').insert({offerte_id:id,v
 async function sR(id,st,d={}){
   try{
     await sb.from('offerte_responses').insert({offerte_id:id,status:st,periode:d.periode||'',opmerkingen:d.opmerkingen||'',submitted_at:new Date().toISOString()});
-    const{data:rows}=await sb.from('user_data').select('user_id,value').eq('key','b4_off');
-    if(rows){for(const row of rows){try{const offs=JSON.parse(row.value);const idx=offs.findIndex(o=>o.id===id);if(idx>=0){offs[idx].status=st==='goedgekeurd'?'goedgekeurd':'afgewezen';offs[idx].klantReactie={status:st,periode:d.periode||'',opmerkingen:d.opmerkingen||'',datum:new Date().toISOString()};offs[idx].log=[...(offs[idx].log||[]),{ts:new Date().toISOString(),actie:st==='goedgekeurd'?'✅ Klant goedgekeurd'+(d.periode?' — '+d.periode:''):'❌ Klant afgewezen'}];await sb.from('user_data').update({value:JSON.stringify(offs),updated_at:new Date().toISOString()}).eq('user_id',row.user_id).eq('key','b4_off');break;}}catch(_){}}}
-  }catch(e){}
+    console.log('Response saved to offerte_responses');
+  }catch(e){console.error('Response save error:',e);}
   document.querySelectorAll('.modal-bg').forEach(m=>m.classList.remove('active'));
   const app=document.getElementById('app');
   app.innerHTML=st==='goedgekeurd'
