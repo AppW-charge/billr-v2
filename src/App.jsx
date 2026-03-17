@@ -1476,80 +1476,12 @@ export default function App() {
   // dataReady: true ALLEEN nadat data volledig geladen is
   // Voorkomt dat lege initiële state de opgeslagen data overschrijft
   const dataReady = useRef(false);
-  const dataLoadedFromCloud = useRef(false); // Track of we ooit cloud data hadden
+  const supabaseVerified = useRef(false); // true = we weten dat Supabase werkt voor deze user
 
   useEffect(()=>{
     let dataLoaded = false;
 
-    const loadUserData = async (u) => {
-      if(dataLoaded) return;
-      dataLoaded = true;
-      
-      // KRITIEK: blokkeer saves tijdens laden
-      dataReady.current = false;
-      
-      const appUser = { id: u.id, email: u.email, naam: u.user_metadata?.naam || u.email.split("@")[0], rol: "admin" };
-      setUser(appUser);
-
-      // UI direct zichtbaar VOOR data laden
-      setLoaded(true);
-
-      // ═══ BULK LOAD: één query voor alle data ═══
-      try {
-        const allData = await Promise.race([
-          sbGetAll(u.id),
-          new Promise(r => setTimeout(()=>{ console.warn("⏱️ Supabase timeout (12s) — fallback naar localStorage"); r(null); }, 12000))
-        ]);
-
-        const parse = (key, fallback) => {
-          try { return allData[key] ? JSON.parse(allData[key]) : fallback; }
-          catch(_) { return fallback; }
-        };
-
-        const keyCount = allData ? Object.keys(allData).length : 0;
-
-        if(allData && keyCount > 0) {
-          // Supabase had data — dit is de AUTORITEIT
-          dataLoadedFromCloud.current = true;
-          console.log(`☁️ Supabase: ${keyCount} keys geladen voor user ${u.id.slice(0,8)}...`);
-          if(allData["b4_set"]) setSettings(parse("b4_set", INIT_SETTINGS));
-          if(allData["b4_kln"]) setKlanten(parse("b4_kln", INIT_KLANTEN));
-          if(allData["b4_prd"]) setProducten(parse("b4_prd", INIT_PRODUCTS));
-          if(allData["b4_off"]) setOffertes(parse("b4_off", []));
-          if(allData["b4_fct"]) setFacturen(parse("b4_fct", []));
-          if(allData["b4_cn"])  setCreditnotas(parse("b4_cn", []));
-          if(allData["b4_am"])  setAanmaningen(parse("b4_am", []));
-          if(allData["b4_bt"])  setBetalingen(parse("b4_bt", []));
-          if(allData["b4_ti"])  setTijdslots(parse("b4_ti", []));
-          if(allData["b4_do"])  setDossiers(parse("b4_do", []));
-          if(allData["b4_ga"])  setGaranties(parse("b4_ga", []));
-          if(allData["b4_at"])  setAcceptTokens(parse("b4_at", {}));
-          // ═══ SYNC localStorage met verse Supabase data ═══
-          // Zodat bij volgende offline/timeout load de data ACTUEEL is
-          try {
-            Object.entries(allData).forEach(([k,v])=>{
-              try { localStorage.setItem(k, v); } catch(_){}
-            });
-            console.log("💾 localStorage gesynchroniseerd met Supabase");
-          } catch(_){}
-        } else {
-          // Supabase leeg of gefaald — probeer localStorage als fallback
-          console.warn("⚠️ Supabase leeg of timeout — probeer localStorage fallback...");
-          loadFromLS();
-        }
-      } catch(e) {
-        console.error("❌ Supabase load exception:", e);
-        loadFromLS();
-      }
-
-      // KRITIEK: wacht een tick zodat React EERST alle setState's verwerkt
-      // voordat saves worden toegestaan
-      await new Promise(r => setTimeout(r, 500));
-      dataReady.current = true;
-      console.log("✅ dataReady = true — saves zijn nu toegestaan");
-    };
-
-    // localStorage load helper
+    // localStorage load helper — ALTIJD beschikbaar als instant cache
     const loadFromLS = () => {
       try {
         const get = (k, fb) => {
@@ -1568,20 +1500,79 @@ export default function App() {
         setDossiers(get('b4_do', []));
         setGaranties(get('b4_ga', []));
         setAcceptTokens(get('b4_at', {}));
-        // NIET dataReady zetten — dat doet loadUserData pas NA de wacht
-        console.log('✅ localStorage loaded');
+        console.log('✅ localStorage loaded (instant cache)');
       } catch(e) {
         console.warn('localStorage load failed:', e);
       }
     };
 
-    // Sessie check — gebruik Supabase cached sessie
+    const applyCloudData = (allData) => {
+      const parse = (key, fallback) => {
+        try { return allData[key] ? JSON.parse(allData[key]) : fallback; }
+        catch(_) { return fallback; }
+      };
+      if(allData["b4_set"]) setSettings(parse("b4_set", INIT_SETTINGS));
+      if(allData["b4_kln"]) setKlanten(parse("b4_kln", INIT_KLANTEN));
+      if(allData["b4_prd"]) setProducten(parse("b4_prd", INIT_PRODUCTS));
+      if(allData["b4_off"]) setOffertes(parse("b4_off", []));
+      if(allData["b4_fct"]) setFacturen(parse("b4_fct", []));
+      if(allData["b4_cn"])  setCreditnotas(parse("b4_cn", []));
+      if(allData["b4_am"])  setAanmaningen(parse("b4_am", []));
+      if(allData["b4_bt"])  setBetalingen(parse("b4_bt", []));
+      if(allData["b4_ti"])  setTijdslots(parse("b4_ti", []));
+      if(allData["b4_do"])  setDossiers(parse("b4_do", []));
+      if(allData["b4_ga"])  setGaranties(parse("b4_ga", []));
+      if(allData["b4_at"])  setAcceptTokens(parse("b4_at", {}));
+      // Sync localStorage als cache
+      try { Object.entries(allData).forEach(([k,v])=>{try{localStorage.setItem(k,v)}catch(_){}}); } catch(_){}
+    };
+
+    const loadUserData = async (u) => {
+      if(dataLoaded) return;
+      dataLoaded = true;
+      dataReady.current = false; // BLOKEER saves
+      
+      const appUser = { id: u.id, email: u.email, naam: u.user_metadata?.naam || u.email.split("@")[0], rol: "admin" };
+      setUser(appUser);
+
+      // STAP 1: Laad localStorage EERST voor instant UI
+      loadFromLS();
+      setLoaded(true);
+
+      // STAP 2: Laad Supabase op achtergrond — GEEN timeout
+      // Als het 30 sec duurt, wacht gewoon. Beter traag dan data kwijt.
+      try {
+        console.log("☁️ Supabase laden...");
+        const allData = await sbGetAll(u.id);
+        const keyCount = allData ? Object.keys(allData).length : 0;
+
+        if(allData && keyCount > 0) {
+          supabaseVerified.current = true;
+          console.log(`☁️ Supabase: ${keyCount} keys geladen — overschrijft localStorage cache`);
+          applyCloudData(allData);
+          console.log("💾 localStorage gesynchroniseerd met Supabase");
+        } else {
+          console.log("☁️ Supabase leeg — localStorage cache blijft actief");
+          // Supabase is leeg maar wérkt: nieuwe user of eerste keer
+          supabaseVerified.current = true;
+        }
+      } catch(e) {
+        console.warn("⚠️ Supabase load mislukt — localStorage cache actief, saves gaan naar localStorage:", e.message);
+        // supabaseVerified blijft false — saves gaan alleen naar localStorage
+      }
+
+      // Wacht tot React alle setState's verwerkt
+      await new Promise(r => setTimeout(r, 300));
+      dataReady.current = true;
+      console.log("✅ dataReady = true — saves zijn nu toegestaan");
+    };
+
+    // Sessie check
     sb.auth.getSession().then(({ data: { session: s } }) => {
       if(s?.user) {
         loadUserData(s.user);
       } else {
         loadFromLS();
-        // Geen user = geen cloud saves nodig, veilig om saves toe te staan
         dataReady.current = true;
         setLoaded(true);
       }
@@ -1597,7 +1588,8 @@ export default function App() {
         await loadUserData(session.user);
       } else if(event === "SIGNED_OUT") {
         dataLoaded = false;
-        dataReady.current = false; // BLOKEER saves tijdens transitie
+        dataReady.current = false;
+        supabaseVerified.current = false;
         setUser(null);
         loadFromLS();
         dataReady.current = true;
@@ -1607,19 +1599,8 @@ export default function App() {
       }
     });
 
-    // Noodstop: toon login na 12s als Supabase niet reageert
-    // MAAR overschrijf NOOIT data als loadUserData al bezig is
-    const hardTimeout = setTimeout(() => {
-      if(!dataLoaded) {
-        loadFromLS();
-        dataReady.current = true;
-      }
-      setLoaded(true);
-    }, 12000);
-
     return () => {
       subscription.unsubscribe();
-      clearTimeout(hardTimeout);
     };
   },[]);
 
@@ -1660,33 +1641,18 @@ export default function App() {
   const lastSyncRef = useRef(0);
   useEffect(()=>{
     const handler = async () => {
-      if(document.visibilityState==="visible" && user && Date.now()-lastSyncRef.current > 15000) {
+      // Alleen synchen als tab zichtbaar, ingelogd, en minstens 60s sinds vorige sync
+      if(document.visibilityState==="visible" && user && Date.now()-lastSyncRef.current > 60000) {
         lastSyncRef.current = Date.now();
-        console.log("📱 Tab zichtbaar — volledige data herladen...");
-        dataReady.current = false; // Blokkeer saves tijdens herladen
+        console.log("📱 Tab zichtbaar — achtergrond sync...");
         try {
           const allData = await sbGetAll(user.id);
           if(allData && Object.keys(allData).length > 0) {
-            const parse=(k,fb)=>{try{return allData[k]?JSON.parse(allData[k]):fb}catch(_){return fb}};
-            if(allData["b4_set"]) setSettings(parse("b4_set",INIT_SETTINGS));
-            if(allData["b4_kln"]) setKlanten(parse("b4_kln",INIT_KLANTEN));
-            if(allData["b4_prd"]) setProducten(parse("b4_prd",INIT_PRODUCTS));
-            if(allData["b4_off"]) setOffertes(parse("b4_off",[]));
-            if(allData["b4_fct"]) setFacturen(parse("b4_fct",[]));
-            if(allData["b4_cn"])  setCreditnotas(parse("b4_cn",[]));
-            if(allData["b4_am"])  setAanmaningen(parse("b4_am",[]));
-            if(allData["b4_bt"])  setBetalingen(parse("b4_bt",[]));
-            if(allData["b4_ti"])  setTijdslots(parse("b4_ti",[]));
-            if(allData["b4_do"])  setDossiers(parse("b4_do",[]));
-            if(allData["b4_ga"])  setGaranties(parse("b4_ga",[]));
-            if(allData["b4_at"])  setAcceptTokens(parse("b4_at",{}));
-            // Sync localStorage
+            // Sync localStorage cache (niet state — voorkomt onverwachte UI-resets)
             try{ Object.entries(allData).forEach(([k,v])=>{try{localStorage.setItem(k,v)}catch(_){}}); }catch(_){}
-            console.log("📱 ✓ Alle data herladen + localStorage gesynchroniseerd");
+            console.log("📱 ✓ localStorage cache bijgewerkt");
           }
         } catch(e) { console.warn("📱 Sync mislukt:",e); }
-        // Wacht tot React alle setState's verwerkt heeft
-        setTimeout(() => { dataReady.current = true; }, 500);
       }
     };
     document.addEventListener("visibilitychange",handler);
@@ -1704,57 +1670,26 @@ export default function App() {
   }, [settings?.email?.emailjsPublicKey]);
 
 
-  // saveKey: async, dual-write to Supabase + localStorage
-  // Als Supabase faalt, valt het altijd terug op localStorage
+  // saveKey: localStorage INSTANT + Supabase DEBOUNCED
+  const saveTimers = useRef({});
   const saveKey = useCallback(async (key, val) => { 
     if(!dataReady.current) return;
     
     const json = JSON.stringify(val);
     
-    // ═══ EMPTY DATA PROTECTION ═══
-    // Als we eerder cloud data hadden, blokkeer het opslaan van lege data
-    // Dit voorkomt dat een race condition al je data wist
-    const isArray = Array.isArray(val);
-    const isEmpty = isArray ? val.length === 0 : (typeof val === "object" && Object.keys(val||{}).length === 0);
-    const isDefaultSettings = key === "b4_set" && val?.bedrijf?.naam === INIT_SETTINGS.bedrijf.naam;
+    // STAP 1: localStorage ALTIJD INSTANT — nooit wachten
+    try { localStorage.setItem(key, json); } catch(e) { console.warn(`localStorage "${key}" failed:`, e); }
     
-    if(dataLoadedFromCloud.current && (isEmpty || isDefaultSettings)) {
-      // Check of er al data in Supabase staat
-      const lsExisting = localStorage.getItem(key);
-      if(lsExisting) {
-        try {
-          const existing = JSON.parse(lsExisting);
-          const existingHasData = Array.isArray(existing) ? existing.length > 0 : (typeof existing === "object" && Object.keys(existing||{}).length > 0);
-          if(existingHasData && key !== "b4_set") {
-            console.warn(`🛡️ GEBLOKKEERD: "${key}" probeerde lege data op te slaan terwijl er ${Array.isArray(existing)?existing.length+" items":""} bestonden. Mogelijk race condition.`);
-            return; // BLOKEER de save
-          }
-        } catch(_){}
-      }
-    }
-    
-    // ALTIJD localStorage schrijven als backup
-    try {
-      localStorage.setItem(key, json);
-    } catch(e) {
-      console.warn(`localStorage save "${key}" failed:`, e);
-    }
-    
+    // STAP 2: Supabase DEBOUNCED — 2s na laatste wijziging
     if(user) {
-      const success = await sbSet(key, json, user.id);
-      if(success) {
-        // Supabase OK
-      } else {
-        console.error(`⚠️ Supabase save "${key}" MISLUKT — data staat alleen in localStorage!`);
-        // Toon melding aan gebruiker bij herhaald falen
-        if(window._saveFailCount === undefined) window._saveFailCount = 0;
-        window._saveFailCount++;
-        if(window._saveFailCount <= 3 && notifyRef.current) {
-          notifyRef.current(`⚠️ Opslaan naar cloud mislukt (${key.replace("b4_","")})`, "er");
+      clearTimeout(saveTimers.current[key]);
+      saveTimers.current[key] = setTimeout(async () => {
+        const success = await sbSet(key, json, user.id);
+        if(!success) {
+          console.error(`⚠️ Cloud save "${key}" MISLUKT — staat in localStorage`);
+          if(notifyRef.current) notifyRef.current(`⚠️ Cloud save mislukt (${key.replace("b4_","")}) — lokaal bewaard`, "er");
         }
-      }
-    } else {
-      console.log(`💾 Saved ${key} (localStorage only — niet ingelogd)`);
+      }, 2000); // 2 seconden debounce
     }
   }, [user]);
   useEffect(()=>{ saveKey("b4_off", offertes);  },[offertes,   saveKey]);
@@ -5009,13 +4944,19 @@ function KlantModal({klant,onSave,onClose,settings}) {
       
       // Scenario 2: BTW geldig maar geen data gevonden
       if(!kboData.naam && kboData.btwnr){
-        setKboError("BTW-nummer is geldig, maar bedrijfsgegevens konden niet worden opgehaald. Vul handmatig in.");
-        // Zet wel het geformatteerde BTW-nummer
+        // Scenario 2: BTW geldig maar geen naam gevonden — normaal, geen fout
+        setKboError(""); // Geen error tonen
+        // Zet wel het geformatteerde BTW-nummer + PEPPOL status
+        let peppolStatus = kboData.peppolActief || false;
+        if(!peppolStatus && getBillitKey(appSettings)) {
+          try { const r = await checkPeppol(`BE${nr}`, appSettings); peppolStatus = r?.registered || false; } catch(_){}
+        }
         setForm(p=>({
           ...p,
           btwnr: kboData.btwnr,
           type: "bedrijf",
-          peppolId: kboData.peppolId
+          peppolId: kboData.peppolId,
+          peppolActief: peppolStatus
         }));
         setKboLoading(false);
         return;
@@ -5069,19 +5010,19 @@ function KlantModal({klant,onSave,onClose,settings}) {
       <div className="mh"><div className="mt-m">{klant?.id?"Klant bewerken":"Nieuwe klant"}</div><button className="xbtn" onClick={onClose}>×</button></div>
       <div className="mb-body">
         <div style={{padding:"8px 12px",background:"#f0f4f8",borderRadius:7,marginBottom:12,fontSize:12,color:"#475569"}}>
-          ℹ Voer een BTW-nummer in → automatisch als bedrijf herkend. Adres heeft autocomplete via OpenStreetMap.
+          ℹ Voer een BTW-nummer in → automatisch gevalideerd + PEPPOL status. Adres heeft autocomplete via OpenStreetMap.
         </div>
         <div className="fg">
-          <label className="fl">BTW-nummer <span style={{fontWeight:400,color:"#64748b"}}>— Belgisch bedrijf: automatisch ingevuld via KBO</span></label>
+          <label className="fl">BTW-nummer <span style={{fontWeight:400,color:"#64748b"}}>— BTW validatie + PEPPOL check</span></label>
           <div style={{display:"flex",gap:7}}>
             <input className="fc" style={{flex:1,fontFamily:"JetBrains Mono,monospace",fontWeight:600}} value={form.btwnr} onChange={e=>set("btwnr",e.target.value)} placeholder="BE0123456789"/>
             {stripBe(form.btwnr).length>=9&&(
               <button className="btn b2 btn-sm" onClick={()=>zoekKBO()} disabled={kboLoading} style={{minWidth:90}}>
-                {kboLoading?<><span className="spin" style={{display:"inline-block"}}>⟳</span> Bezig…</>:"🔍 KBO opzoeken"}
+                {kboLoading?<><span className="spin" style={{display:"inline-block"}}>⟳</span> Bezig…</>:"🔍 Controleren"}
               </button>
             )}
           </div>
-          {kboLoading&&<div style={{background:"#eff6ff",border:"1px solid #93c5fd",borderRadius:6,padding:"7px 10px",marginTop:6,fontSize:12,color:"#1d4ed8",fontWeight:600}}>🔍 Bedrijfsgegevens ophalen via KBO-databank…</div>}
+          {kboLoading&&<div style={{background:"#eff6ff",border:"1px solid #93c5fd",borderRadius:6,padding:"7px 10px",marginTop:6,fontSize:12,color:"#1d4ed8",fontWeight:600}}>🔍 BTW valideren + PEPPOL status controleren…</div>}
           {kboError&&<div style={{background:"#fef2f2",border:"1px solid #fca5a5",borderRadius:6,padding:"6px 10px",marginTop:5,fontSize:12,color:"#991b1b"}}>⚠ {kboError}</div>}
           {stripBe(form.btwnr).length<9&&form.btwnr.length>0&&<div style={{fontSize:11,color:"#94a3b8",marginTop:3}}>Voer 9+ cijfers in voor automatische opzoeking</div>}
           {form.type==="bedrijf"&&stripBe(form.btwnr).length>=9&&!kboLoading&&(
