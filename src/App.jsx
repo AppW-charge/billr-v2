@@ -5380,12 +5380,20 @@ function EmailModal({doc,type,settings,onClose,onSend,onAcceptToken}) {
     const storeSharedOfferte = async ()=>{
       try {
         const t = token.current;
+        // Strip base64 data om payload klein te houden (logo + technische fiches)
+        const cleanLogo = (bed.logo||"").startsWith("data:") ? "" : (bed.logo||"");
+        const cleanBed = {...bed, logo: cleanLogo};
+        const cleanLijnen = (doc.lijnen||[]).map(l=>({
+          ...l,
+          technischeFiche: null,
+          technischeFiches: (l.technischeFiches||[]).map(f=>({naam:f.naam}))
+        }));
         const payload = {
           ...doc,
-          lijnen: (doc.lijnen||[]).map(l=>({...l})), // Keep ALL data including images
+          lijnen: cleanLijnen,
           groepen: doc.groepen||[],
           _dc: dc,
-          _bed: {...bed},
+          _bed: cleanBed,
           _sj: settings?.sjabloon||{},
           _lyt: settings?.layout||{},
           _vw: settings?.voorwaarden||{}
@@ -5394,7 +5402,7 @@ function EmailModal({doc,type,settings,onClose,onSend,onAcceptToken}) {
         const {error:insErr} = await sb.from("shared_offertes").insert({
           token: t,
           offerte_data: payload,
-          settings_data: {bedrijf:bed, sjabloon:settings?.sjabloon, layout:settings?.layout, voorwaarden:settings?.voorwaarden, thema:settings?.thema, email:settings?.email||{}}
+          settings_data: {bedrijf:cleanBed, sjabloon:settings?.sjabloon, layout:settings?.layout, voorwaarden:settings?.voorwaarden, thema:settings?.thema, email:settings?.email||{}}
         });
         if(insErr) {
           console.error("shared_offertes insert failed:", insErr.message, insErr.details);
