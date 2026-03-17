@@ -67,7 +67,9 @@ const sbDel = async (key, userId) => {
 const sbGetAll = async (userId) => {
   if(!userId) return {};
   try {
+    console.time("⏱ Supabase load");
     const { data, error } = await sb.from("user_data").select("key,value").eq("user_id", userId);
+    console.timeEnd("⏱ Supabase load");
     if(error) {
       console.error("[Supabase] GET ALL failed:", error.message, error.details, error.hint);
       return {};
@@ -1562,25 +1564,31 @@ export default function App() {
       loadFromLS();
       setLoaded(true);
 
-      // STAP 2: Laad Supabase op achtergrond — GEEN timeout
-      // Als het 30 sec duurt, wacht gewoon. Beter traag dan data kwijt.
+      // STAP 2: Laad Supabase — max 15 seconden
       try {
         console.log("☁️ Supabase laden...");
-        const allData = await sbGetAll(u.id);
+        const allData = await Promise.race([
+          sbGetAll(u.id),
+          new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 15000))
+        ]);
         const keyCount = allData ? Object.keys(allData).length : 0;
 
         if(allData && keyCount > 0) {
           supabaseVerified.current = true;
-          console.log(`☁️ Supabase: ${keyCount} keys geladen — smart merge met localStorage:`);
+          console.log(`☁️ Supabase: ${keyCount} keys geladen in <15s`);
           applyCloudData(allData);
         } else {
           console.log("☁️ Supabase leeg — localStorage cache blijft actief");
-          // Supabase is leeg maar wérkt: nieuwe user of eerste keer
           supabaseVerified.current = true;
         }
       } catch(e) {
-        console.warn("⚠️ Supabase load mislukt — localStorage cache actief, saves gaan naar localStorage:", e.message);
-        // supabaseVerified blijft false — saves gaan alleen naar localStorage
+        if(e.message === "timeout") {
+          console.warn("⏱️ Supabase timeout (15s) — localStorage cache actief. Saves gaan naar beide.");
+        } else {
+          console.warn("⚠️ Supabase load mislukt:", e.message);
+        }
+        // Saves gaan gewoon door naar localStorage + Supabase (debounced)
+        // Geen data verlies: wat je ziet is wat localStorage had
       }
 
       // Wacht tot React alle setState's verwerkt
@@ -5344,44 +5352,43 @@ function EmailModal({doc,type,settings,onClose,onSend,onAcceptToken}) {
     const storeSharedOfferte = async ()=>{
       try {
         const t = token.current;
-        // Strip base64 data om payload klein te houden (logo + technische fiches)
         const cleanLogo = (bed.logo||"").startsWith("data:") ? "" : (bed.logo||"");
-        const cleanBed = {...bed, logo: cleanLogo};
+        const cleanBed = {naam:bed.naam||"",adres:bed.adres||"",gemeente:bed.gemeente||"",tel:bed.tel||"",email:bed.email||"",btwnr:bed.btwnr||"",website:bed.website||"",iban:bed.iban||"",bic:bed.bic||"",tagline:bed.tagline||"",logo:cleanLogo};
         const cleanLijnen = (doc.lijnen||[]).map(l=>({
-          ...l,
-          technischeFiche: null,
-          technischeFiches: (l.technischeFiches||[]).map(f=>({naam:f.naam}))
+          id:l.id,productId:l.productId,naam:l.naam||"",omschr:l.omschr||"",prijs:l.prijs||0,btw:l.btw||21,aantal:l.aantal||1,
+          eenheid:l.eenheid||"stuk",groepId:l.groepId,isInfo:l.isInfo||false,
+          imageUrl:(l.imageUrl||"").startsWith("data:")?"":l.imageUrl||"",
+          specs:l.specs||[],cat:l.cat||"",technischeFiche:null,technischeFiches:[]
         }));
+        const cleanSj = {...(settings?.sjabloon||{})}; delete cleanSj.achtergrondImg;
         const payload = {
-          ...doc,
-          lijnen: cleanLijnen,
-          groepen: doc.groepen||[],
-          _dc: dc,
-          _bed: cleanBed,
-          _sj: settings?.sjabloon||{},
-          _lyt: settings?.layout||{},
-          _vw: settings?.voorwaarden||{}
+          id:doc.id,nummer:doc.nummer||"",aangemaakt:doc.aangemaakt,vervaldatum:doc.vervaldatum,
+          klant:doc.klant,lijnen:cleanLijnen,groepen:doc.groepen||[],
+          notities:doc.notities||"",installatieType:doc.installatieType||"",btwRegime:doc.btwRegime||"btw21",
+          voorschot:doc.voorschot||"",betalingstermijn:doc.betalingstermijn||14,
+          korting:doc.korting||0,kortingType:doc.kortingType||"pct",
+          _dc:dc,_bed:cleanBed,_sj:cleanSj,_lyt:settings?.layout||{},_vw:settings?.voorwaarden||{}
         };
-        // Store in Supabase
-        const {error:insErr} = await sb.from("shared_offertes").insert({
-          token: t,
-          offerte_data: payload,
-          settings_data: {bedrijf:cleanBed, sjabloon:settings?.sjabloon, layout:settings?.layout, voorwaarden:settings?.voorwaarden, thema:settings?.thema, email:settings?.email||{}}
-        });
-        if(insErr) {
-          console.error("shared_offertes insert failed:", insErr.message, insErr.details);
-          throw new Error(insErr.message);
-        }
+        const sz = Math.round(JSON.stringify(payload).length/1024);
+        console.log(`☁️ shared_offertes payload: ${sz}KB`);
+        
+        const result = await Promise.race([
+          sb.from("shared_offertes").insert({token:t, offerte_data:payload, settings_data:{bedrijf:cleanBed,sjabloon:cleanSj,layout:settings?.layout||{},voorwaarden:settings?.voorwaarden||{},thema:settings?.thema||{},email:settings?.email||{}}}),
+          new Promise(r => setTimeout(()=>r({error:{message:"timeout 10s"}}), 10000))
+        ]);
+        if(result.error) { console.error("shared_offertes:", result.error.message); throw new Error(result.error.message); }
         setAcceptUrl(`${window.location.origin}/offerte.html?token=${t}`);
-        console.log("☁️ Offerte opgeslagen voor klant-link, token:", t);
+        console.log("☁️ ✓ Link aangemaakt:", t);
       } catch(e) {
-        console.warn("Shared offerte save failed, fallback to encoded URL:", e);
-        // Fallback: oude methode met base64 encoding
+        console.warn("Supabase link mislukt, fallback URL:", e.message);
         try {
-          const cleanLijnen = (doc.lijnen||[]).map(l => ({...l, technischeFiche:null, technischeFiches:(l.technischeFiches||[]).map(f=>({naam:f.naam})), imageUrl:(l.imageUrl||"").startsWith("data:")?"":l.imageUrl}));
-          const data = btoa(encodeURIComponent(JSON.stringify({id:doc.id,nummer:doc.nummer,aangemaakt:doc.aangemaakt,vervaldatum:doc.vervaldatum,klant:doc.klant,lijnen:cleanLijnen,notities:doc.notities,installatieType:doc.installatieType,btwRegime:doc.btwRegime,groepen:doc.groepen,voorschot:doc.voorschot,_dc:dc,_bed:{naam:bed.naam,adres:bed.adres,gemeente:bed.gemeente,tel:bed.tel,email:bed.email,btwnr:bed.btwnr,website:bed.website,iban:bed.iban}})));
-          setAcceptUrl(`${window.location.origin}/offerte.html?data=${data}`);
-        } catch(_){}
+          const fb = {id:doc.id,nummer:doc.nummer,aangemaakt:doc.aangemaakt,vervaldatum:doc.vervaldatum,klant:doc.klant,
+            lijnen:(doc.lijnen||[]).map(l=>({id:l.id,naam:l.naam,omschr:l.omschr||"",prijs:l.prijs,btw:l.btw,aantal:l.aantal,eenheid:l.eenheid,groepId:l.groepId,isInfo:l.isInfo,imageUrl:(l.imageUrl||"").startsWith("data:")?"":l.imageUrl||"",specs:l.specs||[]})),
+            notities:doc.notities,installatieType:doc.installatieType,btwRegime:doc.btwRegime,groepen:doc.groepen,voorschot:doc.voorschot,betalingstermijn:doc.betalingstermijn,korting:doc.korting,kortingType:doc.kortingType,
+            _dc:dc,_bed:{naam:bed.naam,adres:bed.adres,gemeente:bed.gemeente,tel:bed.tel,email:bed.email,btwnr:bed.btwnr,website:bed.website,iban:bed.iban}};
+          setAcceptUrl(`${window.location.origin}/offerte.html?data=${btoa(encodeURIComponent(JSON.stringify(fb)))}`);
+          console.log("☁️ Fallback URL aangemaakt");
+        } catch(_){ console.error("Fallback URL mislukt"); }
       }
     };
     storeSharedOfferte();
