@@ -127,40 +127,36 @@ const genOGM = (nr) => {
 const fmtPct = n => Number(n||0).toFixed(1).replace(".",",") + "%";
 
 // ─── KBO & PEPPOL INTEGRATIES ─────────────────────────────────────────
-// KBO Lookup - Realistische versie: alleen CBE API
-// OpenCorporates werkt NIET vanuit browser (CORS blocked)
-async function kboLookup(vatNumber, cbeApiKey = null) {
+// KBO Lookup - BTW validatie + Billit PEPPOL check
+// CBE API verwijderd (CORS geblokkeerd vanuit browser)
+async function kboLookup(vatNumber, settings = null) {
   console.log("[KBO] ==> Start lookup:", vatNumber);
   
   try {
-    // STAP 1: Input cleaning
     const cleaned = String(vatNumber || "")
       .toUpperCase()
       .replace(/^BE\s*/i, '')
       .replace(/[^0-9]/g, '');
-    
-    console.log("[KBO] Cleaned number:", cleaned, `(${cleaned.length} digits)`);
     
     if(cleaned.length !== 10) {
       console.error("[KBO] Invalid length:", cleaned.length);
       return null;
     }
     
-    // STAP 2: Modulo 97 validatie
-    const validateBTW = () => {
-      const num = parseInt(cleaned.slice(0, 8));
-      const checkDigits = parseInt(cleaned.slice(8, 10));
-      const calculated = 97 - (num % 97);
-      const isValid = calculated === checkDigits;
-      console.log("[KBO] Modulo 97 check:", isValid, `(${calculated} === ${checkDigits})`);
-      return isValid;
-    };
+    // Modulo 97 validatie
+    const num = parseInt(cleaned.slice(0, 8));
+    const checkDigits = parseInt(cleaned.slice(8, 10));
+    const calculated = 97 - (num % 97);
+    const isValid = calculated === checkDigits;
+    console.log("[KBO] Modulo 97 check:", isValid);
     
-    const isValidBTW = validateBTW();
+    if(!isValid) {
+      console.error("[KBO] BTW number failed modulo 97 validation");
+      return null;
+    }
+    
     const formattedBTW = `BE ${cleaned.slice(0,4)}.${cleaned.slice(4,7)}.${cleaned.slice(7)}`;
-    
-    // STAP 3: Basis return object
-    const baseResult = {
+    const result = {
       naam: "",
       bedrijf: "",
       adres: "",
@@ -169,56 +165,32 @@ async function kboLookup(vatNumber, cbeApiKey = null) {
       tel: "",
       email: "",
       peppolId: `0208:${cleaned}`,
+      peppolActief: false
     };
     
-    if(!isValidBTW) {
-      console.error("[KBO] BTW number failed modulo 97 validation");
-      return null;
-    }
-    
-    console.log("[KBO] BTW is valid, attempting CBE API lookup...");
-    
-    let foundData = false;
-    
-    // CBE API met API key (enige werkende optie)
-    if(cbeApiKey) {
+    // Probeer bedrijfsnaam op te halen via Billit (als API key beschikbaar)
+    const billitKey = settings?.integraties?.billitApiKey || getBillitKey(settings||{});
+    if(billitKey) {
       try {
-        console.log("[KBO] Trying CBE API with Bearer token...");
-        const cbeResp = await fetch(`https://cbeapi.be/api/enterprise/${cleaned}`, {
-          headers: {
-            'Authorization': `Bearer ${cbeApiKey}`,
-            'Accept': 'application/json'
+        const peppolResp = await fetch(
+          `${getBillitUrl(settings||{})}/v1/peppol/participantInformation/BE${cleaned}`,
+          {headers: {'Authorization':`Bearer ${billitKey}`,'Content-Type':'application/json','Accept':'application/json'}}
+        );
+        if(peppolResp.ok) {
+          const peppolData = await peppolResp.json();
+          console.log("[KBO] Billit PEPPOL data:", peppolData);
+          result.peppolActief = peppolData.Registered === true;
+          // Billit returns participant name if available
+          if(peppolData.Name || peppolData.name) {
+            result.naam = peppolData.Name || peppolData.name;
+            result.bedrijf = result.naam;
           }
-        });
-        if(cbeResp.ok) {
-          const cbeData = await cbeResp.json();
-          console.log("[KBO CBE API] Response:", cbeData);
-          if(cbeData?.denomination || cbeData?.name) {
-            console.log("[KBO] ✓ CBE API SUCCESS!");
-            baseResult.naam = cbeData.denomination || cbeData.name || "";
-            baseResult.bedrijf = cbeData.name || cbeData.denomination || "";
-            baseResult.adres = cbeData.address?.street || "";
-            baseResult.gemeente = `${cbeData.address?.zipcode || ""} ${cbeData.address?.city || ""}`.trim();
-            baseResult.tel = cbeData.contact?.phone || "";
-            baseResult.email = cbeData.contact?.email || "";
-            foundData = true;
-          }
-        } else {
-          console.warn("[KBO CBE API] Failed with status:", cbeResp.status);
         }
-      } catch(e) { 
-        console.warn("[KBO] CBE API failed:", e.message); 
-      }
+      } catch(e) { console.warn("[KBO] Billit PEPPOL lookup failed:", e.message); }
     }
     
-    // Return resultaat
-    if(foundData) {
-      console.log("[KBO] ==> SUCCESS with company data:", baseResult.naam);
-    } else {
-      console.log("[KBO] ==> No company data found, but BTW is valid. Returning formatted number.");
-    }
-    
-    return baseResult;
+    console.log("[KBO] ==> Result:", result.naam ? `Found: ${result.naam}` : "BTW valid, no name found");
+    return result;
     
   } catch(err) {
     console.error("[KBO] Fatal error:", err);
@@ -296,6 +268,33 @@ async function testBillitConnection(settings) {
     if(resp.ok) { const data = await resp.json(); return {ok:true, account:data}; }
     return {ok:false, error:`HTTP ${resp.status}`};
   } catch(err) { return {ok:false, error:err.message}; }
+}
+
+// Haal bedrijfsgegevens op via Billit /v1/account
+async function fetchBillitCompanyData(settings) {
+  const apiKey = getBillitKey(settings);
+  if(!apiKey) throw new Error("Geen Billit API key geconfigureerd");
+  const resp = await fetch(`${getBillitUrl(settings)}/v1/account`, {headers:billitHeaders(settings)});
+  if(!resp.ok) throw new Error(`Billit API fout: HTTP ${resp.status}`);
+  const data = await resp.json();
+  console.log("[BILLIT] Account data:", data);
+  // Map Billit response naar BILLR bedrijfsvelden
+  const co = data.Company || data.company || data;
+  const addr = (co.Addresses || co.addresses || []).find(a => 
+    (a.AddressType||a.addressType||"").toLowerCase().includes("invoice")
+  ) || (co.Addresses || co.addresses || [])[0] || {};
+  const bank = (data.BankAccounts || data.bankAccounts || co.BankAccounts || co.bankAccounts || [])[0] || {};
+  return {
+    naam: co.CommercialName || co.Name || co.commercialName || co.name || "",
+    adres: `${addr.Street||addr.street||""} ${addr.StreetNumber||addr.streetNumber||""}`.trim() + (addr.Box||addr.box ? ` / ${addr.Box||addr.box}` : ""),
+    gemeente: `${addr.Zipcode||addr.zipcode||""} ${addr.City||addr.city||""}`.trim(),
+    btwnr: co.VATNumber || co.vatNumber || co.VatNumber || "",
+    tel: co.Phone || co.phone || addr.Phone || addr.phone || "",
+    email: co.Email || co.email || "",
+    iban: bank.IBAN || bank.iban || "",
+    bic: bank.BIC || bank.bic || "",
+    website: co.Website || co.website || ""
+  };
 }
 
 // Converteer BILLR factuur naar UBL (Universal Business Language)
@@ -4995,12 +4994,11 @@ function KlantModal({klant,onSave,onClose,settings}) {
     const nr=forcedNr||stripBe(form.btwnr);if(nr.length<9)return;
     setKboLoading(true);setKboError("");
     try{
-      // ALTIJD gebruik API key - hardcoded als fallback
-      const HARDCODED_API_KEY = "OqzgVJ8I5wqgA8QjB0Aotu446pn7xqVI";
-      const settings = JSON.parse(localStorage.getItem("billr_settings") || "{}");
-      const cbeApiKey = settings.integraties?.cbeApiKey || HARDCODED_API_KEY;
+      // Gebruik opgeslagen settings (bevat Billit API key)
+      let appSettings;
+      try { appSettings = JSON.parse(localStorage.getItem("b4_set") || "{}"); } catch(_) { appSettings = {}; }
       
-      const kboData = await kboLookup(`BE${nr}`, cbeApiKey);
+      const kboData = await kboLookup(`BE${nr}`, appSettings);
       
       // Scenario 1: Helemaal gefaald (null)
       if(!kboData){
@@ -5024,18 +5022,13 @@ function KlantModal({klant,onSave,onClose,settings}) {
       }
       
       // Scenario 3: Success met data
-      // Check PEPPOL status via Billit or public directory
-      let peppolStatus = false;
-      if(getBillitKey(settings)) {
+      // PEPPOL status is al meegenomen in kboLookup via Billit
+      let peppolStatus = kboData.peppolActief || false;
+      if(!peppolStatus && getBillitKey(appSettings)) {
         try {
-          const result = await checkPeppol(`BE${nr}`, settings);
+          const result = await checkPeppol(`BE${nr}`, appSettings);
           peppolStatus = result?.registered || false;
-        } catch(e) {
-          console.log("Billit PEPPOL check failed, using fallback");
-          peppolStatus = await checkPeppolDirectory(`BE${nr}`, settings);
-        }
-      } else {
-        peppolStatus = await checkPeppolDirectory(`BE${nr}`, settings);
+        } catch(e) { console.log("Billit PEPPOL check failed"); }
       }
       
       setForm(p=>({
@@ -5899,6 +5892,28 @@ function InstellingenPage({settings,setSettings,notify}) {
           <input type="file" ref={logoRef} accept="image/*" style={{display:"none"}} onChange={handleLogo}/>
         </div>
         <div className="fr2">{[["naam","Bedrijfsnaam"],["tagline","Tagline"],["adres","Adres"],["gemeente","Gemeente"],["tel","Telefoon"],["email","Email"],["website","Website"],["btwnr","BTW-nummer"],["iban","IBAN"],["bic","BIC"]].map(([k,l])=><div className="fg" key={k}><label className="fl">{l}</label><input className="fc" value={form.bedrijf[k]||""} onChange={e=>set("bedrijf",k,e.target.value)}/></div>)}</div>
+        {getBillitKey(form)&&<div style={{background:"#eff6ff",border:"1px solid #bfdbfe",borderRadius:8,padding:12,marginBottom:14,display:"flex",gap:12,alignItems:"center",flexWrap:"wrap"}}>
+          <span style={{fontSize:20}}>🔄</span>
+          <div style={{flex:1,minWidth:200}}>
+            <div style={{fontWeight:700,fontSize:13,color:"#1d4ed8"}}>Automatisch invullen via Billit</div>
+            <div style={{fontSize:11,color:"#3b82f6"}}>Haalt bedrijfsnaam, adres, BTW, IBAN, telefoon en email op uit uw Billit account.</div>
+          </div>
+          <button className="btn b2 btn-sm" onClick={async()=>{
+            try{
+              const d=await fetchBillitCompanyData(form);
+              if(d.naam)set("bedrijf","naam",d.naam);
+              if(d.adres)set("bedrijf","adres",d.adres);
+              if(d.gemeente)set("bedrijf","gemeente",d.gemeente);
+              if(d.btwnr)set("bedrijf","btwnr",d.btwnr);
+              if(d.tel)set("bedrijf","tel",d.tel);
+              if(d.email)set("bedrijf","email",d.email);
+              if(d.iban)set("bedrijf","iban",d.iban);
+              if(d.bic)set("bedrijf","bic",d.bic);
+              if(d.website)set("bedrijf","website",d.website);
+              notify("✅ Bedrijfsgegevens opgehaald uit Billit");
+            }catch(e){notify("❌ Billit ophalen mislukt: "+e.message,"er");}
+          }}>🔄 Ophalen uit Billit</button>
+        </div>}
         <button className="btn b2" onClick={doSave}>Opslaan</button>
       </div>}
 
@@ -5946,22 +5961,11 @@ function InstellingenPage({settings,setSettings,notify}) {
 
           {form.integraties?.kboEnabled&&(
             <div style={{marginTop:12,marginBottom:12,padding:12,background:"rgba(255,255,255,.6)",borderRadius:8}}>
-              <div className="fg">
-                <label className="fl">🔑 CBE API Key (optioneel - voor betere resultaten)</label>
-                <input 
-                  className="fc" 
-                  type="password"
-                  value={form.integraties?.cbeApiKey||""} 
-                  onChange={e=>set("integraties","cbeApiKey",e.target.value)} 
-                  placeholder="HFEaHnWgOYc1KQuLipH1b2nMb1d1hS4g"
-                  style={{fontFamily:"JetBrains Mono,monospace"}}
-                />
-                <div style={{fontSize:11,color:"#16a34a",marginTop:4}}>
-                  Optioneel: Registreer op <a href="https://cbeapi.be" target="_blank" rel="noopener noreferrer" style={{color:"#15803d",fontWeight:600}}>cbeapi.be</a> voor een gratis API key.
-                </div>
-              </div>
-              <div style={{fontSize:11,color:"#15803d",padding:"8px 10px",background:"rgba(34,197,94,.1)",borderRadius:6,marginTop:8}}>
-                <strong>KBO Status:</strong> {form.integraties?.cbeApiKey ? "✓ API key ingesteld" : "⚠ Geen API key (beperkte toegang)"}
+              <div style={{fontSize:12,color:"#15803d",lineHeight:1.6}}>
+                ✅ BTW-nummers worden automatisch gevalideerd (modulo 97).<br/>
+                {form.integraties?.billitApiKey 
+                  ? "✅ Bedrijfsnaam wordt opgehaald via Billit PEPPOL (indien geregistreerd)."
+                  : "⚠ Stel een Billit API key in hieronder voor automatische bedrijfsnaam-lookup via PEPPOL."}
               </div>
             </div>
           )}
