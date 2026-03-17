@@ -1291,6 +1291,18 @@ tr.row-active td{border-top:2px solid #2563eb}
   .settings-grid{grid-template-columns:1fr!important}
   .settings-preview{position:static!important;max-height:none!important;margin-top:20px}
 }
+/* ─── INSTELLINGEN MOBILE FIXES ─── */
+@media(max-width:768px){
+  .settings-grid{display:block!important}
+  .settings-preview{display:none!important}
+  .tabs{display:flex!important;overflow-x:auto!important;flex-wrap:nowrap!important;gap:2px!important;-webkit-overflow-scrolling:touch;scrollbar-width:none;padding-bottom:4px!important}
+  .tabs::-webkit-scrollbar{display:none}
+  .tab{flex-shrink:0!important;font-size:11px!important;padding:8px 10px!important;white-space:nowrap!important}
+  .card{padding:12px!important}
+  .fg{margin-bottom:10px!important}
+  .fl{font-size:12px!important}
+  .fc{font-size:14px!important;padding:10px 12px!important}
+}
 `;
 
 // ─── STATUS BADGE COMPONENT ───────────────────────────────────────
@@ -1459,7 +1471,7 @@ export default function App() {
       try {
         const allData = await Promise.race([
           sbGetAll(u.id),
-          new Promise(r => setTimeout(()=>{ console.warn("⏱️ Supabase timeout (5s) — fallback naar localStorage"); r(null); }, 5000))
+          new Promise(r => setTimeout(()=>{ console.warn("⏱️ Supabase timeout (10s) — fallback naar localStorage"); r(null); }, 10000))
         ]);
 
         const parse = (key, fallback) => {
@@ -1470,7 +1482,7 @@ export default function App() {
         const keyCount = allData ? Object.keys(allData).length : 0;
 
         if(allData && keyCount > 0) {
-          // Supabase had data
+          // Supabase had data — dit is de AUTORITEIT
           console.log(`☁️ Supabase: ${keyCount} keys geladen voor user ${u.id.slice(0,8)}...`);
           if(allData["b4_set"]) setSettings(parse("b4_set", INIT_SETTINGS));
           if(allData["b4_kln"]) setKlanten(parse("b4_kln", INIT_KLANTEN));
@@ -1484,6 +1496,14 @@ export default function App() {
           if(allData["b4_do"])  setDossiers(parse("b4_do", []));
           if(allData["b4_ga"])  setGaranties(parse("b4_ga", []));
           if(allData["b4_at"])  setAcceptTokens(parse("b4_at", {}));
+          // ═══ SYNC localStorage met verse Supabase data ═══
+          // Zodat bij volgende offline/timeout load de data ACTUEEL is
+          try {
+            Object.entries(allData).forEach(([k,v])=>{
+              try { localStorage.setItem(k, v); } catch(_){}
+            });
+            console.log("💾 localStorage gesynchroniseerd met Supabase");
+          } catch(_){}
         } else {
           // Supabase leeg of gefaald — probeer localStorage als fallback
           console.warn("⚠️ Supabase leeg of timeout — probeer localStorage fallback...");
@@ -1552,11 +1572,11 @@ export default function App() {
       }
     });
 
-    // Noodstop: toon login na 3s als Supabase niet reageert
+    // Noodstop: toon login na 8s als Supabase niet reageert
     const hardTimeout = setTimeout(() => {
       if(!dataLoaded) loadFromLS();
       setLoaded(true);
-    }, 3000);
+    }, 8000);
 
     return () => {
       subscription.unsubscribe();
@@ -1568,19 +1588,28 @@ export default function App() {
   const lastSyncRef = useRef(0);
   useEffect(()=>{
     const handler = async () => {
-      if(document.visibilityState==="visible" && user && Date.now()-lastSyncRef.current > 30000) {
+      if(document.visibilityState==="visible" && user && Date.now()-lastSyncRef.current > 15000) {
         lastSyncRef.current = Date.now();
-        console.log("📱 Tab zichtbaar — data herladen...");
+        console.log("📱 Tab zichtbaar — volledige data herladen...");
         try {
           const allData = await sbGetAll(user.id);
           if(allData && Object.keys(allData).length > 0) {
             const parse=(k,fb)=>{try{return allData[k]?JSON.parse(allData[k]):fb}catch(_){return fb}};
-            if(allData["b4_off"]) setOffertes(parse("b4_off",[]));
-            if(allData["b4_fct"]) setFacturen(parse("b4_fct",[]));
+            if(allData["b4_set"]) setSettings(parse("b4_set",INIT_SETTINGS));
             if(allData["b4_kln"]) setKlanten(parse("b4_kln",INIT_KLANTEN));
             if(allData["b4_prd"]) setProducten(parse("b4_prd",INIT_PRODUCTS));
-            if(allData["b4_set"]) setSettings(parse("b4_set",INIT_SETTINGS));
-            console.log("📱 ✓ Data herladen");
+            if(allData["b4_off"]) setOffertes(parse("b4_off",[]));
+            if(allData["b4_fct"]) setFacturen(parse("b4_fct",[]));
+            if(allData["b4_cn"])  setCreditnotas(parse("b4_cn",[]));
+            if(allData["b4_am"])  setAanmaningen(parse("b4_am",[]));
+            if(allData["b4_bt"])  setBetalingen(parse("b4_bt",[]));
+            if(allData["b4_ti"])  setTijdslots(parse("b4_ti",[]));
+            if(allData["b4_do"])  setDossiers(parse("b4_do",[]));
+            if(allData["b4_ga"])  setGaranties(parse("b4_ga",[]));
+            if(allData["b4_at"])  setAcceptTokens(parse("b4_at",{}));
+            // Sync localStorage
+            try{ Object.entries(allData).forEach(([k,v])=>{try{localStorage.setItem(k,v)}catch(_){}}); }catch(_){}
+            console.log("📱 ✓ Alle data herladen + localStorage gesynchroniseerd");
           }
         } catch(e) { console.warn("📱 Sync mislukt:",e); }
       }
@@ -5156,28 +5185,44 @@ function EmailModal({doc,type,settings,onClose,onSend,onAcceptToken}) {
 
   // Accept/reject tokens voor offerte
   const token = useRef(genToken());
-  // Encode offerte data for the public offerte.html page
-  const offertePageData = type==="offerte" ? (() => {
-    try {
-      // Strip base64 fiches to keep URL size manageable
-      const cleanLijnen = (doc.lijnen||[]).map(l => ({
-        ...l,
-        technischeFiche: null, // Too large for URL
-        technischeFiches: (l.technischeFiches||[]).map(f => ({naam: f.naam})), // Keep names only
-        imageUrl: (l.imageUrl||"").startsWith("data:") ? "" : l.imageUrl // Strip base64 images
-      }));
-      const payload = {
-        id: doc.id, nummer: doc.nummer, aangemaakt: doc.aangemaakt, vervaldatum: doc.vervaldatum,
-        klant: doc.klant, lijnen: cleanLijnen, notities: doc.notities,
-        installatieType: doc.installatieType, btwRegime: doc.btwRegime,
-        groepen: doc.groepen, voorschot: doc.voorschot,
-        _dc: dc, _bed: {naam:bed.naam,adres:bed.adres,gemeente:bed.gemeente,tel:bed.tel,email:bed.email,btwnr:bed.btwnr,website:bed.website,iban:bed.iban}
-      };
-      return btoa(encodeURIComponent(JSON.stringify(payload)));
-    } catch(e) { console.error("Offerte encode error:",e); return ""; }
-  })() : "";
-  const acceptUrl = type==="offerte" ? `${window.location.origin}/offerte.html?data=${offertePageData}` : "";
-  const rejectUrl = ""; // Reject happens on the offerte.html page, not via separate link
+  // Store full offerte in Supabase shared_offertes and use token-based URL
+  const [acceptUrl, setAcceptUrl] = useState("");
+  useEffect(()=>{
+    if(type!=="offerte") return;
+    const storeSharedOfferte = async ()=>{
+      try {
+        const t = token.current;
+        const payload = {
+          ...doc,
+          lijnen: (doc.lijnen||[]).map(l=>({...l})), // Keep ALL data including images
+          groepen: doc.groepen||[],
+          _dc: dc,
+          _bed: {...bed},
+          _sj: settings?.sjabloon||{},
+          _lyt: settings?.layout||{},
+          _vw: settings?.voorwaarden||{}
+        };
+        // Store in Supabase
+        await sb.from("shared_offertes").upsert({
+          token: t,
+          offerte_data: payload,
+          settings_data: {bedrijf:bed, sjabloon:settings?.sjabloon, layout:settings?.layout, voorwaarden:settings?.voorwaarden, thema:settings?.thema}
+        }, {onConflict:"token"});
+        setAcceptUrl(`${window.location.origin}/offerte.html?token=${t}`);
+        console.log("☁️ Offerte opgeslagen voor klant-link, token:", t);
+      } catch(e) {
+        console.warn("Shared offerte save failed, fallback to encoded URL:", e);
+        // Fallback: oude methode met base64 encoding
+        try {
+          const cleanLijnen = (doc.lijnen||[]).map(l => ({...l, technischeFiche:null, technischeFiches:(l.technischeFiches||[]).map(f=>({naam:f.naam})), imageUrl:(l.imageUrl||"").startsWith("data:")?"":l.imageUrl}));
+          const data = btoa(encodeURIComponent(JSON.stringify({id:doc.id,nummer:doc.nummer,aangemaakt:doc.aangemaakt,vervaldatum:doc.vervaldatum,klant:doc.klant,lijnen:cleanLijnen,notities:doc.notities,installatieType:doc.installatieType,btwRegime:doc.btwRegime,groepen:doc.groepen,voorschot:doc.voorschot,_dc:dc,_bed:{naam:bed.naam,adres:bed.adres,gemeente:bed.gemeente,tel:bed.tel,email:bed.email,btwnr:bed.btwnr,website:bed.website,iban:bed.iban}})));
+          setAcceptUrl(`${window.location.origin}/offerte.html?data=${data}`);
+        } catch(_){}
+      }
+    };
+    storeSharedOfferte();
+  },[doc.id]);
+  const rejectUrl = "";
 
   // Email modus: automatisch (EmailJS), handmatig (mailto), of PEPPOL
   const hasEmailJS = !!(ejCfg.emailjsServiceId && ejCfg.emailjsPublicKey);
