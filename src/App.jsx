@@ -1477,6 +1477,7 @@ export default function App() {
   // dataReady: true ALLEEN nadat data volledig geladen is
   // Voorkomt dat lege initiële state de opgeslagen data overschrijft
   const dataReady = useRef(false);
+  const dataLoadedFromCloud = useRef(false); // Track of we ooit cloud data hadden
 
   useEffect(()=>{
     let dataLoaded = false;
@@ -1484,6 +1485,10 @@ export default function App() {
     const loadUserData = async (u) => {
       if(dataLoaded) return;
       dataLoaded = true;
+      
+      // KRITIEK: blokkeer saves tijdens laden
+      dataReady.current = false;
+      
       const appUser = { id: u.id, email: u.email, naam: u.user_metadata?.naam || u.email.split("@")[0], rol: "admin" };
       setUser(appUser);
 
@@ -1494,7 +1499,7 @@ export default function App() {
       try {
         const allData = await Promise.race([
           sbGetAll(u.id),
-          new Promise(r => setTimeout(()=>{ console.warn("⏱️ Supabase timeout (10s) — fallback naar localStorage"); r(null); }, 10000))
+          new Promise(r => setTimeout(()=>{ console.warn("⏱️ Supabase timeout (12s) — fallback naar localStorage"); r(null); }, 12000))
         ]);
 
         const parse = (key, fallback) => {
@@ -1506,6 +1511,7 @@ export default function App() {
 
         if(allData && keyCount > 0) {
           // Supabase had data — dit is de AUTORITEIT
+          dataLoadedFromCloud.current = true;
           console.log(`☁️ Supabase: ${keyCount} keys geladen voor user ${u.id.slice(0,8)}...`);
           if(allData["b4_set"]) setSettings(parse("b4_set", INIT_SETTINGS));
           if(allData["b4_kln"]) setKlanten(parse("b4_kln", INIT_KLANTEN));
@@ -1537,8 +1543,11 @@ export default function App() {
         loadFromLS();
       }
 
-      // Nu pas mogen saves plaatsvinden
+      // KRITIEK: wacht een tick zodat React EERST alle setState's verwerkt
+      // voordat saves worden toegestaan
+      await new Promise(r => setTimeout(r, 500));
       dataReady.current = true;
+      console.log("✅ dataReady = true — saves zijn nu toegestaan");
     };
 
     // localStorage load helper
@@ -1560,11 +1569,10 @@ export default function App() {
         setDossiers(get('b4_do', []));
         setGaranties(get('b4_ga', []));
         setAcceptTokens(get('b4_at', {}));
-        dataReady.current = true;
+        // NIET dataReady zetten — dat doet loadUserData pas NA de wacht
         console.log('✅ localStorage loaded');
       } catch(e) {
         console.warn('localStorage load failed:', e);
-        dataReady.current = true;
       }
     };
 
@@ -1574,10 +1582,13 @@ export default function App() {
         loadUserData(s.user);
       } else {
         loadFromLS();
+        // Geen user = geen cloud saves nodig, veilig om saves toe te staan
+        dataReady.current = true;
         setLoaded(true);
       }
     }).catch(() => {
       loadFromLS();
+      dataReady.current = true;
       setLoaded(true);
     });
 
@@ -1587,19 +1598,25 @@ export default function App() {
         await loadUserData(session.user);
       } else if(event === "SIGNED_OUT") {
         dataLoaded = false;
+        dataReady.current = false; // BLOKEER saves tijdens transitie
         setUser(null);
         loadFromLS();
+        dataReady.current = true;
         setLoaded(true);
       } else if(event === "TOKEN_REFRESHED" && session?.user && !dataLoaded) {
         await loadUserData(session.user);
       }
     });
 
-    // Noodstop: toon login na 8s als Supabase niet reageert
+    // Noodstop: toon login na 12s als Supabase niet reageert
+    // MAAR overschrijf NOOIT data als loadUserData al bezig is
     const hardTimeout = setTimeout(() => {
-      if(!dataLoaded) loadFromLS();
+      if(!dataLoaded) {
+        loadFromLS();
+        dataReady.current = true;
+      }
       setLoaded(true);
-    }, 8000);
+    }, 12000);
 
     return () => {
       subscription.unsubscribe();
@@ -1647,6 +1664,7 @@ export default function App() {
       if(document.visibilityState==="visible" && user && Date.now()-lastSyncRef.current > 15000) {
         lastSyncRef.current = Date.now();
         console.log("📱 Tab zichtbaar — volledige data herladen...");
+        dataReady.current = false; // Blokkeer saves tijdens herladen
         try {
           const allData = await sbGetAll(user.id);
           if(allData && Object.keys(allData).length > 0) {
@@ -1668,6 +1686,8 @@ export default function App() {
             console.log("📱 ✓ Alle data herladen + localStorage gesynchroniseerd");
           }
         } catch(e) { console.warn("📱 Sync mislukt:",e); }
+        // Wacht tot React alle setState's verwerkt heeft
+        setTimeout(() => { dataReady.current = true; }, 500);
       }
     };
     document.addEventListener("visibilitychange",handler);
@@ -1692,6 +1712,28 @@ export default function App() {
     
     const json = JSON.stringify(val);
     
+    // ═══ EMPTY DATA PROTECTION ═══
+    // Als we eerder cloud data hadden, blokkeer het opslaan van lege data
+    // Dit voorkomt dat een race condition al je data wist
+    const isArray = Array.isArray(val);
+    const isEmpty = isArray ? val.length === 0 : (typeof val === "object" && Object.keys(val||{}).length === 0);
+    const isDefaultSettings = key === "b4_set" && val?.bedrijf?.naam === INIT_SETTINGS.bedrijf.naam;
+    
+    if(dataLoadedFromCloud.current && (isEmpty || isDefaultSettings)) {
+      // Check of er al data in Supabase staat
+      const lsExisting = localStorage.getItem(key);
+      if(lsExisting) {
+        try {
+          const existing = JSON.parse(lsExisting);
+          const existingHasData = Array.isArray(existing) ? existing.length > 0 : (typeof existing === "object" && Object.keys(existing||{}).length > 0);
+          if(existingHasData && key !== "b4_set") {
+            console.warn(`🛡️ GEBLOKKEERD: "${key}" probeerde lege data op te slaan terwijl er ${Array.isArray(existing)?existing.length+" items":""} bestonden. Mogelijk race condition.`);
+            return; // BLOKEER de save
+          }
+        } catch(_){}
+      }
+    }
+    
     // ALTIJD localStorage schrijven als backup
     try {
       localStorage.setItem(key, json);
@@ -1702,9 +1744,15 @@ export default function App() {
     if(user) {
       const success = await sbSet(key, json, user.id);
       if(success) {
-        // Supabase OK — al gelogd in sbSet
+        // Supabase OK
       } else {
-        console.warn(`⚠️ Supabase save "${key}" failed — localStorage fallback actief`);
+        console.error(`⚠️ Supabase save "${key}" MISLUKT — data staat alleen in localStorage!`);
+        // Toon melding aan gebruiker bij herhaald falen
+        if(window._saveFailCount === undefined) window._saveFailCount = 0;
+        window._saveFailCount++;
+        if(window._saveFailCount <= 3 && notifyRef.current) {
+          notifyRef.current(`⚠️ Opslaan naar cloud mislukt (${key.replace("b4_","")})`, "er");
+        }
       }
     } else {
       console.log(`💾 Saved ${key} (localStorage only — niet ingelogd)`);
@@ -1737,6 +1785,8 @@ export default function App() {
   }, [settings]);
 
   const notify = (msg,type="ok") => { setNotif({msg,type}); setTimeout(()=>setNotif(null),3400); };
+  const notifyRef = useRef(notify);
+  notifyRef.current = notify; // Always latest
   const nextNr = (pre,list,fld) => {
     // Use custom prefix from settings if available
     const customPre = pre==="OFF" ? (settings?.voorwaarden?.nummerPrefix_off||"OFF") : pre==="FACT" ? (settings?.voorwaarden?.nummerPrefix_fct||"FACT") : pre;
