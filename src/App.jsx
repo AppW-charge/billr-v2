@@ -1456,6 +1456,8 @@ export default function App() {
   const [klantView, setKlantView] = useState("passport"); // "list" | "passport"
   const [klantImportOpen, setKlantImportOpen] = useState(false);
   const [mobMenu, setMobMenu] = useState(false);
+  const [sbCollapsed, setSbCollapsed] = useState(()=>{try{return localStorage.getItem("billr_sbCollapsed")==="true"}catch(_){return false}});
+  const toggleSb=()=>{const v=!sbCollapsed;setSbCollapsed(v);try{localStorage.setItem("billr_sbCollapsed",v)}catch(_){}};
   const [creditnotas, setCreditnotas] = useState([]);
   const [aanmaningen, setAanmaningen] = useState([]);
   const [betalingen, setBetalingen] = useState([]);
@@ -1507,24 +1509,67 @@ export default function App() {
     };
 
     const applyCloudData = (allData) => {
+      // SLIM MERGE: vergelijk localStorage vs Supabase PER KEY
+      // Wie meer/nieuwere data heeft, wint
       const parse = (key, fallback) => {
         try { return allData[key] ? JSON.parse(allData[key]) : fallback; }
         catch(_) { return fallback; }
       };
-      if(allData["b4_set"]) setSettings(parse("b4_set", INIT_SETTINGS));
-      if(allData["b4_kln"]) setKlanten(parse("b4_kln", INIT_KLANTEN));
-      if(allData["b4_prd"]) setProducten(parse("b4_prd", INIT_PRODUCTS));
-      if(allData["b4_off"]) setOffertes(parse("b4_off", []));
-      if(allData["b4_fct"]) setFacturen(parse("b4_fct", []));
-      if(allData["b4_cn"])  setCreditnotas(parse("b4_cn", []));
-      if(allData["b4_am"])  setAanmaningen(parse("b4_am", []));
-      if(allData["b4_bt"])  setBetalingen(parse("b4_bt", []));
-      if(allData["b4_ti"])  setTijdslots(parse("b4_ti", []));
-      if(allData["b4_do"])  setDossiers(parse("b4_do", []));
-      if(allData["b4_ga"])  setGaranties(parse("b4_ga", []));
-      if(allData["b4_at"])  setAcceptTokens(parse("b4_at", {}));
-      // Sync localStorage als cache
-      try { Object.entries(allData).forEach(([k,v])=>{try{localStorage.setItem(k,v)}catch(_){}}); } catch(_){}
+      const lsGet = (key, fallback) => {
+        try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; }
+        catch(_) { return fallback; }
+      };
+      
+      const smartMerge = (key, setter, fallback) => {
+        const cloud = allData[key] ? parse(key, fallback) : null;
+        const local = lsGet(key, fallback);
+        
+        if(!cloud && !local) return; // Beide leeg
+        if(!cloud) return; // Geen cloud data, localStorage staat al geladen
+        if(!local || (Array.isArray(local) && local.length === 0)) {
+          // localStorage leeg maar cloud heeft data → cloud wint (nieuw toestel)
+          setter(cloud);
+          console.log(`  ☁️→ ${key}: cloud data gebruikt (localStorage was leeg)`);
+          return;
+        }
+        
+        // Beide hebben data: localStorage wint (is altijd nieuwer door instant saves)
+        // TENZIJ cloud méér items heeft (= localStorage was corrupt/gereset)
+        if(Array.isArray(cloud) && Array.isArray(local)) {
+          if(cloud.length > local.length) {
+            setter(cloud);
+            try { localStorage.setItem(key, allData[key]); } catch(_){}
+            console.log(`  ☁️→ ${key}: cloud wint (${cloud.length} > ${local.length} items)`);
+          } else {
+            console.log(`  💾→ ${key}: localStorage behouden (${local.length} items, cloud had ${cloud.length})`);
+          }
+        } else if(key === "b4_set") {
+          // Settings: check of cloud meer ingevulde velden heeft
+          const cloudNaam = cloud?.bedrijf?.naam || "";
+          const localNaam = local?.bedrijf?.naam || "";
+          if(cloudNaam && !localNaam) {
+            setter(cloud);
+            try { localStorage.setItem(key, allData[key]); } catch(_){}
+            console.log(`  ☁️→ ${key}: cloud settings gebruikt (lokaal was leeg)`);
+          } else {
+            console.log(`  💾→ ${key}: localStorage settings behouden`);
+          }
+        }
+        // Default: localStorage blijft staan (al geladen in stap 1)
+      };
+      
+      smartMerge("b4_set", setSettings, INIT_SETTINGS);
+      smartMerge("b4_kln", setKlanten, INIT_KLANTEN);
+      smartMerge("b4_prd", setProducten, INIT_PRODUCTS);
+      smartMerge("b4_off", setOffertes, []);
+      smartMerge("b4_fct", setFacturen, []);
+      smartMerge("b4_cn",  setCreditnotas, []);
+      smartMerge("b4_am",  setAanmaningen, []);
+      smartMerge("b4_bt",  setBetalingen, []);
+      smartMerge("b4_ti",  setTijdslots, []);
+      smartMerge("b4_do",  setDossiers, []);
+      smartMerge("b4_ga",  setGaranties, []);
+      smartMerge("b4_at",  setAcceptTokens, {});
     };
 
     const loadUserData = async (u) => {
@@ -1548,9 +1593,8 @@ export default function App() {
 
         if(allData && keyCount > 0) {
           supabaseVerified.current = true;
-          console.log(`☁️ Supabase: ${keyCount} keys geladen — overschrijft localStorage cache`);
+          console.log(`☁️ Supabase: ${keyCount} keys geladen — smart merge met localStorage:`);
           applyCloudData(allData);
-          console.log("💾 localStorage gesynchroniseerd met Supabase");
         } else {
           console.log("☁️ Supabase leeg — localStorage cache blijft actief");
           // Supabase is leeg maar wérkt: nieuwe user of eerste keer
@@ -1565,6 +1609,20 @@ export default function App() {
       await new Promise(r => setTimeout(r, 300));
       dataReady.current = true;
       console.log("✅ dataReady = true — saves zijn nu toegestaan");
+      
+      // STAP 3: Push lokale data die nieuwer was TERUG naar Supabase (achtergrond)
+      if(supabaseVerified.current) {
+        setTimeout(async () => {
+          const keys = ["b4_set","b4_kln","b4_prd","b4_off","b4_fct","b4_cn","b4_am","b4_bt","b4_ti","b4_do","b4_ga","b4_at"];
+          for(const key of keys) {
+            const lsVal = localStorage.getItem(key);
+            if(lsVal) {
+              await sbSet(key, lsVal, u.id);
+            }
+          }
+          console.log("☁️ ✓ localStorage → Supabase sync voltooid");
+        }, 5000); // 5s na laden, zodat de UI niet geblokkeerd wordt
+      }
     };
 
     // Sessie check
@@ -1672,26 +1730,66 @@ export default function App() {
 
   // saveKey: localStorage INSTANT + Supabase DEBOUNCED
   const saveTimers = useRef({});
+  const pendingSaves = useRef({}); // Track pending Supabase saves
   const saveKey = useCallback(async (key, val) => { 
     if(!dataReady.current) return;
     
     const json = JSON.stringify(val);
     
-    // STAP 1: localStorage ALTIJD INSTANT — nooit wachten
-    try { localStorage.setItem(key, json); } catch(e) { console.warn(`localStorage "${key}" failed:`, e); }
+    // STAP 1: localStorage INSTANT — strip base64 om quota niet te overschrijden
+    try {
+      let lsJson = json;
+      if(key === "b4_off" || key === "b4_fct" || key === "b4_prd") {
+        try {
+          const stripped = JSON.parse(json).map(item => ({
+            ...item,
+            technischeFiche: null,
+            technischeFiches: (item.technischeFiches||[]).map(f => ({naam: f.naam})),
+            lijnen: (item.lijnen||[]).map(l => ({
+              ...l, technischeFiche: null,
+              technischeFiches: (l.technischeFiches||[]).map(f => ({naam: f.naam}))
+            }))
+          }));
+          lsJson = JSON.stringify(stripped);
+        } catch(_) {}
+      }
+      localStorage.setItem(key, lsJson);
+    } catch(e) { console.warn(`localStorage "${key}" failed:`, e); }
     
-    // STAP 2: Supabase DEBOUNCED — 2s na laatste wijziging
+    // STAP 2: Supabase DEBOUNCED — 1s na laatste wijziging
     if(user) {
+      pendingSaves.current[key] = { json, userId: user.id };
       clearTimeout(saveTimers.current[key]);
       saveTimers.current[key] = setTimeout(async () => {
         const success = await sbSet(key, json, user.id);
-        if(!success) {
+        if(success) {
+          delete pendingSaves.current[key];
+        } else {
           console.error(`⚠️ Cloud save "${key}" MISLUKT — staat in localStorage`);
-          if(notifyRef.current) notifyRef.current(`⚠️ Cloud save mislukt (${key.replace("b4_","")}) — lokaal bewaard`, "er");
         }
-      }, 2000); // 2 seconden debounce
+      }, 1000);
     }
   }, [user]);
+  
+  // Flush alle pending saves bij pagina sluiten
+  useEffect(() => {
+    const flush = () => {
+      Object.entries(pendingSaves.current).forEach(([key, {json, userId}]) => {
+        // navigator.sendBeacon kan geen auth headers, gebruik sync XHR als fallback
+        try {
+          const xhr = new XMLHttpRequest();
+          xhr.open("POST", `${SB_URL}/rest/v1/user_data?on_conflict=user_id,key`, false); // sync!
+          xhr.setRequestHeader("Content-Type", "application/json");
+          xhr.setRequestHeader("apikey", SB_KEY);
+          xhr.setRequestHeader("Authorization", `Bearer ${SB_KEY}`);
+          xhr.setRequestHeader("Prefer", "resolution=merge-duplicates");
+          xhr.send(JSON.stringify({ user_id: userId, key, value: json, updated_at: new Date().toISOString() }));
+        } catch(_) {}
+      });
+    };
+    window.addEventListener("beforeunload", flush);
+    return () => window.removeEventListener("beforeunload", flush);
+  }, []);
   useEffect(()=>{ saveKey("b4_off", offertes);  },[offertes,   saveKey]);
   useEffect(()=>{ saveKey("b4_fct", facturen);  },[facturen,   saveKey]);
   useEffect(()=>{ saveKey("b4_kln", klanten);   },[klanten,    saveKey]);
@@ -1751,7 +1849,7 @@ export default function App() {
           return {...l, productId: existing.id};
         } else {
           const newId = uid();
-          newProds.push({id:newId, naam:l.naam, omschr:l.omschr||"", prijs:l.prijs, btw:l.btw||21, eenheid:l.eenheid||"stuk", cat:"Overige", actief:true, imageUrl:"", specs:[], merk:""});
+          newProds.push({id:newId, naam:l.naam, omschr:l.omschr||"", prijs:l.prijs, btw:l.btw||21, eenheid:l.eenheid||"stuk", cat:"Offerte items", actief:true, imageUrl:"", specs:[], merk:"", isManual:true});
           return {...l, productId: newId};
         }
       }
@@ -1959,20 +2057,21 @@ export default function App() {
       <style>{CSS}</style>
       <div className="app" onClick={e=>{if(mobMenu&&!e.target.closest(".sb"))setMobMenu(false)}}>
         {mobMenu&&<div className="sb-overlay on" onClick={()=>setMobMenu(false)}/>}
-        <nav className={`sb${mobMenu?" mobile-open":""}`} style={{position:"relative"}}>
-          <div className="sb-logo">
+        <nav className={`sb${mobMenu?" mobile-open":""}${sbCollapsed?" sb-collapsed":""}`} style={{position:"relative",width:sbCollapsed?60:undefined,minWidth:sbCollapsed?60:undefined}}>
+          <div className="sb-logo" style={{justifyContent:sbCollapsed?"center":undefined,padding:sbCollapsed?"12px 8px":undefined}}>
             <div className="sb-logo-mark">{settings.bedrijf.logo?<img src={settings.bedrijf.logo} alt=""/>:"⚡"}</div>
-            <div><div className="sb-brand">BILLR</div><div className="sb-brand-sub">Offerte & Factuur</div></div>
+            {!sbCollapsed&&<div><div className="sb-brand">BILLR</div><div className="sb-brand-sub">Offerte & Factuur</div></div>}
           </div>
+          <div style={{padding:"4px 8px"}}><button onClick={toggleSb} style={{width:"100%",background:"rgba(255,255,255,.1)",border:"none",color:"rgba(255,255,255,.7)",borderRadius:6,padding:"6px",cursor:"pointer",fontSize:14}}>{sbCollapsed?"»":"«"}</button></div>
           <div className="sb-nav">
-            <div className="sb-sec">Menu</div>
+            {!sbCollapsed&&<div className="sb-sec">Menu</div>}
             {navItems.map(([v,ic,l,b])=>(
-              <div key={v} className={`ni${pg===v?" on":""}`} onClick={()=>{setPg(v);setPgFilter(null);setMobMenu(false);}}>
-                <span className="ni-ic">{ic}</span>{l}{b&&<span className="nb">{b}</span>}
+              <div key={v} className={`ni${pg===v?" on":""}`} onClick={()=>{setPg(v);setPgFilter(null);setMobMenu(false);}} title={sbCollapsed?l:undefined} style={sbCollapsed?{justifyContent:"center",padding:"10px 0"}:undefined}>
+                <span className="ni-ic">{ic}</span>{!sbCollapsed&&<>{l}{b&&<span className="nb">{b}</span>}</>}
               </div>
             ))}
           </div>
-          <div className="sb-foot">
+          {!sbCollapsed&&<div className="sb-foot">
             <div className="sb-user">
               <div className="ava">{(user.naam||user.email).slice(0,2).toUpperCase()}</div>
               <div style={{flex:1,minWidth:0}}>
@@ -1980,7 +2079,7 @@ export default function App() {
                 <div className="sb-user-role" style={{cursor:"pointer"}} onClick={doLogout}>Uitloggen →</div>
               </div>
             </div>
-          </div>
+          </div>}
         </nav>
 
         <button className="fab-menu" onClick={()=>setMobMenu(v=>!v)} style={{background:themaKleur}} aria-label="Menu">
@@ -2021,7 +2120,7 @@ export default function App() {
             {pg==="dashboard"&&<Dashboard offertes={offertes} facturen={factMet} onGoto={gotoFiltered} onNew={()=>{setEditOff(null);setWizOpen(true)}} onFactuur={d=>setFactModal(d)} onPlan={d=>setPlanningModal(d)} settings={settings}/>}
             {pg==="offertes"&&<OffertesPage offertes={offertes} initFilter={pgFilter} onView={d=>setViewDoc({doc:d,type:"offerte"})} onEdit={d=>{setEditOff(d);setWizOpen(true)}} onStatus={updOff} onBulkStatus={bulkUpdOff} onFactuur={d=>setFactModal(d)} onDelete={id=>{setOffertes(p=>p.filter(o=>o.id!==id));notify("Verwijderd")}} onNew={()=>{setEditOff(null);setWizOpen(true)}} onEmail={d=>setEmailModal({doc:d,type:"offerte"})} onPlan={d=>setPlanningModal(d)} settings={settings}/>}
             {pg==="facturen"&&<FacturenPage facturen={factMet} settings={settings} initFilter={pgFilter} onView={d=>setViewDoc({doc:d,type:"factuur"})} onEdit={f=>{setEditFact(f);setFactuurWizOpen(true);}} onStatus={updFact} onBulkStatus={bulkUpdFact} onDelete={id=>{setFacturen(p=>p.filter(f=>f.id!==id));notify("Verwijderd")}} notify={notify} onEmail={d=>setEmailModal({doc:d,type:"factuur"})} onBetaling={f=>setBetalingModal(f)} onAanmaning={f=>setAanmaningModal(f)} onNew={()=>{setEditFact(null);setFactuurWizOpen(true)}}/>}
-            {pg==="klanten"&&<KlantenPage klanten={klanten} offertes={offertes} facturen={factMet} view={klantView} onEdit={k=>setKlantModal(k)} onDelete={id=>{setKlanten(p=>p.filter(k=>k.id!==id));notify("Klant verwijderd")}}/>}
+            {pg==="klanten"&&<KlantenPage klanten={klanten} offertes={offertes} facturen={factMet} view={klantView} onEdit={k=>setKlantModal(k)} onDelete={id=>{setKlanten(p=>p.filter(k=>k.id!==id));notify("Klant verwijderd")}} onNewOfferte={k=>{setEditOff({klant:k});setWizOpen(true);}} onNewFactuur={k=>{setEditFact({klant:k});setFactuurWizOpen(true);}}/>}
             {pg==="producten"&&<ProductenPage producten={producten} settings={settings} onEdit={p=>setProdModal(p)} onDelete={id=>{setProducten(p=>p.filter(x=>x.id!==id));notify("Verwijderd")}} onToggle={id=>setProducten(p=>p.map(x=>x.id===id?{...x,actief:!x.actief}:x))} onEnrich={upd=>setProducten(p=>p.map(x=>x.id===upd.id?upd:x))} onDuplicate={p=>{const dup={...p,id:uid(),naam:p.naam+" (kopie)"};setProducten(pr=>[dup,...pr]);notify("Product gedupliceerd ✓");setProdModal(dup);}}/>}
             {pg==="agenda"&&<div style={{height:"calc(100vh - 70px)",margin:"-22px",overflow:"hidden"}}><iframe src={`${window.location.origin}/planner.html`} style={{width:"100%",height:"100%",border:"none"}} title="Agenda"/></div>}
             {pg==="rapportage"&&<Rapportage offertes={offertes} facturen={factMet}/>}
@@ -2117,26 +2216,37 @@ function Dashboard({offertes, facturen, onGoto, onNew, onFactuur, onPlan, settin
       </div>}
       <div className="g2">
         {settings.dashboardWidgets?.recenteOffertes!==false&&<div className="card">
-          <div className="card-h"><div className="card-t">Recente offertes</div><button className="btn bgh btn-sm" onClick={()=>onGoto("offertes",null)}>Alle →</button></div>
-          {recOff.length===0?<div className="es"><div style={{fontSize:40,opacity:.2}}>📋</div><p style={{marginBottom:10}}>Nog geen offertes</p><button className="btn b2 btn-sm" onClick={onNew}>Maak eerste offerte</button></div>:(
-            recOff.map(o=>{
-              const t=calcTotals(o.lijnen||[]);
-              const inst=INST_TYPES.find(x=>x.id===o.installatieType);
-              return(
-                <div key={o.id} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 0",borderBottom:"1px solid #f1f5f9"}}>
-                  <div style={{width:34,height:34,borderRadius:7,background:inst?.bg||"#f1f5f9",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,flexShrink:0}}>{inst?.icon||"📋"}</div>
-                  <div style={{flex:1,minWidth:0}}>
-                    <div style={{fontWeight:600,fontSize:13,overflow:"hidden",whiteSpace:"nowrap",textOverflow:"ellipsis"}}>{o.klant?.naam||"—"}</div>
-                    <div style={{fontSize:11,color:"#94a3b8"}}>{o.nummer} · {fmtDate(o.aangemaakt)}</div>
-                  </div>
-                  <div style={{textAlign:"right",flexShrink:0}}>
-                    <div style={{fontWeight:700,fontSize:13}}>{fmtEuro(t.totaal)}</div>
-                    <StatusBadge status={o.status} type="off"/>
-                  </div>
+          <div className="card-h"><div className="card-t">Recente acties</div><button className="btn bgh btn-sm" onClick={()=>onGoto("offertes",null)}>Alle →</button></div>
+          {(()=>{
+            // Bouw activiteiten uit offertes + facturen, gesorteerd op datum
+            const acts = [
+              ...offertes.slice(0,20).flatMap(o => {
+                const items = [{ts:o.aangemaakt,type:"off",icon:"📋",txt:`Offerte ${o.nummer} aangemaakt`,sub:o.klant?.naam,status:o.status,id:o.id}];
+                if(o.status==="verstuurd") items.push({ts:o.verzondenOp||o.aangemaakt,type:"off",icon:"📤",txt:`${o.nummer} verstuurd`,sub:o.klant?.naam,status:o.status,id:o.id});
+                if(o.status==="goedgekeurd"||o.klantAkkoord) items.push({ts:o.klantAkkoordDatum||o.aangemaakt,type:"off",icon:"✅",txt:`${o.nummer} goedgekeurd`,sub:o.klant?.naam,status:"goedgekeurd",id:o.id});
+                if(o.status==="ingepland"&&o.planning) items.push({ts:o.planning.ingeplandOp||o.aangemaakt,type:"off",icon:"📅",txt:`Ingepland ${fmtDate(o.planning.datum)} om ${o.planning.tijd}`,sub:o.klant?.naam+` · ${o.nummer}`,status:"ingepland",id:o.id,highlight:true});
+                if(o.status==="afgewezen") items.push({ts:o.aangemaakt,type:"off",icon:"❌",txt:`${o.nummer} afgewezen`,sub:o.klant?.naam,status:"afgewezen",id:o.id});
+                return items;
+              }),
+              ...facturen.slice(0,20).flatMap(f => {
+                const items = [{ts:f.datum||f.aangemaakt,type:"fact",icon:"🧾",txt:`Factuur ${f.nummer}`,sub:f.klant?.naam,status:f.status,id:f.id}];
+                if(f.status==="betaald") items.push({ts:f.betaaldOp||f.datum,type:"fact",icon:"💶",txt:`${f.nummer} betaald`,sub:f.klant?.naam,status:"betaald",id:f.id});
+                return items;
+              })
+            ].sort((a,b)=>new Date(b.ts)-new Date(a.ts)).slice(0,8);
+            
+            if(!acts.length) return <div className="es"><div style={{fontSize:40,opacity:.2}}>📋</div><p style={{marginBottom:10}}>Nog geen activiteit</p><button className="btn b2 btn-sm" onClick={onNew}>Maak eerste offerte</button></div>;
+            return acts.map((a,i)=>(
+              <div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"7px 0",borderBottom:"1px solid #f1f5f9",cursor:"pointer",background:a.highlight?"#ecfeff":undefined,borderRadius:a.highlight?6:0,padding:a.highlight?"7px 8px":"7px 0"}} onClick={()=>onGoto(a.type==="off"?"offertes":"facturen",null)}>
+                <div style={{width:30,height:30,borderRadius:7,background:"#f0f4f8",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,flexShrink:0}}>{a.icon}</div>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{fontWeight:600,fontSize:12.5,overflow:"hidden",whiteSpace:"nowrap",textOverflow:"ellipsis"}}>{a.txt}</div>
+                  <div style={{fontSize:10.5,color:"#94a3b8"}}>{a.sub} · {fmtDate(a.ts)}</div>
                 </div>
-              );
-            })
-          )}
+                <StatusBadge status={a.status} type={a.type==="off"?"off":"fact"}/>
+              </div>
+            ));
+          })()}
         </div>}
         <div>
           {settings.dashboardWidgets?.openFacturen!==false&&<div className="card mb4">
@@ -2603,12 +2713,17 @@ function FacturenPage({facturen,settings,initFilter,onView,onEdit,onStatus,onBul
                       <div className="doc-act-btns">
                         <span className="doc-act-label">⚡ Acties:</span>
                         <button className="btn b2 btn-sm" onClick={()=>onView(f)}>👁 Bekijken</button>
-                        {onEdit&&<button className="btn bs btn-sm" onClick={()=>onEdit(f)}>✏️ Bewerken</button>}
-                        <button className="btn bs btn-sm" onClick={()=>onEmail(f)}>📧 Verzenden</button>
+                        {onEdit&&<button className="btn bs btn-sm" onClick={()=>{
+                          if(f.status!=="concept"){
+                            if(!window.confirm("Deze factuur is al verzonden. Wilt u toch bewerken?")) return;
+                          }
+                          onEdit(f);
+                        }}>{f.status!=="concept"?"🔒 Bewerken":"✏️ Bewerken"}</button>}
+                        <button className="btn bs btn-sm" onClick={()=>onEmail(f)}>📧 Verzenden klant</button>
+                        {emails.length>0&&<button className="btn bs btn-sm" onClick={()=>{onEmail(f);/* TODO: pre-fill boekhouder */onStatus(f.id,{status:"boekhouding",logActie:`📊 Verzonden naar boekhouder (${emails[0]})`});notify("📊 Naar boekhouder gemarkeerd");}}>📊 Verzenden boekhouder</button>}
                         <button className="btn bs btn-sm" onClick={()=>onView(f)} title="Opent document → druk Ctrl+P of klik 🖨">🖨 Afdrukken</button>
                         {f.status!=="betaald"&&<button className="btn bg btn-sm" onClick={()=>onBetaling(f)}>💶 Betaling registreren</button>}
                         {f.status!=="betaald"&&f.status!=="concept"&&<button className="btn bw btn-sm" onClick={()=>onAanmaning(f)}>🔔 Aanmaning sturen</button>}
-                        {emails.length>0&&<button className="btn bs btn-sm" onClick={()=>{onStatus(f.id,{status:"boekhouding",logActie:`📊 Verzonden naar boekhouder (${emails[0]})`});notify("Naar boekhouder gemarkeerd ✓");}}>📊 → Boekhouder</button>}
                         <button className="btn bs btn-sm" onClick={()=>onStatus(f.id,{status:"betaald",logActie:"✅ Betaald gemarkeerd"})}>✅ Betaald</button>
                         <button className="btn bgh btn-sm" onClick={()=>{if(window.confirm("Verwijderen?"))onDelete(f.id)}}>🗑</button>
                       </div>
@@ -2629,7 +2744,7 @@ function FacturenPage({facturen,settings,initFilter,onView,onEdit,onStatus,onBul
 }
 
 // ─── KLANTEN PAGE — LIST + PASSPORT ──────────────────────────────
-function KlantenPage({klanten,offertes,facturen,view,onEdit,onDelete}) {
+function KlantenPage({klanten,offertes,facturen,view,onEdit,onDelete,onNewOfferte,onNewFactuur}) {
   const [q,setQ]=useState("");
   const list=klanten.filter(k=>!q||(k.naam||"").toLowerCase().includes(q.toLowerCase())||(k.bedrijf||"").toLowerCase().includes(q.toLowerCase()))
     .sort((a,b)=>new Date(b.aangemaakt)-new Date(a.aangemaakt));
@@ -2676,8 +2791,10 @@ function KlantenPage({klanten,offertes,facturen,view,onEdit,onDelete}) {
                   <div className="klant-stat"><div className="klant-stat-v" style={{color:s.onbetaald>0?"#f59e0b":"#10b981",fontSize:12}}>{s.onbetaald>0?fmtEuro(s.onbetaald):"✓"}</div><div className="klant-stat-l">Open</div></div>
                 </div>
                 {s.hasVervallen&&<div style={{marginTop:8,padding:"4px 8px",background:"#fef2f2",border:"1px solid #fca5a5",borderRadius:5,fontSize:11,color:"#991b1b",fontWeight:600}}>🔴 Heeft vervallen factuur(en)</div>}
-                <div className="flex gap2" style={{marginTop:10}}>
-                  <button className="btn bs btn-sm" style={{flex:1}} onClick={()=>onEdit(k)}>✏️ Bewerken</button>
+                <div className="flex gap2" style={{marginTop:10,flexWrap:"wrap"}}>
+                  {onNewOfferte&&<button className="btn b2 btn-sm" style={{flex:1}} onClick={()=>onNewOfferte(k)}>📋 Offerte</button>}
+                  {onNewFactuur&&<button className="btn bs btn-sm" style={{flex:1}} onClick={()=>onNewFactuur(k)}>🧾 Factuur</button>}
+                  <button className="btn bs btn-sm" onClick={()=>onEdit(k)}>✏️</button>
                   <button className="btn bgh btn-sm" onClick={()=>{if(window.confirm("Verwijderen?"))onDelete(k.id)}}>🗑</button>
                 </div>
               </div>
@@ -2740,7 +2857,8 @@ async function fetchAIImageUrl(naam, merk) {
 
 function ProductenPage({producten,settings,onEdit,onDelete,onToggle,onEnrich,onDuplicate}) {
   const [q,setQ]=useState("");const [cat,setCat]=useState("alle");const [enriching,setEnriching]=useState(null);
-  const [prodView,setProdView]=useState(settings?.prodView||"tile");
+  const [prodView,setProdView_]=useState(()=>{try{return localStorage.getItem("billr_prodView")||"tile"}catch(_){return "tile"}});
+  const setProdView=(v)=>{setProdView_(v);try{localStorage.setItem("billr_prodView",v)}catch(_){}};
   const [sel,setSel]=useState(new Set());
   const [bulkPrijsPct,setBulkPrijsPct]=useState("");
   const [showBulkPrijs,setShowBulkPrijs]=useState(false);
@@ -2781,7 +2899,6 @@ function ProductenPage({producten,settings,onEdit,onDelete,onToggle,onEnrich,onD
             <button className="bulk-act-btn" onClick={doBulkDelete}>🗑 Verwijderen</button>
             <button className="bulk-act-btn" onClick={()=>setShowBulkPrijs(!showBulkPrijs)}>💰 Prijs %</button>
             <button className="bulk-act-btn" onClick={()=>setShowBulkCat(!showBulkCat)}>📁 Categorie</button>
-            <button className="bulk-act-btn" onClick={async()=>{for(const id of [...sel]){const p=producten.find(x=>x.id===id);if(p){setEnriching(id);try{await doEnrich(p);}catch(_){}setEnriching(null);}}setSel(new Set());}}>✨ AI Bulk</button>
           </div>
           {showBulkPrijs&&(
             <div style={{display:"flex",gap:6,alignItems:"center",width:"100%",marginTop:4}}>
@@ -2833,8 +2950,7 @@ function ProductenPage({producten,settings,onEdit,onDelete,onToggle,onEnrich,onD
                 <span style={{fontSize:11,color:p.btw===6?"#059669":"#2563eb",fontWeight:600}}>{p.btw}%</span>
               </div>
               <div style={{display:"flex",gap:4,marginTop:8}} onClick={e=>e.stopPropagation()}>
-                <button className="btn bs btn-sm" style={{flex:1,fontSize:10}} onClick={()=>doEnrich(p)} disabled={enriching===p.id}>{enriching===p.id?"⟳":"✨ AI"}</button>
-                <button className="btn bs btn-sm" style={{fontSize:10}} title="Dupliceren" onClick={()=>onDuplicate(p)}>📋</button>
+                <button className="btn bs btn-sm" style={{flex:1,fontSize:10}} title="Dupliceren" onClick={()=>onDuplicate(p)}>📋</button>
                 <button className="btn bs btn-sm" style={{fontSize:10}} onClick={()=>{if(window.confirm("Verwijderen?"))onDelete(p.id)}}>🗑</button>
               </div>
               {(p.technischeFiches||[]).length>0&&<div style={{fontSize:10,color:"#3b82f6",marginTop:4}}>📎 {p.technischeFiches.length} fiche(s)</div>}
@@ -2869,14 +2985,6 @@ function ProductenPage({producten,settings,onEdit,onDelete,onToggle,onEnrich,onD
             <td className="mob-hide"><span className="status-badge" style={{background:p.btw===6?"#f0fdf4":"#f0f4ff",color:p.btw===6?"#059669":"#2563eb"}}>{p.btw}%</span></td>
             <td className="mob-hide" style={{color:"#64748b",fontSize:12}}>{p.eenheid}</td>
             <td><div className="flex gap2" style={{flexWrap:"wrap"}}>
-              <button className="btn bs btn-sm" title="AI info ophalen (specs+beschrijving)" onClick={()=>doEnrich(p)} disabled={enriching===p.id}>{enriching===p.id?<span className="spin">⟳</span>:"✨ AI"}</button>
-              <button className="btn bs btn-sm" title="AI afbeelding ophalen" style={{fontSize:11}} disabled={enriching===p.id} onClick={async()=>{
-                setEnriching(p.id);
-                const url=await fetchAIImageUrl(p.naam,p.merk||"");
-                setEnriching(null);
-                if(url)onEnrich({...p,imageUrl:url});
-                else alert("Geen afbeelding gevonden. Vul de URL manueel in via het bewerk-formulier.");
-              }}>🖼 Beeld</button>
               <button className="btn bs btn-sm" onClick={()=>onEdit(p)}>✏️</button>
               <button className="btn bs btn-sm" title="Dupliceren" onClick={()=>onDuplicate(p)}>📋</button>
               <button className="btn bgh btn-sm" onClick={()=>{if(window.confirm("Verwijderen?"))onDelete(p.id)}}>🗑</button>
@@ -5117,46 +5225,41 @@ function ProductModal({prod,onSave,onClose,settings}) {
   return(
     <div className="mo"><div className="mdl mmd">
       <div className="mh"><div className="mt-m">{prod?.id?"Product bewerken":"Nieuw product"}</div><button className="xbtn" onClick={onClose}>×</button></div>
-      <div className="mb-body">
+      <div className="mb-body" style={{padding:"12px 16px"}}>
         <div className="fr2">
-          <div className="fg"><label className="fl">Productnaam *</label><input className="fc" value={form.naam} onChange={e=>set("naam",e.target.value)}/></div>
-          <div className="fg"><label className="fl">Merk</label><input className="fc" value={form.merk} onChange={e=>set("merk",e.target.value)} placeholder="Smappee, SMA, …"/></div>
+          <div className="fg" style={{marginBottom:8}}><label className="fl">Productnaam *</label><input className="fc" value={form.naam} onChange={e=>set("naam",e.target.value)}/></div>
+          <div className="fg" style={{marginBottom:8}}><label className="fl">Merk</label><input className="fc" value={form.merk} onChange={e=>set("merk",e.target.value)} placeholder="Smappee, SMA, …"/></div>
         </div>
-        <div className="fr2">
-          <div className="fg"><label className="fl">Categorie</label>
-            <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-              {cats.map(c=>{
-                const dynC=dynCats.find(x=>x.naam===c);
-                const sel=form.cat===c;
-                return(
-                  <button key={c} type="button" className={`btn btn-sm ${sel?"bp":"bs"}`}
-                    style={{background:sel?(dynC?.kleur||"#2563eb"):undefined,borderColor:sel?(dynC?.kleur||"#2563eb"):undefined}}
-                    onClick={()=>set("cat",c)}>
-                    {dynC?.icoon||"📦"} {c}
-                  </button>
-                );
-              })}
-              <input className="fc" placeholder="Nieuwe categorie…" style={{maxWidth:160,fontSize:12}} 
-                value={cats.includes(form.cat)?"":(form.cat==="Aangepast"?"":form.cat)}
-                onChange={e=>set("cat",e.target.value)}
-                onFocus={()=>{if(cats.includes(form.cat))set("cat","");}}
-              />
-            </div>
+        <div className="fg" style={{marginBottom:8}}><label className="fl">Categorie</label>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(120px,1fr))",gap:5}}>
+            {cats.map(c=>{
+              const dynC=dynCats.find(x=>x.naam===c);
+              const sel=form.cat===c;
+              return(
+                <button key={c} type="button" className={`btn btn-sm ${sel?"bp":"bs"}`}
+                  style={{background:sel?(dynC?.kleur||"#2563eb"):undefined,borderColor:sel?(dynC?.kleur||"#2563eb"):undefined,padding:"7px 10px",fontSize:12,justifyContent:"center"}}
+                  onClick={()=>set("cat",c)}>
+                  {dynC?.icoon||"📦"} {c}
+                </button>
+              );
+            })}
           </div>
-          <div className="fg"><label className="fl">Eenheid</label><select className="fc" value={form.eenheid} onChange={e=>set("eenheid",e.target.value)}>{["stuk","m","uur","dag","jaar","forfait"].map(u=><option key={u} value={u}>{u}</option>)}</select></div>
         </div>
-        <div className="fg"><label className="fl">Beschrijving</label><textarea className="fc" rows={2} value={form.omschr} onChange={e=>set("omschr",e.target.value)}/></div>
         <div className="fr2">
-          <div className="fg"><label className="fl">Prijs excl. BTW (€)</label><input type="number" className="fc" value={form.prijs} step="0.01" min={0} onChange={e=>set("prijs",Number(e.target.value))}/></div>
-          <div className="fg"><label className="fl">BTW tarief</label><select className="fc" value={form.btw} onChange={e=>set("btw",Number(e.target.value))}><option value={6}>6% (renovatie)</option><option value={21}>21% (standaard)</option></select></div>
+          <div className="fg" style={{marginBottom:8}}><label className="fl">Eenheid</label><select className="fc" value={form.eenheid} onChange={e=>set("eenheid",e.target.value)}>{["stuk","m","uur","dag","jaar","forfait"].map(u=><option key={u} value={u}>{u}</option>)}</select></div>
+          <div className="fg" style={{marginBottom:8}}><label className="fl">Beschrijving</label><input className="fc" value={form.omschr} onChange={e=>set("omschr",e.target.value)}/></div>
         </div>
-        <div className="fg"><label className="fl">Afbeelding URL</label>
+        <div className="fr2">
+          <div className="fg" style={{marginBottom:8}}><label className="fl">Prijs excl. BTW (€)</label><input type="number" className="fc" value={form.prijs} step="0.01" min={0} onChange={e=>set("prijs",Number(e.target.value))}/></div>
+          <div className="fg" style={{marginBottom:8}}><label className="fl">BTW tarief</label><select className="fc" value={form.btw} onChange={e=>set("btw",Number(e.target.value))}><option value={6}>6% (renovatie)</option><option value={21}>21% (standaard)</option></select></div>
+        </div>
+        <div className="fg" style={{marginBottom:8}}><label className="fl">Afbeelding URL</label>
           <div style={{display:"flex",gap:8,alignItems:"center"}}>
             <input className="fc" value={form.imageUrl} onChange={e=>set("imageUrl",e.target.value)} placeholder="https://…"/>
             {form.imageUrl&&<img src={form.imageUrl} alt="" style={{width:44,height:44,objectFit:"contain",borderRadius:5,background:"#f8fafc",border:"1px solid #e2e8f0",flexShrink:0}} onError={e=>{e.target.style.display="none"}}/>}
           </div>
         </div>
-        <div className="fg"><label className="fl">Technische specs (één per lijn)</label><textarea className="fc" rows={3} value={specsStr} onChange={e=>{setSpecsStr(e.target.value);set("specs",e.target.value.split("\n").filter(Boolean));}}/></div>
+        <div className="fg" style={{marginBottom:8}}><label className="fl">Technische specs (één per lijn)</label><textarea className="fc" rows={2} value={specsStr} onChange={e=>{setSpecsStr(e.target.value);set("specs",e.target.value.split("\n").filter(Boolean));}}/></div>
         <div className="fg">
           <label className="fl">📎 Technische fiche (PDF)</label>
           <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
@@ -6184,6 +6287,7 @@ function InstellingenPage({settings,setSettings,notify}) {
             <AccRow id="klant" title="Klantgegevens" icon="👤">
               <FG label="Positie op pagina"><PosBtn val={lyt.klant?.positie||"links"} onChange={v=>sl("klant","positie",v)}/></FG>
               <Sld label="Tekstgrootte" val={lyt.klant?.fontSize||12} min={8} max={16} unit="px" onChange={v=>sl("klant","fontSize",v)}/>
+              <Chk label="Label tonen ('Gefactureerd aan' / 'Opgemaakt voor')" val={lyt.klant?.toonLabel!==false} onChange={v=>sl("klant","toonLabel",v)}/>
               <div style={{fontWeight:600,fontSize:12,marginTop:8,marginBottom:4,color:"#64748b"}}>Velden weergeven</div>
               {[["naam","Klantnaam"],["bedrijf","Bedrijfsnaam"],["adres","Adres"],["gemeente","Gemeente/Postcode"],["btwnr","BTW-nummer"],["tel","Telefoonnummer"],["email","E-mailadres"]].map(([k,l])=>(
                 <Veld key={k} label={l} val={lyt.klant?.velden?.[k]!==false} onChange={v=>slv("klant",k,v)}/>
@@ -6197,6 +6301,9 @@ function InstellingenPage({settings,setSettings,notify}) {
                 <div><Chk label="Bedrijfsnaam vet" val={lyt.bedrijf?.naamVet!==false} onChange={v=>sl("bedrijf","naamVet",v)}/></div>
                 <Sld label="Bedrijfsnaam grootte" val={lyt.bedrijf?.naamFontSize||12} min={9} max={20} unit="px" onChange={v=>sl("bedrijf","naamFontSize",v)}/>
               </FR2>
+              <Chk label="Adresregel onder logo tonen (op offerte/factuur pagina)" val={lyt.bedrijf?.toonOnderLogo!==false} onChange={v=>sl("bedrijf","toonOnderLogo",v)}/>
+              <Chk label="Bevestigingslink tonen (offerte)" val={form.sjabloon?.toonBevestigingslink!==false} onChange={v=>set("sjabloon","toonBevestigingslink",v)}/>
+              <Chk label="Productpagina tonen (technische fiches)" val={form.sjabloon?.toonProductpagina!==false} onChange={v=>set("sjabloon","toonProductpagina",v)}/>
               <div style={{fontWeight:600,fontSize:12,marginTop:8,marginBottom:4,color:"#64748b"}}>Velden weergeven</div>
               {[["naam","Bedrijfsnaam"],["adres","Adres"],["gemeente","Gemeente"],["btwnr","BTW-nummer"],["iban","IBAN"],["tel","Telefoon"],["email","E-mail"]].map(([k,l])=>(
                 <Veld key={k} label={l} val={lyt.bedrijf?.velden?.[k]!==false} onChange={v=>slv("bedrijf",k,v)}/>
@@ -6315,7 +6422,7 @@ function InstellingenPage({settings,setSettings,notify}) {
           <div style={{display:"grid",gap:10}}>
             {[
               {key:'statistieken',label:'📈 Statistieken',desc:'4 tegels met kerngetallen (open offertes, facturen, omzet, conversie)'},
-              {key:'recenteOffertes',label:'📋 Recente Offertes',desc:'Laatste 5 offertes met status en bedrag'},
+              {key:'recenteOffertes',label:'📋 Recente Acties',desc:'Laatste activiteiten: offertes, facturen, planningen'},
               {key:'openFacturen',label:'💶 Openstaande Facturen',desc:'Facturen die nog betaald moeten worden'},
               {key:'goedgekeurdeOffertes',label:'✅ Goedgekeurde Offertes',desc:'Offertes die door klant zijn goedgekeurd (met Plan knop)'},
               {key:'snelleActies',label:'⚡ Snelle Acties',desc:'4 knoppen voor snel nieuwe offerte aanmaken per type'},
@@ -6398,11 +6505,11 @@ function InstellingenPage({settings,setSettings,notify}) {
                 <div className="fr2" style={{marginBottom:6}}>
                   <div className="fg" style={{marginBottom:0}}>
                     <label className="fl">Breedte: {form.sjabloon?.logoBreedte||140}px</label>
-                    <input type="range" min={40} max={280} value={form.sjabloon?.logoBreedte||140} onChange={e=>set("sjabloon","logoBreedte",+e.target.value)} style={{width:"100%"}}/>
+                    <input type="range" min={40} max={400} value={form.sjabloon?.logoBreedte||140} onChange={e=>set("sjabloon","logoBreedte",+e.target.value)} style={{width:"100%"}}/>
                   </div>
                   <div className="fg" style={{marginBottom:0}}>
                     <label className="fl">Hoogte: {form.sjabloon?.logoHoogte||52}px</label>
-                    <input type="range" min={20} max={100} value={form.sjabloon?.logoHoogte||52} onChange={e=>set("sjabloon","logoHoogte",+e.target.value)} style={{width:"100%"}}/>
+                    <input type="range" min={20} max={200} value={form.sjabloon?.logoHoogte||52} onChange={e=>set("sjabloon","logoHoogte",+e.target.value)} style={{width:"100%"}}/>
                   </div>
                 </div>
                 <div className="fg" style={{marginBottom:0}}>
