@@ -35,21 +35,18 @@ const sbSet = async (key, value, userId) => {
   try {
     const uid = userId || (await sb.auth.getUser()).data?.user?.id;
     if(!uid) { console.warn(`[Supabase] SET "${key}" skipped: no user id`); return false; }
-    // Timeout van 8s: als Supabase niet antwoordt, mislukken we graceful
-    const timeoutPromise = new Promise((_,reject) => setTimeout(()=>reject(new Error('timeout 8s')), 8000));
-    const upsertPromise = sb.from("user_data").upsert(
+    const { error } = await sb.from("user_data").upsert(
       { user_id: uid, key, value, updated_at: new Date().toISOString() },
       { onConflict: "user_id,key" }
     );
-    const { error } = await Promise.race([upsertPromise, timeoutPromise]);
     if(error) {
-      console.error(`[Supabase] SET "${key}" FAILED:`, error.message);
+      console.error(`[Supabase] SET "${key}" FAILED:`, error.message, error.details, error.hint);
       return false;
     }
     console.log(`☁️ Supabase SAVE: ${key}`);
     return true;
   } catch(e) {
-    console.error(`[Supabase] SET "${key}" exception:`, e.message);
+    console.error(`[Supabase] SET "${key}" exception:`, e);
     return false;
   }
 };
@@ -71,20 +68,17 @@ const sbGetAll = async (userId) => {
   if(!userId) return {};
   try {
     console.time("⏱ Supabase load");
-    // Timeout van 7s: als Supabase niet antwoordt, mislukken we graceful
-    const timeoutPromise = new Promise((_,reject) => setTimeout(()=>reject(new Error('timeout 7s')), 7000));
-    const queryPromise = sb.from("user_data").select("key,value").eq("user_id", userId);
-    const { data, error } = await Promise.race([queryPromise, timeoutPromise]);
+    const { data, error } = await sb.from("user_data").select("key,value").eq("user_id", userId);
     console.timeEnd("⏱ Supabase load");
     if(error) {
-      console.error("[Supabase] GET ALL failed:", error.message);
+      console.error("[Supabase] GET ALL failed:", error.message, error.details, error.hint);
       return {};
     }
     if(!data) return {};
     console.log(`☁️ Supabase LOAD: ${data.length} keys geladen`);
     return Object.fromEntries(data.map(r=>[r.key, r.value]));
   } catch(e) {
-    console.error("[Supabase] GET ALL exception:", e.message);
+    console.error("[Supabase] GET ALL exception:", e);
     return {};
   }
 };
@@ -1483,34 +1477,34 @@ export default function App() {
   const [planningModal, setPlanningModal] = useState(null);
   const [tijdModal, setTijdModal] = useState(null);
 
-  // ═══════════════════════════════════════════════════════════════
-  // DATA SYSTEEM — definitieve fix voor race condition
+  // ══════════════════════════════════════════════════════════════
+  // DATA SYSTEEM — definitieve fix
   //
-  // Probleem: setLoaded(true) vóór applyCloudData + geen timeout op
-  // Supabase = acties worden overschreven door late cloud response.
-  //
-  // Oplossing: dirtyKeys tracking
-  // - UI toont direct met localStorage (geen wachten)
-  // - Supabase laadt op achtergrond (max 7s timeout)
-  // - Elke actie markeer key als "dirty"
-  // - applyCloudData slaat dirty keys OVER → delete wint altijd
-  // ═══════════════════════════════════════════════════════════════
+  // Problemen opgelost:
+  // 1. 12 onnodige saves bij start: loadFromLS triggert useEffects,
+  //    fix = dataReady=false tijdens load, 300ms delay daarna
+  // 2. Race condition: cloud overschrijft user-acties
+  //    fix = dirtyKeys: user-acties markeren key, cloud slaat over
+  // 3. Mobiel verouderd: visibilitychange updatte alleen localStorage
+  //    fix = ook state updaten bij tab-switch
+  // ══════════════════════════════════════════════════════════════
   const dataReady = useRef(false);
   const supabaseVerified = useRef(false);
-  const dirtyKeys = useRef(new Set());   // keys gewijzigd tijdens cloud-laad
-  const cloudDone = useRef(false);       // true zodra cloud-laad klaar/gefaald
+  const dirtyKeys = useRef(new Set());
+  const cloudDone = useRef(false);
+  const saveTimers = useRef({});
+  const pendingSaves = useRef({});
 
   useEffect(()=>{
     let initDone = false;
 
-    const LS_KEYS    = ['b4_set','b4_kln','b4_prd','b4_off','b4_fct','b4_cn','b4_am','b4_bt','b4_ti','b4_do','b4_ga','b4_at'];
-    const LS_FB      = [INIT_SETTINGS,INIT_KLANTEN,INIT_PRODUCTS,[],[],[],[],[],[],[],[],{}];
-    const ALL_SET    = [setSettings,setKlanten,setProducten,setOffertes,setFacturen,setCreditnotas,setAanmaningen,setBetalingen,setTijdslots,setDossiers,setGaranties,setAcceptTokens];
-    const STRIP      = new Set(['b4_off','b4_fct','b4_prd']);
+    const LS_KEYS = ['b4_set','b4_kln','b4_prd','b4_off','b4_fct','b4_cn','b4_am','b4_bt','b4_ti','b4_do','b4_ga','b4_at'];
+    const LS_FB   = [INIT_SETTINGS,INIT_KLANTEN,INIT_PRODUCTS,[],[],[],[],[],[],[],[],{}];
+    const SETTERS = [setSettings,setKlanten,setProducten,setOffertes,setFacturen,setCreditnotas,setAanmaningen,setBetalingen,setTijdslots,setDossiers,setGaranties,setAcceptTokens];
 
-    const stripBase64 = (key, arr) => {
-      if(!STRIP.has(key)) return null;
-      return JSON.stringify((Array.isArray(arr)?arr:[]).map(item=>({
+    const lsStrip = (key, data) => {
+      if(!['b4_off','b4_fct','b4_prd'].includes(key)) return JSON.stringify(data);
+      return JSON.stringify((Array.isArray(data)?data:[]).map(item=>({
         ...item, technischeFiche:null,
         technischeFiches:(item.technischeFiches||[]).map(f=>({naam:f.naam})),
         lijnen:(item.lijnen||[]).map(l=>({...l,technischeFiche:null,
@@ -1522,7 +1516,7 @@ export default function App() {
       try {
         LS_KEYS.forEach((k,i)=>{
           const v=localStorage.getItem(k);
-          ALL_SET[i](v ? JSON.parse(v) : LS_FB[i]);
+          SETTERS[i](v ? JSON.parse(v) : LS_FB[i]);
         });
         console.log('✅ localStorage loaded');
       } catch(e){ console.warn('localStorage load failed:',e); }
@@ -1532,18 +1526,17 @@ export default function App() {
       LS_KEYS.forEach((k,i)=>{
         if(!allData[k]) return;
         if(dirtyKeys.current.has(k)){
-          // Gebruiker heeft deze key al gewijzigd → cloud mag NIET overschrijven
-          // Maar: sla wél de dirty versie op naar Supabase
-          console.log(`⏭ Skip cloud ${k} — gebruiker heeft wijzigingen`);
+          // Gebruiker wijzigde deze key tijdens laden → cloud mag NIET overschrijven
+          // Sla dirty versie op naar Supabase
           const lv = localStorage.getItem(k);
           if(lv && userId) pendingSaves.current[k] = {json:lv, userId};
+          console.log(`⏭ Skip cloud ${k} — gebruiker heeft wijzigingen`);
           return;
         }
         try{
           const cloud = JSON.parse(allData[k]);
-          ALL_SET[i](cloud);
-          const lsStr = stripBase64(k, cloud) || allData[k];
-          try{ localStorage.setItem(k, lsStr); }catch(_){}
+          SETTERS[i](cloud);
+          try{ localStorage.setItem(k, lsStrip(k,cloud)); }catch(_){}
         }catch(e){ console.warn(`Parse ${k}:`,e); }
       });
       console.log(`☁️ Cloud data toegepast`);
@@ -1552,6 +1545,7 @@ export default function App() {
     const loadUserData = async (u) => {
       if(initDone) return;
       initDone = true;
+      dataReady.current = false; // BLOKKEER saves tijdens laden
       cloudDone.current = false;
       dirtyKeys.current.clear();
 
@@ -1559,33 +1553,46 @@ export default function App() {
 
       // STAP 1: localStorage → UI direct (geen wachten)
       loadFromLS();
-      dataReady.current = true;  // saves mogen al starten, worden als dirty gemarkeerd
       setLoaded(true);
+
+      // STAP 2: 300ms wachten zodat React alle state-updates van loadFromLS verwerkt
+      // en de useEffects firen met dataReady=false → geen onnodige saves
+      await new Promise(r => setTimeout(r, 300));
+      dataReady.current = true; // Nu pas mogen saves starten (gebruikersacties)
       console.log('✅ UI actief — Supabase laadt achtergrond...');
 
-      // STAP 2: Supabase op achtergrond (sbGetAll heeft al 7s timeout ingebouwd)
+      // STAP 3: Supabase op achtergrond laden (sbGetAll heeft timeout ingebouwd)
       try {
-        const allData = await sbGetAll(u.id);
+        const allData = await Promise.race([
+          sbGetAll(u.id),
+          new Promise((_,rej) => setTimeout(()=>rej(new Error('timeout 15s')), 15000))
+        ]);
         if(allData && Object.keys(allData).length > 0){
           supabaseVerified.current = true;
           applyCloudData(allData, u.id);
         } else {
           supabaseVerified.current = true;
-          console.log('☁️ Supabase leeg/timeout — localStorage data actief');
+          console.log('☁️ Supabase leeg — localStorage data actief');
         }
       } catch(e){
-        console.warn('⚠️ Cloud load mislukt:',e.message);
+        console.warn('⚠️ Cloud load mislukt/timeout:',e.message,'— localStorage actief');
       }
 
       cloudDone.current = true;
-      console.log('✅ Cloud sync klaar');
       dirtyKeys.current.clear();
+      console.log('✅ Cloud sync klaar');
 
-      // Flush dirty saves die wachtten op cloud-load
-      Object.keys(pendingSaves.current).forEach(k=>{
-        const p = pendingSaves.current[k];
-        if(p) sbSet(k, p.json, p.userId).then(ok=>{ if(ok) delete pendingSaves.current[k]; });
-      });
+      // Flush dirty saves (user-acties tijdens cloud-load)
+      const toFlush = Object.keys(pendingSaves.current);
+      if(toFlush.length > 0){
+        console.log(`💾 Flushing ${toFlush.length} pending saves...`);
+        toFlush.forEach(k=>{
+          const p = pendingSaves.current[k];
+          if(p) sbSet(k, p.json, p.userId).then(ok=>{
+            if(ok) delete pendingSaves.current[k];
+          });
+        });
+      }
     };
 
     sb.auth.getSession()
@@ -1599,7 +1606,7 @@ export default function App() {
       if(event==="SIGNED_IN" && session?.user && !initDone){
         await loadUserData(session.user);
       } else if(event==="SIGNED_OUT"){
-        initDone=false; cloudDone.current=false; dataReady.current=false;
+        initDone=false; dataReady.current=false; cloudDone.current=false;
         supabaseVerified.current=false; dirtyKeys.current.clear();
         setUser(null); loadFromLS(); dataReady.current=true; setLoaded(true);
       }
@@ -1651,19 +1658,19 @@ export default function App() {
       lastSyncRef.current = Date.now();
       console.log("📱 Tab sync...");
       try {
-        const allData = await sbGetAll(user.id); // heeft al 7s timeout
+        const allData = await Promise.race([
+          sbGetAll(user.id),
+          new Promise((_,rej) => setTimeout(()=>rej(new Error('timeout')), 10000))
+        ]);
         if(!allData || !Object.keys(allData).length) return;
-        // Update state (fix mobiel: toonde alleen localStorage, niet cloud)
-        LS_KEYS_REF.forEach((k,i)=>{
+        const LS_KEYS2 = ['b4_set','b4_kln','b4_prd','b4_off','b4_fct','b4_cn','b4_am','b4_bt','b4_ti','b4_do','b4_ga','b4_at'];
+        const SET2 = [setSettings,setKlanten,setProducten,setOffertes,setFacturen,setCreditnotas,setAanmaningen,setBetalingen,setTijdslots,setDossiers,setGaranties,setAcceptTokens];
+        LS_KEYS2.forEach((k,i)=>{
           if(!allData[k] || pendingSaves.current[k]) return;
-          try{
-            const cloud = JSON.parse(allData[k]);
-            ALL_SET_REF[i](cloud);
-            try{ localStorage.setItem(k, allData[k]); }catch(_){}
-          }catch(_){}
+          try{ const c=JSON.parse(allData[k]); SET2[i](c); localStorage.setItem(k,allData[k]); }catch(_){}
         });
-        console.log("📱 ✓ Sync klaar");
-      } catch(e){ console.warn("📱 Sync mislukt:",e); }
+        console.log("📱 ✓ Sync klaar — state bijgewerkt");
+      } catch(e){ console.warn("📱 Sync mislukt:",e.message); }
     };
     document.addEventListener("visibilitychange",handler);
     return ()=>document.removeEventListener("visibilitychange",handler);
@@ -1674,19 +1681,16 @@ export default function App() {
     if(window.emailjs) window.emailjs.init(settings?.email?.emailjsPublicKey||"04zsVAk5imDpo-8GJ");
   },[settings?.email?.emailjsPublicKey]);
 
-  // ═══ SAVE SYSTEEM ═══
-  const saveTimers = useRef({});
-  const pendingSaves = useRef({});
-
-  // Ref-versies van setters voor gebruik in visibilitychange (buiten closure)
-  const LS_KEYS_REF = ['b4_set','b4_kln','b4_prd','b4_off','b4_fct','b4_cn','b4_am','b4_bt','b4_ti','b4_do','b4_ga','b4_at'];
-  const ALL_SET_REF = [setSettings,setKlanten,setProducten,setOffertes,setFacturen,setCreditnotas,setAanmaningen,setBetalingen,setTijdslots,setDossiers,setGaranties,setAcceptTokens];
-
+  // ══════════════════════════════════════════════════════════════
+  // saveKey: localStorage INSTANT + Supabase debounced 200ms
+  // dirtyKeys: markeer key zodat cloud-load niet overschrijft
+  // ══════════════════════════════════════════════════════════════
   const saveKey = useCallback(async (key, val) => {
-    if(!dataReady.current) return;
+    if(!dataReady.current) return; // Geblokkeerd tijdens 300ms initieel laden
+
     const json = JSON.stringify(val);
 
-    // Markeer als dirty zodat cloud-load deze key niet overschrijft
+    // Markeer als dirty: cloud mag deze key niet overschrijven
     if(!cloudDone.current) dirtyKeys.current.add(key);
 
     // localStorage INSTANT
@@ -1706,32 +1710,25 @@ export default function App() {
       localStorage.setItem(key, lsJson);
     }catch(e){ console.warn(`localStorage "${key}" failed:`,e); }
 
-    // Supabase debounced 200ms
+    // Supabase: debounced 200ms, altijd met LAATSTE waarde
     if(user){
       pendingSaves.current[key] = {json, userId: user.id};
       clearTimeout(saveTimers.current[key]);
       saveTimers.current[key] = setTimeout(async()=>{
-        const p = pendingSaves.current[key];
-        if(!p) return;
-        // Wacht max 8s als cloud-load nog bezig is (cloudDone false)
-        if(!cloudDone.current){
-          let w=0;
-          while(!cloudDone.current && w<8000){ await new Promise(r=>setTimeout(r,250)); w+=250; }
-        }
-        const latest = pendingSaves.current[key]; // gebruik altijd LAATSTE versie
+        const latest = pendingSaves.current[key];
         if(!latest) return;
         const ok = await sbSet(key, latest.json, latest.userId);
         if(ok){
           if(pendingSaves.current[key]?.json===latest.json) delete pendingSaves.current[key];
         } else {
-          // Retry 5s later met de dan-actuele waarde
+          // Retry na 8s met dan-actuele waarde
           setTimeout(async()=>{
             const rp = pendingSaves.current[key];
             if(!rp) return;
             const rok = await sbSet(key, rp.json, rp.userId);
             if(rok && pendingSaves.current[key]?.json===rp.json) delete pendingSaves.current[key];
             else if(!rok) console.error(`❌ Save "${key}" mislukt — staat in localStorage`);
-          },5000);
+          }, 8000);
         }
       }, 200);
     }
@@ -6336,15 +6333,26 @@ function InstellingenPage({settings,setSettings,notify}) {
             <button className="btn b2 btn-sm" onClick={()=>{const n={id:uid(),naam:"Nieuw",icoon:"📦",kleur:"#475569"};setForm(p=>({...p,productCats:[...(p.productCats||[]),n]}));}}>＋ Toevoegen</button>
           </div>
           <div style={{display:"flex",flexDirection:"column",gap:8}}>
-            {(form.productCats||[]).map((cat,i)=>(
+            {(form.productCats||[]).map((cat,i)=>{
+              const total=(form.productCats||[]).length;
+              const move=(from,to)=>setForm(p=>{const a=[...(p.productCats||[])];const [x]=a.splice(from,1);a.splice(to,0,x);return{...p,productCats:a};});
+              return(
               <div key={cat.id} style={{display:"flex",gap:8,alignItems:"center",background:"#f8fafc",borderRadius:8,padding:"8px 10px",border:"1px solid var(--bdr)"}}>
+                <div style={{display:"flex",flexDirection:"column",gap:2,flexShrink:0}}>
+                  <button onClick={()=>i>0&&move(i,i-1)} disabled={i===0} title="Omhoog"
+                    style={{width:22,height:22,border:"1.5px solid #e2e8f0",borderRadius:4,background:i===0?"#f1f5f9":"#fff",cursor:i===0?"default":"pointer",fontSize:11,display:"flex",alignItems:"center",justifyContent:"center",opacity:i===0?.3:1,color:"#475569",lineHeight:1}}>▲</button>
+                  <button onClick={()=>i<total-1&&move(i,i+1)} disabled={i===total-1} title="Omlaag"
+                    style={{width:22,height:22,border:"1.5px solid #e2e8f0",borderRadius:4,background:i===total-1?"#f1f5f9":"#fff",cursor:i===total-1?"default":"pointer",fontSize:11,display:"flex",alignItems:"center",justifyContent:"center",opacity:i===total-1?.3:1,color:"#475569",lineHeight:1}}>▼</button>
+                </div>
+                <span style={{fontSize:11,color:"#94a3b8",fontWeight:700,minWidth:14,textAlign:"center"}}>{i+1}</span>
                 <input type="text" value={cat.icoon} onChange={e=>setForm(p=>({...p,productCats:p.productCats.map((c,j)=>j===i?{...c,icoon:e.target.value}:c)}))} style={{width:44,textAlign:"center",fontSize:18,border:"1.5px solid #e2e8f0",borderRadius:6,padding:"4px 6px"}} placeholder="⚡"/>
                 <input className="fc" style={{flex:1}} value={cat.naam} onChange={e=>setForm(p=>({...p,productCats:p.productCats.map((c,j)=>j===i?{...c,naam:e.target.value}:c)}))} placeholder="Categorienaam"/>
                 <input type="color" value={cat.kleur||"#475569"} onChange={e=>setForm(p=>({...p,productCats:p.productCats.map((c,j)=>j===i?{...c,kleur:e.target.value}:c)}))} style={{width:36,height:36,border:"1.5px solid #e2e8f0",borderRadius:6,cursor:"pointer",padding:2}}/>
                 <div style={{background:cat.kleur||"#475569",color:"#fff",borderRadius:6,padding:"4px 10px",fontSize:12,fontWeight:700,minWidth:80,textAlign:"center"}}>{cat.icoon} {cat.naam}</div>
                 <button className="btn bgh btn-sm" onClick={()=>setForm(p=>({...p,productCats:p.productCats.filter((_,j)=>j!==i)}))}>🗑</button>
               </div>
-            ))}
+              );
+            })}
           </div>
           <div style={{fontSize:12,color:"#94a3b8",marginTop:8}}>Deze categorieën worden gebruikt als tegels in de productcatalogus en bij het aanmaken van offertes.</div>
         </div>
@@ -6356,15 +6364,26 @@ function InstellingenPage({settings,setSettings,notify}) {
             <button className="btn b2 btn-sm" onClick={()=>{const n={id:uid(),l:"Nieuw type",icon:"📋",c:"#475569",bg:"#f8fafc"};setForm(p=>({...p,instTypes:[...(p.instTypes||INST_TYPES_DEFAULT),n]}));}}>＋ Toevoegen</button>
           </div>
           <div style={{display:"flex",flexDirection:"column",gap:8}}>
-            {(form.instTypes||INST_TYPES_DEFAULT).map((t,i)=>(
+            {(form.instTypes||INST_TYPES_DEFAULT).map((t,i)=>{
+              const total=(form.instTypes||INST_TYPES_DEFAULT).length;
+              const move=(from,to)=>setForm(p=>{const a=[...(p.instTypes||INST_TYPES_DEFAULT)];const [x]=a.splice(from,1);a.splice(to,0,x);return{...p,instTypes:a};});
+              return(
               <div key={t.id} style={{display:"flex",gap:8,alignItems:"center",background:"#f8fafc",borderRadius:8,padding:"8px 10px",border:"1px solid var(--bdr)"}}>
+                <div style={{display:"flex",flexDirection:"column",gap:2,flexShrink:0}}>
+                  <button onClick={()=>i>0&&move(i,i-1)} disabled={i===0} title="Omhoog"
+                    style={{width:22,height:22,border:"1.5px solid #e2e8f0",borderRadius:4,background:i===0?"#f1f5f9":"#fff",cursor:i===0?"default":"pointer",fontSize:11,display:"flex",alignItems:"center",justifyContent:"center",opacity:i===0?.3:1,color:"#475569",lineHeight:1}}>▲</button>
+                  <button onClick={()=>i<total-1&&move(i,i+1)} disabled={i===total-1} title="Omlaag"
+                    style={{width:22,height:22,border:"1.5px solid #e2e8f0",borderRadius:4,background:i===total-1?"#f1f5f9":"#fff",cursor:i===total-1?"default":"pointer",fontSize:11,display:"flex",alignItems:"center",justifyContent:"center",opacity:i===total-1?.3:1,color:"#475569",lineHeight:1}}>▼</button>
+                </div>
+                <span style={{fontSize:11,color:"#94a3b8",fontWeight:700,minWidth:14,textAlign:"center"}}>{i+1}</span>
                 <input type="text" value={t.icon} onChange={e=>setForm(p=>({...p,instTypes:(p.instTypes||INST_TYPES_DEFAULT).map((x,j)=>j===i?{...x,icon:e.target.value}:x)}))} style={{width:44,textAlign:"center",fontSize:18,border:"1.5px solid #e2e8f0",borderRadius:6,padding:"4px 6px"}}/>
                 <input className="fc" style={{flex:1}} value={t.l} onChange={e=>setForm(p=>({...p,instTypes:(p.instTypes||INST_TYPES_DEFAULT).map((x,j)=>j===i?{...x,l:e.target.value}:x)}))} placeholder="Type naam"/>
                 <input type="color" value={t.c||"#475569"} onChange={e=>setForm(p=>({...p,instTypes:(p.instTypes||INST_TYPES_DEFAULT).map((x,j)=>j===i?{...x,c:e.target.value,bg:e.target.value+"22"}:x)}))} style={{width:36,height:36,border:"1.5px solid #e2e8f0",borderRadius:6,cursor:"pointer",padding:2}}/>
                 <div style={{background:t.bg||"#f8fafc",border:`2px solid ${t.c||"#475569"}`,color:t.c,borderRadius:8,padding:"5px 10px",fontSize:13,fontWeight:700,minWidth:120,textAlign:"center"}}>{t.icon} {t.l}</div>
                 <button className="btn bgh btn-sm" onClick={()=>setForm(p=>({...p,instTypes:(p.instTypes||INST_TYPES_DEFAULT).filter((_,j)=>j!==i)}))}>🗑</button>
               </div>
-            ))}
+              );
+            })}
           </div>
           <div style={{fontSize:12,color:"#94a3b8",marginTop:8}}>Installatietypes verschijnen als selecteerbare tegels bij het aanmaken van een offerte.</div>
         </div>
