@@ -128,40 +128,6 @@ const genOGM = (nr) => {
 
 const fmtPct = n => Number(n||0).toFixed(1).replace(".",",") + "%";
 
-// Fix voor timezone-verschuiving: parse datum als lokale tijd (niet UTC)
-const parseDateLocal = (d) => {
-  if(!d) return new Date();
-  const parts = d.split('-').map(Number);
-  return new Date(parts[0], parts[1]-1, parts[2]);
-};
-const fmtDatumLang = (d) => {
-  if(!d) return '';
-  return parseDateLocal(d).toLocaleDateString("nl-BE", {
-    weekday:"long", day:"numeric", month:"long", year:"numeric"
-  });
-};
-
-// Voeg afspraak toe aan agenda (localStorage voor planner.html)
-const addToAgenda = (event) => {
-  try {
-    const key = 'billr_agenda_events';
-    const existing = JSON.parse(localStorage.getItem(key) || '[]');
-    const filtered = existing.filter(e => e.offerteId !== event.offerteId);
-    const newEvent = {
-      ...event,
-      id: event.id || (Date.now().toString(36) + Math.random().toString(36).slice(2,6)),
-      aangemaakt: new Date().toISOString()
-    };
-    filtered.push(newEvent);
-    localStorage.setItem(key, JSON.stringify(filtered));
-    console.log('📅 Afspraak toegevoegd aan agenda:', newEvent.title);
-    return newEvent;
-  } catch(e) {
-    console.warn('addToAgenda failed:', e);
-    return null;
-  }
-};
-
 // ─── KBO & PEPPOL INTEGRATIES ─────────────────────────────────────────
 // KBO Lookup - BTW validatie + Billit PEPPOL check
 // CBE API verwijderd (CORS geblokkeerd vanuit browser)
@@ -485,14 +451,14 @@ Met formele groeten`},
 // ─── STATUS CONFIG WITH ICONS
 // ──────────────────────────────────────
 const OFF_STATUS = {
-  concept:           {l:"Concept",              c:"#64748b",bg:"#f1f5f9",   icon:"📝"},
-  verstuurd:         {l:"Verstuurd",             c:"#3b82f6",bg:"#eff6ff",   icon:"📤"},
-  afgedrukt:         {l:"Afgedrukt",             c:"#8b5cf6",bg:"#f5f3ff",   icon:"🖨️"},
-  goedgekeurd:       {l:"Goedgekeurd",           c:"#10b981",bg:"#f0fdf4",   icon:"✅"},
-  planning_voorstel: {l:"Datum voorgesteld",     c:"#2563eb",bg:"#eff6ff",   icon:"📬"},
-  ingepland:         {l:"Ingepland",             c:"#0891b2",bg:"#ecfeff",   icon:"📅"},
-  afgewezen:         {l:"Afgewezen",             c:"#ef4444",bg:"#fef2f2",   icon:"❌"},
-  gefactureerd:      {l:"Gefactureerd",          c:"#f59e0b",bg:"#fffbeb",   icon:"🧾"},
+  concept:      {l:"Concept",         c:"#64748b",bg:"#f1f5f9",   icon:"📝"},
+  verstuurd:    {l:"Verstuurd",        c:"#3b82f6",bg:"#eff6ff",   icon:"📤"},
+  afgedrukt:    {l:"Afgedrukt",        c:"#8b5cf6",bg:"#f5f3ff",   icon:"🖨️"},
+  goedgekeurd:  {l:"Goedgekeurd",      c:"#10b981",bg:"#f0fdf4",   icon:"✅"},
+  ingepland:    {l:"Ingepland",        c:"#0891b2",bg:"#ecfeff",   icon:"📅"},
+  ingepland:    {l:"Ingepland",        c:"#8b5cf6",bg:"#f5f3ff",   icon:"📅"},
+  afgewezen:    {l:"Afgewezen",        c:"#ef4444",bg:"#fef2f2",   icon:"❌"},
+  gefactureerd: {l:"Gefactureerd",     c:"#f59e0b",bg:"#fffbeb",   icon:"🧾"},
 };
 const FACT_STATUS = {
   concept:      {l:"Concept",          c:"#64748b",bg:"#f1f5f9",   icon:"📝"},
@@ -1515,11 +1481,15 @@ export default function App() {
   // Voorkomt dat lege initiële state de opgeslagen data overschrijft
   const dataReady = useRef(false);
   const supabaseVerified = useRef(false); // true = we weten dat Supabase werkt voor deze user
+  const [loadingMsg, setLoadingMsg] = useState("Opstarten...");
+
+  // Module-level guard: voorkomt dubbele init door React StrictMode of dubbele auth events
+  // (verklaart de "Timer already exists" warning in de console)
+  const initGuard = useRef(false);
 
   useEffect(()=>{
-    let dataLoaded = false;
 
-    // localStorage load helper — ALTIJD beschikbaar als instant cache
+    // localStorage load helper — laadt data in state ZONDERsetLoaded(true)
     const loadFromLS = () => {
       try {
         const get = (k, fb) => {
@@ -1538,22 +1508,19 @@ export default function App() {
         setDossiers(get('b4_do', []));
         setGaranties(get('b4_ga', []));
         setAcceptTokens(get('b4_at', {}));
-        console.log('✅ localStorage loaded (instant cache)');
+        console.log('✅ localStorage loaded');
       } catch(e) {
         console.warn('localStorage load failed:', e);
       }
     };
 
     const applyCloudData = (allData) => {
-      // SUPABASE = AUTORITEIT als je ingelogd bent
-      // localStorage is alleen een snelle cache voor eerste render
       const parse = (key, fallback) => {
         try { return allData[key] ? JSON.parse(allData[key]) : fallback; }
         catch(_) { return fallback; }
       };
-      
       const apply = (key, setter, fallback) => {
-        if(!allData[key]) return; // Geen cloud data voor deze key → localStorage behouden
+        if(!allData[key]) return;
         const cloud = parse(key, fallback);
         setter(cloud);
         // Sync localStorage cache — strip base64 om quota te voorkomen
@@ -1569,9 +1536,8 @@ export default function App() {
             localStorage.setItem(key, allData[key]);
           }
         } catch(_){}
-        console.log(`  ☁️→ ${key}: cloud data geladen${Array.isArray(cloud) ? ` (${cloud.length} items)` : ''}`);
+        console.log(`  ☁️→ ${key}: ${Array.isArray(parse(key,[])) ? parse(key,[]).length+' items' : 'geladen'}`);
       };
-      
       apply("b4_set", setSettings, INIT_SETTINGS);
       apply("b4_kln", setKlanten, INIT_KLANTEN);
       apply("b4_prd", setProducten, INIT_PRODUCTS);
@@ -1587,40 +1553,64 @@ export default function App() {
     };
 
     const loadUserData = async (u) => {
-      if(dataLoaded) return;
-      dataLoaded = true;
-      dataReady.current = false; // BLOKEER saves tot cloud geladen
-      
+      // ══ GUARD: voorkomt dubbele init (StrictMode / dubbele auth events) ══
+      if(initGuard.current) {
+        console.log("⏭ loadUserData: al bezig, overgeslagen");
+        return;
+      }
+      initGuard.current = true;
+      dataReady.current = false;
+
       const appUser = { id: u.id, email: u.email, naam: u.user_metadata?.naam || u.email.split("@")[0], rol: "admin" };
       setUser(appUser);
 
-      // STAP 1: localStorage = instant UI (cache)
+      // STAP 1: localStorage in state laden (snel, geen UI tonen nog)
+      setLoadingMsg("Lokale data laden...");
       loadFromLS();
-      setLoaded(true);
 
-      // STAP 2: Supabase laden — WACHT gewoon (user ziet al data uit cache)
-      // Geen timeout: beter 20s wachten dan data kwijtraken
-      try {
-        console.log("☁️ Supabase laden (geen timeout — wacht op antwoord)...");
-        const allData = await sbGetAll(u.id);
-        const keyCount = allData ? Object.keys(allData).length : 0;
+      // STAP 2: Supabase laden — UI wordt pas getoond NA cloud sync
+      // Dit voorkomt de race condition waarbij gebruiker data verwijdert
+      // terwijl applyCloudData nog onderweg is
+      setLoadingMsg("Synchroniseren met cloud...");
+      console.log("☁️ Supabase laden...");
 
-        if(allData && keyCount > 0) {
+      // Safety timeout: na 10s toch starten met localStorage data
+      let cloudLoaded = false;
+      const timeoutId = setTimeout(() => {
+        if(!cloudLoaded) {
+          console.warn("⚠️ Supabase timeout (10s) — UI tonen met localStorage data");
           supabaseVerified.current = true;
-          console.log(`☁️ Supabase: ${keyCount} keys geladen — cloud data actief`);
+          dataReady.current = true;
+          setLoadingMsg("Gereed (offline modus)");
+          setLoaded(true);
+        }
+      }, 10000);
+
+      try {
+        const allData = await sbGetAll(u.id);
+        cloudLoaded = true;
+        clearTimeout(timeoutId);
+
+        if(allData && Object.keys(allData).length > 0) {
+          supabaseVerified.current = true;
+          console.log(`☁️ Supabase: ${Object.keys(allData).length} keys — cloud data toepassen`);
+          setLoadingMsg("Data toepassen...");
           applyCloudData(allData);
         } else {
-          console.log("☁️ Supabase leeg — localStorage cache blijft, saves starten");
+          console.log("☁️ Supabase leeg — localStorage data blijft");
           supabaseVerified.current = true;
         }
       } catch(e) {
+        cloudLoaded = true;
+        clearTimeout(timeoutId);
         console.warn("⚠️ Supabase load mislukt:", e.message, "— localStorage actief");
       }
 
-      // NU pas saves toestaan (cloud is geladen OF gefaald)
-      await new Promise(r => setTimeout(r, 300));
+      // Kleine pauze zodat state updates verwerkt zijn voor saves beginnen
+      await new Promise(r => setTimeout(r, 150));
       dataReady.current = true;
-      console.log("✅ dataReady = true — saves toegestaan");
+      setLoaded(true);
+      console.log("✅ dataReady = true — UI actief, saves toegestaan");
     };
 
     // Sessie check
@@ -1640,18 +1630,19 @@ export default function App() {
 
     // Auth state listener
     const { data: { subscription } } = sb.auth.onAuthStateChange(async (event, session) => {
-      if(event === "SIGNED_IN" && session?.user && !dataLoaded) {
+      if(event === "SIGNED_IN" && session?.user && !initGuard.current) {
         await loadUserData(session.user);
       } else if(event === "SIGNED_OUT") {
-        dataLoaded = false;
+        initGuard.current = false;
         dataReady.current = false;
         supabaseVerified.current = false;
         setUser(null);
         loadFromLS();
         dataReady.current = true;
         setLoaded(true);
-      } else if(event === "TOKEN_REFRESHED" && session?.user && !dataLoaded) {
-        await loadUserData(session.user);
+      } else if(event === "TOKEN_REFRESHED") {
+        // Token refresh: GEEN herlaad van data, alleen supabase client bijwerken
+        console.log("🔄 Token vernieuwd — geen herlaad nodig");
       }
     });
 
@@ -1693,113 +1684,27 @@ export default function App() {
     return () => { clearTimeout(timer); clearInterval(interval); };
   },[user, loaded]);
 
-  // ═══ POLL PLANNING RESPONSES: check of klant datum heeft bevestigd ═══
-  useEffect(()=>{
-    if(!user || !loaded) return;
-    const checkPlanningResponses = async () => {
-      try {
-        const {data:responses} = await sb.from('planning_responses')
-          .select('*').not('response','is',null)
-          .order('submitted_at',{ascending:false}).limit(50);
-        if(!responses || responses.length===0) return;
-        let changed = false;
-        setOffertes(prev => {
-          const updated = prev.map(o => {
-            if(!o.planning?.token) return o;
-            const resp = responses.find(r =>
-              r.token === o.planning.token && !o.planning.clientResponse
-            );
-            if(!resp) return o;
-            changed = true;
-            if(resp.response === 'akkoord') {
-              // Klant akkoord: voeg toe aan agenda + status ingepland
-              addToAgenda({
-                offerteId: o.id,
-                title: `Installatie ${o.nummer} — ${o.klant?.naam}`,
-                date: o.planning.datum,
-                time: o.planning.tijd,
-                duration: parseInt(o.planning.duur||4)*60,
-                location: `${o.klant?.adres||''}, ${o.klant?.gemeente||''}`,
-                offerteNummer: o.nummer,
-                klantNaam: o.klant?.naam,
-                klantTel: o.klant?.tel||'',
-                klantEmail: o.klant?.email||'',
-                type: 'installatie',
-                color: '#10b981'
-              });
-              // Stuur bevestigingsmail
-              const bed = settings?.bedrijf||{};
-              const dc = settings?.sjabloon?.accentKleur||settings?.thema?.kleur||'#1a2e4a';
-              const ejCfg = settings?.email||{};
-              if(window.emailjs && o.klant?.email && ejCfg.emailjsServiceId) {
-                const bevestigHtml = buildBevestigingHtml(o, bed, dc);
-                window.emailjs.send(
-                  ejCfg.emailjsServiceId||'service_qrkvr0d',
-                  ejCfg.emailjsTemplateOfferte||'template_5nckw9f',
-                  {
-                    to_email: o.klant.email,
-                    to_name: o.klant?.naam||'',
-                    from_name: bed.naam||'',
-                    reply_to: bed.email||'',
-                    subject: `✅ Installatie bevestigd — ${o.nummer}`,
-                    html_body: bevestigHtml,
-                    message: bevestigHtml
-                  }
-                ).catch(e=>console.warn('Bevestigingsmail mislukt:', e));
-              }
-              return {
-                ...o,
-                status: 'ingepland',
-                planning: {
-                  ...o.planning,
-                  clientResponse: 'akkoord',
-                  bevestigdOp: resp.submitted_at,
-                  status: 'bevestigd'
-                },
-                log: [...(o.log||[]), {
-                  ts: resp.submitted_at,
-                  actie: `✅ Klant bevestigd installatie op ${fmtDatumLang(o.planning.datum)} om ${o.planning.tijd}`
-                }]
-              };
-            } else {
-              // Klant stelt andere datum voor
-              return {
-                ...o,
-                planning: {
-                  ...o.planning,
-                  clientResponse: 'alternatief',
-                  alternativeDatum: resp.alternative_datum||'',
-                  alternativeNotitie: resp.alternative_notitie||'',
-                  responseTs: resp.submitted_at
-                },
-                log: [...(o.log||[]), {
-                  ts: resp.submitted_at,
-                  actie: `📅 Klant stelt andere datum voor${resp.alternative_datum?': '+fmtDatumLang(resp.alternative_datum):''}${resp.alternative_notitie?' — "'+resp.alternative_notitie+'"':''}`
-                }]
-              };
-            }
-          });
-          return updated;
-        });
-        if(changed) console.log('📅 Planning responses verwerkt');
-      } catch(e) { console.warn('Planning poll failed:', e); }
-    };
-    const timer = setTimeout(checkPlanningResponses, 3000);
-    const interval = setInterval(checkPlanningResponses, 60000);
-    return () => { clearTimeout(timer); clearInterval(interval); };
-  },[user, loaded]);
+  // ═══ MOBIELE DATA SYNC: herlaad localStorage bij tab-switch (GEEN state update) ═══
   const lastSyncRef = useRef(0);
   useEffect(()=>{
     const handler = async () => {
-      // Alleen synchen als tab zichtbaar, ingelogd, en minstens 60s sinds vorige sync
-      if(document.visibilityState==="visible" && user && Date.now()-lastSyncRef.current > 60000) {
+      if(document.visibilityState==="visible" && user && Date.now()-lastSyncRef.current > 120000) {
         lastSyncRef.current = Date.now();
-        console.log("📱 Tab zichtbaar — achtergrond sync...");
+        // Sla NIETS op als er pending saves zijn — wacht tot die klaar zijn
+        if(Object.keys(pendingSaves.current).length > 0) {
+          console.log("📱 Tab zichtbaar — pending saves aanwezig, sync overgeslagen");
+          return;
+        }
+        console.log("📱 Tab zichtbaar — achtergrond sync localStorage...");
         try {
           const allData = await sbGetAll(user.id);
           if(allData && Object.keys(allData).length > 0) {
-            // Sync localStorage cache (niet state — voorkomt onverwachte UI-resets)
-            try{ Object.entries(allData).forEach(([k,v])=>{try{localStorage.setItem(k,v)}catch(_){}}); }catch(_){}
+            // ALLEEN localStorage bijwerken, GEEN state (voorkomt UI-reset)
+            Object.entries(allData).forEach(([k,v])=>{
+              // Skip keys die de gebruiker recent gewijzigd heeft
+              if(pendingSaves.current[k]) return;
+              try{ localStorage.setItem(k,v); }catch(_){}
+            });
             console.log("📱 ✓ localStorage cache bijgewerkt");
           }
         } catch(e) { console.warn("📱 Sync mislukt:",e); }
@@ -1820,14 +1725,17 @@ export default function App() {
   }, [settings?.email?.emailjsPublicKey]);
 
 
-  // saveKey: localStorage INSTANT + Supabase DEBOUNCED
+  // saveKey: localStorage INSTANT + Supabase DIRECT (geen debounce voor deletes)
   const saveTimers = useRef({});
-  const pendingSaves = useRef({}); // Track pending Supabase saves
-  const saveKey = useCallback(async (key, val) => { 
+  const pendingSaves = useRef({}); // key -> meest recente json die gesaved moet worden
+  const saveKey = useCallback(async (key, val) => {
     if(!dataReady.current) return;
-    
+
     const json = JSON.stringify(val);
-    
+
+    // Sla niet op als de waarde identiek is aan de vorige save voor deze key
+    if(pendingSaves.current[key]?.json === json) return;
+
     // STAP 1: localStorage INSTANT — strip base64 om quota niet te overschrijden
     try {
       let lsJson = json;
@@ -1847,33 +1755,53 @@ export default function App() {
       }
       localStorage.setItem(key, lsJson);
     } catch(e) { console.warn(`localStorage "${key}" failed:`, e); }
-    
-    // STAP 2: Supabase DEBOUNCED — 300ms na laatste wijziging + retry
+
+    // STAP 2: Supabase — debounce 150ms (was 300ms)
+    // pendingSaves bijhouden met de LAATSTE waarde voor deze key
     if(user) {
       pendingSaves.current[key] = { json, userId: user.id };
       clearTimeout(saveTimers.current[key]);
       saveTimers.current[key] = setTimeout(async () => {
-        let success = await sbSet(key, json, user.id);
+        // Gebruik altijd de MEEST RECENTE json uit pendingSaves (niet de closure)
+        // Dit voorkomt dat een verouderde retry een nieuwe save overschrijft
+        const pending = pendingSaves.current[key];
+        if(!pending) return; // Reeds opgeslagen door een andere route
+
+        const success = await sbSet(key, pending.json, pending.userId);
         if(success) {
-          delete pendingSaves.current[key];
+          // Verwijder enkel als de json nog steeds dezelfde is
+          if(pendingSaves.current[key]?.json === pending.json) {
+            delete pendingSaves.current[key];
+          }
+          console.log(`💾 Supabase opgeslagen: ${key}`);
         } else {
-          // Retry na 3 seconden
-          console.warn(`⟳ Retry save "${key}" in 3s...`);
+          // Retry na 4 seconden — gebruik opnieuw pendingSaves voor de laatste waarde
+          console.warn(`⟳ Retry save "${key}" in 4s...`);
           setTimeout(async () => {
-            success = await sbSet(key, json, user.id);
-            if(success) delete pendingSaves.current[key];
-            else console.error(`❌ Save "${key}" definitief mislukt`);
-          }, 3000);
+            const retryPending = pendingSaves.current[key];
+            if(!retryPending) return; // Ondertussen al opgeslagen
+            const retrySuccess = await sbSet(key, retryPending.json, retryPending.userId);
+            if(retrySuccess) {
+              if(pendingSaves.current[key]?.json === retryPending.json) {
+                delete pendingSaves.current[key];
+              }
+              console.log(`💾 Retry geslaagd: ${key}`);
+            } else {
+              console.error(`❌ Save "${key}" definitief mislukt — data staat nog in localStorage`);
+            }
+          }, 4000);
         }
-      }, 300);
+      }, 150);
     }
   }, [user]);
   
-  // Flush alle pending saves bij pagina sluiten
+  // Flush alle pending saves bij pagina sluiten (sync XHR als laatste redmiddel)
   useEffect(() => {
     const flush = () => {
-      Object.entries(pendingSaves.current).forEach(([key, {json, userId}]) => {
-        // navigator.sendBeacon kan geen auth headers, gebruik sync XHR als fallback
+      const pending = Object.entries(pendingSaves.current);
+      if(pending.length === 0) return;
+      console.log(`🔄 beforeunload: ${pending.length} pending saves flushen...`);
+      pending.forEach(([key, {json, userId}]) => {
         try {
           const xhr = new XMLHttpRequest();
           xhr.open("POST", `${SB_URL}/rest/v1/user_data?on_conflict=user_id,key`, false); // sync!
@@ -2113,7 +2041,8 @@ export default function App() {
         <div style={{position:"absolute",inset:0,border:"3px solid rgba(255,255,255,.15)",borderRadius:"50%"}}/>
         <div style={{position:"absolute",inset:0,border:"3px solid transparent",borderTopColor:"#d4ff00",borderRadius:"50%",animation:"spin 0.8s linear infinite"}}/>
       </div>
-      <div style={{color:"rgba(255,255,255,.7)",fontSize:13,fontWeight:600,letterSpacing:1}}>BILLR laden…</div>
+      <div style={{color:"rgba(255,255,255,.85)",fontSize:13,fontWeight:700,letterSpacing:.5}}>BILLR</div>
+      <div style={{color:"rgba(255,255,255,.55)",fontSize:12,fontWeight:500}}>{loadingMsg}</div>
       <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
     </div>
   );
@@ -2293,7 +2222,7 @@ function Dashboard({offertes, facturen, onGoto, onNew, onFactuur, onPlan, settin
   const conv = offertes.length ? Math.round(offertes.filter(o=>["goedgekeurd","gefactureerd"].includes(o.status)).length/offertes.length*100) : 0;
   const recOff = [...offertes].sort((a,b)=>new Date(b.aangemaakt)-new Date(a.aangemaakt)).slice(0,5);
 
-  const goedgekeurdDoorKlant = offertes.filter(o=>o.klantAkkoord); // Toon ALLE goedgekeurde offertes (ook gefactureerd, planning_voorstel) voor planning
+  const goedgekeurdDoorKlant = offertes.filter(o=>o.klantAkkoord); // Toon ALLE goedgekeurde offertes (ook gefactureerd) voor planning
 
   const stats = [
     {l:"Open offertes",      v:openOff.length,       s:"verstuurd — wachten",     ic:"📋", c:"#2563eb", pg:"offertes", filter:"verstuurd"},
@@ -2370,34 +2299,24 @@ function Dashboard({offertes, facturen, onGoto, onNew, onFactuur, onPlan, settin
             <div className="card-h"><div className="card-t" style={{color:"#059669"}}>✅ Goedgekeurd - Planning ({goedgekeurdDoorKlant.length})</div></div>
             {goedgekeurdDoorKlant.slice(0,3).map(o=>{
               const t=calcTotals(o.lijnen||[]);
-              const alternatiefGevraagd = o.planning?.clientResponse === 'alternatief';
-              const voorstelActief = o.status === 'planning_voorstel' && !o.planning?.clientResponse;
               return(
-                <div key={o.id} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 0",borderBottom:"1px solid #d1fae5",background:alternatiefGevraagd?"#fffbeb":"transparent",borderRadius:alternatiefGevraagd?6:0,padding:alternatiefGevraagd?"8px 6px":"8px 0"}}>
+                <div key={o.id} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 0",borderBottom:"1px solid #d1fae5"}}>
                   <div style={{flex:1}}>
                     <div style={{fontWeight:600,fontSize:13}}>
                       {o.klant?.naam}
                       {o.factuurId&&<span style={{marginLeft:6,fontSize:10,background:"#dbeafe",color:"#1e40af",padding:"2px 6px",borderRadius:4,fontWeight:600}}>Gefactureerd</span>}
                       {o.status==="ingepland"&&<span style={{marginLeft:6,fontSize:10,background:"#ecfeff",color:"#0891b2",padding:"2px 6px",borderRadius:4,fontWeight:600}}>📅 Ingepland</span>}
-                      {voorstelActief&&<span style={{marginLeft:6,fontSize:10,background:"#eff6ff",color:"#2563eb",padding:"2px 6px",borderRadius:4,fontWeight:600}}>📬 Voorstel verstuurd</span>}
-                      {alternatiefGevraagd&&<span style={{marginLeft:6,fontSize:10,background:"#fef3c7",color:"#92400e",padding:"2px 6px",borderRadius:4,fontWeight:700}}>⚠️ Andere datum gewenst</span>}
                     </div>
                     <div style={{fontSize:11,color:"#059669"}}>{o.nummer} · akkoord op {fmtDate(o.klantAkkoordDatum)}</div>
-                    {o.planning?.datum&&<div style={{fontSize:11,color:voorstelActief?"#2563eb":o.status==="ingepland"?"#0891b2":"#059669",fontWeight:600}}>
-                      📅 {fmtDatumLang(o.planning.datum)} om {o.planning.tijd}
-                      {voorstelActief&&<span style={{fontWeight:400,color:"#94a3b8"}}> — wachten op klant</span>}
-                    </div>}
-                    {alternatiefGevraagd&&o.planning?.alternativeDatum&&<div style={{fontSize:11,color:"#d97706",fontWeight:600}}>Klant wenst: {fmtDatumLang(o.planning.alternativeDatum)}</div>}
+                    {o.planning&&<div style={{fontSize:11,color:"#0891b2",fontWeight:600}}>📅 {fmtDate(o.planning.datum)} om {o.planning.tijd}</div>}
                   </div>
                   <div style={{textAlign:"right"}}>
                     <div style={{fontWeight:700,color:"#059669"}}>{fmtEuro(t.totaal)}</div>
                     <div style={{display:"flex",gap:4,marginTop:3}}>
                       {!o.factuurId&&<button className="btn bg btn-sm" style={{fontSize:10}} onClick={()=>onFactuur(o)}>🧾 Factuur</button>}
                       {o.status!=="ingepland"
-                        ?<button className="btn btn-sm" style={{fontSize:10,background:alternatiefGevraagd?"#f59e0b":"#2563eb",color:"#fff",fontWeight:700,border:"none"}} onClick={()=>onPlan(o)}>
-                           {alternatiefGevraagd?"📅 Nieuw voorstel":voorstelActief?"📬 Herplannen":"📅 Inplannen"}
-                          </button>
-                        :<button className="btn btn-sm" style={{fontSize:10,background:"#ecfeff",color:"#0891b2",fontWeight:700,border:"1px solid #a5f3fc"}} onClick={()=>onPlan(o)}>📅 Herplannen</button>
+                        ?<button className="btn" style={{fontSize:10,background:"#d4ff00",color:"#1a2e4c",fontWeight:700}} onClick={()=>onPlan(o)}>📅 Inplannen</button>
+                        :<button className="btn" style={{fontSize:10,background:"#ecfeff",color:"#0891b2",fontWeight:700,border:"1px solid #a5f3fc"}} onClick={()=>onPlan(o)}>📅 Herplannen</button>
                       }
                     </div>
                   </div>
@@ -5441,39 +5360,6 @@ function buildOfferteHtml(doc, bed, tot, acceptUrl, rejectUrl, customHtml, extra
 <div style="text-align:center;padding:16px;font-size:11px;color:#94a3b8">${bed.naam} · ${bed.website||''}</div>
 </div>`;
 }
-function buildBevestigingHtml(offerte, bed, dc) {
-  return `<div style="font-family:Arial,sans-serif;max-width:640px;margin:0 auto;background:#f8fafc">
-<div style="background:${dc};padding:28px 32px;text-align:center;border-radius:8px 8px 0 0">
-  <h1 style="color:#fff;margin:0;font-size:22px">✅ Installatie bevestigd!</h1>
-  <p style="color:rgba(255,255,255,.8);margin:6px 0 0;font-size:14px">${bed.naam||''}</p>
-</div>
-<div style="background:#fff;padding:28px 32px;border:1px solid #e2e8f0;border-top:0">
-  <p style="font-size:15px;color:#1e293b">Beste <strong>${offerte.klant?.naam||''}</strong>,</p>
-  <p style="font-size:14px;color:#475569;line-height:1.6">Uw installatie is officieel bevestigd. Hieronder vindt u de details.</p>
-  <div style="background:#f0fdf4;border:2px solid #10b981;border-radius:12px;padding:24px;margin:20px 0;text-align:center">
-    <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#059669;margin-bottom:8px">BEVESTIGDE INSTALLATIE</div>
-    <div style="font-size:26px;font-weight:900;color:#059669">${fmtDatumLang(offerte.planning?.datum)}</div>
-    <div style="font-size:18px;font-weight:700;color:#1e293b;margin-top:4px">${offerte.planning?.tijd||''} uur</div>
-    <div style="font-size:13px;color:#64748b;margin-top:4px">Geschatte duur: ${offerte.planning?.duur||4} uur</div>
-  </div>
-  <table style="width:100%;border-collapse:collapse;margin:20px 0;font-size:14px">
-    <tr style="background:#f1f5f9"><td style="padding:10px 14px;border:1px solid #e2e8f0;font-weight:600">Referentie</td><td style="padding:10px 14px;border:1px solid #e2e8f0">${offerte.nummer||''}</td></tr>
-    <tr><td style="padding:10px 14px;border:1px solid #e2e8f0;font-weight:600">Adres</td><td style="padding:10px 14px;border:1px solid #e2e8f0">${offerte.klant?.adres||''}, ${offerte.klant?.gemeente||''}</td></tr>
-  </table>
-  <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:14px 18px;font-size:13px;color:#78350f;margin:16px 0">
-    ⚠️ <strong>Belangrijk:</strong> Zorg dat de meterkast en het installatieadres bereikbaar zijn. Bij verhindering, neem minstens 48u op voorhand contact op.
-  </div>
-  <div style="text-align:center;margin:20px 0">
-    <a href="https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent('Installatie '+offerte.nummer+' — '+(bed.naam||''))}&dates=${(offerte.planning?.datum||'').replace(/-/g,'')}T${(offerte.planning?.tijd||'09:00').replace(':','')}00/${(offerte.planning?.datum||'').replace(/-/g,'')}T${String(Math.min(23,parseInt(offerte.planning?.tijd||'09:00')+parseInt(offerte.planning?.duur||4))).padStart(2,'0')}${(offerte.planning?.tijd||'09:00').slice(2)}00&location=${encodeURIComponent((offerte.klant?.adres||'')+', '+(offerte.klant?.gemeente||''))}&details=${encodeURIComponent('Installatie '+offerte.nummer)}" target="_blank" style="display:inline-block;background:#2563eb;color:#fff;padding:10px 24px;border-radius:8px;text-decoration:none;font-weight:700;font-size:13px">📅 Voeg toe aan Google Agenda</a>
-  </div>
-  <div style="margin-top:24px;padding-top:16px;border-top:1px solid #e2e8f0;font-size:13px;color:#64748b">
-    <p style="margin:0"><strong>${bed.naam}</strong> · ${bed.adres||''} · ${bed.gemeente||''}</p>
-    <p style="margin:4px 0">${bed.tel||''} · ${bed.email||''}</p>
-  </div>
-</div>
-</div>`;
-}
-
 function buildFactuurHtml(doc, bed, tot, customHtml, extraVars={}) {
   const dc = extraVars.dc || "#1a2e4a";
   return `<div style="font-family:Arial,sans-serif;max-width:640px;margin:0 auto;background:#f8fafc">
@@ -5838,275 +5724,131 @@ function Rapportage({offertes,facturen}) {
 
 // ─── INSTELLINGEN ─────────────────────────────────────────────────
 // ─── PLANNING MODAL ──────────────────────────────────────────────
-function PlanningModal({offerte, settings, notify, onSave, onClose}) {
-  const [datum, setDatum] = useState(offerte?.planning?.datum || "");
-  const [tijd, setTijd] = useState(offerte?.planning?.tijd || "09:00");
-  const [duur, setDuur] = useState(offerte?.planning?.duur || "4");
-  const [notities, setNotities] = useState(offerte?.planning?.notities || "");
+function PlanningModal({offerte, settings, onSave, onClose, notify}) {
+  const [datum, setDatum] = useState("");
+  const [tijd, setTijd] = useState("09:00");
+  const [duur, setDuur] = useState("4");
+  const [notities, setNotities] = useState("");
   const [sending, setSending] = useState(false);
-
   const bed = settings?.bedrijf || {};
   const dc = settings?.sjabloon?.accentKleur || settings?.thema?.kleur || "#1a2e4a";
-  const ejCfg = settings?.email || {};
 
-  const clientResponse = offerte?.planning?.clientResponse;
-  const isVoorstelActief = offerte?.planning?.status === 'voorstel' && !clientResponse;
-  const wachtOpAntwoord = isVoorstelActief;
-  const alternatiefGevraagd = clientResponse === 'alternatief';
-
-  // Google Calendar link genereren
-  const buildGoogleLink = (d, t, dur, offerteNr) => {
-    if(!d) return '#';
-    const [y,m,day] = d.split('-');
-    const startH = parseInt(t||'09:00');
-    const endH = Math.min(23, startH + parseInt(dur||4));
-    const pad2 = n => String(n).padStart(2,'0');
-    const datePart = `${y}${m}${day}`;
-    const startTime = `${datePart}T${pad2(startH)}0000`;
-    const endTime = `${datePart}T${pad2(endH)}0000`;
-    return `https://calendar.google.com/calendar/render?action=TEMPLATE`
-      + `&text=${encodeURIComponent('Installatie '+offerteNr+' — '+(offerte.klant?.naam||''))}`
-      + `&dates=${startTime}/${endTime}`
-      + `&location=${encodeURIComponent((offerte.klant?.adres||'')+', '+(offerte.klant?.gemeente||''))}`
-      + `&details=${encodeURIComponent('Klant: '+(offerte.klant?.naam||'')+'\nRef: '+offerteNr)}`;
-  };
-
-  const genPlanningToken = () => 'pl_' + Math.random().toString(36).slice(2,10) + Date.now().toString(36);
-
-  const buildVoorstelHtml = (token) => {
-    const acceptUrl = `${window.location.origin}/offerte.html?planningToken=${token}&response=akkoord`;
-    const alternatiefUrl = `${window.location.origin}/offerte.html?planningToken=${token}&response=alternatief`;
-    return `<div style="font-family:Arial,sans-serif;max-width:640px;margin:0 auto;background:#f8fafc">
+  const doInplannen = async () => {
+    if(!datum) { notify("Kies een datum","er"); return; }
+    setSending(true);
+    
+    // Build planning email HTML
+    const emailHtml = `<div style="font-family:Arial,sans-serif;max-width:640px;margin:0 auto;background:#f8fafc">
 <div style="background:${dc};padding:28px 32px;text-align:center;border-radius:8px 8px 0 0">
-  <h1 style="color:#fff;margin:0;font-size:22px">📅 Voorstel installatiedatum</h1>
-  <p style="color:rgba(255,255,255,.8);margin:6px 0 0;font-size:14px">${bed.naam||''}</p>
+  <h1 style="color:#fff;margin:0;font-size:22px">📅 Uw installatie is ingepland!</h1>
+  <p style="color:rgba(255,255,255,.8);margin:6px 0 0;font-size:14px">${bed.naam||""}</p>
 </div>
 <div style="background:#fff;padding:28px 32px;border:1px solid #e2e8f0;border-top:0">
-  <p style="font-size:15px;color:#1e293b">Beste <strong>${offerte.klant?.naam||''}</strong>,</p>
-  <p style="font-size:14px;color:#475569;line-height:1.6">Wij stellen graag de volgende datum voor de installatie van uw ${offerte.installatieType||'installatie'} voor:</p>
-  <div style="background:#f0f9ff;border:2px solid #3b82f6;border-radius:12px;padding:24px;margin:20px 0;text-align:center">
-    <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#1d4ed8;margin-bottom:8px">VOORGESTELDE DATUM</div>
-    <div style="font-size:26px;font-weight:900;color:#1d4ed8">${fmtDatumLang(datum)}</div>
+  <p style="font-size:15px;color:#1e293b">Beste <strong>${offerte.klant?.naam||""}</strong>,</p>
+  <p style="font-size:14px;color:#475569;line-height:1.6">Goed nieuws! Uw installatie is ingepland. Hieronder vindt u de details.</p>
+  <div style="background:#f0fdf4;border:2px solid #86efac;border-radius:12px;padding:24px;margin:20px 0;text-align:center">
+    <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#059669;margin-bottom:8px">GEPLANDE INSTALLATIE</div>
+    <div style="font-size:28px;font-weight:900;color:#059669">${new Date(datum).toLocaleDateString("nl-BE",{weekday:"long",day:"numeric",month:"long",year:"numeric"})}</div>
     <div style="font-size:18px;font-weight:700;color:#1e293b;margin-top:4px">${tijd} uur</div>
-    <div style="font-size:13px;color:#64748b;margin-top:4px">Geschatte duur: ${duur} uur · Ref: ${offerte.nummer||''}</div>
+    <div style="font-size:14px;color:#64748b;margin-top:4px">Geschatte duur: ${duur} uur</div>
   </div>
-  ${notities?`<div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:14px;font-size:13px;color:#78350f;margin:0 0 16px">📝 <strong>Opmerking:</strong> ${notities}</div>`:''}
-  <p style="font-size:14px;color:#475569;margin-bottom:20px;font-weight:600">Past deze datum voor u?</p>
-  <div style="text-align:center;margin:20px 0">
-    <table style="margin:0 auto;border-collapse:separate;border-spacing:12px">
-      <tr>
-        <td><a href="${acceptUrl}" style="display:inline-block;background:#10b981;color:#fff;padding:16px 36px;border-radius:9px;text-decoration:none;font-weight:700;font-size:15px">✅ Ja, deze datum past mij</a></td>
-        <td><a href="${alternatiefUrl}" style="display:inline-block;background:#f59e0b;color:#fff;padding:16px 36px;border-radius:9px;text-decoration:none;font-weight:700;font-size:15px">📅 Andere datum gewenst</a></td>
-      </tr>
-    </table>
+  <table style="width:100%;border-collapse:collapse;margin:20px 0;font-size:14px">
+    <tr style="background:#f1f5f9"><td style="padding:10px 14px;border:1px solid #e2e8f0;font-weight:600">Offerte</td><td style="padding:10px 14px;border:1px solid #e2e8f0">${offerte.nummer||""}</td></tr>
+    <tr><td style="padding:10px 14px;border:1px solid #e2e8f0;font-weight:600">Adres installatie</td><td style="padding:10px 14px;border:1px solid #e2e8f0">${offerte.klant?.adres||""}, ${offerte.klant?.gemeente||""}</td></tr>
+    <tr style="background:#f1f5f9"><td style="padding:10px 14px;border:1px solid #e2e8f0;font-weight:600">Type</td><td style="padding:10px 14px;border:1px solid #e2e8f0">${offerte.installatieType||""}</td></tr>
+    ${notities?`<tr><td style="padding:10px 14px;border:1px solid #e2e8f0;font-weight:600">Opmerking</td><td style="padding:10px 14px;border:1px solid #e2e8f0">${notities}</td></tr>`:""}
+  </table>
+  <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:14px 18px;font-size:13px;color:#78350f;margin:16px 0">
+    ⚠️ <strong>Belangrijk:</strong> Zorg dat de meterkast en het installatieadres bereikbaar zijn. Bij verhindering, neem minstens 48u op voorhand contact op.
   </div>
-  <div style="margin-top:24px;padding-top:16px;border-top:1px solid #e2e8f0;font-size:13px;color:#64748b">
-    <p style="margin:0"><strong>${bed.naam}</strong> · ${bed.adres||''} · ${bed.gemeente||''}</p>
-    <p style="margin:4px 0">${bed.tel||''} · ${bed.email||''}</p>
+  <div style="margin-top:20px;padding-top:16px;border-top:1px solid #e2e8f0;font-size:13px;color:#64748b;line-height:1.6">
+    <p style="margin:0"><strong>${bed.naam}</strong> · ${bed.adres||""} · ${bed.gemeente||""}</p>
+    <p style="margin:4px 0">${bed.tel||""} · ${bed.email||""}</p>
   </div>
 </div>
+<div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px;padding:20px;margin:0 auto;max-width:600px;text-align:center">
+  <div style="font-weight:700;font-size:14px;color:#1d4ed8;margin-bottom:8px">📅 Voeg toe aan uw agenda</div>
+  <p style="font-size:12px;color:#475569;margin-bottom:12px">Zo vergeet u de afspraak niet!</p>
+  <a href="https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(`Installatie ${offerte.nummer||""} — ${bed.naam||""}`)}&details=${encodeURIComponent(`Installatie ${offerte.nummer||""}\nAdres: ${offerte.klant?.adres||""}, ${offerte.klant?.gemeente||""}\n${notities?`Opmerking: ${notities}`:""}`)}&location=${encodeURIComponent(`${offerte.klant?.adres||""}, ${offerte.klant?.gemeente|""}`)}&dates=${datum.replace(/-/g,"")}T${tijd.replace(":","")}00/${datum.replace(/-/g,"")}T${String(Math.min(23,parseInt(tijd)+parseInt(duur))).padStart(2,"0")}${tijd.slice(3)}00" target="_blank" style="display:inline-block;background:#2563eb;color:#fff;padding:10px 24px;border-radius:8px;text-decoration:none;font-weight:700;font-size:13px;margin:4px">📅 Google Agenda</a>
+</div>
+<div style="text-align:center;padding:16px;font-size:11px;color:#94a3b8">${bed.naam} · ${bed.website||""}</div>
 </div>`;
-  };
 
-  const doVerstuurVoorstel = async () => {
-    if(!datum) { notify("Kies een datum", "er"); return; }
-    setSending(true);
-    const token = genPlanningToken();
-
-    // Sla voorstel op in Supabase planning_responses tabel
-    try {
-      await sb.from('planning_responses').insert({
-        token,
-        offerte_id: offerte.id,
-        proposed_datum: datum,
-        proposed_tijd: tijd,
-        proposed_duur: duur,
-        response: null,
-        alternative_datum: null,
-        alternative_notitie: null,
-        submitted_at: null
-      });
-    } catch(e) { console.warn('Planning proposal opslaan mislukt (tabel bestaat nog niet?):', e.message); }
-
-    // Stuur voorstel email
-    if(window.emailjs && offerte.klant?.email && ejCfg.emailjsServiceId) {
+    // Send email via EmailJS
+    if(window.emailjs && offerte.klant?.email) {
       try {
-        window.emailjs.init(ejCfg.emailjsPublicKey || "04zsVAk5imDpo-8GJ");
-        const htmlBody = buildVoorstelHtml(token).replace(/src="data:image\/[^"]+"/g, 'src=""');
-        await window.emailjs.send(
-          ejCfg.emailjsServiceId || "service_qrkvr0d",
-          ejCfg.emailjsTemplateOfferte || "template_5nckw9f",
-          {
-            to_email: offerte.klant.email,
-            to_name: offerte.klant?.naam || "",
-            from_name: bed.naam || "",
-            reply_to: bed.email || "",
-            subject: `Voorstel installatiedatum — ${offerte.nummer} — ${fmtDatumLang(datum)}`,
-            html_body: htmlBody,
-            message: htmlBody
-          }
-        );
-        notify(`📧 Datumvoorstel verstuurd naar ${offerte.klant.email}`);
+        const ejCfg = settings?.email || {};
+        const serviceId = ejCfg.emailjsServiceId || "service_qrkvr0d";
+        const pubKey = ejCfg.emailjsPublicKey || "04zsVAk5imDpo-8GJ";
+        window.emailjs.init(pubKey);
+        
+        // Use offerte template but with planning content
+        const templateId = ejCfg.emailjsTemplateOfferte || "template_5nckw9f";
+        await window.emailjs.send(serviceId, templateId, {
+          to_email: offerte.klant.email,
+          to_name: offerte.klant?.naam || "",
+          from_name: bed.naam,
+          reply_to: bed.email,
+          subject: `Installatie ingepland — ${offerte.nummer} — ${new Date(datum).toLocaleDateString("nl-BE")}`,
+          html_body: emailHtml,
+          message: emailHtml
+        });
+        notify("📧 Planning email verzonden naar " + offerte.klant.email);
       } catch(e) {
-        notify("⚠️ Email mislukt: " + (e?.text || e?.message || ""), "er");
-        console.error("Voorstel email mislukt:", e);
+        console.error("Planning email failed:", e);
+        notify("⚠️ Ingepland maar email verzending mislukt: " + (e?.text||e?.message||""), "er");
       }
-    } else if(!offerte.klant?.email) {
-      notify("⚠️ Klant heeft geen e-mailadres — voeg dit eerst toe", "er");
-    } else if(!ejCfg.emailjsServiceId) {
-      notify("⚠️ EmailJS niet geconfigureerd in Instellingen → Email", "er");
     }
 
+    // Save planning data to offerte
     onSave(offerte.id, {
-      status: 'planning_voorstel',
-      planning: {
-        datum, tijd, duur, notities, token,
-        status: 'voorstel',
-        verstuurdOp: new Date().toISOString()
-      },
-      logActie: `📬 Datumvoorstel verstuurd: ${fmtDatumLang(datum)} om ${tijd}`
+      status: "ingepland",
+      planning: { datum, tijd, duur, notities, ingeplandOp: new Date().toISOString() },
+      logActie: `📅 Ingepland op ${new Date(datum).toLocaleDateString("nl-BE")} om ${tijd}`
     });
-
     setSending(false);
     onClose();
   };
 
-  const doDirectInplannen = () => {
-    if(!datum) { notify("Kies een datum", "er"); return; }
-    addToAgenda({
-      offerteId: offerte.id,
-      title: `Installatie ${offerte.nummer} — ${offerte.klant?.naam}`,
-      date: datum,
-      time: tijd,
-      duration: parseInt(duur)*60,
-      location: `${offerte.klant?.adres||''}, ${offerte.klant?.gemeente||''}`,
-      offerteNummer: offerte.nummer,
-      klantNaam: offerte.klant?.naam,
-      klantTel: offerte.klant?.tel||'',
-      klantEmail: offerte.klant?.email||'',
-      type: 'installatie',
-      color: '#10b981'
-    });
-    onSave(offerte.id, {
-      status: 'ingepland',
-      planning: { datum, tijd, duur, notities, status: 'bevestigd', ingeplandOp: new Date().toISOString() },
-      logActie: `📅 Direct ingepland op ${fmtDatumLang(datum)} om ${tijd}`
-    });
-    notify(`📅 Installatie ingepland op ${fmtDatumLang(datum)}`);
-    onClose();
-  };
-
-  const googleLink = buildGoogleLink(datum, tijd, duur, offerte.nummer);
-
-  return (
+  return(
     <div className="mo"><div className="mdl mmd">
-      <div className="mh">
-        <div className="mt-m">📅 Installatie inplannen</div>
-        <button className="xbtn" onClick={onClose}>×</button>
-      </div>
+      <div className="mh"><div className="mt-m">📅 Installatie inplannen</div><button className="xbtn" onClick={onClose}>×</button></div>
       <div className="mb-body">
-
-        {/* Klant stelt andere datum voor */}
-        {alternatiefGevraagd && (
-          <div style={{background:"#fffbeb",border:"2px solid #f59e0b",borderRadius:9,padding:14,marginBottom:16}}>
-            <div style={{fontWeight:700,color:"#92400e",fontSize:14,marginBottom:6}}>📅 Klant wil een andere datum</div>
-            {offerte.planning?.alternativeDatum && (
-              <div style={{color:"#78350f",fontSize:13}}>Voorkeur klant: <strong>{fmtDatumLang(offerte.planning.alternativeDatum)}</strong></div>
-            )}
-            {offerte.planning?.alternativeNotitie && (
-              <div style={{color:"#78350f",fontSize:13,marginTop:3}}>Opmerking: "<em>{offerte.planning.alternativeNotitie}</em>"</div>
-            )}
-            <div style={{fontSize:12,color:"#92400e",marginTop:8,borderTop:"1px solid #fde68a",paddingTop:8}}>
-              Kies hieronder een nieuwe datum en stuur een nieuw voorstel.
-            </div>
-          </div>
-        )}
-
-        {/* Wachten op klantreactie */}
-        {wachtOpAntwoord && (
-          <div style={{background:"#eff6ff",border:"2px solid #3b82f6",borderRadius:9,padding:12,marginBottom:16,fontSize:13}}>
-            <div style={{fontWeight:700,color:"#1d4ed8",marginBottom:4}}>⏳ Voorstel verstuurd — wachten op klant</div>
-            <div style={{color:"#1e40af"}}>Verstuurd op {offerte.planning?.verstuurdOp ? new Date(offerte.planning.verstuurdOp).toLocaleString("nl-BE",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"}) : "—"}</div>
-            <div style={{color:"#1e40af",marginTop:2}}>Voorgestelde datum: <strong>{fmtDatumLang(offerte.planning?.datum)}</strong> om <strong>{offerte.planning?.tijd}</strong></div>
-            <div style={{fontSize:11,color:"#3b82f6",marginTop:6}}>Klant bevestigt via de link in de email. Stuur hieronder een nieuw voorstel om de datum te wijzigen.</div>
-          </div>
-        )}
-
-        {/* Klant info */}
         <div style={{background:"#f0fdf4",border:"1px solid #86efac",borderRadius:8,padding:12,marginBottom:16,display:"flex",gap:10,alignItems:"center"}}>
-          <span style={{fontSize:22}}>✅</span>
-          <div style={{flex:1}}>
-            <div style={{fontWeight:700,color:"#059669"}}>{offerte.klant?.naam}</div>
+          <span style={{fontSize:24}}>✅</span>
+          <div>
+            <div style={{fontWeight:700,color:"#059669"}}>Goedgekeurd door {offerte.klant?.naam}</div>
             <div style={{fontSize:12,color:"#16a34a"}}>{offerte.nummer} · {fmtEuro(calcTotals(offerte.lijnen||[]).totaal)}</div>
-            {offerte.klantReactie?.periode && <div style={{fontSize:11,color:"#059669"}}>Gewenste periode: {offerte.klantReactie.periode}</div>}
-            {offerte.klantReactie?.opmerkingen && <div style={{fontSize:11,color:"#059669"}}>Opmerking: "{offerte.klantReactie.opmerkingen}"</div>}
+            {offerte.klantReactie?.periode&&<div style={{fontSize:11,color:"#059669"}}>Gewenst: {offerte.klantReactie.periode}</div>}
+            {offerte.klantReactie?.opmerkingen&&<div style={{fontSize:11,color:"#059669"}}>"{offerte.klantReactie.opmerkingen}"</div>}
           </div>
         </div>
-
         <div className="fr2">
-          <div className="fg">
-            <label className="fl">📅 {wachtOpAntwoord || alternatiefGevraagd ? "Nieuwe voorgestelde datum" : "Voorgestelde datum"}</label>
-            <input type="date" className="fc" value={datum} onChange={e=>setDatum(e.target.value)}
-              min={new Date().toISOString().split("T")[0]}/>
-            {datum && <div style={{fontSize:11.5,color:"#2563eb",marginTop:3,fontWeight:600}}>{fmtDatumLang(datum)}</div>}
-          </div>
-          <div className="fg">
-            <label className="fl">🕐 Startuur</label>
-            <input type="time" className="fc" value={tijd} onChange={e=>setTijd(e.target.value)}/>
-          </div>
+          <div className="fg"><label className="fl">📅 Datum</label><input type="date" className="fc" value={datum} onChange={e=>setDatum(e.target.value)} min={new Date().toISOString().split("T")[0]}/></div>
+          <div className="fg"><label className="fl">🕐 Startuur</label><input type="time" className="fc" value={tijd} onChange={e=>setTijd(e.target.value)}/></div>
         </div>
-
         <div className="fr2">
-          <div className="fg">
-            <label className="fl">⏱ Geschatte duur</label>
+          <div className="fg"><label className="fl">⏱ Geschatte duur (uren)</label>
             <select className="fc" value={duur} onChange={e=>setDuur(e.target.value)}>
               {["2","3","4","5","6","7","8"].map(d=><option key={d} value={d}>{d} uur</option>)}
             </select>
           </div>
-          <div className="fg">
-            <label className="fl">📍 Installatieadres</label>
-            <input className="fc" readOnly value={`${offerte.klant?.adres||""}, ${offerte.klant?.gemeente||""}`}/>
-          </div>
+          <div className="fg"><label className="fl">📍 Adres</label><input className="fc" readOnly value={`${offerte.klant?.adres||""}, ${offerte.klant?.gemeente||""}`}/></div>
         </div>
-
-        <div className="fg">
-          <label className="fl">📝 Opmerking voor klant (optioneel)</label>
-          <textarea className="fc" rows={2} value={notities} onChange={e=>setNotities(e.target.value)}
-            placeholder="Bijv: gelieve de meterkast bereikbaar te houden..."/>
-        </div>
-
-        {/* Google Calendar snelkoppeling (voor uzelf) */}
-        {datum && (
-          <div style={{background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:8,padding:"10px 12px",display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
-            <span style={{fontSize:13,color:"#475569",fontWeight:600}}>Uw eigen agenda:</span>
-            <a href={googleLink} target="_blank" rel="noopener noreferrer"
-              style={{fontSize:12,color:"#2563eb",background:"#eff6ff",padding:"5px 12px",borderRadius:6,textDecoration:"none",fontWeight:600,border:"1px solid #bfdbfe"}}>
-              📅 Toevoegen aan Google Agenda
-            </a>
-          </div>
-        )}
-
-        {offerte.klant?.email && (
-          <div style={{background:"#f0fdf4",border:"1px solid #86efac",borderRadius:7,padding:"8px 12px",fontSize:12,color:"#166534",marginTop:8}}>
-            📧 Klant ontvangt een <strong>voorstel</strong> op <strong>{offerte.klant.email}</strong> — hij kan akkoord gaan of een andere datum voorstellen. Na akkoord ontvangt hij automatisch een bevestigingsmail.
-          </div>
-        )}
+        <div className="fg"><label className="fl">📝 Notities (optioneel)</label><textarea className="fc" rows={2} value={notities} onChange={e=>setNotities(e.target.value)} placeholder="Bijv: extra materiaal meenemen..."/></div>
+        {offerte.klant?.email&&<div style={{background:"#eff6ff",border:"1px solid #bfdbfe",borderRadius:7,padding:"8px 12px",fontSize:12,color:"#1d4ed8"}}>
+          📧 Klant ontvangt automatisch een planning-email op <strong>{offerte.klant.email}</strong>
+        </div>}
       </div>
-
-      <div className="mf" style={{gap:8}}>
+      <div className="mf">
         <button className="btn bs" onClick={onClose}>Annuleren</button>
-        <button className="btn bs btn-sm" title="Direct inplannen zonder voorstel naar klant (enkel voor interne afspraken)"
-          onClick={doDirectInplannen} disabled={!datum}>
-          📅 Direct inplannen
-        </button>
-        <button className="btn b2 btn-lg" onClick={doVerstuurVoorstel} disabled={sending || !datum}>
-          {sending ? "⟳ Bezig…" : wachtOpAntwoord ? "📬 Nieuw voorstel sturen" : alternatiefGevraagd ? "📬 Nieuwe datum voorstellen" : "📬 Voorstel sturen naar klant"}
+        <button className="btn bg btn-lg" onClick={doInplannen} disabled={sending} style={{background:"#d4ff00",color:"#1a2e4c",borderColor:"#d4ff00"}}>
+          {sending?"⟳ Bezig…":"📅 Inplannen & klant verwittigen"}
         </button>
       </div>
     </div></div>
   );
 }
-
 
 function InstellingenPage({settings,setSettings,notify}) {
   const isFirstRun = !settings?.bedrijf?.naam;
