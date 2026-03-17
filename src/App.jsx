@@ -454,6 +454,7 @@ const OFF_STATUS = {
   verstuurd:    {l:"Verstuurd",        c:"#3b82f6",bg:"#eff6ff",   icon:"📤"},
   afgedrukt:    {l:"Afgedrukt",        c:"#8b5cf6",bg:"#f5f3ff",   icon:"🖨️"},
   goedgekeurd:  {l:"Goedgekeurd",      c:"#10b981",bg:"#f0fdf4",   icon:"✅"},
+  ingepland:    {l:"Ingepland",        c:"#8b5cf6",bg:"#f5f3ff",   icon:"📅"},
   afgewezen:    {l:"Afgewezen",        c:"#ef4444",bg:"#fef2f2",   icon:"❌"},
   gefactureerd: {l:"Gefactureerd",     c:"#f59e0b",bg:"#fffbeb",   icon:"🧾"},
 };
@@ -1277,6 +1278,8 @@ tr.row-active td{border-top:2px solid #2563eb}
   .qt-totals,.qt-sign,.qt-betaal,.qt-voorschot,.qt-notes,.qt-confirm-link,.qt-fiches{break-inside:avoid!important;page-break-inside:avoid!important}
   .grp-hdr{break-after:avoid!important;page-break-after:avoid!important}
   .grp-sub,.prod-item,.qt-meta-bar,.qt-parties{break-inside:avoid!important;page-break-inside:avoid!important}
+  /* Partijen altijd naast elkaar bij afdrukken */
+  .qt-parties{grid-template-columns:1fr 1fr!important;gap:22px!important}
   
   /* Modal chrome verbergen */
   .mo{position:static!important;background:transparent!important;padding:0!important;display:block!important}
@@ -1449,6 +1452,7 @@ export default function App() {
   // Acceptatie tokens voor offertes (klant klikt op link in email)
   const [acceptTokens, setAcceptTokens] = useState({});
   const [dossierModal, setDossierModal] = useState(null);
+  const [planningModal, setPlanningModal] = useState(null);
   const [tijdModal, setTijdModal] = useState(null);
 
   // dataReady: true ALLEEN nadat data volledig geladen is
@@ -1979,7 +1983,7 @@ export default function App() {
 
           <div className="content">
             {pg==="dashboard"&&<Dashboard offertes={offertes} facturen={factMet} onGoto={gotoFiltered} onNew={()=>{setEditOff(null);setWizOpen(true)}} onFactuur={d=>setFactModal(d)} settings={settings}/>}
-            {pg==="offertes"&&<OffertesPage offertes={offertes} initFilter={pgFilter} onView={d=>setViewDoc({doc:d,type:"offerte"})} onEdit={d=>{setEditOff(d);setWizOpen(true)}} onStatus={updOff} onBulkStatus={bulkUpdOff} onFactuur={d=>setFactModal(d)} onDelete={id=>{setOffertes(p=>p.filter(o=>o.id!==id));notify("Verwijderd")}} onNew={()=>{setEditOff(null);setWizOpen(true)}} onEmail={d=>setEmailModal({doc:d,type:"offerte"})} settings={settings}/>}
+            {pg==="offertes"&&<OffertesPage offertes={offertes} initFilter={pgFilter} onView={d=>setViewDoc({doc:d,type:"offerte"})} onEdit={d=>{setEditOff(d);setWizOpen(true)}} onStatus={updOff} onBulkStatus={bulkUpdOff} onFactuur={d=>setFactModal(d)} onDelete={id=>{setOffertes(p=>p.filter(o=>o.id!==id));notify("Verwijderd")}} onNew={()=>{setEditOff(null);setWizOpen(true)}} onEmail={d=>setEmailModal({doc:d,type:"offerte"})} onPlan={d=>setPlanningModal(d)} settings={settings}/>}
             {pg==="facturen"&&<FacturenPage facturen={factMet} settings={settings} initFilter={pgFilter} onView={d=>setViewDoc({doc:d,type:"factuur"})} onEdit={f=>{setEditFact(f);setFactuurWizOpen(true);}} onStatus={updFact} onBulkStatus={bulkUpdFact} onDelete={id=>{setFacturen(p=>p.filter(f=>f.id!==id));notify("Verwijderd")}} notify={notify} onEmail={d=>setEmailModal({doc:d,type:"factuur"})} onBetaling={f=>setBetalingModal(f)} onAanmaning={f=>setAanmaningModal(f)} onNew={()=>{setEditFact(null);setFactuurWizOpen(true)}}/>}
             {pg==="klanten"&&<KlantenPage klanten={klanten} offertes={offertes} facturen={factMet} view={klantView} onEdit={k=>setKlantModal(k)} onDelete={id=>{setKlanten(p=>p.filter(k=>k.id!==id));notify("Klant verwijderd")}}/>}
             {pg==="producten"&&<ProductenPage producten={producten} settings={settings} onEdit={p=>setProdModal(p)} onDelete={id=>{setProducten(p=>p.filter(x=>x.id!==id));notify("Verwijderd")}} onToggle={id=>setProducten(p=>p.map(x=>x.id===id?{...x,actief:!x.actief}:x))} onEnrich={upd=>setProducten(p=>p.map(x=>x.id===upd.id?upd:x))} onDuplicate={p=>{const dup={...p,id:uid(),naam:p.naam+" (kopie)"};setProducten(pr=>[dup,...pr]);notify("Product gedupliceerd ✓");setProdModal(dup);}}/>}
@@ -2011,7 +2015,7 @@ export default function App() {
         }
         setFactuurWizOpen(false);setEditFact(null);
       }} onClose={()=>{setFactuurWizOpen(false);setEditFact(null);}} notify={notify}/>}
-      {viewDoc&&<DocModal doc={viewDoc.doc} type={viewDoc.type} settings={settings} producten={producten} onClose={()=>setViewDoc(null)} onFactuur={d=>{setFactModal(d);setViewDoc(null);}} onStatusOff={s=>{updOff(viewDoc.doc.id,{status:s});notify("Status: "+OFF_STATUS[s]?.l);}} onStatusFact={s=>{updFact(viewDoc.doc.id,{status:s});notify("Status: "+FACT_STATUS[s]?.l);}} onEmail={()=>setEmailModal({doc:viewDoc.doc,type:viewDoc.type})}/>}
+      {viewDoc&&<DocModal doc={viewDoc.doc} type={viewDoc.type} settings={settings} producten={producten} onClose={()=>setViewDoc(null)} onFactuur={d=>{setFactModal(d);setViewDoc(null);}} onStatusOff={s=>{updOff(viewDoc.doc.id,{status:s});notify("Status: "+OFF_STATUS[s]?.l);}} onStatusFact={s=>{updFact(viewDoc.doc.id,{status:s});notify("Status: "+FACT_STATUS[s]?.l);}} onEmail={()=>setEmailModal({doc:viewDoc.doc,type:viewDoc.type})} onPlan={d=>setPlanningModal(d)}/>}
       {factModal&&<FactuurModal off={factModal} settings={settings} onMaak={maakFactuur} onClose={()=>setFactModal(null)}/>}
       {klantModal!==null&&<KlantModal klant={klantModal} settings={settings} onSave={k=>{if(k.id){setKlanten(p=>p.map(x=>x.id===k.id?k:x));notify("Klant opgeslagen");}else{setKlanten(p=>[{...k,id:uid(),aangemaakt:new Date().toISOString()},...p]);notify("Klant toegevoegd ✓");}setKlantModal(null);}} onClose={()=>setKlantModal(null)}/>}
       {prodModal!==null&&<ProductModal prod={prodModal} settings={settings} onSave={p=>{if(p.id){setProducten(pr=>pr.map(x=>x.id===p.id?p:x));notify("Product opgeslagen");}else{setProducten(pr=>[{...p,id:uid(),actief:true},...pr]);notify("Product toegevoegd ✓");}setProdModal(null);}} onClose={()=>setProdModal(null)}/>}
@@ -2038,6 +2042,7 @@ export default function App() {
       {creditnotaModal!==null&&<CreditnotaModal facturen={facturen} creditnota={creditnotaModal} settings={settings} onSave={cn=>{if(cn.id){setCreditnotas(p=>p.map(x=>x.id===cn.id?cn:x));}else{const n={...cn,id:uid(),nummer:nextNr("CN",creditnotas,"nummer"),aangemaakt:new Date().toISOString(),type:"creditnota"};setCreditnotas(p=>[n,...p]);if(cn.factuurId){updFact(cn.factuurId,{gecrediteerd:true});}}notify("Creditnota opgeslagen ✓");setCreditnotaModal(null);}} onClose={()=>setCreditnotaModal(null)}/>}
       {betalingModal&&<BetalingModal factuur={betalingModal} betalingen={betalingen.filter(b=>b.factuurId===betalingModal.id)} onSave={b=>{const nb={...b,id:uid(),factuurId:betalingModal.id,datum:b.datum||today(),aangemaakt:new Date().toISOString()};setBetalingen(p=>[nb,...p]);const totBet=betalingen.filter(x=>x.factuurId===betalingModal.id).reduce((s,x)=>s+x.bedrag,0)+nb.bedrag;const factTot=calcTotals(betalingModal.lijnen||[]).totaal;if(totBet>=factTot-0.01)updFact(betalingModal.id,{status:"betaald"});else updFact(betalingModal.id,{status:"gedeeltelijk"});notify("Betaling geregistreerd ✓");setBetalingModal(null);}} onClose={()=>setBetalingModal(null)}/>}
       {aanmaningModal&&<AanmaningModal factuur={aanmaningModal} settings={settings} onSend={(am)=>{setAanmaningen(p=>[{...am,id:uid(),aangemaakt:new Date().toISOString(),status:"verzonden",verzonden:today()},...p]);notify("Aanmaning verzonden ✓");setAanmaningModal(null);}} onClose={()=>setAanmaningModal(null)}/>}
+      {planningModal&&<PlanningModal offerte={planningModal} settings={settings} onSave={(id,upd)=>{updOff(id,upd);}} onClose={()=>setPlanningModal(null)} notify={notify}/>}
       {dossierModal!==null&&<DossierModal dossier={dossierModal} klanten={klanten} offertes={offertes} facturen={facturen} onSave={d=>{if(d.id){setDossiers(p=>p.map(x=>x.id===d.id?d:x));}else{setDossiers(p=>[{...d,id:uid(),aangemaakt:new Date().toISOString()},...p]);}notify("Dossier opgeslagen ✓");setDossierModal(null);}} onClose={()=>setDossierModal(null)} notify={notify}/>}
       {tijdModal!==null&&<TijdModal tijdslot={tijdModal} klanten={klanten} offertes={offertes} onSave={t=>{if(t.id){setTijdslots(p=>p.map(x=>x.id===t.id?t:x));}else{setTijdslots(p=>[{...t,id:uid(),aangemaakt:new Date().toISOString()},...p]);}notify("Tijd opgeslagen ✓");setTijdModal(null);}} onClose={()=>setTijdModal(null)}/>}
       {notif&&<div className={`notif ${notif.type}`}>{notif.type==="ok"?"✓":notif.type==="er"?"✕":"ℹ"} {notif.msg}</div>}
@@ -2134,7 +2139,7 @@ function Dashboard({offertes, facturen, onGoto, onNew, onFactuur, settings}) {
                     <div style={{fontWeight:700,color:"#059669"}}>{fmtEuro(t.totaal)}</div>
                     <div style={{display:"flex",gap:4,marginTop:3}}>
                       {!o.factuurId&&<button className="btn bg btn-sm" style={{fontSize:10}} onClick={()=>onFactuur(o)}>🧾 Factuur</button>}
-                      <button className="btn" style={{fontSize:10,background:"#d4ff00",color:"#1a2e4c",fontWeight:700}} onClick={()=>openPlannerWithOfferte(o)}>📅 Plan</button>
+                      <button className="btn" style={{fontSize:10,background:"#d4ff00",color:"#1a2e4c",fontWeight:700}} onClick={()=>setPlanningModal(o)}>📅 Inplannen</button>
                     </div>
                   </div>
                 </div>
@@ -2316,7 +2321,7 @@ async function sendViaPEPPOL(invoice, apiKey) {
   }
 }
 
-function OffertesPage({offertes,initFilter,onView,onEdit,onStatus,onBulkStatus,onFactuur,onDelete,onNew,onEmail,settings}) {
+function OffertesPage({offertes,initFilter,onView,onEdit,onStatus,onBulkStatus,onFactuur,onDelete,onNew,onEmail,onPlan,settings}) {
   const [q,setQ] = useState("");
   const [fs,setFs] = useState(initFilter||"alle");
   const [sel,setSel] = useState(new Set());
@@ -2413,6 +2418,7 @@ function OffertesPage({offertes,initFilter,onView,onEdit,onStatus,onBulkStatus,o
                         <button className="btn bs btn-sm" onClick={()=>{onStatus(o.id,{status:"goedgekeurd",logActie:"✅ Goedgekeurd door klant"});}}>👍 Goedgekeurd</button>
                         <button className="btn bs btn-sm" onClick={()=>{onStatus(o.id,{status:"afgewezen",logActie:"❌ Afgewezen door klant"});}}>👎 Afgewezen</button>
                         {o.status==="goedgekeurd"&&!o.factuurId&&<button className="btn bg btn-sm" onClick={()=>onFactuur(o)}>🧾 → Factuur</button>}
+                        {o.status==="goedgekeurd"&&<button className="btn btn-sm" style={{background:"#d4ff00",color:"#1a2e4c",fontWeight:700,border:"none"}} onClick={()=>onPlan(o)}>📅 Inplannen</button>}
                         <button className="btn bgh btn-sm" onClick={()=>{if(window.confirm("Verwijderen?"))onDelete(o.id)}}>🗑</button>
                       </div>
                       <div className="doc-log-wrap">
@@ -3662,9 +3668,8 @@ function OfferteWizard({klanten,producten,offertes,editData,settings,onSave,onCl
 
   const setQty=(prod,gid,aantal)=>{
     const nb=btwRegime==="verlegd"?0:btwRegime==="btw6"?6:21;
-    const finalBtw=prod.btw!==undefined?prod.btw:nb;
     if(aantal<=0){setLijnen(p=>p.filter(l=>l.productId!==prod.id));return;}
-    setLijnen(p=>{const ex=p.find(l=>l.productId===prod.id);if(ex)return p.map(l=>l.productId===prod.id?{...l,aantal,groepId:gid||l.groepId}:l);return[...p,{id:uid(),productId:prod.id,naam:prod.naam,omschr:prod.omschr,prijs:prod.prijs,btw:finalBtw,aantal,eenheid:prod.eenheid||"stuk",groepId:gid,imageUrl:prod.imageUrl,specs:prod.specs,technischeFiche:prod.technischeFiche||null,fichNaam:prod.fichNaam||""}];});
+    setLijnen(p=>{const ex=p.find(l=>l.productId===prod.id);if(ex)return p.map(l=>l.productId===prod.id?{...l,aantal,groepId:gid||l.groepId,btw:nb}:l);return[...p,{id:uid(),productId:prod.id,naam:prod.naam,omschr:prod.omschr,prijs:prod.prijs,btw:nb,aantal,eenheid:prod.eenheid||"stuk",groepId:gid,imageUrl:prod.imageUrl,specs:prod.specs,technischeFiche:prod.technischeFiche||null,fichNaam:prod.fichNaam||""}];});
   };
 
   const tot=calcTotals(lijnen);
@@ -4691,7 +4696,7 @@ ${docWrapHtml}
 }
 
 // ─── DOC MODAL ───────────────────────────────────────────────────
-function DocModal({doc,type,settings,onClose,onFactuur,onStatusOff,onStatusFact,onEmail}) {
+function DocModal({doc,type,settings,onClose,onFactuur,onStatusOff,onStatusFact,onEmail,onPlan}) {
   const sc = type==="offerte" ? (OFF_STATUS[doc.status]||OFF_STATUS.concept) : (FACT_STATUS[doc.status]||FACT_STATUS.concept);
 
   const doPrint = () => {
@@ -4758,6 +4763,7 @@ function DocModal({doc,type,settings,onClose,onFactuur,onStatusOff,onStatusFact,
             </select>
           )}
           {type==="offerte"&&doc.status==="goedgekeurd"&&!doc.factuurId&&<button className="btn bg btn-sm" onClick={()=>onFactuur(doc)}>🧾 Factuur</button>}
+          {type==="offerte"&&doc.status==="goedgekeurd"&&onPlan&&<button className="btn btn-sm" style={{background:"#d4ff00",color:"#1a2e4c",fontWeight:700,border:"none"}} onClick={()=>{onClose();onPlan(doc);}}>📅 Inplannen</button>}
           <button className="btn bs btn-sm" onClick={onEmail}>📧 Verzenden</button>
           {type==="factuur"&&getBillitKey(settings)&&doc.klant?.peppolActief&&<button className="btn bs btn-sm" style={{background:"#059669",color:"#fff",border:"none"}} onClick={async()=>{
             if(!window.confirm(`Factuur ${doc.nummer} verzenden via PEPPOL naar ${doc.klant?.naam}?`))return;
@@ -5497,6 +5503,126 @@ function Rapportage({offertes,facturen}) {
 }
 
 // ─── INSTELLINGEN ─────────────────────────────────────────────────
+// ─── PLANNING MODAL ──────────────────────────────────────────────
+function PlanningModal({offerte, settings, onSave, onClose, notify}) {
+  const [datum, setDatum] = useState("");
+  const [tijd, setTijd] = useState("09:00");
+  const [duur, setDuur] = useState("4");
+  const [notities, setNotities] = useState("");
+  const [sending, setSending] = useState(false);
+  const bed = settings?.bedrijf || {};
+  const dc = settings?.sjabloon?.accentKleur || settings?.thema?.kleur || "#1a2e4a";
+
+  const doInplannen = async () => {
+    if(!datum) { notify("Kies een datum","er"); return; }
+    setSending(true);
+    
+    // Build planning email HTML
+    const emailHtml = `<div style="font-family:Arial,sans-serif;max-width:640px;margin:0 auto;background:#f8fafc">
+<div style="background:${dc};padding:28px 32px;text-align:center;border-radius:8px 8px 0 0">
+  <h1 style="color:#fff;margin:0;font-size:22px">📅 Uw installatie is ingepland!</h1>
+  <p style="color:rgba(255,255,255,.8);margin:6px 0 0;font-size:14px">${bed.naam||""}</p>
+</div>
+<div style="background:#fff;padding:28px 32px;border:1px solid #e2e8f0;border-top:0">
+  <p style="font-size:15px;color:#1e293b">Beste <strong>${offerte.klant?.naam||""}</strong>,</p>
+  <p style="font-size:14px;color:#475569;line-height:1.6">Goed nieuws! Uw installatie is ingepland. Hieronder vindt u de details.</p>
+  <div style="background:#f0fdf4;border:2px solid #86efac;border-radius:12px;padding:24px;margin:20px 0;text-align:center">
+    <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#059669;margin-bottom:8px">GEPLANDE INSTALLATIE</div>
+    <div style="font-size:28px;font-weight:900;color:#059669">${new Date(datum).toLocaleDateString("nl-BE",{weekday:"long",day:"numeric",month:"long",year:"numeric"})}</div>
+    <div style="font-size:18px;font-weight:700;color:#1e293b;margin-top:4px">${tijd} uur</div>
+    <div style="font-size:14px;color:#64748b;margin-top:4px">Geschatte duur: ${duur} uur</div>
+  </div>
+  <table style="width:100%;border-collapse:collapse;margin:20px 0;font-size:14px">
+    <tr style="background:#f1f5f9"><td style="padding:10px 14px;border:1px solid #e2e8f0;font-weight:600">Offerte</td><td style="padding:10px 14px;border:1px solid #e2e8f0">${offerte.nummer||""}</td></tr>
+    <tr><td style="padding:10px 14px;border:1px solid #e2e8f0;font-weight:600">Adres installatie</td><td style="padding:10px 14px;border:1px solid #e2e8f0">${offerte.klant?.adres||""}, ${offerte.klant?.gemeente||""}</td></tr>
+    <tr style="background:#f1f5f9"><td style="padding:10px 14px;border:1px solid #e2e8f0;font-weight:600">Type</td><td style="padding:10px 14px;border:1px solid #e2e8f0">${offerte.installatieType||""}</td></tr>
+    ${notities?`<tr><td style="padding:10px 14px;border:1px solid #e2e8f0;font-weight:600">Opmerking</td><td style="padding:10px 14px;border:1px solid #e2e8f0">${notities}</td></tr>`:""}
+  </table>
+  <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:14px 18px;font-size:13px;color:#78350f;margin:16px 0">
+    ⚠️ <strong>Belangrijk:</strong> Zorg dat de meterkast en het installatieadres bereikbaar zijn. Bij verhindering, neem minstens 48u op voorhand contact op.
+  </div>
+  <div style="margin-top:20px;padding-top:16px;border-top:1px solid #e2e8f0;font-size:13px;color:#64748b;line-height:1.6">
+    <p style="margin:0"><strong>${bed.naam}</strong> · ${bed.adres||""} · ${bed.gemeente||""}</p>
+    <p style="margin:4px 0">${bed.tel||""} · ${bed.email||""}</p>
+  </div>
+</div>
+<div style="text-align:center;padding:16px;font-size:11px;color:#94a3b8">${bed.naam} · ${bed.website||""}</div>
+</div>`;
+
+    // Send email via EmailJS
+    if(window.emailjs && offerte.klant?.email) {
+      try {
+        const ejCfg = settings?.email || {};
+        const serviceId = ejCfg.emailjsServiceId || "service_qrkvr0d";
+        const pubKey = ejCfg.emailjsPublicKey || "04zsVAk5imDpo-8GJ";
+        window.emailjs.init(pubKey);
+        
+        // Use offerte template but with planning content
+        const templateId = ejCfg.emailjsTemplateOfferte || "template_5nckw9f";
+        await window.emailjs.send(serviceId, templateId, {
+          to_email: offerte.klant.email,
+          from_name: bed.naam,
+          reply_to: bed.email,
+          subject: `📅 Installatie ingepland — ${offerte.nummer} — ${new Date(datum).toLocaleDateString("nl-BE")}`,
+          message_html: emailHtml
+        });
+        notify("📧 Planning email verzonden naar " + offerte.klant.email);
+      } catch(e) {
+        console.error("Planning email failed:", e);
+        notify("⚠️ Ingepland maar email verzending mislukt: " + (e?.text||e?.message||""), "er");
+      }
+    }
+
+    // Save planning data to offerte
+    onSave(offerte.id, {
+      status: "ingepland",
+      planning: { datum, tijd, duur, notities, ingeplandOp: new Date().toISOString() },
+      logActie: `📅 Ingepland op ${new Date(datum).toLocaleDateString("nl-BE")} om ${tijd}`
+    });
+    setSending(false);
+    onClose();
+  };
+
+  return(
+    <div className="mo"><div className="mdl mmd">
+      <div className="mh"><div className="mt-m">📅 Installatie inplannen</div><button className="xbtn" onClick={onClose}>×</button></div>
+      <div className="mb-body">
+        <div style={{background:"#f0fdf4",border:"1px solid #86efac",borderRadius:8,padding:12,marginBottom:16,display:"flex",gap:10,alignItems:"center"}}>
+          <span style={{fontSize:24}}>✅</span>
+          <div>
+            <div style={{fontWeight:700,color:"#059669"}}>Goedgekeurd door {offerte.klant?.naam}</div>
+            <div style={{fontSize:12,color:"#16a34a"}}>{offerte.nummer} · {fmtEuro(calcTotals(offerte.lijnen||[]).totaal)}</div>
+            {offerte.klantReactie?.periode&&<div style={{fontSize:11,color:"#059669"}}>Gewenst: {offerte.klantReactie.periode}</div>}
+            {offerte.klantReactie?.opmerkingen&&<div style={{fontSize:11,color:"#059669"}}>"{offerte.klantReactie.opmerkingen}"</div>}
+          </div>
+        </div>
+        <div className="fr2">
+          <div className="fg"><label className="fl">📅 Datum</label><input type="date" className="fc" value={datum} onChange={e=>setDatum(e.target.value)} min={new Date().toISOString().split("T")[0]}/></div>
+          <div className="fg"><label className="fl">🕐 Startuur</label><input type="time" className="fc" value={tijd} onChange={e=>setTijd(e.target.value)}/></div>
+        </div>
+        <div className="fr2">
+          <div className="fg"><label className="fl">⏱ Geschatte duur (uren)</label>
+            <select className="fc" value={duur} onChange={e=>setDuur(e.target.value)}>
+              {["2","3","4","5","6","7","8"].map(d=><option key={d} value={d}>{d} uur</option>)}
+            </select>
+          </div>
+          <div className="fg"><label className="fl">📍 Adres</label><input className="fc" readOnly value={`${offerte.klant?.adres||""}, ${offerte.klant?.gemeente||""}`}/></div>
+        </div>
+        <div className="fg"><label className="fl">📝 Notities (optioneel)</label><textarea className="fc" rows={2} value={notities} onChange={e=>setNotities(e.target.value)} placeholder="Bijv: extra materiaal meenemen..."/></div>
+        {offerte.klant?.email&&<div style={{background:"#eff6ff",border:"1px solid #bfdbfe",borderRadius:7,padding:"8px 12px",fontSize:12,color:"#1d4ed8"}}>
+          📧 Klant ontvangt automatisch een planning-email op <strong>{offerte.klant.email}</strong>
+        </div>}
+      </div>
+      <div className="mf">
+        <button className="btn bs" onClick={onClose}>Annuleren</button>
+        <button className="btn bg btn-lg" onClick={doInplannen} disabled={sending} style={{background:"#d4ff00",color:"#1a2e4c",borderColor:"#d4ff00"}}>
+          {sending?"⟳ Bezig…":"📅 Inplannen & klant verwittigen"}
+        </button>
+      </div>
+    </div></div>
+  );
+}
+
 function InstellingenPage({settings,setSettings,notify}) {
   const isFirstRun = !settings?.bedrijf?.naam;
   const [tab,setTab]=useState(isFirstRun?"bedrijf":"bedrijf");
