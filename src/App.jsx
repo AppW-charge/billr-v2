@@ -1477,25 +1477,24 @@ export default function App() {
   const [planningModal, setPlanningModal] = useState(null);
   const [tijdModal, setTijdModal] = useState(null);
 
-  // dataReady: true ALLEEN nadat data volledig geladen is
-  // Voorkomt dat lege initiële state de opgeslagen data overschrijft
+  // ══════════════════════════════════════════════════════════════
+  // DATA LOADING & SAVING SYSTEEM — race-condition vrij
+  // Kernprincipe: UI toont pas NADAT Supabase volledig is geladen.
+  // Dit voorkomt dat acties (delete/add) worden overschreven door
+  // een late cloud-sync die nog onderweg was.
+  // ══════════════════════════════════════════════════════════════
   const dataReady = useRef(false);
-  const supabaseVerified = useRef(false); // true = we weten dat Supabase werkt voor deze user
+  const supabaseVerified = useRef(false);
+  const initGuard = useRef(false); // voorkomt dubbele init (React StrictMode / auth events)
+  const saveTimers = useRef({});
+  const pendingSaves = useRef({});
   const [loadingMsg, setLoadingMsg] = useState("Opstarten...");
-
-  // Module-level guard: voorkomt dubbele init door React StrictMode of dubbele auth events
-  // (verklaart de "Timer already exists" warning in de console)
-  const initGuard = useRef(false);
 
   useEffect(()=>{
 
-    // localStorage load helper — laadt data in state ZONDERsetLoaded(true)
     const loadFromLS = () => {
       try {
-        const get = (k, fb) => {
-          const v = localStorage.getItem(k);
-          return v ? JSON.parse(v) : fb;
-        };
+        const get = (k, fb) => { const v=localStorage.getItem(k); return v?JSON.parse(v):fb; };
         setSettings(get('b4_set', INIT_SETTINGS));
         setKlanten(get('b4_kln', INIT_KLANTEN));
         setProducten(get('b4_prd', INIT_PRODUCTS));
@@ -1509,9 +1508,7 @@ export default function App() {
         setGaranties(get('b4_ga', []));
         setAcceptTokens(get('b4_at', {}));
         console.log('✅ localStorage loaded');
-      } catch(e) {
-        console.warn('localStorage load failed:', e);
-      }
+      } catch(e) { console.warn('localStorage load failed:', e); }
     };
 
     const applyCloudData = (allData) => {
@@ -1523,20 +1520,18 @@ export default function App() {
         if(!allData[key]) return;
         const cloud = parse(key, fallback);
         setter(cloud);
-        // Sync localStorage cache — strip base64 om quota te voorkomen
         try {
           if(key === "b4_off" || key === "b4_fct" || key === "b4_prd") {
-            const stripped = (Array.isArray(cloud) ? cloud : []).map(item => ({
+            const stripped = (Array.isArray(cloud)?cloud:[]).map(item => ({
               ...item, technischeFiche: null,
-              technischeFiches: (item.technischeFiches||[]).map(f => ({naam: f.naam})),
-              lijnen: (item.lijnen||[]).map(l => ({...l, technischeFiche: null, technischeFiches: (l.technischeFiches||[]).map(f => ({naam: f.naam}))}))
+              technischeFiches: (item.technischeFiches||[]).map(f=>({naam:f.naam})),
+              lijnen: (item.lijnen||[]).map(l=>({...l, technischeFiche:null, technischeFiches:(l.technischeFiches||[]).map(f=>({naam:f.naam}))}))
             }));
             localStorage.setItem(key, JSON.stringify(stripped));
           } else {
             localStorage.setItem(key, allData[key]);
           }
         } catch(_){}
-        console.log(`  ☁️→ ${key}: ${Array.isArray(parse(key,[])) ? parse(key,[]).length+' items' : 'geladen'}`);
       };
       apply("b4_set", setSettings, INIT_SETTINGS);
       apply("b4_kln", setKlanten, INIT_KLANTEN);
@@ -1550,83 +1545,70 @@ export default function App() {
       apply("b4_do",  setDossiers, []);
       apply("b4_ga",  setGaranties, []);
       apply("b4_at",  setAcceptTokens, {});
+      console.log(`☁️ Cloud data toegepast (${Object.keys(allData).length} keys)`);
     };
 
     const loadUserData = async (u) => {
-      // ══ GUARD: voorkomt dubbele init (StrictMode / dubbele auth events) ══
-      if(initGuard.current) {
-        console.log("⏭ loadUserData: al bezig, overgeslagen");
-        return;
-      }
+      // Guard: voorkomt dubbele init (StrictMode / dubbele auth events = "Timer already exists")
+      if(initGuard.current) { console.log("⏭ loadUserData al bezig"); return; }
       initGuard.current = true;
       dataReady.current = false;
 
-      const appUser = { id: u.id, email: u.email, naam: u.user_metadata?.naam || u.email.split("@")[0], rol: "admin" };
-      setUser(appUser);
+      setUser({ id:u.id, email:u.email, naam:u.user_metadata?.naam||u.email.split("@")[0], rol:"admin" });
 
-      // STAP 1: localStorage in state laden (snel, geen UI tonen nog)
+      // STAP 1: localStorage in state laden (geen UI tonen nog)
       setLoadingMsg("Lokale data laden...");
       loadFromLS();
 
-      // STAP 2: Supabase laden — UI wordt pas getoond NA cloud sync
-      // Dit voorkomt de race condition waarbij gebruiker data verwijdert
-      // terwijl applyCloudData nog onderweg is
+      // STAP 2: Supabase laden — UI pas tonen NA cloud sync
+      // Dit is de fix voor de kern-race-condition:
+      // vroeger: setLoaded(true) vóór applyCloudData → gebruiker kon deleten
+      //          terwijl cloud data nog onderweg was en die delete oversloeg
       setLoadingMsg("Synchroniseren met cloud...");
       console.log("☁️ Supabase laden...");
 
-      // Safety timeout: na 10s toch starten met localStorage data
-      let cloudLoaded = false;
-      const timeoutId = setTimeout(() => {
-        if(!cloudLoaded) {
-          console.warn("⚠️ Supabase timeout (10s) — UI tonen met localStorage data");
+      // Veiligheidsnet: na 12s toch UI tonen (bijv. slechte verbinding)
+      let cloudDone = false;
+      const timeoutHandle = setTimeout(() => {
+        if(!cloudDone) {
+          console.warn("⚠️ Supabase timeout (12s) — UI tonen met lokale data");
           supabaseVerified.current = true;
           dataReady.current = true;
           setLoadingMsg("Gereed (offline modus)");
           setLoaded(true);
         }
-      }, 10000);
+      }, 12000);
 
       try {
         const allData = await sbGetAll(u.id);
-        cloudLoaded = true;
-        clearTimeout(timeoutId);
-
+        cloudDone = true;
+        clearTimeout(timeoutHandle);
         if(allData && Object.keys(allData).length > 0) {
           supabaseVerified.current = true;
-          console.log(`☁️ Supabase: ${Object.keys(allData).length} keys — cloud data toepassen`);
           setLoadingMsg("Data toepassen...");
           applyCloudData(allData);
         } else {
-          console.log("☁️ Supabase leeg — localStorage data blijft");
+          console.log("☁️ Supabase leeg — lokale data blijft");
           supabaseVerified.current = true;
         }
       } catch(e) {
-        cloudLoaded = true;
-        clearTimeout(timeoutId);
-        console.warn("⚠️ Supabase load mislukt:", e.message, "— localStorage actief");
+        cloudDone = true;
+        clearTimeout(timeoutHandle);
+        console.warn("⚠️ Supabase load mislukt:", e.message, "— lokale data actief");
       }
 
-      // Kleine pauze zodat state updates verwerkt zijn voor saves beginnen
+      // Kleine pauze zodat React alle state-updates verwerkt heeft vóór saves beginnen
       await new Promise(r => setTimeout(r, 150));
       dataReady.current = true;
       setLoaded(true);
-      console.log("✅ dataReady = true — UI actief, saves toegestaan");
+      console.log("✅ dataReady=true — UI actief, saves toegestaan");
     };
 
     // Sessie check
     sb.auth.getSession().then(({ data: { session: s } }) => {
-      if(s?.user) {
-        loadUserData(s.user);
-      } else {
-        loadFromLS();
-        dataReady.current = true;
-        setLoaded(true);
-      }
-    }).catch(() => {
-      loadFromLS();
-      dataReady.current = true;
-      setLoaded(true);
-    });
+      if(s?.user) { loadUserData(s.user); }
+      else { loadFromLS(); dataReady.current=true; setLoaded(true); }
+    }).catch(() => { loadFromLS(); dataReady.current=true; setLoaded(true); });
 
     // Auth state listener
     const { data: { subscription } } = sb.auth.onAuthStateChange(async (event, session) => {
@@ -1640,15 +1622,11 @@ export default function App() {
         loadFromLS();
         dataReady.current = true;
         setLoaded(true);
-      } else if(event === "TOKEN_REFRESHED") {
-        // Token refresh: GEEN herlaad van data, alleen supabase client bijwerken
-        console.log("🔄 Token vernieuwd — geen herlaad nodig");
       }
+      // TOKEN_REFRESHED: geen herlaad nodig, Supabase client handelt dit intern af
     });
 
-    return () => {
-      subscription.unsubscribe();
-    };
+    return () => { subscription.unsubscribe(); };
   },[]);
 
   // ═══ POLL OFFERTE RESPONSES: check of klanten gereageerd hebben ═══
@@ -1678,77 +1656,80 @@ export default function App() {
         if(changed) console.log("📬 Offerte responses verwerkt");
       } catch(e) { console.warn("Response poll failed:", e); }
     };
-    // Check on load + every 60s
     const timer = setTimeout(checkResponses, 2000);
     const interval = setInterval(checkResponses, 60000);
     return () => { clearTimeout(timer); clearInterval(interval); };
   },[user, loaded]);
 
-  // ═══ MOBIELE DATA SYNC: herlaad localStorage bij tab-switch (GEEN state update) ═══
+  // ═══ MOBIELE SYNC: bij tab-switch cloud data direct in state laden ═══
+  // Verbeterd: laadt nu WEL state bij terugkeer (mobiel had verouderde data)
   const lastSyncRef = useRef(0);
   useEffect(()=>{
     const handler = async () => {
-      if(document.visibilityState==="visible" && user && Date.now()-lastSyncRef.current > 120000) {
-        lastSyncRef.current = Date.now();
-        // Sla NIETS op als er pending saves zijn — wacht tot die klaar zijn
-        if(Object.keys(pendingSaves.current).length > 0) {
-          console.log("📱 Tab zichtbaar — pending saves aanwezig, sync overgeslagen");
-          return;
+      if(document.visibilityState!=="visible" || !user) return;
+      // Wacht minstens 30s tussen syncs, maar NIET als er pending saves zijn
+      const hasPending = Object.keys(pendingSaves.current).length > 0;
+      const timeSince = Date.now() - lastSyncRef.current;
+      if(hasPending || timeSince < 30000) return;
+      lastSyncRef.current = Date.now();
+      console.log("📱 Tab zichtbaar — cloud sync...");
+      try {
+        const allData = await sbGetAll(user.id);
+        if(allData && Object.keys(allData).length > 0) {
+          // State ÉN localStorage bijwerken (fix voor mobiel die verouderde data toonde)
+          const parse = (key, fb) => { try { return allData[key]?JSON.parse(allData[key]):fb; } catch(_){ return fb; } };
+          const applyIfNewer = (key, setter, fb) => {
+            if(!allData[key]) return;
+            // Sla over als we een pending save hebben voor deze key
+            if(pendingSaves.current[key]) { console.log(`📱 Skip ${key} — pending save`); return; }
+            setter(parse(key, fb));
+            try { localStorage.setItem(key, allData[key]); } catch(_){}
+          };
+          applyIfNewer("b4_set", setSettings, INIT_SETTINGS);
+          applyIfNewer("b4_kln", setKlanten, INIT_KLANTEN);
+          applyIfNewer("b4_prd", setProducten, INIT_PRODUCTS);
+          applyIfNewer("b4_off", setOffertes, []);
+          applyIfNewer("b4_fct", setFacturen, []);
+          applyIfNewer("b4_cn",  setCreditnotas, []);
+          applyIfNewer("b4_am",  setAanmaningen, []);
+          applyIfNewer("b4_bt",  setBetalingen, []);
+          applyIfNewer("b4_ti",  setTijdslots, []);
+          applyIfNewer("b4_do",  setDossiers, []);
+          applyIfNewer("b4_ga",  setGaranties, []);
+          applyIfNewer("b4_at",  setAcceptTokens, {});
+          console.log("📱 ✓ Cloud sync klaar — state bijgewerkt");
         }
-        console.log("📱 Tab zichtbaar — achtergrond sync localStorage...");
-        try {
-          const allData = await sbGetAll(user.id);
-          if(allData && Object.keys(allData).length > 0) {
-            // ALLEEN localStorage bijwerken, GEEN state (voorkomt UI-reset)
-            Object.entries(allData).forEach(([k,v])=>{
-              // Skip keys die de gebruiker recent gewijzigd heeft
-              if(pendingSaves.current[k]) return;
-              try{ localStorage.setItem(k,v); }catch(_){}
-            });
-            console.log("📱 ✓ localStorage cache bijgewerkt");
-          }
-        } catch(e) { console.warn("📱 Sync mislukt:",e); }
-      }
+      } catch(e) { console.warn("📱 Sync mislukt:",e); }
     };
-    document.addEventListener("visibilitychange",handler);
-    return ()=>document.removeEventListener("visibilitychange",handler);
+    document.addEventListener("visibilitychange", handler);
+    return ()=>document.removeEventListener("visibilitychange", handler);
   },[user]);
 
   // ═══ EMAILJS INITIALISATIE ═══
-  // Re-init wanneer settings veranderen (zodat de juiste public key gebruikt wordt)
   useEffect(() => {
     if(window.emailjs) {
       const pubKey = settings?.email?.emailjsPublicKey || "04zsVAk5imDpo-8GJ";
       window.emailjs.init(pubKey);
-      console.log("✅ EmailJS geïnitialiseerd met key:", pubKey.slice(0,6) + "...");
     }
   }, [settings?.email?.emailjsPublicKey]);
 
-
-  // saveKey: localStorage INSTANT + Supabase DIRECT (geen debounce voor deletes)
-  const saveTimers = useRef({});
-  const pendingSaves = useRef({}); // key -> meest recente json die gesaved moet worden
+  // ══════════════════════════════════════════════════════════════
+  // saveKey: localStorage INSTANT + Supabase debounced 150ms
+  // Fix: retry gebruikt altijd de LAATSTE versie via pendingSaves ref
+  // ══════════════════════════════════════════════════════════════
   const saveKey = useCallback(async (key, val) => {
     if(!dataReady.current) return;
-
     const json = JSON.stringify(val);
 
-    // Sla niet op als de waarde identiek is aan de vorige save voor deze key
-    if(pendingSaves.current[key]?.json === json) return;
-
-    // STAP 1: localStorage INSTANT — strip base64 om quota niet te overschrijden
+    // STAP 1: localStorage INSTANT
     try {
       let lsJson = json;
       if(key === "b4_off" || key === "b4_fct" || key === "b4_prd") {
         try {
           const stripped = JSON.parse(json).map(item => ({
-            ...item,
-            technischeFiche: null,
-            technischeFiches: (item.technischeFiches||[]).map(f => ({naam: f.naam})),
-            lijnen: (item.lijnen||[]).map(l => ({
-              ...l, technischeFiche: null,
-              technischeFiches: (l.technischeFiches||[]).map(f => ({naam: f.naam}))
-            }))
+            ...item, technischeFiche: null,
+            technischeFiches: (item.technischeFiches||[]).map(f=>({naam:f.naam})),
+            lijnen: (item.lijnen||[]).map(l=>({...l, technischeFiche:null, technischeFiches:(l.technischeFiches||[]).map(f=>({naam:f.naam}))}))
           }));
           lsJson = JSON.stringify(stripped);
         } catch(_) {}
@@ -1756,60 +1737,45 @@ export default function App() {
       localStorage.setItem(key, lsJson);
     } catch(e) { console.warn(`localStorage "${key}" failed:`, e); }
 
-    // STAP 2: Supabase — debounce 150ms (was 300ms)
-    // pendingSaves bijhouden met de LAATSTE waarde voor deze key
+    // STAP 2: Supabase debounced 150ms
     if(user) {
       pendingSaves.current[key] = { json, userId: user.id };
       clearTimeout(saveTimers.current[key]);
       saveTimers.current[key] = setTimeout(async () => {
-        // Gebruik altijd de MEEST RECENTE json uit pendingSaves (niet de closure)
-        // Dit voorkomt dat een verouderde retry een nieuwe save overschrijft
         const pending = pendingSaves.current[key];
-        if(!pending) return; // Reeds opgeslagen door een andere route
-
+        if(!pending) return;
         const success = await sbSet(key, pending.json, pending.userId);
         if(success) {
-          // Verwijder enkel als de json nog steeds dezelfde is
-          if(pendingSaves.current[key]?.json === pending.json) {
-            delete pendingSaves.current[key];
-          }
-          console.log(`💾 Supabase opgeslagen: ${key}`);
+          if(pendingSaves.current[key]?.json === pending.json) delete pendingSaves.current[key];
+          console.log(`💾 Opgeslagen: ${key}`);
         } else {
-          // Retry na 4 seconden — gebruik opnieuw pendingSaves voor de laatste waarde
           console.warn(`⟳ Retry save "${key}" in 4s...`);
           setTimeout(async () => {
             const retryPending = pendingSaves.current[key];
-            if(!retryPending) return; // Ondertussen al opgeslagen
-            const retrySuccess = await sbSet(key, retryPending.json, retryPending.userId);
-            if(retrySuccess) {
-              if(pendingSaves.current[key]?.json === retryPending.json) {
-                delete pendingSaves.current[key];
-              }
-              console.log(`💾 Retry geslaagd: ${key}`);
-            } else {
-              console.error(`❌ Save "${key}" definitief mislukt — data staat nog in localStorage`);
-            }
+            if(!retryPending) return;
+            const ok = await sbSet(key, retryPending.json, retryPending.userId);
+            if(ok && pendingSaves.current[key]?.json === retryPending.json) delete pendingSaves.current[key];
+            else if(!ok) console.error(`❌ Save "${key}" mislukt — staat in localStorage`);
           }, 4000);
         }
       }, 150);
     }
   }, [user]);
-  
-  // Flush alle pending saves bij pagina sluiten (sync XHR als laatste redmiddel)
+
+  // Flush pending saves bij pagina sluiten
   useEffect(() => {
     const flush = () => {
       const pending = Object.entries(pendingSaves.current);
-      if(pending.length === 0) return;
-      console.log(`🔄 beforeunload: ${pending.length} pending saves flushen...`);
+      if(!pending.length) return;
       pending.forEach(([key, {json, userId}]) => {
         try {
           const xhr = new XMLHttpRequest();
-          xhr.open("POST", `${SB_URL}/rest/v1/user_data?on_conflict=user_id,key`, false); // sync!
+          xhr.open("POST", `${SB_URL}/rest/v1/user_data?on_conflict=user_id,key`, false);
           xhr.setRequestHeader("Content-Type", "application/json");
           xhr.setRequestHeader("apikey", SB_KEY);
           xhr.setRequestHeader("Authorization", `Bearer ${SB_KEY}`);
           xhr.setRequestHeader("Prefer", "resolution=merge-duplicates");
-          xhr.send(JSON.stringify({ user_id: userId, key, value: json, updated_at: new Date().toISOString() }));
+          xhr.send(JSON.stringify({ user_id:userId, key, value:json, updated_at:new Date().toISOString() }));
         } catch(_) {}
       });
     };
@@ -2041,8 +2007,8 @@ export default function App() {
         <div style={{position:"absolute",inset:0,border:"3px solid rgba(255,255,255,.15)",borderRadius:"50%"}}/>
         <div style={{position:"absolute",inset:0,border:"3px solid transparent",borderTopColor:"#d4ff00",borderRadius:"50%",animation:"spin 0.8s linear infinite"}}/>
       </div>
-      <div style={{color:"rgba(255,255,255,.85)",fontSize:13,fontWeight:700,letterSpacing:.5}}>BILLR</div>
-      <div style={{color:"rgba(255,255,255,.55)",fontSize:12,fontWeight:500}}>{loadingMsg}</div>
+      <div style={{color:"rgba(255,255,255,.85)",fontSize:14,fontWeight:700,letterSpacing:.5}}>BILLR</div>
+      <div style={{color:"rgba(255,255,255,.5)",fontSize:12}}>{loadingMsg}</div>
       <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
     </div>
   );
@@ -5673,10 +5639,20 @@ function EmailModal({doc,type,settings,onClose,onSend,onAcceptToken}) {
         {type==="offerte"&&(
           <div style={{background:"#f0fdf4",border:"1px solid #86efac",borderRadius:7,padding:"9px 12px",marginTop:10,fontSize:12,color:"#166534"}}>
             🔗 <strong>Acceptatie-link:</strong> Klant klikt op "Goedkeuren" → status wordt automatisch bijgewerkt in BILLR.
-            <div style={{fontFamily:"monospace",fontSize:10,color:"#94a3b8",marginTop:3,wordBreak:"break-all"}}>
-              {acceptUrl 
-                ? <a href={acceptUrl} target="_blank" rel="noopener noreferrer" style={{color:"#2563eb",textDecoration:"underline"}}>{acceptUrl}</a>
-                : <span style={{color:"#f59e0b"}}>⏳ Link wordt aangemaakt...</span>
+            <div style={{display:"flex",alignItems:"center",gap:6,marginTop:6,background:"#fff",borderRadius:6,padding:"6px 10px",border:"1px solid #86efac"}}>
+              {acceptUrl
+                ? <>
+                    <span style={{fontSize:11,color:"#475569",flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{acceptUrl}</span>
+                    <button onClick={()=>{navigator.clipboard?.writeText(acceptUrl);}} title="Link kopiëren"
+                      style={{flexShrink:0,padding:"3px 10px",background:"#10b981",color:"#fff",border:"none",borderRadius:5,fontSize:11,fontWeight:700,cursor:"pointer"}}>
+                      📋 Kopieer
+                    </button>
+                    <a href={acceptUrl} target="_blank" rel="noopener noreferrer"
+                      style={{flexShrink:0,padding:"3px 10px",background:"#eff6ff",color:"#2563eb",border:"1px solid #bfdbfe",borderRadius:5,fontSize:11,fontWeight:700,textDecoration:"none"}}>
+                      ↗ Open
+                    </a>
+                  </>
+                : <span style={{fontSize:11,color:"#f59e0b"}}>⏳ Link wordt aangemaakt...</span>
               }
             </div>
           </div>
