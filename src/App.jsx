@@ -5228,7 +5228,7 @@ function EmailModal({doc,type,settings,onClose,onSend,onAcceptToken}) {
   const hasEmailJS = !!(ejCfg.emailjsServiceId && ejCfg.emailjsPublicKey);
   const hasPeppol = type==="factuur" && getBillitKey(settings) && doc.klant?.peppolActief;
   const [modus, setModus] = useState(hasPeppol ? "peppol" : hasEmailJS ? "auto" : "handmatig");
-  const [tab, setTab] = useState("bewerk"); // "bewerk" | "preview"
+  const [tab, setTab] = useState("preview"); // Default: voorbeeld tonen
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
   const [error, setError] = useState("");
@@ -5249,7 +5249,17 @@ function EmailModal({doc,type,settings,onClose,onSend,onAcceptToken}) {
   const [subject, setSubject] = useState(`${type==="offerte"?"Offerte":"Factuur"} ${doc.nummer} — ${bed.naam}`);
   const [htmlBody, setHtmlBody] = useState(isHtml ? buildOfferteHtml(doc,bed,tot,acceptUrl,rejectUrl,rawTmpl,{dc}) : defaultHtml);
   const [txtBody, setTxtBody] = useState(!isHtml ? rawTmpl.replace(/{naam}/g,doc.klant?.naam||"").replace(/{nummer}/g,doc.nummer||"").replace(/{datum}/g,fmtDate(doc.datum||doc.aangemaakt)).replace(/{vervaldatum}/g,fmtDate(doc.vervaldatum)).replace(/{bedrijf}/g,bed.naam||"").replace(/{totaal}/g,fmtEuro(tot.totaal)).replace(/{iban}/g,bed.iban||"").replace(/{tel}/g,bed.tel||"") : "");
-  const [bodyMode, setBodyMode] = useState(isHtml ? "html" : "tekst");
+  const [bodyMode, setBodyMode] = useState("html"); // Always default to HTML
+
+  // Rebuild HTML wanneer acceptUrl beschikbaar wordt (async Supabase token)
+  useEffect(()=>{
+    if(acceptUrl && type==="offerte") {
+      const fresh = isHtml 
+        ? buildOfferteHtml(doc,bed,tot,acceptUrl,rejectUrl,rawTmpl,{dc})
+        : buildOfferteHtml(doc, bed, tot, acceptUrl, rejectUrl, null, {dc});
+      setHtmlBody(fresh);
+    }
+  },[acceptUrl]);
 
   const doAutoSend = async () => {
     if(!to) return setError("Voer een e-mailadres in");
@@ -5411,7 +5421,7 @@ function EmailModal({doc,type,settings,onClose,onSend,onAcceptToken}) {
         {tab==="preview"&&(
           <div style={{border:"1px solid #e2e8f0",borderRadius:8,overflow:"hidden",maxHeight:420,overflowY:"auto"}}>
             {bodyMode==="html"
-              ? <iframe srcDoc={htmlBody} style={{width:"100%",height:380,border:"none"}} title="Email preview"/>
+              ? <iframe srcDoc={htmlBody} sandbox="allow-same-origin" style={{width:"100%",height:420,border:"none"}} title="Email preview"/>
               : <pre style={{padding:16,fontSize:12.5,fontFamily:"Arial",margin:0,whiteSpace:"pre-wrap"}}>{txtBody}</pre>
             }
           </div>
@@ -5437,7 +5447,12 @@ function EmailModal({doc,type,settings,onClose,onSend,onAcceptToken}) {
         {type==="offerte"&&(
           <div style={{background:"#f0fdf4",border:"1px solid #86efac",borderRadius:7,padding:"9px 12px",marginTop:10,fontSize:12,color:"#166534"}}>
             🔗 <strong>Acceptatie-link:</strong> Klant klikt op "Goedkeuren" → status wordt automatisch bijgewerkt in BILLR.
-            <div style={{fontFamily:"monospace",fontSize:10,color:"#94a3b8",marginTop:3,wordBreak:"break-all"}}>{acceptUrl}</div>
+            <div style={{fontFamily:"monospace",fontSize:10,color:"#94a3b8",marginTop:3,wordBreak:"break-all"}}>
+              {acceptUrl 
+                ? <a href={acceptUrl} target="_blank" rel="noopener noreferrer" style={{color:"#2563eb",textDecoration:"underline"}}>{acceptUrl}</a>
+                : <span style={{color:"#f59e0b"}}>⏳ Link wordt aangemaakt...</span>
+              }
+            </div>
           </div>
         )}
       </div>
