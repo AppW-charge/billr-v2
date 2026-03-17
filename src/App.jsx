@@ -5250,11 +5250,15 @@ function EmailModal({doc,type,settings,onClose,onSend,onAcceptToken}) {
           _vw: settings?.voorwaarden||{}
         };
         // Store in Supabase
-        await sb.from("shared_offertes").upsert({
+        const {error:insErr} = await sb.from("shared_offertes").insert({
           token: t,
           offerte_data: payload,
           settings_data: {bedrijf:bed, sjabloon:settings?.sjabloon, layout:settings?.layout, voorwaarden:settings?.voorwaarden, thema:settings?.thema}
-        }, {onConflict:"token"});
+        });
+        if(insErr) {
+          console.error("shared_offertes insert failed:", insErr.message, insErr.details);
+          throw new Error(insErr.message);
+        }
         setAcceptUrl(`${window.location.origin}/offerte.html?token=${t}`);
         console.log("☁️ Offerte opgeslagen voor klant-link, token:", t);
       } catch(e) {
