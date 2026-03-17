@@ -28,10 +28,6 @@ body{font-family:'Inter',sans-serif;background:#f0f4f8;color:#1e293b;font-size:1
 .qt-tbl th{text-align:left;padding:8px 12px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:#94a3b8;border-bottom:2px solid #e2e8f0;background:#f8fafc}
 .qt-tbl th.r,.qt-tbl td.r{text-align:right}.qt-tbl th.c,.qt-tbl td.c{text-align:center}
 .qt-tbl td{padding:10px 12px;border-bottom:1px solid #f1f5f9;vertical-align:top;font-size:13px}
-.qt-meta-bar{display:flex;gap:6px;flex-wrap:wrap;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:10px 14px;margin-bottom:16px}
-.qt-meta-item{flex:1;min-width:100px}
-.qt-meta-lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:#94a3b8;margin-bottom:2px}
-.qt-meta-val{font-weight:600;font-size:13px;color:#1e293b}
 .grp-sub{display:flex;justify-content:flex-end;padding:8px 14px;background:#f8fafc;font-weight:700;font-size:13px;border-bottom:2px solid #e2e8f0;gap:8px}
 .tot-box{max-width:380px;margin-left:auto;margin-top:20px}
 .tot-row{display:flex;justify-content:space-between;padding:6px 0;font-size:14px;color:#475569}
@@ -53,12 +49,23 @@ body{font-family:'Inter',sans-serif;background:#f0f4f8;color:#1e293b;font-size:1
 .cal-btns{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;margin-top:16px}
 .cal-btn{display:inline-flex;align-items:center;gap:8px;padding:10px 20px;border-radius:10px;font-weight:700;font-size:13px;text-decoration:none;cursor:pointer;border:2px solid #e2e8f0;background:#fff;color:#1e293b;transition:all .15s}
 .cal-btn:hover{border-color:#2563eb;background:#eff6ff;transform:translateY(-1px)}
+/* Planning response pagina */
+.pl-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;background:#f0f4f8;padding:20px}
+.pl-card{max-width:560px;width:100%;background:#fff;border-radius:16px;box-shadow:0 8px 32px rgba(0,0,0,.12);overflow:hidden}
+.pl-header{padding:28px 32px;color:#fff;text-align:center}
+.pl-body{padding:28px 32px}
+.pl-datum-box{border:2px solid;border-radius:12px;padding:20px;margin:16px 0;text-align:center}
+.pl-btn{width:100%;border:none;padding:14px;border-radius:9px;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .15s;margin-bottom:10px}
+.pl-btn:hover{transform:translateY(-1px);box-shadow:0 4px 12px rgba(0,0,0,.15)}
+.pl-btn:disabled{opacity:.5;cursor:not-allowed;transform:none}
+.pl-input{width:100%;padding:10px 14px;border:1.5px solid #d1d5db;border-radius:8px;font-size:14px;font-family:inherit;box-sizing:border-box;outline:none}
+.pl-input:focus{border-color:#2563eb}
 @media print{.action-bar,.bottom-cta,.modal-bg,.doc-page-lbl{display:none!important}body{background:#fff}.doc-page{box-shadow:none;margin:0;break-after:page}.wrap{padding:0;max-width:100%}}
-@media(max-width:640px){.cov{grid-template-columns:1fr!important;min-height:auto!important}.cov-l,.cov-r{padding:24px 20px!important}.btn{padding:10px 16px;font-size:13px}.action-bar h2{font-size:13px}.pg-footer{flex-direction:column;text-align:center;gap:2px}.grp-sub{font-size:12px}.qt-tbl th,.qt-tbl td{padding:6px 8px;font-size:11px}.modal{padding:20px}}
+@media(max-width:640px){.cov{grid-template-columns:1fr!important;min-height:auto!important}.cov-l,.cov-r{padding:24px 20px!important}.btn{padding:10px 16px;font-size:13px}.action-bar h2{font-size:13px}.pg-footer{flex-direction:column;text-align:center;gap:2px}.grp-sub{font-size:12px}.qt-tbl th,.qt-tbl td{padding:6px 8px;font-size:11px}.modal{padding:20px}.pl-body{padding:20px 16px}.pl-header{padding:20px 16px}}
 </style>
 </head>
 <body>
-<div id="app"><div class="status-msg"><div class="icon">⏳</div><h2>Offerte laden...</h2></div></div>
+<div id="app"><div class="status-msg"><div class="icon">⏳</div><h2>Laden...</h2></div></div>
 <script>
 const SB_URL="https://qxnxbqkdvvblfkihmjxy.supabase.co";
 const SB_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF4bnhicWtkdnZibGZraWhtanh5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMzNTI3MTMsImV4cCI6MjA4ODkyODcxM30.1JDvrHgxLpU1GZqSjDVGtfnFJg8PHuD-aFpHOxAY1To";
@@ -68,11 +75,183 @@ if(window.pdfjsLib) window.pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdnjs
 
 const fE=n=>"€\u00A0"+Number(n||0).toFixed(2).replace(".",",").replace(/\B(?=(\d{3})+(?!\d))/g,".");
 const fD=d=>d?new Date(d).toLocaleDateString("nl-BE",{day:"2-digit",month:"2-digit",year:"numeric"}):"—";
+// Correcte datumweergave zonder timezone-verschuiving
+const fDL=d=>{if(!d)return"";const p=d.split('-').map(Number);return new Date(p[0],p[1]-1,p[2]).toLocaleDateString("nl-BE",{weekday:"long",day:"numeric",month:"long",year:"numeric"});};
 const fB=n=>{const c=(n||"").replace(/[^0-9]/g,"");return c.length>=9?"BE "+c.slice(0,4)+"."+c.slice(4,7)+"."+c.slice(7):(n||"");};
 const BTW_L={btw6:"6% BTW (renovatie)",btw21:"21% BTW",verlegd:"BTW verlegd"};
 
 function calcTot(doc){const it=(doc?.lijnen||[]).filter(l=>!l.isInfo);const sub=it.reduce((s,l)=>s+(l.prijs*l.aantal),0);const bg={};it.forEach(l=>{const r=l.btw||21;if(!bg[r])bg[r]=0;bg[r]+=l.prijs*l.aantal*(r/100);});const btw=Object.values(bg).reduce((s,v)=>s+v,0);return{subtotaal:sub,btwGroepen:bg,btw,totaal:sub+btw};}
 
+async function sbFetch(path,method,body){
+  const r=await fetch(SB_URL+path,{method:method||'GET',headers:{'Content-Type':'application/json','apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Prefer':'return=representation'},body:body?JSON.stringify(body):undefined});
+  if(!r.ok)throw new Error('HTTP '+r.status);
+  const txt=await r.text();return txt?JSON.parse(txt):null;
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  PLANNING RESPONSE HANDLER
+//  Wordt opgeroepen als URL ?planningToken=xxx&response=yyy bevat
+// ═══════════════════════════════════════════════════════════════
+async function handlePlanningResponse(planningToken,response){
+  const app=document.getElementById('app');
+  app.innerHTML='<div class="pl-wrap"><div class="pl-card"><div class="pl-body" style="text-align:center;padding:60px 20px"><div style="font-size:40px;margin-bottom:12px">⏳</div><div style="font-size:15px;color:#64748b">Laden...</div></div></div></div>';
+
+  // Haal voorsteldata op uit Supabase
+  let voorstel=null;
+  try{
+    const rows=await sbFetch('/rest/v1/planning_responses?token=eq.'+encodeURIComponent(planningToken)+'&select=*','GET');
+    voorstel=rows?.[0];
+  }catch(e){
+    app.innerHTML='<div class="pl-wrap"><div class="pl-card"><div class="pl-body" style="text-align:center;padding:40px"><div style="font-size:40px;margin-bottom:12px">⚠️</div><div style="font-weight:700;color:#ef4444">Fout bij laden</div><div style="font-size:13px;color:#64748b;margin-top:8px">Probeer opnieuw of neem contact op.</div></div></div></div>';
+    return;
+  }
+
+  if(!voorstel){
+    app.innerHTML='<div class="pl-wrap"><div class="pl-card"><div class="pl-body" style="text-align:center;padding:40px"><div style="font-size:40px;margin-bottom:12px">🔍</div><div style="font-weight:700;color:#64748b">Link niet gevonden</div><div style="font-size:13px;color:#94a3b8;margin-top:8px">Deze link is ongeldig of al verwerkt.</div></div></div></div>';
+    return;
+  }
+
+  // Al beantwoord?
+  if(voorstel.response){
+    const icon=voorstel.response==='akkoord'?'✅':'📅';
+    const kleur=voorstel.response==='akkoord'?'#10b981':'#f59e0b';
+    const tekst=voorstel.response==='akkoord'?'Al bevestigd!':'Alternatieve datum al ingediend';
+    app.innerHTML=`<div class="pl-wrap"><div class="pl-card"><div class="pl-body" style="text-align:center;padding:40px"><div style="font-size:48px;margin-bottom:12px">${icon}</div><div style="font-weight:800;font-size:18px;color:${kleur}">${tekst}</div><div style="font-size:13px;color:#64748b;margin-top:8px">U heeft al gereageerd op dit voorstel.</div></div></div></div>`;
+    return;
+  }
+
+  const datumNL=fDL(voorstel.proposed_datum||'');
+
+  if(response==='akkoord'){
+    // Verwerk bevestiging
+    app.innerHTML='<div class="pl-wrap"><div class="pl-card"><div class="pl-body" style="text-align:center;padding:40px"><div style="font-size:40px;margin-bottom:12px">⏳</div><div style="font-size:15px;color:#64748b">Bevestiging opslaan...</div></div></div></div>';
+    try{
+      await sbFetch('/rest/v1/planning_responses?token=eq.'+encodeURIComponent(planningToken),'PATCH',{response:'akkoord',submitted_at:new Date().toISOString()});
+      showPlanningBevestigd(voorstel,datumNL);
+    }catch(e){
+      app.innerHTML='<div class="pl-wrap"><div class="pl-card"><div class="pl-body" style="text-align:center;padding:40px"><div style="font-size:40px;margin-bottom:12px">⚠️</div><div style="font-weight:700;color:#ef4444">Fout bij bevestigen</div><div style="font-size:13px;color:#64748b;margin-top:8px">Probeer opnieuw of neem contact op.</div></div></div></div>';
+    }
+  } else if(response==='alternatief'){
+    showAlternatiefForm(planningToken,voorstel,datumNL);
+  }
+}
+
+function showPlanningBevestigd(voorstel,datumNL){
+  const d=voorstel.proposed_datum||'';
+  const t=voorstel.proposed_tijd||'09:00';
+  const dur=parseInt(voorstel.proposed_duur||4);
+  const startH=parseInt(t.split(':')[0]||9);
+  const eindH=Math.min(23,startH+dur);
+  const pad=n=>String(n).padStart(2,'0');
+  const dp=d.replace(/-/g,'');
+  const gcUrl=d?`https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent('Installatie bevestigd')}&dates=${dp}T${t.replace(':','')}00/${dp}T${pad(eindH)}0000`:'#';
+
+  document.getElementById('app').innerHTML=`
+<div class="pl-wrap">
+<div class="pl-card">
+  <div class="pl-header" style="background:#10b981">
+    <div style="font-size:56px;margin-bottom:12px">✅</div>
+    <div style="font-size:22px;font-weight:900;margin-bottom:4px">Installatie bevestigd!</div>
+    <div style="opacity:.85;font-size:14px">U ontvangt een bevestigingsmail van ons</div>
+  </div>
+  <div class="pl-body">
+    <div class="pl-datum-box" style="border-color:#10b981;background:#f0fdf4">
+      <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#059669;margin-bottom:6px">BEVESTIGDE DATUM</div>
+      <div style="font-size:22px;font-weight:900;color:#059669">${datumNL}</div>
+      <div style="font-size:16px;font-weight:700;color:#1e293b;margin-top:4px">${t} uur · ${dur} uur gepland</div>
+    </div>
+    <div style="text-align:center;margin:20px 0">
+      <a href="${gcUrl}" target="_blank" style="display:inline-flex;align-items:center;gap:8px;background:#2563eb;color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:700;font-size:14px">📅 Voeg toe aan Google Agenda</a>
+    </div>
+    <div style="background:#f8fafc;border-radius:10px;padding:14px;font-size:13px;color:#64748b;text-align:center;line-height:1.6">
+      We nemen binnenkort contact met u op ter bevestiging van alle details.
+    </div>
+  </div>
+</div>
+</div>`;
+}
+
+function showAlternatiefForm(planningToken,voorstel,datumNL){
+  document.getElementById('app').innerHTML=`
+<div class="pl-wrap">
+<div class="pl-card">
+  <div class="pl-header" style="background:#2563eb">
+    <div style="font-size:40px;margin-bottom:8px">📅</div>
+    <div style="font-size:20px;font-weight:900;margin-bottom:4px">Andere datum gewenst?</div>
+    <div style="opacity:.85;font-size:14px">Kies uw voorkeursdatum hieronder</div>
+  </div>
+  <div class="pl-body">
+    <div class="pl-datum-box" style="border-color:#bfdbfe;background:#f0f9ff">
+      <div style="font-size:12px;color:#1d4ed8;margin-bottom:4px">Voorgestelde datum was</div>
+      <div style="font-size:18px;font-weight:700;color:#1d4ed8">${datumNL}</div>
+      <div style="font-size:13px;color:#475569;margin-top:2px">om ${voorstel.proposed_tijd||''} uur</div>
+    </div>
+    <div class="fg">
+      <label class="fl" style="color:#374151">Uw gewenste datum *</label>
+      <input type="date" id="altDatum" class="pl-input" min="${new Date().toISOString().split('T')[0]}"/>
+      <div id="altDatumTxt" style="font-size:12px;color:#2563eb;margin-top:4px;font-weight:600;min-height:18px"></div>
+    </div>
+    <div class="fg">
+      <label class="fl" style="color:#374151">Opmerking (optioneel)</label>
+      <textarea id="altNotitie" class="pl-input" rows="3" placeholder="Bijv: liefst na 14u, niet op vrijdag..." style="resize:none"></textarea>
+    </div>
+    <div id="altErr" style="display:none;background:#fef2f2;border:1px solid #fca5a5;color:#991b1b;border-radius:7px;padding:10px 14px;font-size:13px;margin-bottom:12px"></div>
+    <button id="altBtn" class="pl-btn" style="background:#f59e0b;color:#fff" onclick="submitAlternatief('${planningToken}')">
+      📅 Alternatieve datum doorsturen
+    </button>
+    <div style="text-align:center;font-size:12px;color:#94a3b8">We bevestigen zo snel mogelijk een nieuwe datum.</div>
+  </div>
+</div>
+</div>`;
+
+  // Live datum weergave
+  document.getElementById('altDatum').addEventListener('change',function(){
+    const el=document.getElementById('altDatumTxt');
+    if(el&&this.value) el.textContent=fDL(this.value);
+  });
+}
+
+window.submitAlternatief=async function(planningToken){
+  const datum=document.getElementById('altDatum')?.value;
+  const notitie=document.getElementById('altNotitie')?.value||'';
+  const errEl=document.getElementById('altErr');
+  const btn=document.getElementById('altBtn');
+  if(!datum){errEl.style.display='block';errEl.textContent='⚠ Kies een datum';return;}
+  btn.textContent='⏳ Bezig...';btn.disabled=true;errEl.style.display='none';
+  try{
+    await sbFetch('/rest/v1/planning_responses?token=eq.'+encodeURIComponent(planningToken),'PATCH',{
+      response:'alternatief',alternative_datum:datum,alternative_notitie:notitie,submitted_at:new Date().toISOString()
+    });
+    const datumNL=fDL(datum);
+    document.getElementById('app').innerHTML=`
+<div class="pl-wrap">
+<div class="pl-card">
+  <div class="pl-header" style="background:#f59e0b">
+    <div style="font-size:48px;margin-bottom:10px">📅</div>
+    <div style="font-size:20px;font-weight:900;margin-bottom:4px">Voorkeur ontvangen!</div>
+    <div style="opacity:.9;font-size:14px">We nemen zo snel mogelijk contact op</div>
+  </div>
+  <div class="pl-body">
+    <div class="pl-datum-box" style="border-color:#fde68a;background:#fffbeb">
+      <div style="font-size:13px;color:#92400e;margin-bottom:4px">Uw voorkeursdatum</div>
+      <div style="font-size:20px;font-weight:900;color:#d97706">${datumNL}</div>
+      ${notitie?`<div style="font-size:13px;color:#78350f;margin-top:6px;font-style:italic">"${notitie}"</div>`:''}
+    </div>
+    <div style="font-size:14px;color:#64748b;line-height:1.6;text-align:center">
+      Uw voorkeur is doorgestuurd. We bevestigen zo snel mogelijk een nieuwe datum via e-mail.
+    </div>
+  </div>
+</div>
+</div>`;
+  }catch(e){
+    btn.textContent='📅 Alternatieve datum doorsturen';btn.disabled=false;
+    errEl.style.display='block';errEl.textContent='⚠ Fout bij verzenden. Probeer opnieuw.';
+  }
+};
+
+// ═══════════════════════════════════════════════════════════════
+//  OFFERTE FUNCTIES (ongewijzigd)
+// ═══════════════════════════════════════════════════════════════
 async function tV(id){try{await sb.from('offerte_views').insert({offerte_id:id,viewed_at:new Date().toISOString(),user_agent:navigator.userAgent.slice(0,200),referrer:(document.referrer||'').slice(0,200)||null});}catch(e){}}
 
 async function sR(id,st,d={},doc=null){
@@ -92,7 +271,6 @@ function showConf(doc,data){
   const ics=`BEGIN:VCALENDAR\nVERSION:2.0\nPRODID:-//BILLR//NL\nBEGIN:VEVENT\nDTSTART;VALUE=DATE:${icsD(sD)}\nSUMMARY:${evT}\nDESCRIPTION:${evD.replace(/\n/g,'\\n')}\nLOCATION:${evL}\nSTATUS:TENTATIVE\nEND:VEVENT\nEND:VCALENDAR`;
   const icsUrl=URL.createObjectURL(new Blob([ics],{type:'text/calendar'}));
   const gcUrl=`https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(evT)}&details=${encodeURIComponent(evD)}&location=${encodeURIComponent(evL)}&dates=${icsD(sD)}/${icsD(new Date(sD.getTime()+4*36e5))}`;
-
   document.getElementById('app').innerHTML=`
 <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#f0fdf4,#ecfdf5);padding:20px">
 <div style="background:#fff;border-radius:20px;box-shadow:0 8px 40px rgba(0,0,0,.1);max-width:640px;width:100%;overflow:hidden">
@@ -120,7 +298,6 @@ function showConf(doc,data){
 <div style="background:#f8fafc;border-radius:10px;padding:16px;text-align:center">
 <div style="font-size:13px;color:#64748b;line-height:1.6"><strong>${b.naam||''}</strong> neemt binnenkort contact met u op.<br/>${b.tel?b.tel+' · ':''}${b.email||''}</div>
 </div></div></div></div>`;
-  // Send bevestigingsmail
   sendConfEmail(doc,data,tot);
 }
 
@@ -129,7 +306,7 @@ async function sendConfEmail(doc,data,tot){
   const ej=doc?._emailCfg||{};const b=doc?._bed||{};const dc=doc?._dc||'#1a2e4a';
   try{
     window.emailjs.init(ej.emailjsPublicKey||"04zsVAk5imDpo-8GJ");
-    const h=`<div style="font-family:Arial,sans-serif;max-width:640px;margin:0 auto"><div style="background:${dc};padding:28px 32px;text-align:center;border-radius:8px 8px 0 0"><h1 style="color:#fff;margin:0;font-size:22px">✅ Offerte bevestigd</h1><p style="color:rgba(255,255,255,.8);margin:6px 0 0;font-size:14px">${b.naam||''}</p></div><div style="background:#fff;padding:28px 32px;border:1px solid #e2e8f0;border-top:0"><p style="font-size:15px;color:#1e293b;margin-bottom:16px">Beste <strong>${doc.klant?.naam||''}</strong>,</p><p style="font-size:14px;color:#475569;line-height:1.6;margin-bottom:20px">Bedankt! Uw offerte <strong>${doc.nummer||''}</strong> is succesvol bevestigd.</p><div style="background:#f0fdf4;border:2px solid #86efac;border-radius:12px;padding:20px;margin:16px 0;text-align:center"><div style="font-size:12px;font-weight:700;text-transform:uppercase;color:#059669;margin-bottom:6px">BEVESTIGD</div><div style="font-size:24px;font-weight:900;color:#059669">${doc.nummer||''}</div><div style="font-size:18px;font-weight:700;color:#1e293b;margin-top:4px">${fE(tot.totaal)}</div>${data.periode?'<div style="font-size:14px;color:#059669;margin-top:6px">Gewenst: '+data.periode+'</div>':''}</div><table style="width:100%;border-collapse:collapse;margin:20px 0;font-size:14px"><tr style="background:#f1f5f9"><td style="padding:10px 14px;border:1px solid #e2e8f0;font-weight:600">Offerte</td><td style="padding:10px 14px;border:1px solid #e2e8f0">${doc.nummer||''}</td></tr><tr><td style="padding:10px 14px;border:1px solid #e2e8f0;font-weight:600">Datum</td><td style="padding:10px 14px;border:1px solid #e2e8f0">${fD(doc.aangemaakt)}</td></tr><tr style="background:#f1f5f9"><td style="padding:10px 14px;border:1px solid #e2e8f0;font-weight:600">Adres</td><td style="padding:10px 14px;border:1px solid #e2e8f0">${doc.klant?.adres||''}, ${doc.klant?.gemeente||''}</td></tr></table><div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:14px 18px;font-size:13px;color:#1d4ed8;margin:16px 0">📅 <strong>Volgende stap:</strong> Wij nemen binnenkort contact op om de installatiedatum te bevestigen.</div><div style="margin-top:20px;padding-top:16px;border-top:1px solid #e2e8f0;font-size:13px;color:#64748b"><p style="margin:0"><strong>${b.naam||''}</strong> · ${b.adres||''} · ${b.gemeente||''}</p><p style="margin:4px 0">${b.tel||''} · ${b.email||''}</p></div></div></div>`;
+    const h=`<div style="font-family:Arial,sans-serif;max-width:640px;margin:0 auto"><div style="background:${dc};padding:28px 32px;text-align:center;border-radius:8px 8px 0 0"><h1 style="color:#fff;margin:0;font-size:22px">✅ Offerte bevestigd</h1><p style="color:rgba(255,255,255,.8);margin:6px 0 0;font-size:14px">${b.naam||''}</p></div><div style="background:#fff;padding:28px 32px;border:1px solid #e2e8f0;border-top:0"><p style="font-size:15px;color:#1e293b;margin-bottom:16px">Beste <strong>${doc.klant?.naam||''}</strong>,</p><p style="font-size:14px;color:#475569;line-height:1.6;margin-bottom:20px">Bedankt! Uw offerte <strong>${doc.nummer||''}</strong> is succesvol bevestigd.</p><div style="background:#f0fdf4;border:2px solid #86efac;border-radius:12px;padding:20px;margin:16px 0;text-align:center"><div style="font-size:12px;font-weight:700;text-transform:uppercase;color:#059669;margin-bottom:6px">BEVESTIGD</div><div style="font-size:24px;font-weight:900;color:#059669">${doc.nummer||''}</div><div style="font-size:18px;font-weight:700;color:#1e293b;margin-top:4px">${fE(tot.totaal)}</div>${data.periode?'<div style="font-size:14px;color:#059669;margin-top:6px">Gewenst: '+data.periode+'</div>':''}</div><div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:14px 18px;font-size:13px;color:#1d4ed8;margin:16px 0">📅 <strong>Volgende stap:</strong> Wij nemen binnenkort contact op om de installatiedatum te bevestigen.</div><div style="margin-top:20px;padding-top:16px;border-top:1px solid #e2e8f0;font-size:13px;color:#64748b"><p style="margin:0"><strong>${b.naam||''}</strong> · ${b.adres||''} · ${b.gemeente||''}</p><p style="margin:4px 0">${b.tel||''} · ${b.email||''}</p></div></div></div>`;
     await window.emailjs.send(ej.emailjsServiceId||"service_qrkvr0d",ej.emailjsTemplateOfferte||"template_5nckw9f",{to_email:doc.klant.email,to_name:doc.klant?.naam||'',subject:`✅ Offerte ${doc.nummer} bevestigd — ${b.naam||''}`,html_body:h,from_name:b.naam||'',reply_to:b.email||''});
     console.log("✅ Bevestigingsmail verzonden");
   }catch(e){console.warn("Bevestigingsmail fout:",e);}
@@ -154,92 +331,42 @@ function R(doc){
   const kB=doc.kortingType==="pct"?sub*(doc.korting||0)/100:Number(doc.korting||0);
   const eT=doc.korting>0?tot.totaal-kB*(1+0.21):tot.totaal;
   tV(doc.id);window._offId=doc.id;window._offDoc=doc;
-  const ontwerp=sj.ontwerpOfferte||'kl_split';
-  const bedV=lyt.bedrijf?.velden||{};const klV=lyt.klant?.velden||{};
-  const logoW=lyt.logo?.voorblad?.breedte||sj.logoBreedte||200;const logoH=lyt.logo?.voorblad?.hoogte||sj.logoHoogte||80;
-  const logoWO=lyt.logo?.offerte?.breedte||sj.logoBreedte||140;const logoHO=lyt.logo?.offerte?.hoogte||sj.logoHoogte||52;
-  const toonLabel=lyt.klant?.toonLabel!==false;
-  const toonOnderLogo=lyt.bedrijf?.toonOnderLogo!==false;
   let h='';
-  // ACTION BAR
   h+='<div class="action-bar"><h2>📋 '+(doc.nummer||'')+' — '+(b.naam||'')+'</h2><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" style="background:#f1f5f9;color:#475569" onclick="window.print()">🖨</button><button class="btn btn-accept" onclick="showA()">✅ Goedkeuren</button><button class="btn btn-reject" onclick="showR()">❌ Afwijzen</button></div></div><div class="wrap">';
-  
-  // Helper: klant info block
-  const klantHtml=()=>{let s='';
-    if(toonLabel)s+='<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#94a3b8;margin-bottom:6px">Opgemaakt voor</div>';
-    if(klV.naam!==false)s+='<div style="font-weight:800;font-size:18px">'+(doc.klant?.naam||'')+'</div>';
-    if(klV.bedrijf!==false&&doc.klant?.bedrijf)s+='<div style="font-weight:600;color:#475569">'+doc.klant.bedrijf+'</div>';
-    s+='<div style="font-size:13px;color:#64748b;line-height:1.7;margin-top:4px">';
-    if(klV.adres!==false)s+=(doc.klant?.adres||'')+'<br>';
-    if(klV.gemeente!==false)s+=(doc.klant?.gemeente||'');
-    s+='</div>';
-    if(klV.btwnr!==false&&doc.klant?.btwnr)s+='<div style="font-family:JetBrains Mono,monospace;font-size:11px;color:#64748b;margin-top:4px">'+fB(doc.klant.btwnr)+'</div>';
-    return s;};
-  const metaHtml=()=>'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:24px"><div><div style="font-size:10px;font-weight:600;color:#94a3b8;text-transform:uppercase">Datum</div><div style="font-weight:700">'+fD(doc.aangemaakt)+'</div></div><div><div style="font-size:10px;font-weight:600;color:#94a3b8;text-transform:uppercase">Geldig tot</div><div style="font-weight:700">'+fD(doc.vervaldatum)+'</div></div><div><div style="font-size:10px;font-weight:600;color:#94a3b8;text-transform:uppercase">BTW</div><div style="font-weight:700;font-size:12px">'+(BTW_L[doc.btwRegime]||'—')+'</div></div><div><div style="font-size:10px;font-weight:600;color:#94a3b8;text-transform:uppercase">Totaal</div><div style="font-weight:800;font-size:18px;color:'+dc+'">'+fE(eT)+'</div></div></div>';
-  const bedLogo=(light,w,hh)=>b.logo?'<img src="'+b.logo+'" alt="" style="max-width:'+w+'px;max-height:'+hh+'px;object-fit:contain;margin-bottom:8px'+(light?';filter:brightness(0) invert(1)':'')+'" onerror="this.style.display=\'none\'"/>':'<div style="font-size:28px;margin-bottom:4px">⚡</div>';
-  const bedInfo=(light)=>{let s='';
-    if(bedV.naam!==false)s+='<div style="font-weight:900;font-size:18px;color:'+(light?'#fff':'#1e293b')+'">'+(b.naam||'')+'</div>';
-    s+='<div style="font-size:11px;opacity:.7;margin-top:4px">'+(b.tagline||'')+'</div>';
-    s+='<div style="font-size:11px;opacity:.6;margin-top:12px;line-height:1.8">';
-    if(bedV.adres!==false)s+=(b.adres||'')+'<br>';
-    if(bedV.gemeente!==false)s+=(b.gemeente||'')+'<br>';
-    if(bedV.tel!==false)s+=(b.tel||'')+'<br>';
-    if(bedV.email!==false)s+=(b.email||'');
-    s+='</div>';return s;};
-  
-  // PAGE 1: COVER
   if(sj.toonVoorblad!==false){
-  h+='<div class="doc-page-lbl">Pagina 1 — Voorblad</div><div class="doc-page">';
-  if(ontwerp==='kl_split'){
-    h+='<div class="cov"><div class="cov-l" style="background:linear-gradient(155deg,'+dc+' 0%,'+dc+'ee 70%,#0f172a 100%)">'+bedLogo(true,logoW,logoH)+'<div style="margin-top:auto">'+bedInfo(true)+'</div></div>';
-    h+='<div class="cov-r"><div><div style="font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#94a3b8">Offerte</div><div style="font-family:JetBrains Mono,monospace;font-size:22px;font-weight:800;color:'+dc+';margin-top:4px">'+(doc.nummer||'')+'</div></div>';
-    h+='<div style="margin-top:24px">'+klantHtml()+'</div>'+metaHtml();
-    h+='<div style="font-size:11px;color:#94a3b8;margin-top:16px">'+(b.naam||'')+' · '+fB(b.btwnr||'')+' · IBAN: '+(b.iban||'')+'</div></div></div>';
-  } else if(ontwerp==='modern_top'){
-    h+='<div style="min-height:500px;display:flex;flex-direction:column"><div style="background:linear-gradient(135deg,'+dc+','+dc+'cc);padding:40px 48px 32px;color:#fff"><div style="display:flex;justify-content:space-between;align-items:flex-start">'+bedLogo(true,logoW,logoH)+'<div style="text-align:right"><div style="font-size:32px;font-weight:900;letter-spacing:-1">OFFERTE</div><div style="font-family:JetBrains Mono,monospace;font-size:14px;opacity:.8;margin-top:2px">'+(doc.nummer||'')+'</div></div></div></div>';
-    h+='<div style="padding:40px 48px;flex:1;display:grid;grid-template-columns:1fr 1fr;gap:40px">'+klantHtml()+metaHtml()+'</div></div>';
-  } else if(ontwerp==='minimal'){
-    h+='<div style="min-height:500px;padding:60px 64px;display:flex;flex-direction:column;justify-content:space-between"><div style="display:flex;justify-content:space-between;align-items:flex-start"><div><div style="font-weight:900;font-size:22px;color:'+dc+';letter-spacing:-1">'+(b.naam||'')+'</div><div style="font-size:11px;color:#94a3b8;margin-top:2px">'+(b.tagline||'')+'</div></div><div style="text-align:right"><div style="font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#94a3b8">Offerte</div><div style="font-family:JetBrains Mono,monospace;font-size:20px;font-weight:800;color:#1e293b;margin-top:2px">'+(doc.nummer||'')+'</div></div></div>';
-    h+='<div style="border-left:4px solid '+dc+';padding-left:24px">'+klantHtml()+'</div>'+metaHtml()+'<div style="font-size:10px;color:#cbd5e1">'+(b.naam||'')+' · '+fB(b.btwnr||'')+' · '+(b.iban||'')+' · '+(b.tel||'')+'</div></div>';
-  } else if(ontwerp==='diagonal'){
-    h+='<div style="min-height:500px;position:relative;overflow:hidden"><div style="position:absolute;top:0;left:0;right:0;height:55%;background:linear-gradient(150deg,'+dc+' 60%,transparent 60%)"></div><div style="position:absolute;top:0;left:0;right:0;height:55%;background:linear-gradient(150deg,'+dc+'dd 60%,'+dc+'33 100%)"></div>';
-    h+='<div style="position:relative;padding:48px 52px;color:#fff"><div style="font-weight:900;font-size:20px;letter-spacing:-.5px">'+(b.naam||'')+'</div><div style="font-size:11px;opacity:.7;margin-top:2px">'+(b.tagline||'')+'</div><div style="margin-top:40px"><div style="font-weight:900;font-size:36px;letter-spacing:-1;line-height:1">OFFERTE</div><div style="font-family:JetBrains Mono,monospace;font-size:14px;opacity:.8;margin-top:4px">'+(doc.nummer||'')+'</div></div></div>';
-    h+='<div style="position:relative;padding:0 52px;margin-top:20px;display:grid;grid-template-columns:1fr 1fr;gap:32px">'+klantHtml()+metaHtml()+'</div></div>';
-  } else if(ontwerp==='centered'){
-    h+='<div style="min-height:500px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:48px;gap:32px"><div>'+bedLogo(false,logoW,logoH)+'<div style="font-weight:900;font-size:22px;color:'+dc+'">'+(b.naam||'')+'</div><div style="font-size:11px;color:#94a3b8">'+(b.tagline||'')+'</div></div>';
-    h+='<div style="width:60px;height:4px;background:'+dc+';border-radius:2px"></div><div><div style="font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#94a3b8">Offerte</div><div style="font-family:JetBrains Mono,monospace;font-size:24px;font-weight:800;color:#1e293b;margin-top:4px">'+(doc.nummer||'')+'</div></div>';
-    h+='<div style="background:#f8fafc;border-radius:12px;padding:24px 32px;min-width:320px;text-align:left">'+klantHtml()+'</div>'+metaHtml()+'<div style="font-size:10px;color:#cbd5e1">'+(b.naam||'')+' · '+fB(b.btwnr||'')+' · IBAN: '+(b.iban||'')+'</div></div>';
+  h+='<div class="doc-page-lbl">Pagina 1 — Voorblad</div><div class="doc-page"><div class="cov"><div class="cov-l" style="background:linear-gradient(155deg,'+dc+' 0%,'+dc+'ee 70%,#0f172a 100%)">';
+  if(b.logo)h+='<img src="'+b.logo+'" alt="" style="max-width:200px;max-height:80px;object-fit:contain;margin-bottom:12px" onerror="this.style.display=\'none\'"/>';
+  h+='<div style="margin-top:auto"><div style="font-weight:900;font-size:18px">'+(b.naam||'')+'</div><div style="font-size:11px;opacity:.7;margin-top:4px">'+(b.tagline||'')+'</div><div style="font-size:11px;opacity:.6;margin-top:12px;line-height:1.8">'+(b.adres||'')+'<br>'+(b.gemeente||'')+'<br>'+(b.tel||'')+'<br>'+(b.email||'')+'</div></div></div>';
+  h+='<div class="cov-r"><div><div style="font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#94a3b8">Offerte</div><div style="font-family:JetBrains Mono,monospace;font-size:22px;font-weight:800;color:'+dc+';margin-top:4px">'+(doc.nummer||'')+'</div></div>';
+  h+='<div style="margin-top:24px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#94a3b8;margin-bottom:6px">Opgemaakt voor</div><div style="font-weight:800;font-size:18px">'+(doc.klant?.naam||'')+'</div>'+(doc.klant?.bedrijf?'<div style="font-weight:600;color:#475569">'+doc.klant.bedrijf+'</div>':'')+'<div style="font-size:13px;color:#64748b;line-height:1.7;margin-top:4px">'+(doc.klant?.adres||'')+'<br>'+(doc.klant?.gemeente||'')+'</div>'+(doc.klant?.btwnr?'<div style="font-family:JetBrains Mono,monospace;font-size:11px;color:#64748b;margin-top:4px">'+fB(doc.klant.btwnr)+'</div>':'')+'</div>';
+  h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:24px"><div><div style="font-size:10px;font-weight:600;color:#94a3b8;text-transform:uppercase">Datum</div><div style="font-weight:700">'+fD(doc.aangemaakt)+'</div></div><div><div style="font-size:10px;font-weight:600;color:#94a3b8;text-transform:uppercase">Geldig tot</div><div style="font-weight:700">'+fD(doc.vervaldatum)+'</div></div><div><div style="font-size:10px;font-weight:600;color:#94a3b8;text-transform:uppercase">BTW</div><div style="font-weight:700;font-size:12px">'+(BTW_L[doc.btwRegime]||'—')+'</div></div><div><div style="font-size:10px;font-weight:600;color:#94a3b8;text-transform:uppercase">Totaal</div><div style="font-weight:800;font-size:18px;color:'+dc+'">'+fE(eT)+'</div></div></div>';
+  h+='<div style="font-size:11px;color:#94a3b8;margin-top:16px">'+(b.naam||'')+' · '+fB(b.btwnr||'')+' · IBAN: '+(b.iban||'')+'</div></div></div></div>';
   }
-  h+='</div>';
-  }
-  // PAGE 2: PRODUCTS + FICHES
   if(sj.toonProductpagina!==false&&uP.length>0){
     h+='<div class="doc-page-lbl">Pagina 2 — Productinformatie & Technische fiches</div><div class="doc-page"><div style="height:6px;background:'+dc+';border-radius:4px 4px 0 0;flex-shrink:0"></div><div style="padding:30px 36px;flex:1">';
     h+='<div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:6px;flex-wrap:wrap;gap:8px"><div><div style="font-weight:900;font-size:20px;color:'+dc+';letter-spacing:-.5px">Productinformatie & Technische Fiches</div><div style="font-size:12px;color:#64748b;margin-top:2px">Producten voor '+(doc.klant?.naam||'')+'</div></div><div style="font-size:10px;color:#94a3b8;text-align:right">'+(b.naam||'')+' · '+(doc.nummer||'')+'</div></div><div style="height:1px;background:#e2e8f0;margin-bottom:20px"></div>';
     uP.forEach((l,i)=>{
       const rs=l.specs||[];
       const sr=rs.filter(s=>s.includes(":")||s.includes("=")).map(s=>{const ci=s.indexOf(":");const eq=s.indexOf("=");const si=ci>=0&&(eq<0||ci<=eq)?ci:eq;return si>=0?{k:s.slice(0,si).trim(),v:s.slice(si+1).trim()}:{k:s.trim(),v:""};});
-      h+='<div style="margin-bottom:28px;'+(i>0?'padding-top:20px;border-top:1px solid #e2e8f0;':'')+'"><div style="display:flex;gap:16px;align-items:flex-start;margin-bottom:10px;flex-wrap:wrap">';
+      h+='<div style="margin-bottom:28px;'+(i>0?'padding-top:20px;border-top:1px solid #e2e8f0;':'')+'">';
+      h+='<div style="display:flex;gap:16px;align-items:flex-start;margin-bottom:10px;flex-wrap:wrap">';
       if(l.imageUrl)h+='<div style="flex-shrink:0;width:90px;height:90px;border-radius:10px;overflow:hidden;border:1px solid #e2e8f0;background:#f8fafc;display:flex;align-items:center;justify-content:center"><img src="'+l.imageUrl+'" alt="" style="width:100%;height:100%;object-fit:contain" onerror="this.parentElement.style.display=\'none\'"/></div>';
       const gn=G.find(g=>g.id===l.groepId)?.naam||l.cat||'Product';
       h+='<div style="flex:1;min-width:200px"><div style="display:flex;align-items:center;gap:8px;margin-bottom:4px"><span style="background:'+dc+';color:#fff;border-radius:5px;padding:2px 9px;font-size:10px;font-weight:700">'+gn+'</span><span style="font-size:11px;color:#94a3b8">×'+l.aantal+' '+(l.eenheid||'stuk')+'</span></div>';
       h+='<div style="font-weight:800;font-size:16px;color:#1e293b;line-height:1.3;margin-bottom:4px">'+l.naam+'</div>';
       if(l.omschr)h+='<div style="font-size:12.5px;color:#475569;line-height:1.6">'+l.omschr+'</div>';
       h+='</div><div style="flex-shrink:0;text-align:right;background:#f8fafc;border-radius:8px;padding:10px 14px;border:1px solid #e2e8f0"><div style="font-size:10px;color:#94a3b8;font-weight:600">EENHEIDSPRIJS</div><div style="font-weight:800;font-size:16px;color:'+dc+'">'+fE(l.prijs)+'</div><div style="font-size:10px;color:#94a3b8">BTW '+(l.btw||21)+'%</div></div></div>';
-      // Specs
       if(rs.length>0){
         h+='<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:12px 14px;margin-bottom:8px"><div style="font-weight:700;font-size:11px;letter-spacing:.8px;text-transform:uppercase;color:'+dc+';margin-bottom:8px">📋 Technische specificaties</div>';
         if(sr.length>0){h+='<table class="spec-tbl"><tbody>';sr.forEach((r,j)=>{h+='<tr style="background:'+(j%2===0?'#fff':'#f8fafc')+'"><td>'+r.k+'</td><td>'+r.v+'</td></tr>';});h+='</tbody></table>';}
         else{h+='<div style="display:flex;flex-wrap:wrap;gap:6px">';rs.forEach(s=>{h+='<span class="spec-tag">✓ '+s+'</span>';});h+='</div>';}
         h+='</div>';
       }
-      // Technische fiche PDF
       if(l.technischeFiche){
         const fId='fiche-'+i;
         h+='<div class="fiche-wrap"><div class="fiche-hdr"><span>📄</span><span>Technische fiche: '+(l.fichNaam||l.naam+' - fiche.pdf')+'</span><a href="'+(l.technischeFiche.startsWith('data:')?l.technischeFiche:'data:application/pdf;base64,'+l.technischeFiche)+'" download="'+(l.fichNaam||l.naam+'-fiche.pdf')+'" class="fiche-dl">📥 Download</a></div><div id="'+fId+'" style="background:#f8fafc;min-height:60px"></div></div>';
         setTimeout(()=>{const c=document.getElementById(fId);if(c)renderPdfFiche(l.technischeFiche,c);},100+i*200);
       }
-      // technischeFiches array
       if(l.technischeFiches&&l.technischeFiches.length>0){
         l.technischeFiches.forEach((f,fi)=>{if(f.data){
           const fId2='fiche-'+i+'-'+fi;
@@ -251,43 +378,14 @@ function R(doc){
     });
     h+='</div><div class="pg-footer" style="background:'+dc+'"><span><strong>'+(b.naam||'')+'</strong></span><span>'+(b.tel||'')+' · '+(b.email||'')+'</span><span>'+(b.website||'')+'</span></div></div>';
   }
-  // PAGE 3: OFFERTEDETAIL
   h+='<div class="doc-page-lbl">Pagina 3 — Offertedetail</div><div class="doc-page"><div style="height:5px;background:'+dc+';flex-shrink:0"></div><div style="padding:24px 36px;flex:1">';
   h+='<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;flex-wrap:wrap;gap:12px"><div>';
-  if(b.logo)h+='<img src="'+b.logo+'" alt="" style="max-width:'+logoWO+'px;max-height:'+Math.min(logoHO,40)+'px;object-fit:contain;margin-bottom:4px" onerror="this.style.display=\'none\'"/>';
+  if(b.logo)h+='<img src="'+b.logo+'" alt="" style="max-width:140px;max-height:40px;object-fit:contain;margin-bottom:4px" onerror="this.style.display=\'none\'"/>';
   else h+='<div style="font-weight:900;font-size:16px;color:'+dc+'">⚡ '+(b.naam||'')+'</div>';
-  if(toonOnderLogo)h+='<div style="font-size:11px;color:#64748b;margin-top:2px">'+(bedV.adres!==false?(b.adres||'')+' · ':'')+''+(bedV.gemeente!==false?(b.gemeente||''):'')+'<br>'+(bedV.tel!==false?(b.tel||'')+' · ':'')+''+(bedV.email!==false?(b.email||'')+' · ':'')+''+(bedV.btwnr!==false?fB(b.btwnr||''):'')+'</div>';
-  h+='</div><div style="text-align:right"><div style="font-size:28px;font-weight:900;color:'+dc+'">OFFERTE</div><div style="font-family:JetBrains Mono,monospace;font-size:14px;color:'+dc+'">'+(doc.nummer||'')+'</div></div></div>';
-  // Meta bar
-  const mb=lyt.metaBar||{};
-  h+='<div class="qt-meta-bar">';
-  if(mb.toonDatum!==false)h+='<div class="qt-meta-item"><div class="qt-meta-lbl">Datum</div><div class="qt-meta-val">'+fD(doc.aangemaakt)+'</div></div>';
-  if(mb.toonGeldig!==false)h+='<div class="qt-meta-item"><div class="qt-meta-lbl">Geldig tot</div><div class="qt-meta-val">'+fD(doc.vervaldatum)+'</div></div>';
-  if(mb.toonBtw!==false)h+='<div class="qt-meta-item"><div class="qt-meta-lbl">BTW-regime</div><div class="qt-meta-val">'+((BTW_L[doc.btwRegime]||'—').split('—')[0].trim())+'</div></div>';
-  if(mb.toonBetaling!==false&&doc.betalingstermijn)h+='<div class="qt-meta-item"><div class="qt-meta-lbl">Betaling</div><div class="qt-meta-val">'+doc.betalingstermijn+' dagen</div></div>';
-  h+='</div>';
-  // Parties
-  h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:20px"><div>';
-  if(bedV.naam!==false)h+='<div style="font-weight:800;font-size:14px;color:#1e293b">'+(b.naam||'')+'</div>';
-  if(bedV.adres!==false)h+='<div style="font-size:12px;color:#64748b">'+(b.adres||'')+'</div>';
-  if(bedV.gemeente!==false)h+='<div style="font-size:12px;color:#64748b">'+(b.gemeente||'')+'</div>';
-  h+='<div style="font-family:JetBrains Mono,monospace;font-size:10.5px;color:#64748b;margin-top:3px">';
-  if(bedV.btwnr!==false)h+=fB(b.btwnr||'')+'<br>';
-  if(bedV.iban!==false)h+='IBAN: '+(b.iban||'')+'<br>';
-  if(bedV.tel!==false)h+=(b.tel||'')+'<br>';
-  if(bedV.email!==false)h+=(b.email||'');
-  h+='</div></div>';
-  h+='<div>';
-  if(toonLabel)h+='<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:#94a3b8;margin-bottom:4px">Klant</div>';
-  if(klV.naam!==false)h+='<div style="font-weight:800;font-size:14px;color:#1e293b">'+(doc.klant?.naam||'')+'</div>';
-  if(klV.bedrijf!==false&&doc.klant?.bedrijf)h+='<div style="font-weight:600;color:#475569;font-size:12.5px">'+doc.klant.bedrijf+'</div>';
-  if(klV.adres!==false)h+='<div style="font-size:12px;color:#64748b">'+(doc.klant?.adres||'')+'</div>';
-  if(klV.gemeente!==false)h+='<div style="font-size:12px;color:#64748b">'+(doc.klant?.gemeente||'')+'</div>';
-  if(klV.btwnr!==false&&doc.klant?.btwnr)h+='<div style="font-family:JetBrains Mono,monospace;font-size:10.5px;color:#64748b">'+fB(doc.klant.btwnr)+'</div>';
-  if(klV.tel!==false&&doc.klant?.tel)h+='<div style="font-size:11px;color:#64748b">'+doc.klant.tel+'</div>';
-  if(klV.email!==false&&doc.klant?.email)h+='<div style="font-size:11px;color:#64748b">'+doc.klant.email+'</div>';
-  h+='</div></div>';
-  // Groups
+  h+='<div style="font-size:11px;color:#64748b;margin-top:2px">'+(b.adres||'')+' · '+(b.gemeente||'')+'<br>'+(b.tel||'')+' · '+(b.email||'')+' · '+fB(b.btwnr||'')+'</div></div><div style="text-align:right"><div style="font-size:28px;font-weight:900;color:'+dc+'">OFFERTE</div><div style="font-family:JetBrains Mono,monospace;font-size:14px;color:'+dc+'">'+(doc.nummer||'')+'</div></div></div>';
+  h+='<div style="display:flex;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;overflow:hidden;margin-bottom:18px"><div style="flex:1;padding:9px 14px;border-right:1px solid #e2e8f0"><div style="font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#94a3b8;margin-bottom:1px">Datum</div><div style="font-size:12.5px;font-weight:700">'+fD(doc.aangemaakt)+'</div></div><div style="flex:1;padding:9px 14px;border-right:1px solid #e2e8f0"><div style="font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#94a3b8;margin-bottom:1px">Geldig tot</div><div style="font-size:12.5px;font-weight:700">'+fD(doc.vervaldatum)+'</div></div><div style="flex:1;padding:9px 14px;border-right:1px solid #e2e8f0"><div style="font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#94a3b8;margin-bottom:1px">BTW-regime</div><div style="font-size:12.5px;font-weight:700">'+((BTW_L[doc.btwRegime]||'—').split('—')[0].trim())+'</div></div>'+(doc.betalingstermijn?'<div style="flex:1;padding:9px 14px"><div style="font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#94a3b8;margin-bottom:1px">Betaling</div><div style="font-size:12.5px;font-weight:700">'+doc.betalingstermijn+' dagen</div></div>':'')+'</div>';
+  h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:20px"><div><div style="font-weight:800;font-size:14px;color:#1e293b">'+(b.naam||'')+'</div><div style="font-size:12px;color:#64748b">'+(b.adres||'')+'</div><div style="font-size:12px;color:#64748b">'+(b.gemeente||'')+'</div><div style="font-family:JetBrains Mono,monospace;font-size:10.5px;color:#64748b;margin-top:3px">'+fB(b.btwnr||'')+'<br>IBAN: '+(b.iban||'')+'<br>'+(b.tel||'')+'<br>'+(b.email||'')+'</div></div>';
+  h+='<div><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:#94a3b8;margin-bottom:4px">Klant</div><div style="font-weight:800;font-size:14px;color:#1e293b">'+(doc.klant?.naam||'')+'</div>'+(doc.klant?.bedrijf?'<div style="font-weight:600;color:#475569;font-size:12.5px">'+doc.klant.bedrijf+'</div>':'')+'<div style="font-size:12px;color:#64748b">'+(doc.klant?.adres||'')+'</div><div style="font-size:12px;color:#64748b">'+(doc.klant?.gemeente||'')+'</div>'+(doc.klant?.btwnr?'<div style="font-family:JetBrains Mono,monospace;font-size:10.5px;color:#64748b">'+fB(doc.klant.btwnr)+'</div>':'')+(doc.klant?.tel?'<div style="font-size:11px;color:#64748b">'+doc.klant.tel+'</div>':'')+(doc.klant?.email?'<div style="font-size:11px;color:#64748b">'+doc.klant.email+'</div>':'')+'</div></div>';
   gr.forEach(g=>{
     h+='<div class="grp-hdr" style="background:'+dc+'">'+g.naam+'</div><table class="qt-tbl"><thead><tr><th>Omschrijving</th><th>Eenh.</th><th class="c">Aantal</th><th class="r">Prijs excl.</th><th class="r">BTW</th><th class="r">Totaal</th></tr></thead><tbody>';
     g.items.forEach(l=>{
@@ -296,7 +394,6 @@ function R(doc){
     });
     h+='</tbody></table><div class="grp-sub"><span>Subtotaal '+g.naam+':</span><strong>'+fE(g.items.filter(l=>!l.isInfo).reduce((s,l)=>s+l.prijs*l.aantal,0))+'</strong></div>';
   });
-  // Totals
   h+='<div class="tot-box"><div class="tot-row"><span>Subtotaal excl. BTW</span><span>'+fE(sub)+'</span></div>';
   Object.entries(bg).forEach(([p,v])=>{h+='<div class="tot-row"><span>BTW '+p+'%</span><span>'+fE(v)+'</span></div>';});
   if(doc.korting>0)h+='<div class="tot-row" style="color:#ef4444"><span>Korting '+(doc.kortingType==="pct"?'('+doc.korting+'%)':'(forfait)')+'</span><span>−'+fE(kB*(1+0.21))+'</span></div>';
@@ -306,12 +403,9 @@ function R(doc){
   if(doc.notities)h+='<div style="margin-top:10px;padding:14px 18px;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;font-size:13px"><strong>Opmerking:</strong> '+doc.notities+'</div>';
   h+='<div style="margin-top:20px;padding:20px;border:2px dashed #e2e8f0;border-radius:8px;text-align:center"><div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#94a3b8">'+(sj.handtekeningTekst||'Akkoord klant — datum, handtekening & naam')+'</div><div style="font-size:12px;color:#94a3b8;margin-top:8px">Gelieve ondertekend terug te bezorgen of digitaal te bevestigen via de knoppen bovenaan.</div></div>';
   h+='</div><div class="pg-footer" style="background:'+dc+'"><span><strong>'+(b.naam||'')+'</strong> · '+(b.adres||'')+', '+(b.gemeente||'')+'</span><span>BTW: <strong>'+fB(b.btwnr||'')+'</strong></span><span>'+(sj.footerTekst||('IBAN: '+(b.iban||'')))+'</span></div></div>';
-  // PAGE 4: VOORWAARDEN
   if(vw.tekst){h+='<div class="doc-page-lbl">Pagina 4 — Voorwaarden</div><div class="doc-page"><div style="height:5px;background:'+dc+';flex-shrink:0"></div><div style="padding:30px 36px;flex:1;overflow:hidden"><div style="font-weight:900;font-size:18px;color:'+dc+';margin-bottom:16px;letter-spacing:-.4px">Algemene Verkoopsvoorwaarden & Verklaringen</div><div style="font-size:11px;line-height:1.6;color:#475569;white-space:pre-line">'+vw.tekst+'</div></div><div class="pg-footer" style="background:'+dc+'"><span>'+(b.naam||'')+' · '+(b.adres||'')+', '+(b.gemeente||'')+'</span><span>BTW: '+fB(b.btwnr||'')+' · '+(b.website||'')+'</span></div></div>';}
-  // CTA
   h+='<div class="doc-page bottom-cta" style="text-align:center;padding:40px"><h3 style="font-size:20px;margin-bottom:16px">Uw beslissing over '+(doc.nummer||'')+'</h3><p style="color:#64748b;margin-bottom:24px">Totaal: <strong style="color:'+dc+';font-size:22px">'+fE(eT)+'</strong></p><div style="display:flex;gap:16px;justify-content:center;flex-wrap:wrap"><button class="btn btn-accept" style="font-size:16px;padding:18px 48px" onclick="showA()">✅ Goedkeuren</button><button class="btn btn-reject" style="font-size:16px;padding:18px 48px" onclick="showR()">❌ Afwijzen</button></div></div>';
   h+='</div>';
-  // Modals
   h+='<div class="modal-bg" id="aM"><div class="modal"><h2 style="margin-bottom:20px;color:#10b981">✅ Offerte goedkeuren</h2><p style="margin-bottom:20px;color:#64748b">Bevestig offerte <strong>'+(doc.nummer||'')+'</strong> voor <strong>'+fE(eT)+'</strong>.</p><div class="fg"><label class="fl">📅 Gewenste periode</label><select class="fc" id="aP"><option value="">— Kies —</option><option>Zo snel mogelijk</option><option>Binnen 2 weken</option><option>Binnen 1 maand</option><option>Binnen 2 maanden</option><option>Na overleg</option></select></div><div class="fg"><label class="fl">💬 Extra info</label><textarea class="fc" id="aN" rows="3" placeholder="Bijv: ochtend is beter…"></textarea></div><div style="display:flex;gap:10px;margin-top:20px"><button class="btn btn-reject" style="flex:1" onclick="cM()">Annuleren</button><button class="btn btn-accept" style="flex:1" onclick="dA()">✅ Bevestigen</button></div></div></div>';
   h+='<div class="modal-bg" id="rM"><div class="modal"><h2 style="margin-bottom:20px;color:#ef4444">❌ Afwijzen</h2><div class="fg"><label class="fl">Reden (optioneel)</label><textarea class="fc" id="rR" rows="3"></textarea></div><div style="display:flex;gap:10px;margin-top:20px"><button class="btn" style="flex:1;background:#f1f5f9;color:#64748b" onclick="cM()">Annuleren</button><button class="btn" style="flex:1;background:#ef4444;color:#fff" onclick="dR()">❌ Afwijzen</button></div></div></div>';
   document.getElementById('app').innerHTML=h;
@@ -322,7 +416,20 @@ window.cM=()=>document.querySelectorAll('.modal-bg').forEach(m=>m.classList.remo
 window.dA=()=>sR(window._offId,'goedgekeurd',{periode:document.getElementById('aP')?.value||'',opmerkingen:document.getElementById('aN')?.value||''},window._offDoc);
 window.dR=()=>sR(window._offId,'afgewezen',{opmerkingen:document.getElementById('rR')?.value||''},window._offDoc);
 
+// ═══════════════════════════════════════════════════════════════
+//  INIT — bepaal welke flow op basis van URL parameters
+// ═══════════════════════════════════════════════════════════════
 async function init(){
+  const planningToken=P.get('planningToken');
+  const planningResponse=P.get('response');
+
+  // Planning response flow (klant reageert op datumvoorstel)
+  if(planningToken){
+    await handlePlanningResponse(planningToken, planningResponse||'akkoord');
+    return;
+  }
+
+  // Normale offerte flow
   const token=P.get('token');const data=P.get('data');
   if(token){
     try{const{data:row,error}=await sb.from('shared_offertes').select('offerte_data,settings_data').eq('token',token).single();
