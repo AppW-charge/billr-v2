@@ -1301,13 +1301,29 @@ tr.row-active td{border-top:2px solid #2563eb}
 @media(max-width:768px){
   .settings-grid{display:block!important}
   .settings-preview{display:none!important}
-  .tabs{display:flex!important;overflow-x:auto!important;flex-wrap:nowrap!important;gap:2px!important;-webkit-overflow-scrolling:touch;scrollbar-width:none;padding-bottom:4px!important}
+  .tabs{display:flex!important;overflow-x:auto!important;flex-wrap:nowrap!important;gap:2px!important;-webkit-overflow-scrolling:touch;scrollbar-width:none;padding-bottom:4px!important;max-width:100%!important;width:100%!important}
   .tabs::-webkit-scrollbar{display:none}
-  .tab{flex-shrink:0!important;font-size:11px!important;padding:8px 10px!important;white-space:nowrap!important}
+  .tab{flex-shrink:0!important;flex:none!important;font-size:11px!important;padding:8px 10px!important;white-space:nowrap!important;min-width:auto!important}
   .card{padding:12px!important}
   .fg{margin-bottom:10px!important}
   .fl{font-size:12px!important}
   .fc{font-size:14px!important;padding:10px 12px!important}
+  /* Offerte wizard preview fix */
+  .doc-wrap{transform:none!important;width:100%!important}
+  .doc-page .cov{grid-template-columns:1fr!important;min-height:auto!important}
+  .doc-page .cov-l,.doc-page .cov-r{padding:20px!important}
+  .doc-page .qt-parties,.doc-page .qt-meta-bar{display:block!important}
+  .doc-page .qt-parties>div{margin-bottom:12px}
+  .doc-page .qt-meta-bar>div{margin-bottom:6px}
+  .doc-page .qt-pg{padding:16px!important}
+  .doc-page .prod-page{padding:16px!important}
+  .fr2{display:block!important}
+  .fr2>div{margin-bottom:10px}
+}
+@media(max-width:480px){
+  .tab{font-size:10px!important;padding:7px 8px!important}
+  .action-bar{padding:8px 12px}
+  .doc-page-lbl{font-size:9px}
 }
 `;
 
@@ -2079,7 +2095,6 @@ export default function App() {
       {betalingModal&&<BetalingModal factuur={betalingModal} betalingen={betalingen.filter(b=>b.factuurId===betalingModal.id)} onSave={b=>{const nb={...b,id:uid(),factuurId:betalingModal.id,datum:b.datum||today(),aangemaakt:new Date().toISOString()};setBetalingen(p=>[nb,...p]);const totBet=betalingen.filter(x=>x.factuurId===betalingModal.id).reduce((s,x)=>s+x.bedrag,0)+nb.bedrag;const factTot=calcTotals(betalingModal.lijnen||[]).totaal;if(totBet>=factTot-0.01)updFact(betalingModal.id,{status:"betaald"});else updFact(betalingModal.id,{status:"gedeeltelijk"});notify("Betaling geregistreerd ✓");setBetalingModal(null);}} onClose={()=>setBetalingModal(null)}/>}
       {aanmaningModal&&<AanmaningModal factuur={aanmaningModal} settings={settings} onSend={(am)=>{setAanmaningen(p=>[{...am,id:uid(),aangemaakt:new Date().toISOString(),status:"verzonden",verzonden:today()},...p]);notify("Aanmaning verzonden ✓");setAanmaningModal(null);}} onClose={()=>setAanmaningModal(null)}/>}
       {planningModal&&<PlanningModal offerte={planningModal} settings={settings} notify={notify} onSave={(id,upd)=>{updOff(id,upd);}} onClose={()=>setPlanningModal(null)}/>}
-      {planningModal&&<PlanningModal offerte={planningModal} settings={settings} onSave={(id,upd)=>{updOff(id,upd);}} onClose={()=>setPlanningModal(null)} notify={notify}/>}
       {dossierModal!==null&&<DossierModal dossier={dossierModal} klanten={klanten} offertes={offertes} facturen={facturen} onSave={d=>{if(d.id){setDossiers(p=>p.map(x=>x.id===d.id?d:x));}else{setDossiers(p=>[{...d,id:uid(),aangemaakt:new Date().toISOString()},...p]);}notify("Dossier opgeslagen ✓");setDossierModal(null);}} onClose={()=>setDossierModal(null)} notify={notify}/>}
       {tijdModal!==null&&<TijdModal tijdslot={tijdModal} klanten={klanten} offertes={offertes} onSave={t=>{if(t.id){setTijdslots(p=>p.map(x=>x.id===t.id?t:x));}else{setTijdslots(p=>[{...t,id:uid(),aangemaakt:new Date().toISOString()},...p]);}notify("Tijd opgeslagen ✓");setTijdModal(null);}} onClose={()=>setTijdModal(null)}/>}
       {notif&&<div className={`notif ${notif.type}`}>{notif.type==="ok"?"✓":notif.type==="er"?"✕":"ℹ"} {notif.msg}</div>}
@@ -2363,6 +2378,42 @@ async function sendViaPEPPOL(invoice, apiKey) {
   }
 }
 
+// ─── OFFERTE VIEW STATS (fetches from offerte_views) ──────────
+function OfferteViewStats({offerteId}) {
+  const [views, setViews] = useState(null);
+  const [loading, setLoading] = useState(true);
+  useEffect(()=>{
+    if(!offerteId) return;
+    const fetchViews = async () => {
+      try {
+        const {data, error} = await sb.from('offerte_views').select('viewed_at,user_agent').eq('offerte_id', offerteId).order('viewed_at', {ascending: false}).limit(20);
+        if(!error && data) setViews(data);
+      } catch(e) { console.warn("View stats fetch failed:", e); }
+      setLoading(false);
+    };
+    fetchViews();
+  },[offerteId]);
+
+  if(loading) return <div style={{fontSize:11,color:"#94a3b8",padding:"4px 0"}}>⟳ Views laden...</div>;
+  if(!views || views.length === 0) return <div style={{fontSize:11,color:"#94a3b8",padding:"4px 0"}}>Nog niet bekeken door klant</div>;
+  
+  const isMobile = ua => /mobile|android|iphone/i.test(ua||"");
+  return (
+    <div style={{marginTop:6}}>
+      <div style={{fontSize:10.5,fontWeight:700,color:"#2563eb",marginBottom:4}}>👁 {views.length}× bekeken door klant</div>
+      <div style={{maxHeight:90,overflowY:"auto",fontSize:10.5,color:"#64748b"}}>
+        {views.slice(0,8).map((v,i) => (
+          <div key={i} style={{padding:"2px 0",display:"flex",gap:8,alignItems:"center"}}>
+            <span>{new Date(v.viewed_at).toLocaleString("nl-BE",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"})}</span>
+            <span style={{fontSize:10,opacity:.6}}>{isMobile(v.user_agent)?"📱":"💻"}</span>
+          </div>
+        ))}
+        {views.length > 8 && <div style={{fontSize:10,color:"#94a3b8",fontStyle:"italic"}}>+{views.length-8} meer...</div>}
+      </div>
+    </div>
+  );
+}
+
 function OffertesPage({offertes,initFilter,onView,onEdit,onStatus,onBulkStatus,onFactuur,onDelete,onNew,onEmail,onPlan,settings}) {
   const [q,setQ] = useState("");
   const [fs,setFs] = useState(initFilter||"alle");
@@ -2466,6 +2517,7 @@ function OffertesPage({offertes,initFilter,onView,onEdit,onStatus,onBulkStatus,o
                       <div className="doc-log-wrap">
                         <div style={{fontSize:10.5,fontWeight:700,color:"#94a3b8",textTransform:"uppercase",letterSpacing:".5px",marginBottom:3}}>📋 Activiteitenlog</div>
                         <DocLog log={o.log}/>
+                        <OfferteViewStats offerteId={o.id}/>
                       </div>
                     </div>
                   </td>
@@ -3986,8 +4038,10 @@ function OfferteWizard({klanten,producten,offertes,editData,settings,onSave,onCl
           <div style={{background:"#eff6ff",border:"1px solid #bfdbfe",borderRadius:8,padding:"8px 12px",marginBottom:10,fontSize:12,color:"#1d4ed8",fontWeight:600}}>
             👁 Voorontwerp — zo ziet uw offerte eruit (alle pagina's). Scroll om alles te bekijken.
           </div>
-          <div style={{border:"1px solid #e2e8f0",borderRadius:10,overflow:"hidden",boxShadow:"0 2px 12px rgba(0,0,0,.08)"}}>
-            <OfferteDocument doc={{klant,installatieType:instType,groepen,lijnen,notities,btwRegime,voorschot,vervaldatum,betalingstermijn,korting:Number(korting),kortingType,nummer:"VOORBEELD",aangemaakt:new Date().toISOString()}} settings={settings}/>
+          <div style={{border:"1px solid #e2e8f0",borderRadius:10,overflow:"hidden",boxShadow:"0 2px 12px rgba(0,0,0,.08)",maxWidth:"100%",overflowX:"auto"}}>
+            <div style={{minWidth:0,width:"100%"}}>
+              <OfferteDocument doc={{klant,installatieType:instType,groepen,lijnen,notities,btwRegime,voorschot,vervaldatum,betalingstermijn,korting:Number(korting),kortingType,nummer:"VOORBEELD",aangemaakt:new Date().toISOString()}} settings={settings}/>
+            </div>
           </div>
         </div>}
       </div>
@@ -5253,7 +5307,7 @@ function EmailModal({doc,type,settings,onClose,onSend,onAcceptToken}) {
         const {error:insErr} = await sb.from("shared_offertes").insert({
           token: t,
           offerte_data: payload,
-          settings_data: {bedrijf:bed, sjabloon:settings?.sjabloon, layout:settings?.layout, voorwaarden:settings?.voorwaarden, thema:settings?.thema}
+          settings_data: {bedrijf:bed, sjabloon:settings?.sjabloon, layout:settings?.layout, voorwaarden:settings?.voorwaarden, thema:settings?.thema, email:settings?.email||{}}
         });
         if(insErr) {
           console.error("shared_offertes insert failed:", insErr.message, insErr.details);
@@ -5591,6 +5645,11 @@ function PlanningModal({offerte, settings, onSave, onClose, notify}) {
     <p style="margin:4px 0">${bed.tel||""} · ${bed.email||""}</p>
   </div>
 </div>
+<div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px;padding:20px;margin:0 auto;max-width:600px;text-align:center">
+  <div style="font-weight:700;font-size:14px;color:#1d4ed8;margin-bottom:8px">📅 Voeg toe aan uw agenda</div>
+  <p style="font-size:12px;color:#475569;margin-bottom:12px">Zo vergeet u de afspraak niet!</p>
+  <a href="https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(`Installatie ${offerte.nummer||""} — ${bed.naam||""}`)}&details=${encodeURIComponent(`Installatie ${offerte.nummer||""}\nAdres: ${offerte.klant?.adres||""}, ${offerte.klant?.gemeente||""}\n${notities?`Opmerking: ${notities}`:""}`)}&location=${encodeURIComponent(`${offerte.klant?.adres||""}, ${offerte.klant?.gemeente|""}`)}&dates=${datum.replace(/-/g,"")}T${tijd.replace(":","")}00/${datum.replace(/-/g,"")}T${String(Math.min(23,parseInt(tijd)+parseInt(duur))).padStart(2,"0")}${tijd.slice(3)}00" target="_blank" style="display:inline-block;background:#2563eb;color:#fff;padding:10px 24px;border-radius:8px;text-decoration:none;font-weight:700;font-size:13px;margin:4px">📅 Google Agenda</a>
+</div>
 <div style="text-align:center;padding:16px;font-size:11px;color:#94a3b8">${bed.naam} · ${bed.website||""}</div>
 </div>`;
 
@@ -5610,6 +5669,7 @@ function PlanningModal({offerte, settings, onSave, onClose, notify}) {
           from_name: bed.naam,
           reply_to: bed.email,
           subject: `Installatie ingepland — ${offerte.nummer} — ${new Date(datum).toLocaleDateString("nl-BE")}`,
+          html_body: emailHtml,
           message: emailHtml
         });
         notify("📧 Planning email verzonden naar " + offerte.klant.email);
@@ -5739,7 +5799,7 @@ function InstellingenPage({settings,setSettings,notify}) {
   };
   
   return(
-    <div style={{maxWidth: showPreview ? 1400 : 720, margin: "0 auto"}}>
+    <div style={{maxWidth: showPreview ? 1400 : 720, margin: "0 auto", overflow: "hidden"}}>
       {isFirstRun&&<div style={{background:"linear-gradient(135deg,#eff6ff,#e0f2fe)",border:"2px solid #3b82f6",borderRadius:10,padding:"14px 16px",marginBottom:14,display:"flex",gap:12,alignItems:"center"}}>
         <span style={{fontSize:28}}>👋</span>
         <div>
@@ -5747,7 +5807,7 @@ function InstellingenPage({settings,setSettings,notify}) {
           <div style={{fontSize:13,color:"#1e40af"}}>Vul hieronder uw bedrijfsgegevens in. Deze verschijnen op al uw offertes en facturen.</div>
         </div>
       </div>}
-      <div className="tabs">{[["bedrijf","🏢 Bedrijf"],["email","📧 Email"],["voorwaarden","📄 Voorwaarden"],["thema","🎨 Thema"],["sjabloon","📐 Ontwerpen"],["layout","📋 Layout"],["categorieen","📦 Categorieën"],["dashboard","📊 Dashboard"]].map(([v,l])=><div key={v} className={`tab ${tab===v?"on":""}`} onClick={()=>setTab(v)}>{l}</div>)}</div>
+      <div className="tabs" style={{maxWidth:"100%"}}>{[["bedrijf","🏢 Bedrijf"],["email","📧 Email"],["voorwaarden","📄 Voorwaarden"],["thema","🎨 Thema"],["sjabloon","📐 Ontwerpen"],["layout","📋 Layout"],["categorieen","📦 Categorieën"],["dashboard","📊 Dashboard"]].map(([v,l])=><div key={v} className={`tab ${tab===v?"on":""}`} onClick={()=>setTab(v)}>{l}</div>)}</div>
 
       {/* Split screen layout voor tabs met preview */}
       <div className="settings-grid" style={{display: showPreview ? "grid" : "block", gridTemplateColumns: showPreview ? "1fr 650px" : "1fr", gap: 20, alignItems: "start"}}>
