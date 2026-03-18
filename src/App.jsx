@@ -1495,6 +1495,7 @@ export default function App() {
   const [planningModal, setPlanningModal] = useState(null);
   const [offerteViews, setOfferteViews] = useState({});
   const [offerteResponses, setOfferteResponses] = useState({});
+  const [planningProposals, setPlanningProposals] = useState({});
   const [logboekModal, setLogboekModal] = useState(null);
   const [widgetOrder, setWidgetOrder] = useState(null); // null = use settings default
 
@@ -1640,6 +1641,7 @@ export default function App() {
     try {
       const { data: views } = await sb.from('offerte_views').select('offerte_id, viewed_at, user_agent');
       const { data: responses } = await sb.from('offerte_responses').select('offerte_id, status, periode, opmerkingen, submitted_at');
+      const { data: proposals } = await sb.from('planning_proposals').select('*').catch(()=>({data:null}));
       if(views) {
         const grouped = {};
         views.forEach(v => {
@@ -1656,9 +1658,23 @@ export default function App() {
         });
         setOfferteResponses(grouped);
       }
+      if(proposals) {
+        const grouped = {};
+        proposals.forEach(p => {
+          if(!grouped[p.offerte_id]) grouped[p.offerte_id] = [];
+          grouped[p.offerte_id].push(p);
+        });
+        setPlanningProposals(grouped);
+      }
     } catch(e) { console.warn("Offerte tracking fetch failed:", e); }
   }, []);
   useEffect(() => { if(user) fetchOfferteTracking(); }, [user, fetchOfferteTracking]);
+  // Auto-poll tracking elke 60s op dashboard
+  useEffect(() => {
+    if(!user || pg !== "dashboard") return;
+    const iv = setInterval(fetchOfferteTracking, 60000);
+    return () => clearInterval(iv);
+  }, [user, pg, fetchOfferteTracking]);
 
 
   // saveKey: async, dual-write to Supabase + localStorage
@@ -1959,29 +1975,91 @@ export default function App() {
     if(!window.emailjs) { notify("EmailJS niet geladen", "er"); return false; }
     const emailCfg = settings?.email || {};
     const serviceId = emailCfg.emailjsServiceId || "service_qrkvr0d";
-    const templateId = emailCfg.emailjsTemplatePlanning || "template_5nckw9f"; // fallback to offerte template
+    const templateId = emailCfg.emailjsTemplatePlanning || "template_5nckw9f";
     const pubKey = emailCfg.emailjsPublicKey || "04zsVAk5imDpo-8GJ";
     window.emailjs.init(pubKey);
     const klantData = klanten.find(k => k.id === offerte.klantId) || offerte.klant || {};
     const bed = settings?.bedrijf || {};
+    const dc = settings?.sjabloon?.accentKleur || settings?.thema?.kleur || bed.kleur || "#1a2e4a";
     const totals = calcTotals(offerte.lijnen || []);
-    const isBevestiging = emailType === "bevestiging";
+    const isVoorstel = emailType === "bevestiging";
+
+    // Sla voorstel op in Supabase zodat klant via planning.html kan reageren
+    let planningUrl = "";
+    if(isVoorstel) {
+      try {
+        const proposalId = uid();
+        await sb.from('planning_proposals').upsert({
+          id: proposalId,
+          offerte_id: offerte.id,
+          plan_data: {
+            ...planData,
+            klant: klantData,
+            offerteNummer: offerte.nummer,
+            installatieType: offerte.installatieType,
+            totaal: fmtEuro(totals.totaal),
+            _bed: { naam:bed.naam, adres:bed.adres, gemeente:bed.gemeente, tel:bed.tel, email:bed.email },
+            _dc: dc
+          },
+          status: "voorstel"
+        });
+        planningUrl = `${window.location.origin}/planning.html?id=${proposalId}`;
+        console.log("✅ Planning voorstel opgeslagen:", proposalId);
+      } catch(e) { console.warn("Planning save failed:", e); }
+    }
+
+    // Professionele HTML email
+    const htmlEmail = isVoorstel ? `<div style="font-family:Inter,Arial,sans-serif;max-width:600px;margin:0 auto;background:#f8fafc">
+<div style="background:linear-gradient(135deg,${dc},${dc}cc);padding:28px 32px;text-align:center;border-radius:8px 8px 0 0">
+  <div style="font-size:22px;font-weight:900;color:#fff">📅 Installatieafspraak</div>
+  <div style="color:rgba(255,255,255,.8);font-size:13px;margin-top:4px">${bed.naam||""}</div>
+</div>
+<div style="background:#fff;padding:28px 32px;border:1px solid #e2e8f0;border-top:0">
+  <p style="font-size:15px;color:#1e293b">Beste <strong>${klantData.naam||"Klant"}</strong>,</p>
+  <p style="font-size:14px;color:#475569;line-height:1.6;margin-top:8px">Naar aanleiding van offerte <strong>${offerte.nummer}</strong> stellen wij de volgende afspraak voor:</p>
+  <div style="background:linear-gradient(135deg,#eff6ff,#dbeafe);border:2px solid #93c5fd;border-radius:12px;padding:24px;margin:20px 0;text-align:center">
+    <div style="font-size:11px;font-weight:700;color:#3b82f6;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Voorgestelde datum</div>
+    <div style="font-size:24px;font-weight:900;color:#1e40af">${planData.planDatum ? new Date(planData.planDatum+"T12:00:00").toLocaleDateString("nl-BE",{weekday:"long",day:"numeric",month:"long",year:"numeric"}) : "—"}</div>
+    <div style="font-size:18px;font-weight:700;color:#3b82f6;margin-top:4px">⏰ ${planData.planTijd||"Nog te bepalen"}</div>
+    ${planData.planNotities?`<div style="font-size:13px;color:#64748b;margin-top:10px;font-style:italic">💬 ${planData.planNotities}</div>`:""}
+  </div>
+  <table style="width:100%;border-collapse:collapse;margin:16px 0;font-size:13px">
+    <tr style="background:#f1f5f9"><td style="padding:8px 12px;border:1px solid #e2e8f0;font-weight:600">📍 Adres</td><td style="padding:8px 12px;border:1px solid #e2e8f0">${klantData.adres||""}, ${klantData.gemeente||""}</td></tr>
+    <tr><td style="padding:8px 12px;border:1px solid #e2e8f0;font-weight:600">💰 Totaal</td><td style="padding:8px 12px;border:1px solid #e2e8f0;font-weight:700;color:${dc}">${fmtEuro(totals.totaal)}</td></tr>
+  </table>
+  <div style="text-align:center;margin:24px 0">
+    <a href="${planningUrl}" style="display:inline-block;background:#10b981;color:#fff;padding:14px 40px;border-radius:10px;text-decoration:none;font-weight:800;font-size:16px">✅ Afspraak bekijken & bevestigen</a>
+  </div>
+  <div style="text-align:center;font-size:12px;color:#94a3b8">Past dit moment niet? Via bovenstaande link kunt u ook een ander moment voorstellen.</div>
+</div>
+<div style="text-align:center;padding:16px;font-size:11px;color:#94a3b8">${bed.naam||""} · ${bed.tel||""} · ${bed.email||""}</div>
+</div>` : `<div style="font-family:Inter,Arial,sans-serif;max-width:600px;margin:0 auto;background:#f8fafc">
+<div style="background:${dc};padding:28px 32px;text-align:center;border-radius:8px 8px 0 0">
+  <div style="font-size:22px;font-weight:900;color:#fff">Planning geannuleerd</div>
+</div>
+<div style="background:#fff;padding:28px 32px;border:1px solid #e2e8f0;border-top:0">
+  <p style="font-size:15px;color:#1e293b">Beste <strong>${klantData.naam||"Klant"}</strong>,</p>
+  <p style="font-size:14px;color:#475569;line-height:1.6;margin-top:8px">Helaas moeten wij de afspraak voor offerte <strong>${offerte.nummer}</strong> annuleren.</p>
+  ${planData.planNotities?`<p style="font-size:13px;color:#64748b;margin-top:8px">Reden: ${planData.planNotities}</p>`:""}
+  <p style="font-size:14px;color:#475569;margin-top:12px">Wij nemen zo snel mogelijk contact op voor een nieuwe datum.</p>
+</div>
+<div style="text-align:center;padding:16px;font-size:11px;color:#94a3b8">${bed.naam||""}</div>
+</div>`;
+
     const templateParams = {
       to_email: klantData.email || "",
       to_name: klantData.naam || "Klant",
       from_name: bed.naam || "BILLR",
       reply_to: emailCfg.eigen || bed.email || "",
-      subject: isBevestiging 
-        ? `Afspraak bevestigd — ${offerte.nummer} — ${bed.naam||""}`
-        : `Planning geannuleerd — ${offerte.nummer} — ${bed.naam||""}`,
-      html_body: isBevestiging
-        ? `Beste ${klantData.naam||"Klant"},\n\nUw installatie voor offerte ${offerte.nummer} is ingepland.\n\n📅 Datum: ${planData.planDatum||"—"}\n⏰ Tijdstip: ${planData.planTijd||"—"}\n📍 Adres: ${klantData.adres||""}, ${klantData.gemeente||""}\n\n💰 Totaal: ${fmtEuro(totals.totaal)}\n\n${planData.planNotities ? "Opmerking: "+planData.planNotities+"\n\n":""}Bij vragen kunt u ons altijd bereiken.\n\nMet vriendelijke groeten,\n${bed.naam||""}\n${bed.tel||""}`
-        : `Beste ${klantData.naam||"Klant"},\n\nHelaas moeten wij de geplande afspraak voor offerte ${offerte.nummer} annuleren.\n\n${planData.planNotities ? "Reden: "+planData.planNotities+"\n\n":""}Wij nemen zo snel mogelijk contact op voor een nieuwe datum.\n\nOnze excuses voor het ongemak.\n\nMet vriendelijke groeten,\n${bed.naam||""}\n${bed.tel||""}`,
+      subject: isVoorstel 
+        ? `📅 Installatieafspraak — ${offerte.nummer} — Bevestig uw datum`
+        : `Planning geannuleerd — ${offerte.nummer}`,
+      html_body: htmlEmail,
     };
     try {
       const response = await window.emailjs.send(serviceId, templateId, templateParams);
       if(response.status === 200) {
-        notify(`📧 Planning ${isBevestiging?"bevestiging":"annulering"} verzonden naar ${klantData.email}`, "ok");
+        notify(`📧 Planning ${isVoorstel?"voorstel":"annulering"} verzonden naar ${klantData.email}`, "ok");
         return true;
       }
     } catch(error) {
@@ -2161,7 +2239,7 @@ export default function App() {
           </div>
 
           <div className="content">
-            {pg==="dashboard"&&<Dashboard offertes={offertes} facturen={factMet} onGoto={gotoFiltered} onNew={()=>{setEditOff(null);setWizOpen(true)}} onFactuur={d=>setFactModal(d)} settings={settings} offerteViews={offerteViews} offerteResponses={offerteResponses} onLogboek={o=>setLogboekModal(o)} onPlan={o=>setPlanningModal(o)} widgetOrder={widgetOrder} setWidgetOrder={setWidgetOrder} onRefreshTracking={fetchOfferteTracking}/>}
+            {pg==="dashboard"&&<Dashboard offertes={offertes} facturen={factMet} onGoto={gotoFiltered} onNew={()=>{setEditOff(null);setWizOpen(true)}} onFactuur={d=>setFactModal(d)} settings={settings} offerteViews={offerteViews} offerteResponses={offerteResponses} planningProposals={planningProposals} onLogboek={o=>setLogboekModal(o)} onPlan={o=>setPlanningModal(o)} widgetOrder={widgetOrder} setWidgetOrder={setWidgetOrder} onRefreshTracking={fetchOfferteTracking}/>}
             {pg==="offertes"&&<OffertesPage offertes={offertes} initFilter={pgFilter} onView={d=>setViewDoc({doc:d,type:"offerte"})} onEdit={d=>{setEditOff(d);setWizOpen(true)}} onStatus={updOff} onBulkStatus={bulkUpdOff} onFactuur={d=>setFactModal(d)} onDelete={id=>{setOffertes(p=>p.filter(o=>o.id!==id));notify("Verwijderd")}} onNew={()=>{setEditOff(null);setWizOpen(true)}} onEmail={d=>setEmailModal({doc:d,type:"offerte"})} onPlan={d=>setPlanningModal(d)} settings={settings}/>}
             {pg==="facturen"&&<FacturenPage facturen={factMet} settings={settings} initFilter={pgFilter} onView={d=>setViewDoc({doc:d,type:"factuur"})} onEdit={f=>{setEditFact(f);setFactuurWizOpen(true);}} onStatus={updFact} onBulkStatus={bulkUpdFact} onDelete={id=>{setFacturen(p=>p.filter(f=>f.id!==id));notify("Verwijderd")}} notify={notify} onEmail={d=>setEmailModal({doc:d,type:"factuur"})} onBetaling={f=>setBetalingModal(f)} onAanmaning={f=>setAanmaningModal(f)} onNew={()=>{setEditFact(null);setFactuurWizOpen(true)}}/>}
             {pg==="klanten"&&<KlantenPage klanten={klanten} offertes={offertes} facturen={factMet} view={klantView} onEdit={k=>setKlantModal(k)} onDelete={id=>{setKlanten(p=>p.filter(k=>k.id!==id));notify("Klant verwijderd")}}/>}
@@ -2245,7 +2323,7 @@ export default function App() {
 }
 
 // ─── DASHBOARD ────────────────────────────────────────────────────
-function Dashboard({offertes, facturen, onGoto, onNew, onFactuur, settings, offerteViews, offerteResponses, onLogboek, onPlan, widgetOrder, setWidgetOrder, onRefreshTracking}) {
+function Dashboard({offertes, facturen, onGoto, onNew, onFactuur, settings, offerteViews, offerteResponses, planningProposals, onLogboek, onPlan, widgetOrder, setWidgetOrder, onRefreshTracking}) {
   const instTypesSetting = settings;
   const openOff = offertes.filter(o=>o.status==="verstuurd");
   const openFact = facturen.filter(f=>f.status!=="betaald"&&f.status!=="concept");
@@ -2380,23 +2458,41 @@ function Dashboard({offertes, facturen, onGoto, onNew, onFactuur, settings, offe
           verstuurdOff.map(o=>{
             const views = offerteViews?.[o.id] || [];
             const resp = offerteResponses?.[o.id] || [];
+            const plans = planningProposals?.[o.id] || [];
             const lastView = views.length ? views.sort((a,b)=>new Date(b.viewed_at)-new Date(a.viewed_at))[0] : null;
             const lastResp = resp.length ? resp.sort((a,b)=>new Date(b.submitted_at)-new Date(a.submitted_at))[0] : null;
+            const lastPlan = plans.length ? plans.sort((a,b)=>new Date(b.created_at)-new Date(a.created_at))[0] : null;
+            const planStatus = lastPlan?.status;
             return(
-              <div key={o.id} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 0",borderBottom:"1px solid #e0e7ff",cursor:"pointer"}} onClick={()=>onLogboek(o)}>
-                <div style={{flex:1,minWidth:0}}>
-                  <div style={{fontWeight:600,fontSize:13,display:"flex",alignItems:"center",gap:6}}>
-                    {o.klant?.naam||"—"}
-                    <StatusBadge status={o.status} type="off"/>
+              <div key={o.id} style={{borderBottom:"1px solid #e0e7ff",padding:"8px 0"}}>
+                <div style={{display:"flex",alignItems:"center",gap:10,cursor:"pointer"}} onClick={()=>onLogboek(o)}>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{fontWeight:600,fontSize:13,display:"flex",alignItems:"center",gap:6}}>
+                      {o.klant?.naam||"—"}
+                      <StatusBadge status={o.status} type="off"/>
+                    </div>
+                    <div style={{fontSize:11,color:"#6366f1"}}>{o.nummer} · {fmtDate(o.aangemaakt)}</div>
                   </div>
-                  <div style={{fontSize:11,color:"#6366f1"}}>{o.nummer} · {fmtDate(o.aangemaakt)}</div>
+                  <div style={{display:"flex",gap:8,alignItems:"center",flexShrink:0}}>
+                    <span title="Bekeken" style={{fontSize:12,color:views.length?"#2563eb":"#cbd5e1",fontWeight:600}}>👁 {views.length}</span>
+                    {lastResp&&<span style={{fontSize:10,padding:"2px 6px",borderRadius:4,fontWeight:700,background:lastResp.status==="goedgekeurd"?"#d1fae5":"#fef2f2",color:lastResp.status==="goedgekeurd"?"#065f46":"#991b1b"}}>{lastResp.status==="goedgekeurd"?"✅":"❌"}</span>}
+                    <span style={{fontSize:12,color:"#94a3b8"}}>→</span>
+                  </div>
                 </div>
-                <div style={{display:"flex",gap:8,alignItems:"center",flexShrink:0}}>
-                  <span title="Bekeken" style={{fontSize:12,color:views.length?"#2563eb":"#cbd5e1",fontWeight:600}}>👁 {views.length}</span>
-                  {lastResp&&<span style={{fontSize:10,padding:"2px 6px",borderRadius:4,fontWeight:700,background:lastResp.status==="goedgekeurd"?"#d1fae5":"#fef2f2",color:lastResp.status==="goedgekeurd"?"#065f46":"#991b1b"}}>{lastResp.status==="goedgekeurd"?"✅":"❌"}</span>}
-                  {lastView&&<span style={{fontSize:10,color:"#94a3b8"}}>{fmtDate(lastView.viewed_at)}</span>}
-                  <span style={{fontSize:12,color:"#94a3b8"}}>→</span>
-                </div>
+                {/* Planning status row */}
+                {lastPlan&&<div style={{marginTop:6,display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
+                  <span style={{fontSize:10,padding:"2px 8px",borderRadius:4,fontWeight:700,
+                    background:planStatus==="akkoord"?"#d1fae5":planStatus==="alternatief"?"#fef3c7":"#dbeafe",
+                    color:planStatus==="akkoord"?"#065f46":planStatus==="alternatief"?"#92400e":"#1e40af"
+                  }}>{planStatus==="akkoord"?"✅ Klant akkoord":planStatus==="alternatief"?"📅 Ander moment voorgesteld":"⏳ Wacht op klant"}</span>
+                  {lastPlan.plan_data?.planDatum&&<span style={{fontSize:10,color:"#64748b"}}>📅 {fmtDate(lastPlan.plan_data.planDatum)} {lastPlan.plan_data.planTijd||""}</span>}
+                  {planStatus==="alternatief"&&lastPlan.client_response&&<span style={{fontSize:10,color:"#d97706",fontWeight:600}}>→ {lastPlan.client_response.datum||""} {lastPlan.client_response.tijd||""}</span>}
+                </div>}
+                {/* Action buttons for goedgekeurde offertes */}
+                {(o.status==="goedgekeurd"||lastResp?.status==="goedgekeurd")&&<div style={{marginTop:6,display:"flex",gap:6}}>
+                  {(!lastPlan||planStatus==="alternatief")&&<button className="btn btn-sm" style={{background:"#f59e0b",color:"#fff",fontWeight:700,fontSize:10}} onClick={e=>{e.stopPropagation();onPlan(o)}}>📅 {planStatus==="alternatief"?"Herplannen":"Inplannen"}</button>}
+                  {planStatus==="akkoord"&&!o.planBevestigd&&<button className="btn btn-sm" style={{background:"#10b981",color:"#fff",fontWeight:700,fontSize:10}} onClick={e=>{e.stopPropagation();onPlan(o)}}>✅ Bevestigen</button>}
+                </div>}
               </div>
             );
           })
@@ -2532,8 +2628,8 @@ function PlanningModal({offerte, settings, klanten, onSave, onEmail, onClose}) {
         </div>
         <div className="mf">
           <button className="btn b2" style={{flex:1}} onClick={doSave}>💾 Opslaan</button>
-          <button className="btn" style={{background:"#10b981",color:"#fff",flex:1}} onClick={doEmailBevestiging} disabled={sending||!klant.email}>
-            {sending?"Verzenden...":"📧 Bevestiging sturen"}
+          <button className="btn" style={{background:"#f59e0b",color:"#fff",flex:1}} onClick={doEmailBevestiging} disabled={sending||!klant.email}>
+            {sending?"Verzenden...":"📅 Voorstel sturen"}
           </button>
           {planStatus==="geannuleerd"&&<button className="btn" style={{background:"#ef4444",color:"#fff"}} onClick={doEmailAnnulering} disabled={sending||!klant.email}>
             📧 Annulering sturen
