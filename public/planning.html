@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Planning bevestigen</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Inter',Arial,sans-serif;background:#f0f4f8;color:#1e293b;min-height:100vh}
+.wrap{max-width:600px;margin:0 auto;padding:24px 16px 120px}
+.card{background:#fff;border-radius:14px;box-shadow:0 2px 12px rgba(0,0,0,.06);overflow:hidden;margin-bottom:16px}
+.header{padding:32px;text-align:center;color:#fff}
+.header h1{font-size:24px;font-weight:900;letter-spacing:-.5px;margin-bottom:4px}
+.header p{opacity:.8;font-size:13px}
+.body{padding:28px}
+.info-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:20px}
+.info-item{background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:12px 14px}
+.info-lbl{font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.5px}
+.info-val{font-size:15px;font-weight:700;color:#1e293b;margin-top:2px}
+.plan-box{background:linear-gradient(135deg,#eff6ff,#dbeafe);border:2px solid #93c5fd;border-radius:12px;padding:20px;margin:20px 0;text-align:center}
+.plan-date{font-size:28px;font-weight:900;color:#1e40af;letter-spacing:-1px}
+.plan-time{font-size:20px;font-weight:700;color:#3b82f6;margin-top:4px}
+.plan-note{font-size:13px;color:#64748b;margin-top:10px;font-style:italic}
+.klant-info{display:flex;gap:12px;align-items:center;padding:14px;background:#f8fafc;border-radius:8px;border:1px solid #e2e8f0;margin-bottom:16px}
+.klant-avatar{width:44px;height:44px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:800;color:#fff;flex-shrink:0}
+.footer-info{text-align:center;padding:20px;font-size:12px;color:#94a3b8;line-height:1.6}
+/* Floating action */
+.fab{position:fixed;bottom:0;left:0;right:0;z-index:100;background:#fff;border-top:2px solid #e2e8f0;padding:14px 20px;box-shadow:0 -4px 20px rgba(0,0,0,.1)}
+.fab-inner{max-width:600px;margin:0 auto;display:flex;gap:10px}
+.fab-btn{flex:1;padding:14px;border:none;border-radius:10px;font-weight:800;font-size:15px;cursor:pointer;transition:all .2s;text-align:center}
+.fab-accept{background:#10b981;color:#fff}.fab-accept:hover{background:#059669}
+.fab-alt{background:#f59e0b;color:#fff}.fab-alt:hover{background:#d97706}
+.fab-reject{background:#f1f5f9;color:#64748b;border:1px solid #e2e8f0}.fab-reject:hover{background:#fef2f2;color:#ef4444}
+/* Modal */
+.modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:200;align-items:center;justify-content:center}
+.modal-bg.active{display:flex}
+.modal{background:#fff;border-radius:16px;max-width:480px;width:95%;padding:28px;max-height:90vh;overflow-y:auto}
+.fg{margin-bottom:14px}.fl{display:block;font-weight:600;font-size:13px;margin-bottom:6px}
+.fc{width:100%;padding:10px 14px;border:2px solid #e2e8f0;border-radius:8px;font-size:14px;font-family:inherit}.fc:focus{outline:none;border-color:#2563eb}
+.status-msg{text-align:center;padding:60px 20px}.status-msg .icon{font-size:64px;margin-bottom:16px}
+@media(max-width:500px){.info-grid{grid-template-columns:1fr}.plan-date{font-size:22px}.fab-btn{padding:12px;font-size:13px}}
+</style>
+</head>
+<body>
+<div id="app"><div class="status-msg"><div class="icon">⏳</div><h2>Planning laden...</h2></div></div>
+<script>
+const SB_URL="https://qxnxbqkdvvblfkihmjxy.supabase.co";
+const SB_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF4bnhicWtkdnZibGZraWhtanh5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMzNTI3MTMsImV4cCI6MjA4ODkyODcxM30.1JDvrHgxLpU1GZqSjDVGtfnFJg8PHuD-aFpHOxAY1To";
+const pid=new URLSearchParams(window.location.search).get('id');
+const fmtDate=function(d){return d?new Date(d).toLocaleDateString("nl-BE",{weekday:"long",day:"numeric",month:"long",year:"numeric"}):"—"};
+const fmtTime=function(t){return t||"—"};
+
+async function respond(id,status,data){
+  try{
+    var s=window.supabase.createClient(SB_URL,SB_KEY);
+    await s.from('planning_proposals').update({status:status,client_response:{...data,responded_at:new Date().toISOString()}}).eq('id',id);
+  }catch(e){console.error(e)}
+  var ok=status==='akkoord';
+  document.getElementById('app').innerHTML='<div class="status-msg"><div class="icon">'+(ok?'✅':'📅')+'</div><h2 style="color:'+(ok?'#059669':'#f59e0b')+'">'+(ok?'Afspraak bevestigd!':'Alternatief voorstel verstuurd')+'</h2><p style="margin-top:12px;max-width:400px;margin-left:auto;margin-right:auto">'+(ok?'Uw installatie-afspraak is bevestigd. U ontvangt een bevestigingsmail met alle details.':'Uw voorkeur is doorgegeven. We nemen zo snel mogelijk contact op met een aangepast voorstel.')+'</p></div>';
+}
+
+function render(p){
+  var d=p.plan_data;var bed=d._bed||{};var klant=d.klant||{};var dc=d._dc||'#1a2e4a';
+  window._pid=p.id;
+  document.getElementById('app').innerHTML=
+  '<div class="fab"><div class="fab-inner"><button class="fab-btn fab-accept" onclick="doAccept()">✅ Akkoord</button><button class="fab-btn fab-alt" onclick="showAltModal()">📅 Ander moment</button></div></div>'+
+  '<div class="wrap">'+
+  '<div class="card"><div class="header" style="background:linear-gradient(135deg,'+dc+','+dc+'cc)"><h1>📅 Installatieafspraak</h1><p>'+(bed.naam||'')+'</p></div>'+
+  '<div class="body">'+
+  '<div class="klant-info"><div class="klant-avatar" style="background:'+dc+'">'+(klant.naam||'K').slice(0,2).toUpperCase()+'</div><div><div style="font-weight:700;font-size:15px">'+(klant.naam||'')+'</div><div style="font-size:12px;color:#64748b">'+(klant.adres||'')+', '+(klant.gemeente||'')+'</div></div></div>'+
+  '<div class="plan-box"><div style="font-size:12px;font-weight:700;color:#3b82f6;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Voorgestelde datum</div><div class="plan-date">'+fmtDate(d.planDatum)+'</div><div class="plan-time">⏰ '+fmtTime(d.planTijd)+'</div>'+(d.planNotities?'<div class="plan-note">💬 '+d.planNotities+'</div>':'')+'</div>'+
+  '<div class="info-grid"><div class="info-item"><div class="info-lbl">Offerte</div><div class="info-val">'+(d.offerteNummer||'')+'</div></div><div class="info-item"><div class="info-lbl">Type</div><div class="info-val">'+(d.installatieType||'Installatie')+'</div></div><div class="info-item"><div class="info-lbl">Totaal</div><div class="info-val" style="color:'+dc+'">'+(d.totaal||'')+'</div></div><div class="info-item"><div class="info-lbl">Status</div><div class="info-val" style="color:#f59e0b">⏳ Wacht op uw akkoord</div></div></div>'+
+  '<div style="background:#fffbeb;border:1.5px solid #fde68a;border-radius:10px;padding:16px;margin-top:16px"><div style="font-weight:700;font-size:13px;color:#92400e;margin-bottom:6px">📋 Wat kunt u verwachten?</div><div style="font-size:12px;color:#a16207;line-height:1.6">• Onze monteur komt op het afgesproken tijdstip<br>• De installatie duurt gemiddeld een halve tot volledige dag<br>• Zorg voor vrije toegang tot de meterkast en installatielocatie<br>• Na afloop ontvangt u een werkbon ter bevestiging</div></div>'+
+  '</div></div>'+
+  '<div class="footer-info"><strong>'+(bed.naam||'')+'</strong><br>'+(bed.adres||'')+' · '+(bed.gemeente||'')+'<br>'+(bed.tel||'')+' · '+(bed.email||'')+'</div>'+
+  '</div>'+
+  '<div class="modal-bg" id="altModal"><div class="modal"><h2 style="margin-bottom:16px;color:#f59e0b">📅 Ander moment voorstellen</h2><p style="font-size:13px;color:#64748b;margin-bottom:16px">Laat ons weten wanneer het u beter past.</p><div class="fg"><label class="fl">Voorkeursdatum</label><input class="fc" type="date" id="altDate"></div><div class="fg"><label class="fl">Voorkeurstijdstip</label><select class="fc" id="altTime"><option value="">— Kies —</option><option>Ochtend (8:00-12:00)</option><option>Namiddag (13:00-17:00)</option><option>Hele dag</option><option>Na 17:00</option></select></div><div class="fg"><label class="fl">Opmerking</label><textarea class="fc" id="altNote" rows="2" placeholder="Extra info..."></textarea></div><div style="display:flex;gap:10px"><button class="fab-btn fab-reject" style="flex:1;font-size:14px;padding:12px" onclick="closeAlt()">Annuleren</button><button class="fab-btn fab-alt" style="flex:1;font-size:14px;padding:12px" onclick="doAlt()">📅 Verstuur voorstel</button></div></div></div>';
+}
+
+window.doAccept=function(){respond(window._pid,'akkoord',{})};
+window.showAltModal=function(){document.getElementById('altModal').classList.add('active')};
+window.closeAlt=function(){document.getElementById('altModal').classList.remove('active')};
+window.doAlt=function(){respond(window._pid,'alternatief',{datum:document.getElementById('altDate')?.value||'',tijd:document.getElementById('altTime')?.value||'',opmerking:document.getElementById('altNote')?.value||''})};
+
+async function load(){
+  if(!pid){document.getElementById('app').innerHTML='<div class="status-msg"><div class="icon">📅</div><h2>Geen planning</h2><p>Gebruik de link uit uw email.</p></div>';return;}
+  try{
+    var s=window.supabase.createClient(SB_URL,SB_KEY);
+    var r=await s.from('planning_proposals').select('*').eq('id',pid).single();
+    if(r.data){
+      if(r.data.status==='akkoord'){document.getElementById('app').innerHTML='<div class="status-msg"><div class="icon">✅</div><h2 style="color:#059669">Afspraak bevestigd</h2><p>Deze afspraak is al bevestigd.</p></div>';return;}
+      render(r.data);return;
+    }
+  }catch(e){console.warn(e)}
+  document.getElementById('app').innerHTML='<div class="status-msg"><div class="icon">❌</div><h2>Planning niet gevonden</h2><p>Neem contact op.</p></div>';
+}
+load();
+</script>
+</body>
+</html>
