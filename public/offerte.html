@@ -70,8 +70,12 @@ const fmtBtwnr=b=>(b||"").replace(/^BE\s*/,"BE ").replace(/(\d{4})(\d{3})(\d{3})
 async function trackView(id){try{const s=window.supabase.createClient(SB_URL,SB_KEY);await s.from('offerte_views').insert({offerte_id:id,viewed_at:new Date().toISOString(),user_agent:navigator.userAgent.slice(0,200)});}catch(e){}}
 
 async function submitResponse(id,status,data={}){
-  try{const s=window.supabase.createClient(SB_URL,SB_KEY);await s.from('offerte_responses').insert({offerte_id:id,status,periode:data.periode||'',opmerkingen:data.opmerkingen||'',submitted_at:new Date().toISOString()});}catch(e){}
-  const ok=status==='goedgekeurd';
+  try{
+    var s=window.supabase.createClient(SB_URL,SB_KEY);
+    var r=await s.from('offerte_responses').insert({offerte_id:id,status:status,periode:data.periode||'',opmerkingen:data.opmerkingen||'',submitted_at:new Date().toISOString()});
+    console.log('📝 Response saved:',status,r.error?'ERROR: '+JSON.stringify(r.error):'OK');
+  }catch(e){console.error('Submit error:',e)}
+  var ok=status==='goedgekeurd';
   document.getElementById('app').innerHTML='<div class="status-msg"><div class="icon">'+(ok?'✅':'❌')+'</div><h2 style="color:'+(ok?'#059669':'#dc2626')+'">'+(ok?'Offerte goedgekeurd!':'Offerte afgewezen')+'</h2><p style="margin-top:12px">'+(ok?'Bedankt voor uw vertrouwen! We gaan aan de slag en houden u op de hoogte.':'Uw reactie is geregistreerd. Bedankt voor uw feedback.')+'</p><div style="margin-top:20px;padding:14px;background:#f8fafc;border-radius:10px;border:1px solid #e2e8f0;display:inline-block;font-size:13px;color:#64748b">'+(ok?'📧 U ontvangt binnenkort een bevestigingsmail met de planning.':'📧 We hebben uw reactie ontvangen.')+'</div></div>';
 }
 
@@ -83,7 +87,7 @@ function renderOfferte(doc){
   const gl=[...groepen.map(g=>({...g,items:lijnen.filter(l=>l.groepId===g.id)})).filter(g=>g.items.length>0)];
   const rest=lijnen.filter(l=>!l.groepId||!groepen.find(g=>g.id===l.groepId));
   if(rest.length)gl.push({id:'rest',naam:'Producten',items:rest});
-  const up=lijnen.filter((l,i,a)=>a.findIndex(x=>x.naam===l.naam)===i&&(l.imageUrl||l.omschr||(l.specs||[]).length));
+  const up=lijnen.filter(function(l){return l.naam&&(l.imageUrl||l.omschr||(l.specs||[]).length||(l.technischeFiches||[]).length||l.technischeFiche);});
   trackView(doc.id);window._offId=doc.id;
 
   document.getElementById('app').innerHTML=
@@ -125,8 +129,18 @@ window.doAccept=function(){submitResponse(window._offId,'goedgekeurd',{periode:d
 window.doReject=function(){submitResponse(window._offId,'afgewezen',{opmerkingen:document.getElementById('rejectReason')?.value||''})};
 
 async function loadOfferte(){
-  if(offId){try{const s=window.supabase.createClient(SB_URL,SB_KEY);const{data}=await s.from('offerte_shares').select('offerte_data').eq('id',offId).single();if(data?.offerte_data){renderOfferte(data.offerte_data);return;}}catch(e){console.warn(e)}
-  document.getElementById('app').innerHTML='<div class="status-msg"><div class="icon">⏳</div><h2>Offerte niet gevonden</h2><p>Neem contact op met uw leverancier.</p></div>';return;}
+  if(offId){
+    try{
+      var s=window.supabase.createClient(SB_URL,SB_KEY);
+      var r=await s.from('offerte_shares').select('offerte_data').eq('id',offId).single();
+      console.log('📊 Supabase response:',r.error?r.error:'OK',r.data?'data found':'no data');
+      if(r.data&&r.data.offerte_data){
+        console.log('✅ Offerte loaded, lijnen:',r.data.offerte_data.lijnen?.length);
+        renderOfferte(r.data.offerte_data);return;
+      }
+    }catch(e){console.error('Load error:',e)}
+    document.getElementById('app').innerHTML='<div class="status-msg"><div class="icon">⏳</div><h2>Offerte niet gevonden</h2><p>De offerte moet opnieuw verstuurd worden.<br><small style="color:#94a3b8">ID: '+offId+'</small></p></div>';return;
+  }
   if(offerteData){try{renderOfferte(JSON.parse(decodeURIComponent(atob(offerteData))));return;}catch(e){}}
   document.getElementById('app').innerHTML='<div class="status-msg"><div class="icon">📋</div><h2>Geen offerte</h2><p>Gebruik de link uit uw email.</p></div>';
 }
