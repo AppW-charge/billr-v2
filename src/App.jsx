@@ -2157,7 +2157,7 @@ export default function App() {
 
           <div className="content">
             {pg==="dashboard"&&<Dashboard offertes={offertes} facturen={factMet} onGoto={gotoFiltered} onNew={()=>{setEditOff(null);setWizOpen(true)}} onFactuur={d=>setFactModal(d)} settings={settings} offerteViews={offerteViews} offerteResponses={offerteResponses} onLogboek={o=>setLogboekModal(o)} onPlan={o=>setPlanningModal(o)} widgetOrder={widgetOrder} setWidgetOrder={setWidgetOrder} onRefreshTracking={fetchOfferteTracking}/>}
-            {pg==="offertes"&&<OffertesPage offertes={offertes} initFilter={pgFilter} onView={d=>setViewDoc({doc:d,type:"offerte"})} onEdit={d=>{setEditOff(d);setWizOpen(true)}} onStatus={updOff} onBulkStatus={bulkUpdOff} onFactuur={d=>setFactModal(d)} onDelete={id=>{setOffertes(p=>p.filter(o=>o.id!==id));notify("Verwijderd")}} onNew={()=>{setEditOff(null);setWizOpen(true)}} onEmail={d=>setEmailModal({doc:d,type:"offerte"})} settings={settings}/>}
+            {pg==="offertes"&&<OffertesPage offertes={offertes} initFilter={pgFilter} onView={d=>setViewDoc({doc:d,type:"offerte"})} onEdit={d=>{setEditOff(d);setWizOpen(true)}} onStatus={updOff} onBulkStatus={bulkUpdOff} onFactuur={d=>setFactModal(d)} onDelete={id=>{setOffertes(p=>p.filter(o=>o.id!==id));notify("Verwijderd")}} onNew={()=>{setEditOff(null);setWizOpen(true)}} onEmail={d=>setEmailModal({doc:d,type:"offerte"})} onPlan={d=>setPlanningModal(d)} settings={settings}/>}
             {pg==="facturen"&&<FacturenPage facturen={factMet} settings={settings} initFilter={pgFilter} onView={d=>setViewDoc({doc:d,type:"factuur"})} onEdit={f=>{setEditFact(f);setFactuurWizOpen(true);}} onStatus={updFact} onBulkStatus={bulkUpdFact} onDelete={id=>{setFacturen(p=>p.filter(f=>f.id!==id));notify("Verwijderd")}} notify={notify} onEmail={d=>setEmailModal({doc:d,type:"factuur"})} onBetaling={f=>setBetalingModal(f)} onAanmaning={f=>setAanmaningModal(f)} onNew={()=>{setEditFact(null);setFactuurWizOpen(true)}}/>}
             {pg==="klanten"&&<KlantenPage klanten={klanten} offertes={offertes} facturen={factMet} view={klantView} onEdit={k=>setKlantModal(k)} onDelete={id=>{setKlanten(p=>p.filter(k=>k.id!==id));notify("Klant verwijderd")}}/>}
             {pg==="producten"&&<ProductenPage producten={producten} settings={settings} onEdit={p=>setProdModal(p)} onDelete={id=>{setProducten(p=>p.filter(x=>x.id!==id));notify("Verwijderd")}} onToggle={id=>setProducten(p=>p.map(x=>x.id===id?{...x,actief:!x.actief}:x))} onEnrich={upd=>setProducten(p=>p.map(x=>x.id===upd.id?upd:x))} onDuplicate={p=>{const dup={...p,id:uid(),naam:p.naam+" (kopie)",aangemaakt:new Date().toISOString()};setProducten(prev=>[dup,...prev]);notify("Product gedupliceerd ✓");setProdModal(dup);}}/>}
@@ -2490,12 +2490,13 @@ function PlanningModal({offerte, settings, klanten, onSave, onEmail, onClose}) {
   };
 
   return(
-    <div className="modal-bg active" onClick={e=>e.target===e.currentTarget&&onClose()}>
-      <div className="modal" style={{maxWidth:560}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+    <div className="mo" onClick={e=>e.target===e.currentTarget&&onClose()}>
+      <div className="mdl mmd" style={{display:"flex",flexDirection:"column",maxHeight:"90vh"}}>
+        <div className="mh">
           <div style={{fontWeight:800,fontSize:18}}>📅 Planning — {offerte.nummer}</div>
-          <button className="btn btn-sm" onClick={onClose}>✕</button>
+          <button className="xbtn" onClick={onClose}>×</button>
         </div>
+        <div className="mb-body" style={{flex:1,overflowY:"auto"}}>
         <div style={{background:"#f0fdf4",border:"1px solid #86efac",borderRadius:8,padding:14,marginBottom:16}}>
           <div style={{fontWeight:700,fontSize:14}}>{klant.naam||"—"}</div>
           <div style={{fontSize:12,color:"#059669"}}>{klant.adres}, {klant.gemeente} · {klant.tel||""}</div>
@@ -2523,7 +2524,8 @@ function PlanningModal({offerte, settings, klanten, onSave, onEmail, onClose}) {
           <label className="fl">Notities</label>
           <textarea className="fc" rows={3} value={planNotities} onChange={e=>setPlanNotities(e.target.value)} placeholder="Extra info voor de klant of monteur..."/>
         </div>
-        <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+        </div>
+        <div className="mf">
           <button className="btn b2" style={{flex:1}} onClick={doSave}>💾 Opslaan</button>
           <button className="btn" style={{background:"#10b981",color:"#fff",flex:1}} onClick={doEmailBevestiging} disabled={sending||!klant.email}>
             {sending?"Verzenden...":"📧 Bevestiging sturen"}
@@ -2531,8 +2533,8 @@ function PlanningModal({offerte, settings, klanten, onSave, onEmail, onClose}) {
           {planStatus==="geannuleerd"&&<button className="btn" style={{background:"#ef4444",color:"#fff"}} onClick={doEmailAnnulering} disabled={sending||!klant.email}>
             📧 Annulering sturen
           </button>}
+          {!klant.email&&<div style={{fontSize:11,color:"#ef4444"}}>⚠ Geen email</div>}
         </div>
-        {!klant.email&&<div style={{fontSize:11,color:"#ef4444",marginTop:6}}>⚠ Geen email adres bij klant — email niet mogelijk</div>}
       </div>
     </div>
   );
@@ -2554,8 +2556,8 @@ function OfferteLogboekModal({offerte, views, responses, onClose, onRefresh}) {
   };
 
   return(
-    <div className="modal-bg active" onClick={e=>e.target===e.currentTarget&&onClose()}>
-      <div className="modal" style={{maxWidth:620}}>
+    <div className="mo" onClick={e=>e.target===e.currentTarget&&onClose()}>
+      <div className="mdl mlg" style={{maxHeight:"90vh",overflowY:"auto"}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
           <div style={{fontWeight:800,fontSize:18}}>📊 Logboek — {offerte.nummer}</div>
           <div style={{display:"flex",gap:6}}>
@@ -2670,7 +2672,7 @@ function DocLog({log=[]}) {
 }
 
 
-function OffertesPage({offertes,initFilter,onView,onEdit,onStatus,onBulkStatus,onFactuur,onDelete,onNew,onEmail,settings}) {
+function OffertesPage({offertes,initFilter,onView,onEdit,onStatus,onBulkStatus,onFactuur,onDelete,onNew,onEmail,onPlan,settings}) {
   const [q,setQ] = useState("");
   const [fs,setFs] = useState(initFilter||"alle");
   const [sel,setSel] = useState(new Set());
@@ -2750,6 +2752,7 @@ function OffertesPage({offertes,initFilter,onView,onEdit,onStatus,onBulkStatus,o
                   <div className="flex gap2">
                     <button className="btn bs btn-sm" onClick={()=>onView(o)} title="Bekijken">👁</button>
                     <button className="btn bs btn-sm" onClick={()=>onEdit(o)} title="Bewerken">✏️</button>
+                    {(o.status==="goedgekeurd"||o.klantAkkoord)&&<button className="btn btn-sm" style={{background:"#d4ff00",color:"#1a2e4c",fontWeight:700,fontSize:11}} onClick={()=>onPlan(o)} title="Inplannen">📅</button>}
                     <button className="btn bgh btn-sm" onClick={()=>{if(window.confirm("Verwijderen?"))onDelete(o.id)}} title="Verwijderen">🗑</button>
                   </div>
                 </td>
@@ -2767,6 +2770,7 @@ function OffertesPage({offertes,initFilter,onView,onEdit,onStatus,onBulkStatus,o
                         <button className="btn bs btn-sm" onClick={()=>{onStatus(o.id,{status:"goedgekeurd",logActie:"✅ Goedgekeurd door klant"});}}>👍 Goedgekeurd</button>
                         <button className="btn bs btn-sm" onClick={()=>{onStatus(o.id,{status:"afgewezen",logActie:"❌ Afgewezen door klant"});}}>👎 Afgewezen</button>
                         {o.status==="goedgekeurd"&&!o.factuurId&&<button className="btn bg btn-sm" onClick={()=>onFactuur(o)}>🧾 → Factuur</button>}
+                        {(o.status==="goedgekeurd"||o.klantAkkoord)&&<button className="btn btn-sm" style={{background:"#d4ff00",color:"#1a2e4c",fontWeight:700}} onClick={()=>onPlan(o)}>📅 Inplannen</button>}
                         <button className="btn bgh btn-sm" onClick={()=>{if(window.confirm("Verwijderen?"))onDelete(o.id)}}>🗑</button>
                       </div>
                       <div className="doc-log-wrap">
