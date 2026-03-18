@@ -4762,13 +4762,21 @@ function FichePages({fiche, naam, fichNaam, omschr, dc, bed, docNummer}) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if(!fiche || !window.pdfjsLib) { setLoading(false); return; }
+    if(!fiche || fiche==="[PDF]" || !window.pdfjsLib) { 
+      console.warn("FichePages skip:", !fiche?"no fiche":fiche==="[PDF]"?"stripped":"no pdfjsLib");
+      setLoading(false); return; 
+    }
 
     const render = async () => {
       try {
         let pdfData;
         if(fiche.startsWith('data:')) {
-          pdfData = atob(fiche.split(',')[1]);
+          const parts = fiche.split(',');
+          if(parts.length < 2 || !parts[1]) throw new Error("Invalid data URI");
+          pdfData = atob(parts[1]);
+        } else if(fiche.startsWith('http')) {
+          // URL — kan niet lokaal renderen, toon als embed
+          setLoading(false); return;
         } else {
           pdfData = atob(fiche);
         }
@@ -4779,7 +4787,7 @@ function FichePages({fiche, naam, fichNaam, omschr, dc, bed, docNummer}) {
         const imgs = [];
         for(let i = 1; i <= pdf.numPages; i++) {
           const page = await pdf.getPage(i);
-          const scale = 2.5; // High-res for sharp A4 print
+          const scale = 2.0;
           const viewport = page.getViewport({scale});
           const canvas = document.createElement('canvas');
           canvas.width = viewport.width;
@@ -4787,8 +4795,9 @@ function FichePages({fiche, naam, fichNaam, omschr, dc, bed, docNummer}) {
           await page.render({canvasContext: canvas.getContext('2d'), viewport}).promise;
           imgs.push(canvas.toDataURL('image/png'));
         }
+        console.log(`✅ Fiche gerenderd: ${fichNaam||naam} — ${imgs.length} pagina's`);
         setPageImages(imgs);
-      } catch(e) { console.error("Fiche render error:", e); }
+      } catch(e) { console.error("Fiche render error:", fichNaam||naam, e.message); }
       setLoading(false);
     };
     render();
@@ -5126,12 +5135,13 @@ function OfferteDocument({doc, settings}) {
                     </div>
                   )}
                   {i<uniqueProds.length-1&&<div style={{height:1,background:"#e2e8f0",marginTop:20}}/>}
-                  {/* Technische fiches indicatie */}
+                  {/* Technische fiches indicatie (label only, PDF's staan onderaan) */}
                   {((l.technischeFiches||[]).length>0||l.technischeFiche)&&<div style={{marginTop:8,display:"flex",flexWrap:"wrap",gap:4}}>
                     {(l.technischeFiches||[]).map((f,fi)=>(
                       <span key={fi} style={{display:"inline-flex",alignItems:"center",gap:4,background:"#eff6ff",border:"1px solid #bfdbfe",borderRadius:5,padding:"3px 10px",fontSize:11,color:"#2563eb",fontWeight:600}}>📎 {f.naam||"Fiche "+(fi+1)}</span>
                     ))}
                     {l.technischeFiche&&!(l.technischeFiches||[]).length&&<span style={{display:"inline-flex",alignItems:"center",gap:4,background:"#eff6ff",border:"1px solid #bfdbfe",borderRadius:5,padding:"3px 10px",fontSize:11,color:"#2563eb",fontWeight:600}}>📎 {l.fichNaam||"Technische fiche"}</span>}
+                    <span style={{fontSize:10,color:"#94a3b8",alignSelf:"center"}}>→ zie onderaan</span>
                   </div>}
                 </div>
               );
