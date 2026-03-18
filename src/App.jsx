@@ -4674,13 +4674,12 @@ function FichePDFEmbed({fiche, naam, fichNaam, fullPage = false}) {
 
     const renderPdf = async () => {
       try {
-        // Extract base64 data
         let pdfData;
         if(fiche.startsWith('data:')) {
-          const base64 = fiche.split(',')[1];
-          pdfData = atob(base64);
+          const clean = (fiche.split(',')[1]||'').replace(/[\s\r\n]/g, '');
+          pdfData = atob(clean);
         } else {
-          pdfData = atob(fiche);
+          pdfData = atob(fiche.replace(/[\s\r\n]/g, ''));
         }
         
         const uint8 = new Uint8Array(pdfData.length);
@@ -4773,12 +4772,14 @@ function FichePages({fiche, naam, fichNaam, omschr, dc, bed, docNummer}) {
         if(fiche.startsWith('data:')) {
           const parts = fiche.split(',');
           if(parts.length < 2 || !parts[1]) throw new Error("Invalid data URI");
-          pdfData = atob(parts[1]);
+          // Clean base64: remove whitespace/newlines
+          const clean = parts[1].replace(/[\s\r\n]/g, '');
+          pdfData = atob(clean);
         } else if(fiche.startsWith('http')) {
-          // URL — kan niet lokaal renderen, toon als embed
           setLoading(false); return;
         } else {
-          pdfData = atob(fiche);
+          const clean = fiche.replace(/[\s\r\n]/g, '');
+          pdfData = atob(clean);
         }
         const uint8 = new Uint8Array(pdfData.length);
         for(let i = 0; i < pdfData.length; i++) uint8[i] = pdfData.charCodeAt(i);
@@ -5241,16 +5242,40 @@ function OfferteDocument({doc, settings}) {
       </div>
 
       {/* TECHNISCHE FICHES — AAN HET EINDE, elke PDF-pagina = eigen A4 */}
-      {uniqueProds.filter(l=>l.technischeFiche||(l.technischeFiches||[]).length).map((l,fi)=>(
+      {uniqueProds.filter(l=>(l.technischeFiche&&l.technischeFiche!=="[PDF]")||(l.technischeFiches||[]).length>0).map((l,fi)=>{
+        console.log(`📎 Fiche sectie voor ${l.naam}:`, 
+          'technischeFiche:', l.technischeFiche ? (l.technischeFiche.length>100?l.technischeFiche.slice(0,50)+'...':l.technischeFiche) : 'null',
+          'technischeFiches:', (l.technischeFiches||[]).map(f=>({naam:f.naam, hasData:!!f.data, dataLen:f.data?.length||0, url:f.url||''}))
+        );
+        return(
         <div key={`fiche-grp-${fi}`}>
-          {/* Legacy: single technischeFiche */}
-          {l.technischeFiche&&l.technischeFiche!=="[PDF]"&&<FichePages fiche={l.technischeFiche} naam={l.naam} fichNaam={l.fichNaam} omschr={l.omschr} dc={dc} bed={bed} docNummer={doc.nummer}/>}
-          {/* Nieuw: array technischeFiches */}
-          {(l.technischeFiches||[]).filter(f=>f.data||f.url).map((f,ffi)=>(
-            <FichePages key={`fiche-${fi}-${ffi}`} fiche={f.data||f.url} naam={l.naam} fichNaam={f.naam} omschr={l.omschr} dc={dc} bed={bed} docNummer={doc.nummer}/>
-          ))}
+          {/* Legacy: single technischeFiche — alleen als GEEN array */}
+          {l.technischeFiche&&l.technischeFiche!=="[PDF]"&&l.technischeFiche.length>100&&!(l.technischeFiches||[]).length&&
+            <FichePages fiche={l.technischeFiche} naam={l.naam} fichNaam={l.fichNaam} omschr={l.omschr} dc={dc} bed={bed} docNummer={doc.nummer}/>}
+          {/* Nieuw: array technischeFiches — render ALLE met data */}
+          {(l.technischeFiches||[]).map((f,ffi)=>{
+            const ficheData = f.data || f.url || null;
+            if(!ficheData || ficheData.length < 100) {
+              // Geen base64 data — toon placeholder
+              return(
+                <div key={`fiche-ph-${fi}-${ffi}`}>
+                  <div className="doc-page-lbl">Technische fiche — {f.naam||l.naam}</div>
+                  <div className="doc-page" style={{pageBreakBefore:"always"}}>
+                    <div style={{height:5,background:dc,flexShrink:0}}/>
+                    <div style={{padding:"30mm 20mm",textAlign:"center"}}>
+                      <div style={{fontSize:36,marginBottom:16}}>📋</div>
+                      <div style={{fontWeight:800,fontSize:20,color:"#1e293b",marginBottom:8}}>{l.naam}</div>
+                      <div style={{fontSize:14,color:"#94a3b8",marginBottom:8}}>{f.naam||"Technische fiche"}</div>
+                      <div style={{fontSize:12,color:"#f59e0b",padding:"8px 16px",background:"#fffbeb",borderRadius:8,display:"inline-block"}}>⚠ PDF data niet beschikbaar — product opnieuw opslaan om fiches te herstellen</div>
+                    </div>
+                  </div>
+                </div>
+              );
+            }
+            return <FichePages key={`fiche-${fi}-${ffi}`} fiche={ficheData} naam={l.naam} fichNaam={f.naam} omschr={l.omschr} dc={dc} bed={bed} docNummer={doc.nummer}/>;
+          })}
         </div>
-      ))}
+      );})}
     </div>
   );
 }
