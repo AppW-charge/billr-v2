@@ -1506,6 +1506,30 @@ export default function App() {
   useEffect(()=>{
     let dataLoaded = false;
 
+    // ═══ STARTUP CLEANUP: verwijder bloated base64 uit localStorage ═══
+    try {
+      let totalSize = 0;
+      for(let i=0;i<localStorage.length;i++) {
+        const k = localStorage.key(i);
+        const v = localStorage.getItem(k);
+        totalSize += (v||"").length;
+      }
+      if(totalSize > 4000000) { // >4MB = bijna vol
+        console.warn(`⚠️ localStorage ${(totalSize/1024/1024).toFixed(1)}MB — opschonen...`);
+        ["b4_prd","b4_off","b4_fct"].forEach(k => {
+          try {
+            const raw = localStorage.getItem(k);
+            if(raw && raw.length > 500000) { // >500KB → strip
+              const arr = JSON.parse(raw);
+              const stripped = stripBase64(k, arr);
+              localStorage.setItem(k, JSON.stringify(stripped));
+              console.log(`🧹 ${k} opgeschoond: ${(raw.length/1024).toFixed(0)}KB → ${(JSON.stringify(stripped).length/1024).toFixed(0)}KB`);
+            }
+          } catch(_){}
+        });
+      }
+    } catch(_){}
+
     const loadUserData = async (u) => {
       if(dataLoaded) return;
       dataLoaded = true;
@@ -1725,29 +1749,55 @@ export default function App() {
   }, [user, pg, fetchOfferteTracking]);
 
 
-  // saveKey: async, dual-write to Supabase + localStorage
-  // Als Supabase faalt, valt het altijd terug op localStorage
+  // saveKey: dual-write to Supabase + localStorage
+  // localStorage: strip base64 fiches (QuotaExceededError prevention)
+  // Supabase: full data
+  const stripBase64 = (key, val) => {
+    if(!Array.isArray(val)) return val;
+    if(key === "b4_prd") return val.map(p => {
+      const c = {...p};
+      if(c.technischeFiche && String(c.technischeFiche).length > 500) c.technischeFiche = "[PDF]";
+      if(c.technischeFiches) c.technischeFiches = c.technischeFiches.map(f => ({naam:f.naam||"",url:f.url||"",type:f.type||""}));
+      return c;
+    });
+    if(key === "b4_off" || key === "b4_fct") return val.map(d => {
+      const c = {...d};
+      if(c.lijnen) c.lijnen = c.lijnen.map(l => {
+        const cl = {...l};
+        if(cl.technischeFiche && String(cl.technischeFiche).length > 500) cl.technischeFiche = null;
+        if(cl.technischeFiches) cl.technischeFiches = cl.technischeFiches.map(f => ({naam:f.naam||"",url:f.url||"",type:f.type||""}));
+        return cl;
+      });
+      return c;
+    });
+    return val;
+  };
+
   const saveKey = useCallback(async (key, val) => { 
     if(!dataReady.current) return;
     
-    const json = JSON.stringify(val);
-    
-    // ALTIJD localStorage schrijven als backup
+    // localStorage: ALTIJD strip base64 (QuotaExceeded prevention)
     try {
-      localStorage.setItem(key, json);
+      const stripped = stripBase64(key, val);
+      localStorage.setItem(key, JSON.stringify(stripped));
     } catch(e) {
       console.warn(`localStorage save "${key}" failed:`, e);
+      // Als het TOCH faalt, probeer oude data te verwijderen
+      try { localStorage.removeItem(key); } catch(_){}
     }
     
+    // Supabase: volledige data (hogere limiet)
     if(user) {
+      const json = JSON.stringify(val);
       const success = await sbSet(key, json, user.id);
-      if(success) {
-        // Supabase OK — al gelogd in sbSet
-      } else {
-        console.warn(`⚠️ Supabase save "${key}" failed — localStorage fallback actief`);
+      if(!success) {
+        // Als Supabase ook faalt (te groot), probeer gestripte versie
+        const strippedJson = JSON.stringify(stripBase64(key, val));
+        if(strippedJson.length < json.length) {
+          await sbSet(key, strippedJson, user.id);
+        }
+        console.warn(`⚠️ Supabase save "${key}" failed`);
       }
-    } else {
-      console.log(`💾 Saved ${key} (localStorage only — niet ingelogd)`);
     }
   }, [user]);
   useEffect(()=>{ saveKey("b4_off", offertes);  },[offertes,   saveKey]);
