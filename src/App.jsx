@@ -11,6 +11,8 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGri
 // ─── SUPABASE CLIENT ──────────────────────────────────────────────
 const SB_URL  = "https://qxnxbqkdvvblfkihmjxy.supabase.co";
 const SB_KEY  = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF4bnhicWtkdnZibGZraWhtanh5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMzNTI3MTMsImV4cCI6MjA4ODkyODcxM30.1JDvrHgxLpU1GZqSjDVGtfnFJg8PHuD-aFpHOxAY1To";
+const BILLR_VERSION = "v7.2.9-safe-2026-03-18";
+console.log(`🔷 BILLR ${BILLR_VERSION} loaded`);
 const sb = createClient(SB_URL, SB_KEY);
 // Track hoeveel items Supabase had per key — voorkomt dat lege saves data wissen
 const _cloudCounts = {};
@@ -1482,7 +1484,8 @@ export default function App() {
   // dataReady: true ALLEEN nadat data volledig geladen is
   // Voorkomt dat lege initiële state de opgeslagen data overschrijft
   const dataReady = useRef(false);
-  const supabaseVerified = useRef(false); // true = we weten dat Supabase werkt voor deze user
+  const supabaseVerified = useRef(false);
+  const _savesEnabled = useRef(false); // EXTRA veiligheid: pas true na volledige load
 
   useEffect(()=>{
     let dataLoaded = false;
@@ -1600,9 +1603,11 @@ export default function App() {
       }
 
       // NU pas saves toestaan (cloud is geladen OF gefaald)
-      await new Promise(r => setTimeout(r, 300));
+      // WACHT 2 seconden zodat React ALLE initiële effects heeft verwerkt
+      await new Promise(r => setTimeout(r, 2000));
       dataReady.current = true;
-      console.log("✅ dataReady = true — saves toegestaan");
+      _savesEnabled.current = true;
+      console.log("✅ dataReady = true, saves ENABLED — versie:", BILLR_VERSION);
     };
 
     // Sessie check
@@ -1612,11 +1617,13 @@ export default function App() {
       } else {
         loadFromLS();
         dataReady.current = true;
+        _savesEnabled.current = true;
         setLoaded(true);
       }
     }).catch(() => {
       loadFromLS();
       dataReady.current = true;
+      _savesEnabled.current = true;
       setLoaded(true);
     });
 
@@ -1627,10 +1634,12 @@ export default function App() {
       } else if(event === "SIGNED_OUT") {
         dataLoaded = false;
         dataReady.current = false;
+        _savesEnabled.current = false;
         supabaseVerified.current = false;
         setUser(null);
         loadFromLS();
         dataReady.current = true;
+        _savesEnabled.current = true; // localStorage-only saves OK
         setLoaded(true);
       } else if(event === "TOKEN_REFRESHED" && session?.user && !dataLoaded) {
         await loadUserData(session.user);
@@ -1721,7 +1730,7 @@ export default function App() {
   const saveTimers = useRef({});
   const pendingSaves = useRef({}); // Track pending Supabase saves
   const saveKey = useCallback(async (key, val) => { 
-    if(!dataReady.current) return;
+    if(!dataReady.current || !_savesEnabled.current) return;
     
     // ⛔ VEILIGHEID: NOOIT lege arrays opslaan als Supabase eerder data had
     if(Array.isArray(val) && val.length === 0 && _cloudCounts[key]) {
@@ -2076,7 +2085,7 @@ export default function App() {
         <nav className={`sb${mobMenu?" mobile-open":""}${sbCollapsed?" sb-collapsed":""}`} style={{position:"relative",width:sbCollapsed?60:undefined,minWidth:sbCollapsed?60:undefined}}>
           <div className="sb-logo" style={{justifyContent:sbCollapsed?"center":undefined,padding:sbCollapsed?"12px 8px":undefined}}>
             <div className="sb-logo-mark">{settings.bedrijf.logo?<img src={settings.bedrijf.logo} alt=""/>:"⚡"}</div>
-            {!sbCollapsed&&<div><div className="sb-brand">BILLR</div><div className="sb-brand-sub">Offerte & Factuur</div></div>}
+            {!sbCollapsed&&<div><div className="sb-brand">BILLR</div><div className="sb-brand-sub">{BILLR_VERSION}</div></div>}
           </div>
           <div style={{padding:"4px 8px"}}><button onClick={toggleSb} style={{width:"100%",background:"rgba(255,255,255,.1)",border:"none",color:"rgba(255,255,255,.7)",borderRadius:6,padding:"6px",cursor:"pointer",fontSize:14}}>{sbCollapsed?"»":"«"}</button></div>
           <div className="sb-nav">
