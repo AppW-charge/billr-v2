@@ -130,13 +130,13 @@ const fmtPct = n => Number(n||0).toFixed(1).replace(".",",") + "%";
 // Production: https://api.billit.be  |  Sandbox: https://api.sandbox.billit.be
 
 const BILLIT_API = {
-  production: "https://api.billit.be",
-  sandbox: "https://api.sandbox.billit.be"
+  production: "/api/billit",
+  sandbox: "/api/billit"
 };
 
 function getBillitUrl(settings) {
-  const env = settings?.integraties?.billitEnv || "production";
-  return BILLIT_API[env] || BILLIT_API.production;
+  // Always use local proxy — avoids CORS
+  return "/api/billit";
 }
 
 function getBillitKey(settings) {
@@ -144,10 +144,12 @@ function getBillitKey(settings) {
 }
 
 function billitHeaders(settings) {
+  const env = settings?.integraties?.billitEnv || "production";
   return {
     'Authorization': `Bearer ${getBillitKey(settings)}`,
     'Content-Type': 'application/json',
-    'Accept': 'application/json'
+    'Accept': 'application/json',
+    'X-Billit-Env': env
   };
 }
 
@@ -1851,6 +1853,22 @@ export default function App() {
     setFacturen(p=>[n,...p]); updOff(off.id,{status:"gefactureerd",factuurId:n.id}); setFactModal(null); notify("Factuur aangemaakt ✓"); setPg("facturen"); setPgFilter(null);
   };
 
+  // ═══ OFFERTE SHARING — sla snapshot op voor publieke offerte.html pagina ═══
+  const shareOfferte = async (offerte) => {
+    try {
+      const bed = settings?.bedrijf || {};
+      const dc = settings?.sjabloon?.accentKleur || settings?.thema?.kleur || bed.kleur || "#1a2e4a";
+      const shareData = {
+        ...offerte,
+        _bed: { naam:bed.naam, adres:bed.adres, gemeente:bed.gemeente, tel:bed.tel, email:bed.email, btwnr:bed.btwnr, iban:bed.iban, bic:bed.bic, website:bed.website, logo:bed.logo },
+        _dc: dc,
+        _voorwaarden: settings?.voorwaarden?.tekst?.slice(0,2000) || ""
+      };
+      await sb.from('offerte_shares').upsert({ id: offerte.id, offerte_data: shareData });
+      console.log("✅ Offerte gedeeld voor publieke view:", offerte.nummer);
+    } catch(e) { console.warn("Offerte share failed:", e); }
+  };
+
   // ═══ EMAILJS VERZENDING ═══
   const sendEmail = async (type, doc, recipientEmail) => {
     if(!window.emailjs) {
@@ -2199,6 +2217,7 @@ export default function App() {
           if(success) {
             if(emailModal.type==="offerte") {
               updOff(emailModal.doc.id, {status:"verstuurd", logActie:`📧 Verzonden`});
+              shareOfferte(emailModal.doc); // Sla snapshot op voor publieke offerte.html
             } else {
               updFact(emailModal.doc.id, {status:"verstuurd", logActie:`📧 Verzonden`});
             }
@@ -5478,9 +5497,9 @@ function buildOfferteHtml(doc, bed, tot, acceptUrl, rejectUrl, customHtml, extra
     <tr><td style="padding:10px 14px;border:1px solid #e2e8f0;font-weight:600;font-size:16px">Totaal incl. BTW</td><td style="padding:10px 14px;border:1px solid #e2e8f0;font-size:16px;font-weight:700;color:${dc}">${fmtEuro(tot.totaal)}</td></tr>
   </table>
   <div style="text-align:center;margin:28px 0">
-    <a href="${acceptUrl}" style="display:inline-block;background:${dc};color:#fff;padding:14px 36px;border-radius:8px;text-decoration:none;font-weight:700;font-size:15px">✅ Offerte goedkeuren</a>
+    <a href="${acceptUrl}" style="display:inline-block;background:${dc};color:#fff;padding:14px 36px;border-radius:8px;text-decoration:none;font-weight:700;font-size:15px">📋 Offerte bekijken</a>
   </div>
-  ${rejectUrl ? `<div style="text-align:center;margin:12px 0"><a href="${rejectUrl}" style="color:#94a3b8;font-size:13px;text-decoration:underline">Offerte afwijzen</a></div>` : ''}
+  <div style="text-align:center;margin:6px 0;font-size:12px;color:#94a3b8">U kunt de offerte bekijken, goedkeuren of afwijzen via bovenstaande link.</div>
   <div style="margin-top:24px;padding-top:16px;border-top:1px solid #e2e8f0;font-size:13px;color:#64748b;line-height:1.6">
     <p style="margin:0"><strong>${bed.naam}</strong></p>
     <p style="margin:4px 0">${bed.adres||''} · ${bed.gemeente||''}</p>
@@ -5531,8 +5550,10 @@ function EmailModal({doc,type,settings,onClose,onSend,onAcceptToken}) {
 
   // Accept/reject tokens voor offerte
   const token = useRef(genToken());
-  const acceptUrl = type==="offerte" ? `${window.location.origin}${window.location.pathname}?action=accept&token=${token.current}&id=${doc.id}` : "";
-  const rejectUrl = type==="offerte" ? `${window.location.origin}${window.location.pathname}?action=reject&token=${token.current}&id=${doc.id}` : "";
+  // Link naar publieke offerte pagina (offerte.html) — klant kan daar bekijken + goedkeuren/afwijzen
+  const offerteViewUrl = type==="offerte" ? `${window.location.origin}/offerte.html?id=${doc.id}&nr=${encodeURIComponent(doc.nummer||"")}` : "";
+  const acceptUrl = offerteViewUrl; // Email knop linkt naar view pagina
+  const rejectUrl = ""; // Niet meer nodig — afwijzen gebeurt op offerte.html
 
   // Email modus: automatisch (EmailJS), handmatig (mailto), of PEPPOL
   const hasEmailJS = !!(ejCfg.emailjsServiceId && ejCfg.emailjsPublicKey);
@@ -5602,7 +5623,7 @@ function EmailModal({doc,type,settings,onClose,onSend,onAcceptToken}) {
               <tr><td style="padding:8px;border:1px solid #e2e8f0;font-weight:600">${type==="offerte"?"Geldig tot":"Vervaldatum"}</td><td style="padding:8px;border:1px solid #e2e8f0">${fmtDate(doc.vervaldatum)}</td></tr>
               <tr><td style="padding:8px;border:1px solid #e2e8f0;font-weight:600">Totaal incl. BTW</td><td style="padding:8px;border:1px solid #e2e8f0"><strong>${fmtEuro(tot.totaal)}</strong></td></tr>
             </table>
-            ${type==="offerte"&&acceptUrl?`<p><a href="${acceptUrl}" style="background:${dc};color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;display:inline-block;font-weight:600">✅ Offerte goedkeuren</a></p>`:""}
+            ${type==="offerte"&&acceptUrl?`<p><a href="${acceptUrl}" style="background:${dc};color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;display:inline-block;font-weight:600">📋 Offerte bekijken</a></p>`:""}
             <p>Met vriendelijke groeten,<br/><strong>${bed.naam||""}</strong><br/>${bed.tel||""} · ${bed.email||""}</p>
           </div>
         </div>`;
