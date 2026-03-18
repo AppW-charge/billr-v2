@@ -1777,27 +1777,21 @@ export default function App() {
   const saveKey = useCallback(async (key, val) => { 
     if(!dataReady.current) return;
     
-    // localStorage: ALTIJD strip base64 (QuotaExceeded prevention)
+    // localStorage: strip base64 fiches (QuotaExceeded prevention)
     try {
       const stripped = stripBase64(key, val);
       localStorage.setItem(key, JSON.stringify(stripped));
     } catch(e) {
       console.warn(`localStorage save "${key}" failed:`, e);
-      // Als het TOCH faalt, probeer oude data te verwijderen
       try { localStorage.removeItem(key); } catch(_){}
     }
     
-    // Supabase: volledige data (hogere limiet)
+    // Supabase: ALTIJD volledige data (geen stripping!)
     if(user) {
       const json = JSON.stringify(val);
       const success = await sbSet(key, json, user.id);
       if(!success) {
-        // Als Supabase ook faalt (te groot), probeer gestripte versie
-        const strippedJson = JSON.stringify(stripBase64(key, val));
-        if(strippedJson.length < json.length) {
-          await sbSet(key, strippedJson, user.id);
-        }
-        console.warn(`⚠️ Supabase save "${key}" failed`);
+        console.warn(`⚠️ Supabase save "${key}" failed (${(json.length/1024).toFixed(0)}KB)`);
       }
     }
   }, [user]);
@@ -4367,7 +4361,7 @@ function OfferteWizard({klanten,producten,offertes,editData,settings,onSave,onCl
     const nb=btwRegime==="verlegd"?0:btwRegime==="btw6"?6:21;
     const finalBtw=btwRegime==="verlegd"?0:btwRegime==="btw6"?6:(prod.btw!==undefined?prod.btw:nb);
     if(aantal<=0){setLijnen(p=>p.filter(l=>l.productId!==prod.id));return;}
-    setLijnen(p=>{const ex=p.find(l=>l.productId===prod.id);if(ex)return p.map(l=>l.productId===prod.id?{...l,aantal,groepId:gid||l.groepId}:l);return[...p,{id:uid(),productId:prod.id,naam:prod.naam,omschr:prod.omschr,prijs:prod.prijs,btw:finalBtw,aantal,eenheid:prod.eenheid||"stuk",groepId:gid,imageUrl:prod.imageUrl,specs:prod.specs,technischeFiche:prod.technischeFiche||null,fichNaam:prod.fichNaam||""}];});
+    setLijnen(p=>{const ex=p.find(l=>l.productId===prod.id);if(ex)return p.map(l=>l.productId===prod.id?{...l,aantal,groepId:gid||l.groepId}:l);return[...p,{id:uid(),productId:prod.id,naam:prod.naam,omschr:prod.omschr,prijs:prod.prijs,btw:finalBtw,aantal,eenheid:prod.eenheid||"stuk",groepId:gid,imageUrl:prod.imageUrl,specs:prod.specs,technischeFiches:prod.technischeFiches||[],technischeFiche:prod.technischeFiche||null,fichNaam:prod.fichNaam||""}];});
   };
 
   const tot=calcTotals(lijnen);
@@ -4618,7 +4612,7 @@ function OfferteWizard({klanten,producten,offertes,editData,settings,onSave,onCl
             <div key={l.id} style={{display:"grid",gridTemplateColumns:"3fr 60px 80px 55px 26px",gap:5,marginBottom:4,alignItems:"start"}}>
               <ProductAutocomplete producten={actProds} value={l.naam} compact
                 onChange={v=>setLijnen(p=>p.map((x,j)=>j===i?{...x,naam:v}:x))}
-                onSelect={p=>setLijnen(prev=>prev.map((x,j)=>j===i?{...x,productId:p.id,naam:p.naam,omschr:p.omschr||"",prijs:p.prijs,btw:btwRegime==="verlegd"?0:btwRegime==="btw6"?6:(p.btw||21),eenheid:p.eenheid||"stuk",imageUrl:p.imageUrl||"",specs:p.specs||[],technischeFiche:p.technischeFiche||null,fichNaam:p.fichNaam||""}:x))}
+                onSelect={p=>setLijnen(prev=>prev.map((x,j)=>j===i?{...x,productId:p.id,naam:p.naam,omschr:p.omschr||"",prijs:p.prijs,btw:btwRegime==="verlegd"?0:btwRegime==="btw6"?6:(p.btw||21),eenheid:p.eenheid||"stuk",imageUrl:p.imageUrl||"",specs:p.specs||[],technischeFiches:p.technischeFiches||[],technischeFiche:p.technischeFiche||null,fichNaam:p.fichNaam||""}:x))}
                 placeholder="Typ productnaam…"/>
               <input type="number" className="fc" style={{fontSize:12.5,textAlign:"center"}} value={l.aantal} min={1} onChange={e=>setLijnen(p=>p.map((x,j)=>j===i?{...x,aantal:Number(e.target.value)}:x))}/>
               <input type="number" className="fc" style={{fontSize:12.5,textAlign:"right"}} value={l.prijs} step="0.01" onChange={e=>setLijnen(p=>p.map((x,j)=>j===i?{...x,prijs:Number(e.target.value)}:x))}/>
@@ -5132,6 +5126,13 @@ function OfferteDocument({doc, settings}) {
                     </div>
                   )}
                   {i<uniqueProds.length-1&&<div style={{height:1,background:"#e2e8f0",marginTop:20}}/>}
+                  {/* Technische fiches indicatie */}
+                  {((l.technischeFiches||[]).length>0||l.technischeFiche)&&<div style={{marginTop:8,display:"flex",flexWrap:"wrap",gap:4}}>
+                    {(l.technischeFiches||[]).map((f,fi)=>(
+                      <span key={fi} style={{display:"inline-flex",alignItems:"center",gap:4,background:"#eff6ff",border:"1px solid #bfdbfe",borderRadius:5,padding:"3px 10px",fontSize:11,color:"#2563eb",fontWeight:600}}>📎 {f.naam||"Fiche "+(fi+1)}</span>
+                    ))}
+                    {l.technischeFiche&&!(l.technischeFiches||[]).length&&<span style={{display:"inline-flex",alignItems:"center",gap:4,background:"#eff6ff",border:"1px solid #bfdbfe",borderRadius:5,padding:"3px 10px",fontSize:11,color:"#2563eb",fontWeight:600}}>📎 {l.fichNaam||"Technische fiche"}</span>}
+                  </div>}
                 </div>
               );
             })}
@@ -5230,8 +5231,15 @@ function OfferteDocument({doc, settings}) {
       </div>
 
       {/* TECHNISCHE FICHES — AAN HET EINDE, elke PDF-pagina = eigen A4 */}
-      {uniqueProds.filter(l=>l.technischeFiche).map((l,fi)=>(
-        <FichePages key={`fiche-${fi}`} fiche={l.technischeFiche} naam={l.naam} fichNaam={l.fichNaam} omschr={l.omschr} dc={dc} bed={bed} docNummer={doc.nummer}/>
+      {uniqueProds.filter(l=>l.technischeFiche||(l.technischeFiches||[]).length).map((l,fi)=>(
+        <React.Fragment key={`fiche-grp-${fi}`}>
+          {/* Legacy: single technischeFiche */}
+          {l.technischeFiche&&l.technischeFiche!=="[PDF]"&&<FichePages fiche={l.technischeFiche} naam={l.naam} fichNaam={l.fichNaam} omschr={l.omschr} dc={dc} bed={bed} docNummer={doc.nummer}/>}
+          {/* Nieuw: array technischeFiches */}
+          {(l.technischeFiches||[]).filter(f=>f.data||f.url).map((f,ffi)=>(
+            <FichePages key={`fiche-${fi}-${ffi}`} fiche={f.data||f.url} naam={l.naam} fichNaam={f.naam} omschr={l.omschr} dc={dc} bed={bed} docNummer={doc.nummer}/>
+          ))}
+        </React.Fragment>
       ))}
     </div>
   );
