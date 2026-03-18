@@ -5232,14 +5232,14 @@ function OfferteDocument({doc, settings}) {
 
       {/* TECHNISCHE FICHES — AAN HET EINDE, elke PDF-pagina = eigen A4 */}
       {uniqueProds.filter(l=>l.technischeFiche||(l.technischeFiches||[]).length).map((l,fi)=>(
-        <React.Fragment key={`fiche-grp-${fi}`}>
+        <div key={`fiche-grp-${fi}`}>
           {/* Legacy: single technischeFiche */}
           {l.technischeFiche&&l.technischeFiche!=="[PDF]"&&<FichePages fiche={l.technischeFiche} naam={l.naam} fichNaam={l.fichNaam} omschr={l.omschr} dc={dc} bed={bed} docNummer={doc.nummer}/>}
           {/* Nieuw: array technischeFiches */}
           {(l.technischeFiches||[]).filter(f=>f.data||f.url).map((f,ffi)=>(
             <FichePages key={`fiche-${fi}-${ffi}`} fiche={f.data||f.url} naam={l.naam} fichNaam={f.naam} omschr={l.omschr} dc={dc} bed={bed} docNummer={doc.nummer}/>
           ))}
-        </React.Fragment>
+        </div>
       ))}
     </div>
   );
