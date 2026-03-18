@@ -4674,21 +4674,20 @@ function FichePDFEmbed({fiche, naam, fichNaam, fullPage = false}) {
 
     const renderPdf = async () => {
       try {
-        let pdfData;
-        if(fiche.startsWith('data:')) {
-          const clean = (fiche.split(',')[1]||'').replace(/[\s\r\n]/g, '');
-          pdfData = atob(clean);
+        let pdf;
+        if(fiche.startsWith('data:') || fiche.startsWith('http')) {
+          const resp = await fetch(fiche);
+          const buf = await resp.arrayBuffer();
+          pdf = await window.pdfjsLib.getDocument({data: buf}).promise;
         } else {
-          pdfData = atob(fiche.replace(/[\s\r\n]/g, ''));
+          const clean = fiche.replace(/[\s\r\n]/g, '');
+          const raw = atob(clean);
+          const uint8 = new Uint8Array(raw.length);
+          for(let i = 0; i < raw.length; i++) uint8[i] = raw.charCodeAt(i);
+          pdf = await window.pdfjsLib.getDocument({data: uint8}).promise;
         }
-        
-        const uint8 = new Uint8Array(pdfData.length);
-        for(let i = 0; i < pdfData.length; i++) uint8[i] = pdfData.charCodeAt(i);
-        
-        const pdf = await window.pdfjsLib.getDocument({data: uint8}).promise;
         const images = [];
         
-        // Render each page at 2x scale for sharp print quality (A4 = 210x297mm)
         for(let i = 1; i <= pdf.numPages; i++) {
           const page = await pdf.getPage(i);
           const scale = 2.0; // 2x for print quality
@@ -4768,26 +4767,23 @@ function FichePages({fiche, naam, fichNaam, omschr, dc, bed, docNummer}) {
 
     const render = async () => {
       try {
-        let pdfData;
-        if(fiche.startsWith('data:')) {
-          const parts = fiche.split(',');
-          if(parts.length < 2 || !parts[1]) throw new Error("Invalid data URI");
-          // Clean base64: remove whitespace/newlines
-          const clean = parts[1].replace(/[\s\r\n]/g, '');
-          pdfData = atob(clean);
-        } else if(fiche.startsWith('http')) {
-          setLoading(false); return;
+        let pdfDoc;
+        if(fiche.startsWith('data:') || fiche.startsWith('http')) {
+          // Use fetch to convert data URI or URL to ArrayBuffer — avoids atob issues
+          const resp = await fetch(fiche);
+          const buf = await resp.arrayBuffer();
+          pdfDoc = await window.pdfjsLib.getDocument({data: buf}).promise;
         } else {
+          // Raw base64 string
           const clean = fiche.replace(/[\s\r\n]/g, '');
-          pdfData = atob(clean);
+          const raw = atob(clean);
+          const uint8 = new Uint8Array(raw.length);
+          for(let i = 0; i < raw.length; i++) uint8[i] = raw.charCodeAt(i);
+          pdfDoc = await window.pdfjsLib.getDocument({data: uint8}).promise;
         }
-        const uint8 = new Uint8Array(pdfData.length);
-        for(let i = 0; i < pdfData.length; i++) uint8[i] = pdfData.charCodeAt(i);
-
-        const pdf = await window.pdfjsLib.getDocument({data: uint8}).promise;
         const imgs = [];
-        for(let i = 1; i <= pdf.numPages; i++) {
-          const page = await pdf.getPage(i);
+        for(let i = 1; i <= pdfDoc.numPages; i++) {
+          const page = await pdfDoc.getPage(i);
           const scale = 2.0;
           const viewport = page.getViewport({scale});
           const canvas = document.createElement('canvas');
