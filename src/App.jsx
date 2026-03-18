@@ -1665,7 +1665,8 @@ export default function App() {
     try {
       const { data: views } = await sb.from('offerte_views').select('offerte_id, viewed_at, user_agent');
       const { data: responses } = await sb.from('offerte_responses').select('offerte_id, status, periode, opmerkingen, submitted_at');
-      const { data: proposals } = await sb.from('planning_proposals').select('*').catch(()=>({data:null}));
+      let proposals = null;
+      try { const r = await sb.from('planning_proposals').select('*'); proposals = r.data; } catch(_){}
       if(views) {
         const grouped = {};
         views.forEach(v => {
