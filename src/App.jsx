@@ -1692,12 +1692,12 @@ export default function App() {
             // Alleen updaten als status nog niet gesynct is
             if(latest.status === "goedgekeurd" && o.status === "verstuurd") {
               changed = true;
-              const newLog = [...(o.log||[]), {ts: latest.submitted_at, txt: `✅ Klant heeft offerte goedgekeurd${latest.periode ? " (periode: "+latest.periode+")" : ""}${latest.opmerkingen ? " — "+latest.opmerkingen : ""}`}];
+              const newLog = [...(o.log||[]), {ts: latest.submitted_at, actie: `✅ Klant heeft offerte goedgekeurd${latest.periode ? " (periode: "+latest.periode+")" : ""}${latest.opmerkingen ? " — "+latest.opmerkingen : ""}`}];
               return {...o, status: "goedgekeurd", klantAkkoord: true, klantPeriode: latest.periode, klantOpmerkingen: latest.opmerkingen, log: newLog};
             }
             if(latest.status === "afgewezen" && o.status === "verstuurd") {
               changed = true;
-              const newLog = [...(o.log||[]), {ts: latest.submitted_at, txt: `❌ Klant heeft offerte afgewezen${latest.opmerkingen ? " — "+latest.opmerkingen : ""}`}];
+              const newLog = [...(o.log||[]), {ts: latest.submitted_at, actie: `❌ Klant heeft offerte afgewezen${latest.opmerkingen ? " — "+latest.opmerkingen : ""}`}];
               return {...o, status: "afgewezen", log: newLog};
             }
             return o;
@@ -1723,15 +1723,15 @@ export default function App() {
             if(!cr) return o; // Nog geen klantreactie
             const respTs = cr.responded_at || latest.created_at;
             // Check of we deze response al gelogd hebben
-            const alreadyLogged = (o.log||[]).some(l => l.txt && l.txt.includes("Planning") && l.ts === respTs);
+            const alreadyLogged = (o.log||[]).some(l => l.actie && l.actie.includes("Planning") && l.ts === respTs);
             if(alreadyLogged) return o;
             changed = true;
             const isAkkoord = latest.status === "akkoord";
             const pd = latest.plan_data || {};
-            const logTxt = isAkkoord
+            const logActie = isAkkoord
               ? `✅ Klant akkoord met afspraak op ${pd.planDatum||"?"} ${pd.planTijd||""}`
               : `📅 Klant vraagt ander moment${cr.datum ? ": "+cr.datum : ""}${cr.tijd ? " "+cr.tijd : ""}${cr.opmerking ? " — "+cr.opmerking : ""}`;
-            const newLog = [...(o.log||[]), {ts: respTs, txt: logTxt}];
+            const newLog = [...(o.log||[]), {ts: respTs, actie: logActie}];
             const updates = {log: newLog};
             if(isAkkoord) { updates.planBevestigdDoorKlant = true; }
             return {...o, ...updates};
@@ -2630,39 +2630,61 @@ function Dashboard({offertes, facturen, onGoto, onNew, onFactuur, settings, offe
             const views = offerteViews?.[o.id] || [];
             const resp = offerteResponses?.[o.id] || [];
             const plans = planningProposals?.[o.id] || [];
-            const lastView = views.length ? views.sort((a,b)=>new Date(b.viewed_at)-new Date(a.viewed_at))[0] : null;
             const lastResp = resp.length ? resp.sort((a,b)=>new Date(b.submitted_at)-new Date(a.submitted_at))[0] : null;
             const lastPlan = plans.length ? plans.sort((a,b)=>new Date(b.created_at)-new Date(a.created_at))[0] : null;
-            const planStatus = lastPlan?.status;
+            const ps = lastPlan?.status;
+            const isIngepland = o.planStatus==="ingepland";
+
+            // Build visual timeline steps
+            const steps = [];
+            steps.push({icon:"📧",label:"Verstuurd",done:true,color:"#2563eb"});
+            steps.push({icon:"👁",label:`Bekeken (${views.length}×)`,done:views.length>0,color:"#6366f1"});
+            if(lastResp?.status==="goedgekeurd") steps.push({icon:"✅",label:"Goedgekeurd",done:true,color:"#059669"});
+            else if(lastResp?.status==="afgewezen") steps.push({icon:"❌",label:"Afgewezen",done:true,color:"#dc2626"});
+            else steps.push({icon:"⏳",label:"Wacht reactie",done:false,color:"#94a3b8"});
+            if(lastResp?.status==="goedgekeurd") {
+              if(isIngepland) steps.push({icon:"📅",label:"Ingepland",done:true,color:"#059669"});
+              else if(ps==="akkoord") steps.push({icon:"✅",label:"Klant akkoord",done:true,color:"#10b981"});
+              else if(ps==="alternatief") steps.push({icon:"🔄",label:"Herplannen",done:true,color:"#f59e0b"});
+              else if(ps==="voorstel") steps.push({icon:"⏳",label:"Wacht klant",done:false,color:"#3b82f6"});
+              else steps.push({icon:"📅",label:"Nog inplannen",done:false,color:"#94a3b8"});
+            }
+
             return(
-              <div key={o.id} style={{borderBottom:"1px solid #e0e7ff",padding:"8px 0"}}>
+              <div key={o.id} style={{borderBottom:"1px solid #e0e7ff",padding:"10px 0"}}>
+                {/* Header */}
                 <div style={{display:"flex",alignItems:"center",gap:10,cursor:"pointer"}} onClick={()=>onLogboek(o)}>
                   <div style={{flex:1,minWidth:0}}>
-                    <div style={{fontWeight:600,fontSize:13,display:"flex",alignItems:"center",gap:6}}>
-                      {o.klant?.naam||"—"}
-                      <StatusBadge status={o.status} type="off"/>
-                    </div>
-                    <div style={{fontSize:11,color:"#6366f1"}}>{o.nummer} · {fmtDate(o.aangemaakt)}</div>
+                    <div style={{fontWeight:700,fontSize:13}}>{o.klant?.naam||"—"} <span style={{fontWeight:400,color:"#94a3b8"}}>— {o.nummer}</span></div>
                   </div>
-                  <div style={{display:"flex",gap:8,alignItems:"center",flexShrink:0}}>
-                    <span title="Bekeken" style={{fontSize:12,color:views.length?"#2563eb":"#cbd5e1",fontWeight:600}}>👁 {views.length}</span>
-                    {lastResp&&<span style={{fontSize:10,padding:"2px 6px",borderRadius:4,fontWeight:700,background:lastResp.status==="goedgekeurd"?"#d1fae5":"#fef2f2",color:lastResp.status==="goedgekeurd"?"#065f46":"#991b1b"}}>{lastResp.status==="goedgekeurd"?"✅":"❌"}</span>}
-                    <span style={{fontSize:12,color:"#94a3b8"}}>→</span>
-                  </div>
+                  <span style={{fontSize:12,color:"#94a3b8"}}>→</span>
                 </div>
-                {/* Planning status row */}
-                {lastPlan&&<div style={{marginTop:6,display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
-                  <span style={{fontSize:10,padding:"2px 8px",borderRadius:4,fontWeight:700,
-                    background:planStatus==="akkoord"?"#d1fae5":planStatus==="alternatief"?"#fef3c7":"#dbeafe",
-                    color:planStatus==="akkoord"?"#065f46":planStatus==="alternatief"?"#92400e":"#1e40af"
-                  }}>{planStatus==="akkoord"?"✅ Klant akkoord":planStatus==="alternatief"?"📅 Ander moment voorgesteld":"⏳ Wacht op klant"}</span>
-                  {lastPlan.plan_data?.planDatum&&<span style={{fontSize:10,color:"#64748b"}}>📅 {fmtDate(lastPlan.plan_data.planDatum)} {lastPlan.plan_data.planTijd||""}</span>}
-                  {planStatus==="alternatief"&&lastPlan.client_response&&<span style={{fontSize:10,color:"#d97706",fontWeight:600}}>→ {lastPlan.client_response.datum||""} {lastPlan.client_response.tijd||""}</span>}
+                {/* Visual timeline */}
+                <div style={{display:"flex",gap:2,alignItems:"center",margin:"8px 0 4px",flexWrap:"wrap"}}>
+                  {steps.map((s,i)=>(
+                    <div key={i} style={{display:"flex",alignItems:"center",gap:2}}>
+                      <div style={{
+                        fontSize:10,padding:"2px 8px",borderRadius:10,fontWeight:700,
+                        background:s.done?s.color+"18":"#f1f5f9",
+                        color:s.done?s.color:"#cbd5e1",
+                        border:`1px solid ${s.done?s.color+"40":"#e2e8f0"}`
+                      }}>{s.icon} {s.label}</div>
+                      {i<steps.length-1&&<span style={{color:"#cbd5e1",fontSize:10}}>›</span>}
+                    </div>
+                  ))}
+                </div>
+                {/* Details */}
+                {ps==="alternatief"&&lastPlan?.client_response&&<div style={{fontSize:11,color:"#d97706",background:"#fffbeb",padding:"4px 8px",borderRadius:6,marginTop:4,border:"1px solid #fde68a"}}>
+                  ⚠ Klant wil ander moment{lastPlan.client_response.datum?": "+lastPlan.client_response.datum:""} {lastPlan.client_response.tijd||""} {lastPlan.client_response.opmerking?"— "+lastPlan.client_response.opmerking:""}
                 </div>}
-                {/* Action buttons for goedgekeurde offertes */}
-                {(o.status==="goedgekeurd"||lastResp?.status==="goedgekeurd")&&<div style={{marginTop:6,display:"flex",gap:6}}>
-                  {(!lastPlan||planStatus==="alternatief")&&<button className="btn btn-sm" style={{background:"#f59e0b",color:"#fff",fontWeight:700,fontSize:10}} onClick={e=>{e.stopPropagation();onPlan(o)}}>📅 {planStatus==="alternatief"?"Herplannen":"Inplannen"}</button>}
-                  {planStatus==="akkoord"&&!o.planBevestigd&&<button className="btn btn-sm" style={{background:"#10b981",color:"#fff",fontWeight:700,fontSize:10}} onClick={e=>{e.stopPropagation();onPlan(o)}}>✅ Bevestigen</button>}
+                {isIngepland&&o.planDatum&&<div style={{fontSize:11,color:"#059669",background:"#f0fdf4",padding:"4px 8px",borderRadius:6,marginTop:4,border:"1px solid #86efac"}}>
+                  ✅ Bevestigd: {fmtDate(o.planDatum)} ⏰ {o.planTijd||"—"}
+                </div>}
+                {/* Action buttons */}
+                {(o.status==="goedgekeurd"||lastResp?.status==="goedgekeurd")&&!isIngepland&&<div style={{marginTop:6,display:"flex",gap:6}}>
+                  {(!lastPlan||ps==="alternatief")&&<button className="btn btn-sm" style={{background:"#f59e0b",color:"#fff",fontWeight:700,fontSize:10}} onClick={e=>{e.stopPropagation();onPlan(o)}}>📅 {ps==="alternatief"?"Herplannen":"Inplannen"}</button>}
+                  {ps==="akkoord"&&<button className="btn btn-sm" style={{background:"#10b981",color:"#fff",fontWeight:700,fontSize:10}} onClick={e=>{e.stopPropagation();onPlan(o)}}>✅ Bevestig & plan in</button>}
+                  {ps==="voorstel"&&<button className="btn btn-sm" style={{background:"#dbeafe",color:"#1e40af",fontWeight:700,fontSize:10}} disabled>⏳ Wacht op klant</button>}
                 </div>}
               </div>
             );
@@ -3008,11 +3030,12 @@ function DocIcons({doc, type}) {
 
 function DocLog({log=[]}) {
   const fmt = ts => { try{ const d=new Date(ts); return `${d.toLocaleDateString("nl-BE")} ${d.toLocaleTimeString("nl-BE",{hour:"2-digit",minute:"2-digit"})}`; }catch(_){ return ts; }};
-  if(!log.length) return <div className="doc-log-empty">Nog geen acties geregistreerd</div>;
-  return [...log].reverse().map((l,i)=>(
+  const clean = log.filter(l => l.actie || l.txt); // Filter lege entries
+  if(!clean.length) return <div className="doc-log-empty">Nog geen acties geregistreerd</div>;
+  return [...clean].reverse().map((l,i)=>(
     <div key={i} className="doc-log-entry">
       <span className="doc-log-ts">{fmt(l.ts)}</span>
-      <span className="doc-log-act">{l.actie}</span>
+      <span className="doc-log-act">{l.actie || l.txt}</span>
     </div>
   ));
 }
