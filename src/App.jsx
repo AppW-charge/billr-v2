@@ -2,8 +2,8 @@
 import * as XLSX from 'xlsx';
 import { createClient } from '@supabase/supabase-js';
 // ═══════════════════════════════════════════════════════════════════
-//  BILLR v6.3 — Volledige build met alle features
-//  Volledig boekhoudprogramma — Supabase editie
+//  BILLR v7.2 — Definitieve build — Alle fixes
+//  Volledig boekhoudprogramma — Supabase + Billit Peppol editie
 // ═══════════════════════════════════════════════════════════════════
 import { useState, useEffect, useLayoutEffect, useRef, useCallback } from "react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
@@ -12,6 +12,8 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGri
 const SB_URL  = "https://qxnxbqkdvvblfkihmjxy.supabase.co";
 const SB_KEY  = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF4bnhicWtkdnZibGZraWhtanh5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMzNTI3MTMsImV4cCI6MjA4ODkyODcxM30.1JDvrHgxLpU1GZqSjDVGtfnFJg8PHuD-aFpHOxAY1To";
 const sb = createClient(SB_URL, SB_KEY);
+// Track hoeveel items Supabase had per key — voorkomt dat lege saves data wissen
+const _cloudCounts = {};
 
 // ─── SUPABASE DATA HELPERS ────────────────────────────────────────
 // Slaat alles op in één tabel: user_data (user_id, key, value)
@@ -67,7 +69,9 @@ const sbDel = async (key, userId) => {
 const sbGetAll = async (userId) => {
   if(!userId) return {};
   try {
+    console.time("⏱ Supabase load");
     const { data, error } = await sb.from("user_data").select("key,value").eq("user_id", userId);
+    console.timeEnd("⏱ Supabase load");
     if(error) {
       console.error("[Supabase] GET ALL failed:", error.message, error.details, error.hint);
       return {};
@@ -106,9 +110,10 @@ const stripBe = s => (s||"").replace(/[^0-9]/g,"");
 const fmtBtwnr = n => { const c=stripBe(n); return c.length>=9?"BE "+c.slice(0,4)+"."+c.slice(4,7)+"."+c.slice(7):(n||""); };
 
 function calcTotals(lijnen=[]) {
-  const sub = lijnen.reduce((s,l)=>s+(l.prijs*l.aantal),0);
+  const items = lijnen.filter(l=>!l.isInfo);
+  const sub = items.reduce((s,l)=>s+(l.prijs*l.aantal),0);
   const gr={};
-  lijnen.forEach(l=>{const r=l.btw||21;if(!gr[r])gr[r]=0;gr[r]+=l.prijs*l.aantal*(r/100);});
+  items.forEach(l=>{const r=l.btw||21;if(!gr[r])gr[r]=0;gr[r]+=l.prijs*l.aantal*(r/100);});
   const btw=Object.values(gr).reduce((s,v)=>s+v,0);
   return {subtotaal:sub,btw,totaal:sub+btw,btwGroepen:gr};
 }
@@ -125,291 +130,288 @@ const genOGM = (nr) => {
 
 const fmtPct = n => Number(n||0).toFixed(1).replace(".",",") + "%";
 
-// ─── BILLIT PEPPOL & KBO INTEGRATIE ─────────────────────────────────────
-// Billit API: https://docs.billit.be
-// Production: https://api.billit.be  |  Sandbox: https://api.sandbox.billit.be
-
-const BILLIT_API = {
-  production: "/api/billit",
-  sandbox: "/api/billit"
-};
-
-function getBillitUrl(settings) {
-  // Always use local proxy — avoids CORS
-  return "/api/billit";
-}
-
-function getBillitKey(settings) {
-  return settings?.integraties?.billitApiKey || "";
-}
-
-function billitHeaders(settings) {
-  const env = settings?.integraties?.billitEnv || "production";
-  return {
-    'Authorization': `Bearer ${getBillitKey(settings)}`,
-    'Content-Type': 'application/json',
-    'Accept': 'application/json',
-    'X-Billit-Env': env
-  };
-}
-
-// ── KBO Lookup via CBE API ──
-async function kboLookup(vatNumber, cbeApiKey = null) {
+// ─── KBO & PEPPOL INTEGRATIES ─────────────────────────────────────────
+// KBO Lookup - BTW validatie + Billit PEPPOL check
+// CBE API verwijderd (CORS geblokkeerd vanuit browser)
+async function kboLookup(vatNumber, settings = null) {
   console.log("[KBO] ==> Start lookup:", vatNumber);
+  
   try {
-    const cleaned = String(vatNumber || "").toUpperCase().replace(/^BE\s*/i, '').replace(/[^0-9]/g, '');
-    if(cleaned.length !== 10) { console.error("[KBO] Invalid length:", cleaned.length); return null; }
+    const cleaned = String(vatNumber || "")
+      .toUpperCase()
+      .replace(/^BE\s*/i, '')
+      .replace(/[^0-9]/g, '');
+    
+    if(cleaned.length !== 10) {
+      console.error("[KBO] Invalid length:", cleaned.length);
+      return null;
+    }
     
     // Modulo 97 validatie
     const num = parseInt(cleaned.slice(0, 8));
     const checkDigits = parseInt(cleaned.slice(8, 10));
     const calculated = 97 - (num % 97);
-    if(calculated !== checkDigits) { console.error("[KBO] BTW failed modulo 97"); return null; }
+    const isValid = calculated === checkDigits;
+    console.log("[KBO] Modulo 97 check:", isValid);
+    
+    if(!isValid) {
+      console.error("[KBO] BTW number failed modulo 97 validation");
+      return null;
+    }
     
     const formattedBTW = `BE ${cleaned.slice(0,4)}.${cleaned.slice(4,7)}.${cleaned.slice(7)}`;
-    const baseResult = { naam:"", bedrijf:"", adres:"", gemeente:"", btwnr:formattedBTW, tel:"", email:"", peppolId:`0208:${cleaned}` };
+    const result = {
+      naam: "",
+      bedrijf: "",
+      adres: "",
+      gemeente: "",
+      btwnr: formattedBTW,
+      tel: "",
+      email: "",
+      peppolId: `0208:${cleaned}`,
+      peppolActief: false
+    };
     
-    // CBE API lookup
-    if(cbeApiKey) {
+    // Probeer bedrijfsnaam op te halen via Billit (als API key beschikbaar)
+    const billitKey = settings?.integraties?.billitApiKey || getBillitKey(settings||{});
+    if(billitKey) {
       try {
-        const cbeResp = await fetch(`https://cbeapi.be/api/enterprise/${cleaned}`, {
-          headers: { 'Authorization': `Bearer ${cbeApiKey}`, 'Accept': 'application/json' }
-        });
-        if(cbeResp.ok) {
-          const d = await cbeResp.json();
-          if(d?.denomination || d?.name) {
-            baseResult.naam = d.denomination || d.name || "";
-            baseResult.bedrijf = d.name || d.denomination || "";
-            baseResult.adres = d.address?.street || "";
-            baseResult.gemeente = `${d.address?.zipcode||""} ${d.address?.city||""}`.trim();
-            baseResult.tel = d.contact?.phone || "";
-            baseResult.email = d.contact?.email || "";
-            console.log("[KBO] ✓ CBE API SUCCESS:", baseResult.naam);
+        const peppolResp = await fetch(
+          `${getBillitUrl(settings||{})}/v1/peppol/participantInformation/BE${cleaned}`,
+          {headers: {'Authorization':`Bearer ${billitKey}`,'Content-Type':'application/json','Accept':'application/json'}}
+        );
+        if(peppolResp.ok) {
+          const peppolData = await peppolResp.json();
+          console.log("[KBO] Billit PEPPOL data:", peppolData);
+          result.peppolActief = peppolData.Registered === true;
+          // Billit returns participant name if available
+          if(peppolData.Name || peppolData.name) {
+            result.naam = peppolData.Name || peppolData.name;
+            result.bedrijf = result.naam;
           }
         }
-      } catch(e) { console.warn("[KBO] CBE API failed:", e.message); }
+      } catch(e) { console.warn("[KBO] Billit PEPPOL lookup failed:", e.message); }
     }
-    return baseResult;
-  } catch(err) { console.error("[KBO] Fatal error:", err); return null; }
+    
+    console.log("[KBO] ==> Result:", result.naam ? `Found: ${result.naam}` : "BTW valid, no name found");
+    return result;
+    
+  } catch(err) {
+    console.error("[KBO] Fatal error:", err);
+    return null;
+  }
 }
 
-// ── Billit: Check PEPPOL status van een klant ──
-async function checkPeppolBillit(vatNumber, settings) {
+// ─── BILLIT PEPPOL INTEGRATIE ────────────────────────────────────
+const BILLIT_API = { production: "https://api.billit.be", sandbox: "https://api.sandbox.billit.be" };
+function getBillitUrl(settings) { return BILLIT_API[settings?.integraties?.billitEnv||"production"]||BILLIT_API.production; }
+function getBillitKey(settings) { return settings?.integraties?.billitApiKey||""; }
+function billitHeaders(settings) { return {'Authorization':`Bearer ${getBillitKey(settings)}`,'Content-Type':'application/json','Accept':'application/json'}; }
+
+// PEPPOL Status Check via Billit
+async function checkPeppol(vatNumber, settings) {
   const apiKey = getBillitKey(settings);
-  if(!apiKey) return { registered: false, reason: "Geen Billit API key" };
-  
+  if(!apiKey) return {registered:false, reason:"Geen Billit API key"};
   const cleaned = String(vatNumber||"").replace(/\s/g,"").replace(/\./g,"");
-  // Billit accepteert zowel BE0437... als 0437...
   const query = cleaned.startsWith("BE") ? cleaned : `BE${cleaned}`;
-  
   try {
-    const resp = await fetch(`${getBillitUrl(settings)}/v1/peppol/participantInformation/${query}`, {
-      headers: billitHeaders(settings)
-    });
+    const resp = await fetch(`${getBillitUrl(settings)}/v1/peppol/participantInformation/${query}`, {headers:billitHeaders(settings)});
     if(resp.ok) {
       const data = await resp.json();
       console.log("[PEPPOL] ✓ Billit lookup:", query, data);
-      return {
-        registered: data.Registered === true,
-        identifier: data.Identifier || "",
-        documentTypes: data.DocumentTypes || [],
-        raw: data
-      };
+      return {registered: data.Registered===true, identifier: data.Identifier||"", documentTypes: data.DocumentTypes||[]};
     }
-    if(resp.status === 404) return { registered: false, reason: "Niet op Peppol" };
-    return { registered: false, reason: `HTTP ${resp.status}` };
-  } catch(err) {
-    console.error("[PEPPOL] Check failed:", err);
-    return { registered: false, reason: err.message };
-  }
+    if(resp.status===404) return {registered:false, reason:"Niet op Peppol"};
+    return {registered:false, reason:`HTTP ${resp.status}`};
+  } catch(err) { console.error("[PEPPOL] Check failed:", err); return {registered:false, reason:err.message}; }
 }
 
-// ── Billit: Factuur aanmaken als Billit Order ──
-function billrToBillitOrder(factuur, settings) {
-  const bed = settings?.bedrijf || {};
-  const klant = factuur.klant || {};
-  const totals = calcTotals(factuur.lijnen || []);
-  
-  // Splits adres: straatnaam + huisnummer
-  const adresParts = (klant.adres || "").match(/^(.+?)\s+(\d+\S*)$/) || [null, klant.adres || "", ""];
-  const gemeenteParts = (klant.gemeente || "").match(/^(\d{4})\s+(.+)$/) || [null, "", klant.gemeente || ""];
-  const bedAdres = (bed.adres || "").match(/^(.+?)\s+(\d+\S*)$/) || [null, bed.adres || "", ""];
-  const bedGem = (bed.gemeente || "").match(/^(\d{4})\s+(.+)$/) || [null, "", bed.gemeente || ""];
-  
+// Billit: Factuur verzenden via Peppol
+async function sendViaPeppol(invoice, settings) {
+  const apiKey = getBillitKey(settings);
+  if(!apiKey) throw new Error("Billit API key niet geconfigureerd. Ga naar Instellingen → Integraties.");
+  const bed = settings?.bedrijf||{};
+  const klant = invoice.klant||{};
+  const totals = calcTotals(invoice.lijnen||[]);
+  // Billit Order format
+  const order = {
+    Type: "SalesInvoice",
+    Date: invoice.datum||new Date().toISOString().split("T")[0],
+    DueDate: invoice.vervaldatum,
+    YourRef: invoice.nummer,
+    Currency: "EUR",
+    Lines: (invoice.lijnen||[]).filter(l=>!l.isInfo).map((l,i)=>({
+      LineNumber: i+1,
+      Description: l.naam + (l.omschr ? ` - ${l.omschr}` : ""),
+      Quantity: l.aantal,
+      UnitPrice: l.prijs,
+      VatPercentage: l.btw||21
+    })),
+    Supplier: {Name:bed.naam, VatNumber:String(bed.btwnr||"").replace(/[^0-9BE]/g,""), Street:bed.adres, City:bed.gemeente?.replace(/^\d+\s*/,""), ZipCode:bed.gemeente?.match(/^\d+/)?.[0]||"", Country:"BE"},
+    Customer: {Name:klant.naam||klant.bedrijf, VatNumber:String(klant.btwnr||"").replace(/[^0-9BE]/g,""), Street:klant.adres, City:klant.gemeente?.replace(/^\d+\s*/,""), ZipCode:klant.gemeente?.match(/^\d+/)?.[0]||"", Country:"BE"}
+  };
+  try {
+    // Stap 1: Factuur aanmaken
+    const createResp = await fetch(`${getBillitUrl(settings)}/v1/order`, {method:"POST", headers:billitHeaders(settings), body:JSON.stringify(order)});
+    if(!createResp.ok) { const err = await createResp.text(); throw new Error(`Billit aanmaken mislukt: ${err}`); }
+    const created = await createResp.json();
+    console.log("[BILLIT] Order created:", created.Id);
+    // Stap 2: Verstuur via Peppol
+    const sendResp = await fetch(`${getBillitUrl(settings)}/v1/order/commands/send`, {method:"POST", headers:billitHeaders(settings), body:JSON.stringify({OrderId:created.Id, TransportType:"Peppol"})});
+    if(!sendResp.ok) { const err = await sendResp.text(); throw new Error(`Peppol verzending mislukt: ${err}`); }
+    return await sendResp.json();
+  } catch(err) { console.error("[BILLIT] Send error:", err); throw err; }
+}
+
+// Test Billit API verbinding
+async function testBillitConnection(settings) {
+  const apiKey = getBillitKey(settings);
+  if(!apiKey) return {ok:false, error:"Geen API key"};
+  try {
+    const resp = await fetch(`${getBillitUrl(settings)}/v1/account`, {headers:billitHeaders(settings)});
+    if(resp.ok) { const data = await resp.json(); return {ok:true, account:data}; }
+    return {ok:false, error:`HTTP ${resp.status}`};
+  } catch(err) { return {ok:false, error:err.message}; }
+}
+
+// Haal bedrijfsgegevens op via Billit /v1/account
+async function fetchBillitCompanyData(settings) {
+  const apiKey = getBillitKey(settings);
+  if(!apiKey) throw new Error("Geen Billit API key geconfigureerd");
+  const resp = await fetch(`${getBillitUrl(settings)}/v1/account`, {headers:billitHeaders(settings)});
+  if(!resp.ok) throw new Error(`Billit API fout: HTTP ${resp.status}`);
+  const data = await resp.json();
+  console.log("[BILLIT] Account data:", data);
+  // Map Billit response naar BILLR bedrijfsvelden
+  const co = data.Company || data.company || data;
+  const addr = (co.Addresses || co.addresses || []).find(a => 
+    (a.AddressType||a.addressType||"").toLowerCase().includes("invoice")
+  ) || (co.Addresses || co.addresses || [])[0] || {};
+  const bank = (data.BankAccounts || data.bankAccounts || co.BankAccounts || co.bankAccounts || [])[0] || {};
   return {
-    OrderType: "Invoice",
-    OrderDirection: "Income",
-    OrderNumber: factuur.nummer,
-    OrderDate: factuur.datum || new Date().toISOString().slice(0,10),
-    DeliveryDate: factuur.datum || new Date().toISOString().slice(0,10),
-    ExpiryDate: factuur.vervaldatum,
-    PaymentReference: genOGM(factuur.nummer).replace(/[+/]/g, ""),
-    Customer: {
-      Name: klant.naam || klant.bedrijf || "",
-      VATNumber: (klant.btwnr || "").replace(/[\s.]/g, ""),
-      Email: klant.email || "",
-      Language: "NL",
-      Phone: klant.tel || "",
-      Addresses: [{
-        AddressType: "InvoiceAddress",
-        Name: klant.naam || "",
-        Street: adresParts[1],
-        StreetNumber: adresParts[2] || "",
-        Zipcode: gemeenteParts[1],
-        City: gemeenteParts[2],
-        CountryCode: "BE"
-      }]
-    },
-    OrderLines: (factuur.lijnen || []).filter(l => l.prijs > 0 || l.productId).map(l => ({
-      Quantity: l.aantal || 1,
-      UnitPriceExcl: l.prijs || 0,
-      Description: l.naam || "",
-      DescriptionExtended: l.omschr || "",
-      VATPercentage: l.btw || 21,
-      Unit: l.eenheid === "stuk" ? "C62" : l.eenheid === "m" ? "MTR" : l.eenheid === "uur" ? "HUR" : "C62"
-    }))
+    naam: co.CommercialName || co.Name || co.commercialName || co.name || "",
+    adres: `${addr.Street||addr.street||""} ${addr.StreetNumber||addr.streetNumber||""}`.trim() + (addr.Box||addr.box ? ` / ${addr.Box||addr.box}` : ""),
+    gemeente: `${addr.Zipcode||addr.zipcode||""} ${addr.City||addr.city||""}`.trim(),
+    btwnr: co.VATNumber || co.vatNumber || co.VatNumber || "",
+    tel: co.Phone || co.phone || addr.Phone || addr.phone || "",
+    email: co.Email || co.email || "",
+    iban: bank.IBAN || bank.iban || "",
+    bic: bank.BIC || bank.bic || "",
+    website: co.Website || co.website || ""
   };
 }
 
-// ── Billit: Factuur versturen via Peppol ──
-async function sendViaBillit(factuur, settings) {
-  const apiKey = getBillitKey(settings);
-  if(!apiKey) throw new Error("Geen Billit API key ingesteld");
-  
-  const baseUrl = getBillitUrl(settings);
-  const headers = billitHeaders(settings);
-  
-  // Stap 1: Factuur aanmaken in Billit
-  console.log("[BILLIT] Stap 1: Factuur aanmaken...");
-  const order = billrToBillitOrder(factuur, settings);
-  
-  const createResp = await fetch(`${baseUrl}/v1/order`, {
-    method: "POST",
-    headers,
-    body: JSON.stringify(order)
-  });
-  
-  if(!createResp.ok) {
-    const err = await createResp.json().catch(() => ({}));
-    const errMsg = err.errors?.map(e => e.Description).join(", ") || `HTTP ${createResp.status}`;
-    throw new Error(`Billit factuur aanmaken mislukt: ${errMsg}`);
-  }
-  
-  const createData = await createResp.json();
-  const billitId = createData; // Billit returns the UUID directly
-  console.log("[BILLIT] ✓ Factuur aangemaakt, ID:", billitId);
-  
-  // Stap 2: Versturen via Peppol
-  console.log("[BILLIT] Stap 2: Versturen via Peppol...");
-  const sendResp = await fetch(`${baseUrl}/v1/order/commands/send`, {
-    method: "POST",
-    headers,
-    body: JSON.stringify({
-      OrderIds: [typeof billitId === "string" ? billitId : billitId.Id || billitId],
-      TransportType: "Peppol"
-    })
-  });
-  
-  if(!sendResp.ok) {
-    const err = await sendResp.json().catch(() => ({}));
-    const errMsg = err.errors?.map(e => e.Description).join(", ") || `HTTP ${sendResp.status}`;
-    throw new Error(`Peppol verzending mislukt: ${errMsg}`);
-  }
-  
-  console.log("[BILLIT] ✓ Factuur verzonden via Peppol!");
-  return { success: true, billitId: typeof billitId === "string" ? billitId : billitId.Id };
-}
-
-// ── Billit: Test verbinding ──
-async function testBillitConnection(settings) {
-  const apiKey = getBillitKey(settings);
-  if(!apiKey) return { ok: false, error: "Geen API key" };
-  try {
-    const resp = await fetch(`${getBillitUrl(settings)}/v1`, {
-      method: "POST",
-      headers: billitHeaders(settings)
-    });
-    if(resp.ok) return { ok: true };
-    return { ok: false, error: `HTTP ${resp.status}` };
-  } catch(err) {
-    return { ok: false, error: err.message };
-  }
-}
-
-// ── Legacy UBL converter (voor compatibiliteit) ──
+// Converteer BILLR factuur naar UBL (Universal Business Language)
 function convertToUBL(invoice, settings) {
   const totals = calcTotals(invoice.lijnen || []);
-  const bed = settings?.bedrijf || {};
+  
   return {
     customizationID: "urn:cen.eu:en16931:2017#compliant#urn:fdc:peppol.eu:2017:poacc:billing:3.0",
     id: invoice.nummer,
     issueDate: invoice.datum,
     dueDate: invoice.vervaldatum,
-    invoiceTypeCode: "380",
+    invoiceTypeCode: "380", // Commercial invoice
     documentCurrencyCode: "EUR",
+    
+    // Supplier (jouw bedrijf)
     accountingSupplierParty: {
       party: {
-        endpointID: { schemeID: "0208", value: stripBe(bed.btwnr || "") },
-        partyName: { name: bed.naam || "" },
-        postalAddress: {
-          streetName: bed.adres || "",
-          cityName: (bed.gemeente || "").split(" ").slice(1).join(" "),
-          postalZone: (bed.gemeente || "").split(" ")[0],
-          country: { identificationCode: "BE" }
+        endpointID: {
+          schemeID: "0208",
+          value: stripBe(settings.bedrijf?.btwnr || "")
         },
-        partyTaxScheme: { companyID: bed.btwnr || "", taxScheme: { id: "VAT" } },
-        partyLegalEntity: { registrationName: bed.naam || "", companyID: stripBe(bed.btwnr || "") }
+        partyName: {name: settings.bedrijf?.naam || ""},
+        postalAddress: {
+          streetName: settings.bedrijf?.adres || "",
+          cityName: (settings.bedrijf?.gemeente || "").split(" ").slice(1).join(" "),
+          postalZone: (settings.bedrijf?.gemeente || "").split(" ")[0],
+          country: {identificationCode: "BE"}
+        },
+        partyTaxScheme: {
+          companyID: settings.bedrijf?.btwnr || "",
+          taxScheme: {id: "VAT"}
+        },
+        partyLegalEntity: {
+          registrationName: settings.bedrijf?.naam || "",
+          companyID: stripBe(settings.bedrijf?.btwnr || "")
+        }
       }
     },
+    
+    // Customer (klant)
     accountingCustomerParty: {
       party: {
-        endpointID: { schemeID: "0208", value: stripBe(invoice.klant?.btwnr || "") },
-        partyName: { name: invoice.klant?.naam || invoice.klant?.bedrijf || "" },
+        endpointID: {
+          schemeID: "0208",
+          value: stripBe(invoice.klant?.btwnr || "")
+        },
+        partyName: {name: invoice.klant?.naam || invoice.klant?.bedrijf || ""},
         postalAddress: {
           streetName: invoice.klant?.adres || "",
           cityName: (invoice.klant?.gemeente || "").split(" ").slice(1).join(" "),
           postalZone: (invoice.klant?.gemeente || "").split(" ")[0],
-          country: { identificationCode: "BE" }
+          country: {identificationCode: "BE"}
         },
-        partyTaxScheme: { companyID: invoice.klant?.btwnr || "", taxScheme: { id: "VAT" } }
+        partyTaxScheme: {
+          companyID: invoice.klant?.btwnr || "",
+          taxScheme: {id: "VAT"}
+        }
       }
     },
+    
+    // Payment means
     paymentMeans: {
-      paymentMeansCode: "30",
+      paymentMeansCode: "30", // Credit transfer
       paymentID: genOGM(invoice.nummer).replace(/\+/g, "").replace(/\//g, ""),
-      payeeFinancialAccount: { id: bed.iban || "", financialInstitutionBranch: { id: bed.bic || "" } }
+      payeeFinancialAccount: {
+        id: settings.bedrijf?.iban || "",
+        financialInstitutionBranch: {id: settings.bedrijf?.bic || ""}
+      }
     },
+    
+    // Tax total
     taxTotal: {
-      taxAmount: { currencyID: "EUR", value: totals.btw.toFixed(2) },
+      taxAmount: {currencyID: "EUR", value: totals.btw.toFixed(2)},
       taxSubtotal: Object.entries(totals.btwGroepen).map(([rate, amount]) => ({
-        taxableAmount: { currencyID: "EUR", value: (amount / (parseFloat(rate) / 100)).toFixed(2) },
-        taxAmount: { currencyID: "EUR", value: amount.toFixed(2) },
-        taxCategory: { id: "S", percent: parseFloat(rate), taxScheme: { id: "VAT" } }
+        taxableAmount: {currencyID: "EUR", value: (amount / (parseFloat(rate) / 100)).toFixed(2)},
+        taxAmount: {currencyID: "EUR", value: amount.toFixed(2)},
+        taxCategory: {
+          id: "S", // Standard rate
+          percent: parseFloat(rate),
+          taxScheme: {id: "VAT"}
+        }
       }))
     },
+    
+    // Monetary totals
     legalMonetaryTotal: {
-      lineExtensionAmount: { currencyID: "EUR", value: totals.subtotaal.toFixed(2) },
-      taxExclusiveAmount: { currencyID: "EUR", value: totals.subtotaal.toFixed(2) },
-      taxInclusiveAmount: { currencyID: "EUR", value: totals.totaal.toFixed(2) },
-      payableAmount: { currencyID: "EUR", value: totals.totaal.toFixed(2) }
+      lineExtensionAmount: {currencyID: "EUR", value: totals.subtotaal.toFixed(2)},
+      taxExclusiveAmount: {currencyID: "EUR", value: totals.subtotaal.toFixed(2)},
+      taxInclusiveAmount: {currencyID: "EUR", value: totals.totaal.toFixed(2)},
+      payableAmount: {currencyID: "EUR", value: totals.totaal.toFixed(2)}
     },
+    
+    // Invoice lines
     invoiceLine: (invoice.lijnen || []).map((lijn, idx) => ({
       id: String(idx + 1),
-      invoicedQuantity: { unitCode: lijn.eenheid || "C62", value: lijn.aantal },
-      lineExtensionAmount: { currencyID: "EUR", value: (lijn.prijs * lijn.aantal).toFixed(2) },
+      invoicedQuantity: {unitCode: lijn.eenheid || "C62", value: lijn.aantal},
+      lineExtensionAmount: {currencyID: "EUR", value: (lijn.prijs * lijn.aantal).toFixed(2)},
       item: {
         name: lijn.naam,
         description: lijn.omschr || "",
-        classifiedTaxCategory: { id: "S", percent: lijn.btw || 21, taxScheme: { id: "VAT" } }
+        classifiedTaxCategory: {
+          id: "S",
+          percent: lijn.btw || 21,
+          taxScheme: {id: "VAT"}
+        }
       },
       price: {
-        priceAmount: { currencyID: "EUR", value: lijn.prijs.toFixed(2) },
-        baseQuantity: { unitCode: lijn.eenheid || "C62", value: 1 }
+        priceAmount: {currencyID: "EUR", value: lijn.prijs.toFixed(2)},
+        baseQuantity: {unitCode: lijn.eenheid || "C62", value: 1}
       }
     }))
   };
 }
-
 
 const AANMANING_TEMPLATES = [
   {level:1, titel:"1e Herinnering", dagen:7,  toon:"vriendelijk",
@@ -455,6 +457,8 @@ const OFF_STATUS = {
   verstuurd:    {l:"Verstuurd",        c:"#3b82f6",bg:"#eff6ff",   icon:"📤"},
   afgedrukt:    {l:"Afgedrukt",        c:"#8b5cf6",bg:"#f5f3ff",   icon:"🖨️"},
   goedgekeurd:  {l:"Goedgekeurd",      c:"#10b981",bg:"#f0fdf4",   icon:"✅"},
+  ingepland:    {l:"Ingepland",        c:"#0891b2",bg:"#ecfeff",   icon:"📅"},
+  ingepland:    {l:"Ingepland",        c:"#8b5cf6",bg:"#f5f3ff",   icon:"📅"},
   afgewezen:    {l:"Afgewezen",        c:"#ef4444",bg:"#fef2f2",   icon:"❌"},
   gefactureerd: {l:"Gefactureerd",     c:"#f59e0b",bg:"#fffbeb",   icon:"🧾"},
 };
@@ -559,8 +563,8 @@ const INIT_KLANTEN = [
 const INIT_SETTINGS = {
   bedrijf:{naam:"",tagline:"",adres:"",gemeente:"",tel:"",email:"",btwnr:"",iban:"",bic:"",website:"",kleur:"#1a2e4a",logo:""},
   email:{eigen:"info@wcharge.be",boekhouder1:"",boekhouder2:"",cc:"",emailjsServiceId:"",emailjsTemplateOfferte:"",emailjsTemplateFactuur:"",emailjsPublicKey:"",templateOfferte:"Beste {naam},\n\nIn bijlage vindt u onze offerte {nummer} d.d. {datum}, geldig tot {vervaldatum}.\n\nWat mag u verwachten?\n{technische_info}\n\nBij akkoord kunt u de offerte bevestigen via onderstaande link.\nBij vragen staan we steeds voor u klaar.\n\nMet vriendelijke groeten,\n{bedrijf}\n{tel}",templateFactuur:"Beste {naam},\n\nIn bijlage vindt u factuur {nummer} d.d. {datum}.\nGelieve te betalen vóór {vervaldatum}.\n\nBedrag: {totaal}\nIBAN: {iban} · Mededeling: {nummer}\n\nMet vriendelijke groeten,\n{bedrijf}"},
-  integraties:{kboEnabled:true,peppolEnabled:true,billitApiKey:"98050f8c-93aa-4f2e-a206-3f15e4905276",billitEnv:"production",cbeApiKey:"OqzgVJ8I5wqgA8QjB0Aotu446pn7xqVI"},
-  dashboardWidgets:{omzetGrafiek:true,recenteOffertes:true,openFacturen:true,goedgekeurdeOffertes:true,snelleActies:true,statistieken:true,agenda:true,offerteLogboek:true,afspraken:true,widgetOrder:["statistieken","recenteOffertes","openFacturen","goedgekeurdeOffertes","offerteLogboek","afspraken","snelleActies","agenda"]},
+  integraties:{kboEnabled:true,peppolEnabled:false,peppolApiKey:"",eInvoiceApiKey:"",cbeApiKey:"OqzgVJ8I5wqgA8QjB0Aotu446pn7xqVI",billitApiKey:"",billitEnv:"production"},
+  dashboardWidgets:{omzetGrafiek:true,recenteOffertes:true,openFacturen:true,goedgekeurdeOffertes:true,snelleActies:true,statistieken:true,agenda:true},
   voorwaarden:{betalingstermijn:14,voorschot:"50%",boekjaarStart:"01-01",nummerPrefix_off:"OFF",nummerPrefix_fct:"FACT",tegenNummer_off:null,tegenNummer_fct:null,tekst:`1. Al onze facturen zijn contant betaalbaar op de bankrekening vermeld op de factuur en zullen na verloop van 14 dagen van rechtswege een intrest van 1% per maand meebrengen, zonder aangetekende ingebrekestelling of dagvaarding te noodzaken.\n\n2. Op onze facturen dienen binnen de 8 dagen na ontvangst eventuele opmerkingen te geschieden.\n\n3. Het bedrag van de onbetaald gebleven facturen zal ten titel van schadevergoeding, van rechtswege verhoogd worden met 15% met een minimum van €65,00 vanaf de dag volgend op de vervaldag.\n\n4. Onze facturen zijn betaalbaar te Lochristi, zodat in geval van betwisting enkel de Rechtbanken van het arrondissement Gent bevoegd zijn.\n\nBTW 6% verklaring: Bij gebrek aan schriftelijke betwisting binnen een termijn van één maand vanaf de ontvangst van de factuur, wordt de klant geacht te erkennen dat (1) de werken worden verricht aan een woning waarvan de eerste ingebruikneming heeft plaatsgevonden in een kalenderjaar dat ten minste tien jaar voorafgaat aan de datum van de eerste factuur, (2) de woning na uitvoering uitsluitend of hoofdzakelijk als privéwoning wordt gebruikt en (3) de werken worden gefactureerd aan een eindverbruiker.\n\nBTW verlegd: Verlegging van heffing. Bij gebrek aan schriftelijke betwisting binnen één maand na ontvangst wordt de afnemer geacht te erkennen dat hij een belastingplichtige is gehouden tot periodieke BTW-aangiften.`},
   thema:{kleur:"#1a2e4a",naam:"Elektrisch Blauw"},
   layout:{
@@ -736,14 +740,14 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--txt);font-s
   .mo{padding:0!important;align-items:flex-end!important;background:rgba(0,0,0,.55)!important}
   .mdl{max-width:100vw!important;width:100vw!important;height:95dvh!important;max-height:95dvh!important;border-radius:18px 18px 0 0!important;margin:0!important;overflow:hidden!important;display:flex!important;flex-direction:column!important}
   .msm,.mmd,.mlg,.mxl,.mfull{max-width:100vw!important;width:100vw!important}
-  .mh{padding:12px 14px 6px!important;position:sticky!important;top:0!important;background:#fff!important;z-index:10!important;flex-shrink:0!important;flex-wrap:wrap!important}
+  .mh{padding:12px 14px 10px!important;position:sticky!important;top:0!important;background:#fff!important;z-index:10!important;flex-shrink:0!important}
   /* Drag handle op modal */
-  .mh::before{content:'';display:block;width:36px;height:4px;background:#d1d5db;border-radius:2px;margin:0 auto 8px;flex-shrink:0}
-  .mb-body{padding:8px 12px 16px!important;overflow-y:auto!important;flex:1!important;-webkit-overflow-scrolling:touch!important}
-  .mf{padding:10px 12px!important;gap:7px!important;flex-wrap:wrap;position:sticky!important;bottom:0!important;background:#f8fafc!important;border-top:1px solid var(--bdr)!important;padding-bottom:calc(10px + env(safe-area-inset-bottom,0px))!important;z-index:10!important}
+  .mh::before{content:'';display:block;width:36px;height:4px;background:#d1d5db;border-radius:2px;margin:0 auto 10px;flex-shrink:0}
+  .mb-body{padding:8px 12px!important;overflow-y:auto!important;flex:1!important;-webkit-overflow-scrolling:touch!important}
+  .mf{padding:10px 12px!important;gap:7px!important;flex-wrap:wrap;position:sticky!important;bottom:0!important;background:#f8fafc!important;border-top:1px solid var(--bdr)!important;padding-bottom:calc(10px + env(safe-area-inset-bottom,0px))!important}
   /* Wizard stappen compact */
-  .wzs{overflow-x:auto;flex-wrap:nowrap!important;-webkit-overflow-scrolling:touch;gap:3px!important;margin:6px 0 0!important;padding-bottom:2px}
-  .wz{min-width:56px;font-size:9px!important;padding:5px 3px!important}
+  .wzs{overflow-x:auto;flex-wrap:nowrap!important;-webkit-overflow-scrolling:touch;gap:3px!important;margin-bottom:10px!important;padding-bottom:2px}
+  .wz{min-width:64px;font-size:9.5px!important;padding:5px 3px!important}
   .wzn{width:16px!important;height:16px!important;font-size:8.5px!important;flex-shrink:0!important}
   /* Product tiles */
   .ptile-grid{grid-template-columns:repeat(2,1fr)!important;gap:6px!important}
@@ -756,22 +760,6 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--txt);font-s
   .qb{width:22px!important;height:22px!important;font-size:13px!important}
   /* Wizard 2-kol → 1 kol */
   .wiz-col2{grid-template-columns:1fr!important}
-  /* Category tabs: max 2 per row on mobile */
-  .cat-tabs-mob{display:grid!important;grid-template-columns:1fr 1fr!important;gap:6px!important}
-  /* Doc-page responsive in preview */
-  .doc-page{max-width:100%!important;width:100%!important;box-shadow:0 1px 6px rgba(0,0,0,.08)!important;margin-bottom:10px!important;font-size:10px!important}
-  .doc-page .cov,.doc-page .cov-l,.doc-page .cov-r{min-height:auto!important;padding:20px!important}
-  .doc-page .qt-tbl{font-size:10px!important}
-  .doc-page .qt-tbl th,.doc-page .qt-tbl td{padding:4px 5px!important}
-  .doc-page .qt-parties{grid-template-columns:1fr!important;gap:12px!important}
-  .doc-page .qt-meta-bar{flex-wrap:wrap!important;gap:6px!important}
-  .doc-page .qt-totals{max-width:100%!important}
-  .doc-page .qt-tot-box{min-width:0!important}
-  .doc-page .grp-hdr{font-size:12px!important;padding:6px 10px!important}
-  .doc-page .prod-page{padding:16px!important}
-  .doc-page .qt-sign{padding:16px!important}
-  /* fr2 grid → 1 col on mobile */
-  .fr2{grid-template-columns:1fr!important}
   /* Knoppen: 44px minimum */
   .btn{min-height:40px}
   .btn-sm{min-height:36px!important}
@@ -1242,8 +1230,8 @@ tr.row-active td{border-top:2px solid #2563eb}
   .doc-page{
     box-shadow:none!important;border-radius:0!important;
     margin:0!important;max-width:100%!important;width:210mm!important;
-    height:297mm!important;max-height:297mm!important;
-    overflow:hidden!important;
+    min-height:297mm!important;max-height:none!important;
+    overflow:visible!important;
     display:flex!important;flex-direction:column!important;
     break-after:page!important;page-break-after:always!important;
     box-sizing:border-box!important;position:relative!important;
@@ -1262,10 +1250,10 @@ tr.row-active td{border-top:2px solid #2563eb}
   .cov-r{height:100%!important;box-sizing:border-box!important}
   
   /* Content pagina's: interne padding (omdat @page margin=0) */
-  .prod-page{padding:8mm 12mm!important;box-sizing:border-box!important;flex:1!important;overflow:hidden!important}
-  .fct-pg{padding:8mm 12mm!important;box-sizing:border-box!important;flex:1!important;overflow:hidden!important}
-  .qt-pg{padding:8mm 12mm!important;box-sizing:border-box!important;flex:1!important;overflow:hidden!important}
-  .fct-pg2{padding:8mm 12mm!important;box-sizing:border-box!important;flex:1!important;overflow:hidden!important}
+  .prod-page{padding:8mm 12mm!important;box-sizing:border-box!important;flex:1!important;overflow:visible!important}
+  .fct-pg{padding:8mm 12mm!important;box-sizing:border-box!important;flex:1!important;overflow:visible!important}
+  .qt-pg{padding:8mm 12mm!important;box-sizing:border-box!important;flex:1!important;overflow:visible!important}
+  .fct-pg2{padding:8mm 12mm!important;box-sizing:border-box!important;flex:1!important;overflow:visible!important}
   
   /* Footer: altijd onderaan de pagina */
   .qt-footer{
@@ -1294,6 +1282,10 @@ tr.row-active td{border-top:2px solid #2563eb}
   .qt-totals,.qt-sign,.qt-betaal,.qt-voorschot,.qt-notes,.qt-confirm-link,.qt-fiches{break-inside:avoid!important;page-break-inside:avoid!important}
   .grp-hdr{break-after:avoid!important;page-break-after:avoid!important}
   .grp-sub,.prod-item,.qt-meta-bar,.qt-parties{break-inside:avoid!important;page-break-inside:avoid!important}
+  /* Partijen altijd naast elkaar bij afdrukken */
+  .qt-parties{grid-template-columns:1fr 1fr!important;gap:22px!important}
+  /* Header altijd horizontaal bij afdrukken */
+  .qt-header{flex-direction:row!important;justify-content:space-between!important;align-items:flex-start!important}
   
   /* Modal chrome verbergen */
   .mo{position:static!important;background:transparent!important;padding:0!important;display:block!important}
@@ -1307,6 +1299,34 @@ tr.row-active td{border-top:2px solid #2563eb}
   /* Stack preview onder instellingen op kleinere schermen */
   .settings-grid{grid-template-columns:1fr!important}
   .settings-preview{position:static!important;max-height:none!important;margin-top:20px}
+}
+/* ─── INSTELLINGEN MOBILE FIXES ─── */
+@media(max-width:768px){
+  .settings-grid{display:block!important}
+  .settings-preview{display:none!important}
+  .tabs{display:flex!important;overflow-x:auto!important;flex-wrap:nowrap!important;gap:2px!important;-webkit-overflow-scrolling:touch;scrollbar-width:none;padding-bottom:4px!important;max-width:100%!important;width:100%!important}
+  .tabs::-webkit-scrollbar{display:none}
+  .tab{flex-shrink:0!important;flex:none!important;font-size:11px!important;padding:8px 10px!important;white-space:nowrap!important;min-width:auto!important}
+  .card{padding:12px!important}
+  .fg{margin-bottom:10px!important}
+  .fl{font-size:12px!important}
+  .fc{font-size:14px!important;padding:10px 12px!important}
+  /* Offerte wizard preview fix */
+  .doc-wrap{transform:none!important;width:100%!important}
+  .doc-page .cov{grid-template-columns:1fr!important;min-height:auto!important}
+  .doc-page .cov-l,.doc-page .cov-r{padding:20px!important}
+  .doc-page .qt-parties,.doc-page .qt-meta-bar{display:block!important}
+  .doc-page .qt-parties>div{margin-bottom:12px}
+  .doc-page .qt-meta-bar>div{margin-bottom:6px}
+  .doc-page .qt-pg{padding:16px!important}
+  .doc-page .prod-page{padding:16px!important}
+  .fr2{display:block!important}
+  .fr2>div{margin-bottom:10px}
+}
+@media(max-width:480px){
+  .tab{font-size:10px!important;padding:7px 8px!important}
+  .action-bar{padding:8px 12px}
+  .doc-page-lbl{font-size:9px}
 }
 `;
 
@@ -1329,7 +1349,6 @@ function LoginScreen({onLogin, themaKleur}) {
   const [naam, setNaam] = useState("");
   const [err, setErr] = useState("");
   const [ok, setOk] = useState("");
-  const [verificationSent, setVerificationSent] = useState(false);
 
   const doLogin = async () => {
     setErr(""); setOk("");
@@ -1347,7 +1366,8 @@ function LoginScreen({onLogin, themaKleur}) {
     const { data, error } = await sb.auth.signUp({ email, password: pw, options: { data: { naam }, emailRedirectTo: appUrl } });
     if (error) return setErr(error.message);
     if (data.user && !data.session) {
-      setVerificationSent(true);
+      setOk("✅ Bevestigingsemail verzonden naar " + email + "! Klik op de link in uw mailbox en log daarna in.");
+      setTab("login");
     } else if (data.session) {
       onLogin({ id: data.user.id, email: data.user.email, naam, rol: "admin" });
     }
@@ -1358,41 +1378,6 @@ function LoginScreen({onLogin, themaKleur}) {
     await sb.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin });
     setOk("Wachtwoord-reset email verzonden naar " + email);
   };
-
-  // ── Verification sent state ──
-  if(verificationSent) return (
-    <div className="login-wrap" style={{"--theme":themaKleur||"#1a2e4a"}}>
-      <div className="login-card" style={{textAlign:"center",padding:"48px 36px"}}>
-        <div style={{width:72,height:72,borderRadius:"50%",background:"linear-gradient(135deg,#10b981,#059669)",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 20px",fontSize:36}}>📧</div>
-        <div className="login-brand" style={{color:themaKleur||"#1a2e4a",fontSize:28,marginBottom:4}}>Verificatie verzonden!</div>
-        <div style={{fontSize:14,color:"#475569",lineHeight:1.6,marginBottom:20}}>
-          We hebben een bevestigingsmail gestuurd naar:<br/>
-          <strong style={{color:"#1e293b",fontSize:15}}>{email}</strong>
-        </div>
-        <div style={{background:"#eff6ff",borderRadius:12,padding:20,marginBottom:20,textAlign:"left"}}>
-          <div style={{fontWeight:700,fontSize:14,color:"#1e40af",marginBottom:10}}>📋 Volgende stappen:</div>
-          <div style={{display:"flex",gap:10,marginBottom:8,alignItems:"flex-start"}}>
-            <span style={{background:"#2563eb",color:"#fff",borderRadius:"50%",width:24,height:24,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:800,flexShrink:0}}>1</span>
-            <span style={{fontSize:13,color:"#1e40af"}}>Open uw mailbox en zoek de email van BILLR</span>
-          </div>
-          <div style={{display:"flex",gap:10,marginBottom:8,alignItems:"flex-start"}}>
-            <span style={{background:"#2563eb",color:"#fff",borderRadius:"50%",width:24,height:24,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:800,flexShrink:0}}>2</span>
-            <span style={{fontSize:13,color:"#1e40af"}}>Klik op <strong>"Bevestig email"</strong> in de mail</span>
-          </div>
-          <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
-            <span style={{background:"#2563eb",color:"#fff",borderRadius:"50%",width:24,height:24,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:800,flexShrink:0}}>3</span>
-            <span style={{fontSize:13,color:"#1e40af"}}>Kom hier terug en log in met uw gegevens</span>
-          </div>
-        </div>
-        <div style={{fontSize:12,color:"#94a3b8",marginBottom:16}}>
-          💡 Controleer ook uw spam-map als u de email niet ziet
-        </div>
-        <button className="btn btn-lg" style={{width:"100%",justifyContent:"center",background:themaKleur||"#1a2e4a",color:"#fff"}} onClick={()=>{setVerificationSent(false);setTab("login");setOk("Account aangemaakt! U kunt nu inloggen na bevestiging.")}}>
-          ← Terug naar inloggen
-        </button>
-      </div>
-    </div>
-  );
 
   return (
     <div className="login-wrap" style={{"--theme":themaKleur||"#1a2e4a"}}>
@@ -1454,11 +1439,9 @@ function openPlannerWithOfferte(offerte) {
 // ─── MAIN APP ────────────────────────────────────────────────────
 export default function App() {
   const [user, setUser] = useState(null);
-  const [pg, setPg] = useState(()=>{ try { return sessionStorage.getItem("billr_pg")||"dashboard"; } catch(_) { return "dashboard"; }});
+  const [pg, setPgRaw] = useState(()=>{try{return sessionStorage.getItem("billr_pg")||"dashboard"}catch(_){return "dashboard"}});
+  const setPg = useCallback((v)=>{setPgRaw(v);try{sessionStorage.setItem("billr_pg",v)}catch(_){};},[]);
   const [pgFilter, setPgFilter] = useState(null); // filter when clicking dashboard
-
-  // Persist current page to sessionStorage
-  useEffect(()=>{ try { sessionStorage.setItem("billr_pg", pg); } catch(_){} },[pg]);
   const [klanten, setKlanten] = useState(INIT_KLANTEN);
   const [producten, setProducten] = useState(INIT_PRODUCTS);
   const [offertes, setOffertes] = useState([]);
@@ -1477,6 +1460,8 @@ export default function App() {
   const [klantView, setKlantView] = useState("passport"); // "list" | "passport"
   const [klantImportOpen, setKlantImportOpen] = useState(false);
   const [mobMenu, setMobMenu] = useState(false);
+  const [sbCollapsed, setSbCollapsed] = useState(()=>{try{return localStorage.getItem("billr_sbCollapsed")==="true"}catch(_){return false}});
+  const toggleSb=()=>{const v=!sbCollapsed;setSbCollapsed(v);try{localStorage.setItem("billr_sbCollapsed",v)}catch(_){}};
   const [creditnotas, setCreditnotas] = useState([]);
   const [aanmaningen, setAanmaningen] = useState([]);
   const [betalingen, setBetalingen] = useState([]);
@@ -1491,99 +1476,18 @@ export default function App() {
   // Acceptatie tokens voor offertes (klant klikt op link in email)
   const [acceptTokens, setAcceptTokens] = useState({});
   const [dossierModal, setDossierModal] = useState(null);
-  const [tijdModal, setTijdModal] = useState(null);
   const [planningModal, setPlanningModal] = useState(null);
-  const [offerteViews, setOfferteViews] = useState({});
-  const [offerteResponses, setOfferteResponses] = useState({});
-  const [planningProposals, setPlanningProposals] = useState({});
-  const [logboekModal, setLogboekModal] = useState(null);
-  const [widgetOrder, setWidgetOrder] = useState(null); // null = use settings default
+  const [tijdModal, setTijdModal] = useState(null);
 
   // dataReady: true ALLEEN nadat data volledig geladen is
   // Voorkomt dat lege initiële state de opgeslagen data overschrijft
   const dataReady = useRef(false);
+  const supabaseVerified = useRef(false); // true = we weten dat Supabase werkt voor deze user
 
   useEffect(()=>{
     let dataLoaded = false;
 
-    // ═══ STARTUP CLEANUP: verwijder bloated base64 uit localStorage ═══
-    try {
-      let totalSize = 0;
-      for(let i=0;i<localStorage.length;i++) {
-        const k = localStorage.key(i);
-        const v = localStorage.getItem(k);
-        totalSize += (v||"").length;
-      }
-      if(totalSize > 4000000) { // >4MB = bijna vol
-        console.warn(`⚠️ localStorage ${(totalSize/1024/1024).toFixed(1)}MB — opschonen...`);
-        ["b4_prd","b4_off","b4_fct"].forEach(k => {
-          try {
-            const raw = localStorage.getItem(k);
-            if(raw && raw.length > 500000) { // >500KB → strip
-              const arr = JSON.parse(raw);
-              const stripped = stripBase64(k, arr);
-              localStorage.setItem(k, JSON.stringify(stripped));
-              console.log(`🧹 ${k} opgeschoond: ${(raw.length/1024).toFixed(0)}KB → ${(JSON.stringify(stripped).length/1024).toFixed(0)}KB`);
-            }
-          } catch(_){}
-        });
-      }
-    } catch(_){}
-
-    const loadUserData = async (u) => {
-      if(dataLoaded) return;
-      dataLoaded = true;
-      const appUser = { id: u.id, email: u.email, naam: u.user_metadata?.naam || u.email.split("@")[0], rol: "admin" };
-      setUser(appUser);
-
-      // UI direct zichtbaar VOOR data laden
-      setLoaded(true);
-
-      // ═══ BULK LOAD: één query voor alle data ═══
-      try {
-        const allData = await Promise.race([
-          sbGetAll(u.id),
-          new Promise(r => setTimeout(()=>{ console.warn("⏱️ Supabase timeout (5s) — fallback naar localStorage"); r(null); }, 5000))
-        ]);
-
-        const parse = (key, fallback) => {
-          try { return allData[key] ? JSON.parse(allData[key]) : fallback; }
-          catch(_) { return fallback; }
-        };
-
-        const keyCount = allData ? Object.keys(allData).length : 0;
-
-        if(allData && keyCount > 0) {
-          // Supabase had data
-          console.log(`☁️ Supabase: ${keyCount} keys geladen voor user ${u.id.slice(0,8)}...`);
-          if(allData["b4_set"]) setSettings(parse("b4_set", INIT_SETTINGS));
-          if(allData["b4_kln"]) setKlanten(parse("b4_kln", INIT_KLANTEN));
-          if(allData["b4_prd"]) setProducten(parse("b4_prd", INIT_PRODUCTS));
-          if(allData["b4_off"]) setOffertes(parse("b4_off", []));
-          if(allData["b4_fct"]) setFacturen(parse("b4_fct", []));
-          if(allData["b4_cn"])  setCreditnotas(parse("b4_cn", []));
-          if(allData["b4_am"])  setAanmaningen(parse("b4_am", []));
-          if(allData["b4_bt"])  setBetalingen(parse("b4_bt", []));
-          if(allData["b4_ti"])  setTijdslots(parse("b4_ti", []));
-          if(allData["b4_do"])  setDossiers(parse("b4_do", []));
-          if(allData["b4_ga"])  setGaranties(parse("b4_ga", []));
-          if(allData["b4_at"])  setAcceptTokens(parse("b4_at", {}));
-          if(allData["b4_wo"])  setWidgetOrder(parse("b4_wo", null));
-        } else {
-          // Supabase leeg of gefaald — probeer localStorage als fallback
-          console.warn("⚠️ Supabase leeg of timeout — probeer localStorage fallback...");
-          loadFromLS();
-        }
-      } catch(e) {
-        console.error("❌ Supabase load exception:", e);
-        loadFromLS();
-      }
-
-      // Nu pas mogen saves plaatsvinden
-      dataReady.current = true;
-    };
-
-    // localStorage load helper
+    // localStorage load helper — ALTIJD beschikbaar als instant cache
     const loadFromLS = () => {
       try {
         const get = (k, fb) => {
@@ -1602,25 +1506,117 @@ export default function App() {
         setDossiers(get('b4_do', []));
         setGaranties(get('b4_ga', []));
         setAcceptTokens(get('b4_at', {}));
-        setWidgetOrder(get('b4_wo', null));
-        dataReady.current = true;
-        console.log('✅ localStorage loaded');
+        console.log('✅ localStorage loaded (instant cache)');
       } catch(e) {
         console.warn('localStorage load failed:', e);
-        dataReady.current = true;
       }
     };
 
-    // Sessie check — gebruik Supabase cached sessie
+    const applyCloudData = (allData) => {
+      // SUPABASE = AUTORITEIT als je ingelogd bent
+      // localStorage is alleen een snelle cache voor eerste render
+      const parse = (key, fallback) => {
+        try { return allData[key] ? JSON.parse(allData[key]) : fallback; }
+        catch(_) { return fallback; }
+      };
+      
+      const apply = (key, setter, fallback) => {
+        if(!allData[key]) return;
+        const cloud = parse(key, fallback);
+        // ⛔ Skip lege arrays als localStorage iets had (voorkomt data-verlies)
+        if(Array.isArray(cloud) && cloud.length === 0) {
+          try {
+            const ls = localStorage.getItem(key);
+            if(ls) { const lsData = JSON.parse(ls); if(Array.isArray(lsData) && lsData.length > 0) {
+              console.warn(`  ⛔ ${key}: cloud is LEEG maar localStorage had ${lsData.length} items — cloud genegeerd`);
+              _cloudCounts[key] = lsData.length; // bescherm tegen lege saves
+              return;
+            }}
+          } catch(_){}
+        }
+        // Track hoeveel items cloud had (voor empty-save bescherming)
+        if(Array.isArray(cloud) && cloud.length > 0) _cloudCounts[key] = cloud.length;
+        if(key === "b4_set" && cloud?.bedrijf?.naam) _cloudCounts["b4_set_naam"] = cloud.bedrijf.naam;
+        setter(cloud);
+        // Sync localStorage cache — strip base64 om quota te voorkomen
+        try {
+          if(key === "b4_off" || key === "b4_fct" || key === "b4_prd") {
+            const stripped = (Array.isArray(cloud) ? cloud : []).map(item => ({
+              ...item, technischeFiche: null,
+              technischeFiches: (item.technischeFiches||[]).map(f => ({naam: f.naam})),
+              lijnen: (item.lijnen||[]).map(l => ({...l, technischeFiche: null, technischeFiches: (l.technischeFiches||[]).map(f => ({naam: f.naam}))}))
+            }));
+            localStorage.setItem(key, JSON.stringify(stripped));
+          } else {
+            localStorage.setItem(key, allData[key]);
+          }
+        } catch(_){}
+        console.log(`  ☁️→ ${key}: cloud data geladen${Array.isArray(cloud) ? ` (${cloud.length} items)` : ''}`);
+      };
+      
+      apply("b4_set", setSettings, INIT_SETTINGS);
+      apply("b4_kln", setKlanten, INIT_KLANTEN);
+      apply("b4_prd", setProducten, INIT_PRODUCTS);
+      apply("b4_off", setOffertes, []);
+      apply("b4_fct", setFacturen, []);
+      apply("b4_cn",  setCreditnotas, []);
+      apply("b4_am",  setAanmaningen, []);
+      apply("b4_bt",  setBetalingen, []);
+      apply("b4_ti",  setTijdslots, []);
+      apply("b4_do",  setDossiers, []);
+      apply("b4_ga",  setGaranties, []);
+      apply("b4_at",  setAcceptTokens, {});
+    };
+
+    const loadUserData = async (u) => {
+      if(dataLoaded) return;
+      dataLoaded = true;
+      dataReady.current = false; // BLOKEER saves tot cloud geladen
+      
+      const appUser = { id: u.id, email: u.email, naam: u.user_metadata?.naam || u.email.split("@")[0], rol: "admin" };
+      setUser(appUser);
+
+      // STAP 1: localStorage = instant UI (cache)
+      loadFromLS();
+      setLoaded(true);
+
+      // STAP 2: Supabase laden — WACHT gewoon (user ziet al data uit cache)
+      // Geen timeout: beter 20s wachten dan data kwijtraken
+      try {
+        console.log("☁️ Supabase laden (geen timeout — wacht op antwoord)...");
+        const allData = await sbGetAll(u.id);
+        const keyCount = allData ? Object.keys(allData).length : 0;
+
+        if(allData && keyCount > 0) {
+          supabaseVerified.current = true;
+          console.log(`☁️ Supabase: ${keyCount} keys geladen — cloud data actief`);
+          applyCloudData(allData);
+        } else {
+          console.log("☁️ Supabase leeg — localStorage cache blijft, saves starten");
+          supabaseVerified.current = true;
+        }
+      } catch(e) {
+        console.warn("⚠️ Supabase load mislukt:", e.message, "— localStorage actief");
+      }
+
+      // NU pas saves toestaan (cloud is geladen OF gefaald)
+      await new Promise(r => setTimeout(r, 300));
+      dataReady.current = true;
+      console.log("✅ dataReady = true — saves toegestaan");
+    };
+
+    // Sessie check
     sb.auth.getSession().then(({ data: { session: s } }) => {
       if(s?.user) {
         loadUserData(s.user);
       } else {
         loadFromLS();
+        dataReady.current = true;
         setLoaded(true);
       }
     }).catch(() => {
       loadFromLS();
+      dataReady.current = true;
       setLoaded(true);
     });
 
@@ -1630,25 +1626,85 @@ export default function App() {
         await loadUserData(session.user);
       } else if(event === "SIGNED_OUT") {
         dataLoaded = false;
+        dataReady.current = false;
+        supabaseVerified.current = false;
         setUser(null);
         loadFromLS();
+        dataReady.current = true;
         setLoaded(true);
       } else if(event === "TOKEN_REFRESHED" && session?.user && !dataLoaded) {
         await loadUserData(session.user);
       }
     });
 
-    // Noodstop: toon login na 3s als Supabase niet reageert
-    const hardTimeout = setTimeout(() => {
-      if(!dataLoaded) loadFromLS();
-      setLoaded(true);
-    }, 3000);
-
     return () => {
       subscription.unsubscribe();
-      clearTimeout(hardTimeout);
     };
   },[]);
+
+  // ═══ POLL OFFERTE RESPONSES: check of klanten gereageerd hebben ═══
+  useEffect(()=>{
+    if(!user || !loaded) return;
+    const checkResponses = async () => {
+      try {
+        const {data:responses} = await sb.from('offerte_responses').select('*').order('submitted_at',{ascending:false}).limit(50);
+        if(!responses || responses.length===0) return;
+        let changed = false;
+        setOffertes(prev => {
+          const updated = prev.map(o => {
+            const resp = responses.find(r => r.offerte_id === o.id && !o.klantReactie);
+            if(resp) {
+              changed = true;
+              return {
+                ...o,
+                status: resp.status === 'goedgekeurd' ? 'goedgekeurd' : 'afgewezen',
+                klantReactie: { status: resp.status, periode: resp.periode||'', opmerkingen: resp.opmerkingen||'', datum: resp.submitted_at },
+                log: [...(o.log||[]), {ts: resp.submitted_at, actie: resp.status==='goedgekeurd' ? '✅ Klant heeft goedgekeurd'+(resp.periode?' — '+resp.periode:'') : '❌ Klant heeft afgewezen'+(resp.opmerkingen?' — '+resp.opmerkingen:'')}]
+              };
+            }
+            return o;
+          });
+          return updated;
+        });
+        if(changed) console.log("📬 Offerte responses verwerkt");
+      } catch(e) { console.warn("Response poll failed:", e); }
+    };
+    // Check on load + every 60s
+    const timer = setTimeout(checkResponses, 2000);
+    const interval = setInterval(checkResponses, 60000);
+    return () => { clearTimeout(timer); clearInterval(interval); };
+  },[user, loaded]);
+
+  // ═══ MOBIELE DATA SYNC: herlaad bij tab-switch (visibilitychange) ═══
+  const lastSyncRef = useRef(0);
+  useEffect(()=>{
+    const handler = async () => {
+      if(document.visibilityState==="visible" && user && Date.now()-lastSyncRef.current > 60000) {
+        lastSyncRef.current = Date.now();
+        console.log("📱 Tab zichtbaar — achtergrond sync...");
+        try {
+          const allData = await sbGetAll(user.id);
+          if(allData && Object.keys(allData).length > 0) {
+            // Sync localStorage cache — maar NOOIT lege data overschrijven
+            try{ Object.entries(allData).forEach(([k,v])=>{
+              try{
+                const parsed = JSON.parse(v);
+                // Skip lege arrays als localStorage data had
+                if(Array.isArray(parsed) && parsed.length === 0) {
+                  const existing = localStorage.getItem(k);
+                  if(existing) { const ex = JSON.parse(existing); if(Array.isArray(ex) && ex.length > 0) return; }
+                }
+                localStorage.setItem(k,v);
+              }catch(_){ localStorage.setItem(k,v); }
+            }); }catch(_){}
+            console.log("📱 ✓ localStorage cache bijgewerkt");
+          }
+        } catch(e) { console.warn("📱 Sync mislukt:",e); }
+      }
+    };
+    document.addEventListener("visibilitychange",handler);
+    return ()=>document.removeEventListener("visibilitychange",handler);
+  },[user]);
 
   // ═══ EMAILJS INITIALISATIE ═══
   // Re-init wanneer settings veranderen (zodat de juiste public key gebruikt wordt)
@@ -1660,141 +1716,96 @@ export default function App() {
     }
   }, [settings?.email?.emailjsPublicKey]);
 
-  // ═══ OFFERTE TRACKING — fetch views + responses from Supabase ═══
-  const fetchOfferteTracking = useCallback(async () => {
-    try {
-      const { data: views } = await sb.from('offerte_views').select('offerte_id, viewed_at, user_agent');
-      const { data: responses } = await sb.from('offerte_responses').select('offerte_id, status, periode, opmerkingen, submitted_at');
-      let proposals = null;
-      try { const r = await sb.from('planning_proposals').select('*'); proposals = r.data; } catch(_){}
-      if(views) {
-        const grouped = {};
-        views.forEach(v => {
-          if(!grouped[v.offerte_id]) grouped[v.offerte_id] = [];
-          grouped[v.offerte_id].push(v);
-        });
-        setOfferteViews(grouped);
-      }
-      if(responses) {
-        const grouped = {};
-        responses.forEach(r => {
-          if(!grouped[r.offerte_id]) grouped[r.offerte_id] = [];
-          grouped[r.offerte_id].push(r);
-        });
-        setOfferteResponses(grouped);
-        // Auto-sync: update offerte status + log als klant heeft gereageerd
-        setOffertes(prev => {
-          let changed = false;
-          const next = prev.map(o => {
-            const oResp = grouped[o.id];
-            if(!oResp || !oResp.length) return o;
-            const latest = oResp.sort((a,b)=>new Date(b.submitted_at)-new Date(a.submitted_at))[0];
-            // Alleen updaten als status nog niet gesynct is
-            if(latest.status === "goedgekeurd" && o.status === "verstuurd") {
-              changed = true;
-              const newLog = [...(o.log||[]), {ts: latest.submitted_at, actie: `✅ Klant heeft offerte goedgekeurd${latest.periode ? " (periode: "+latest.periode+")" : ""}${latest.opmerkingen ? " — "+latest.opmerkingen : ""}`}];
-              return {...o, status: "goedgekeurd", klantAkkoord: true, klantPeriode: latest.periode, klantOpmerkingen: latest.opmerkingen, log: newLog};
-            }
-            if(latest.status === "afgewezen" && o.status === "verstuurd") {
-              changed = true;
-              const newLog = [...(o.log||[]), {ts: latest.submitted_at, actie: `❌ Klant heeft offerte afgewezen${latest.opmerkingen ? " — "+latest.opmerkingen : ""}`}];
-              return {...o, status: "afgewezen", log: newLog};
-            }
-            return o;
-          });
-          return changed ? next : prev;
-        });
-      }
-      if(proposals) {
-        const grouped = {};
-        proposals.forEach(p => {
-          if(!grouped[p.offerte_id]) grouped[p.offerte_id] = [];
-          grouped[p.offerte_id].push(p);
-        });
-        setPlanningProposals(grouped);
-        // Auto-sync: update offerte log met planning responses
-        setOffertes(prev => {
-          let changed = false;
-          const next = prev.map(o => {
-            const oPlans = grouped[o.id];
-            if(!oPlans || !oPlans.length) return o;
-            const latest = oPlans.sort((a,b)=>new Date(b.created_at)-new Date(a.created_at))[0];
-            const cr = latest.client_response;
-            if(!cr) return o; // Nog geen klantreactie
-            const respTs = cr.responded_at || latest.created_at;
-            // Check of we deze response al gelogd hebben
-            const alreadyLogged = (o.log||[]).some(l => l.actie && l.actie.includes("Planning") && l.ts === respTs);
-            if(alreadyLogged) return o;
-            changed = true;
-            const isAkkoord = latest.status === "akkoord";
-            const pd = latest.plan_data || {};
-            const logActie = isAkkoord
-              ? `✅ Klant akkoord met afspraak op ${pd.planDatum||"?"} ${pd.planTijd||""}`
-              : `📅 Klant vraagt ander moment${cr.datum ? ": "+cr.datum : ""}${cr.tijd ? " "+cr.tijd : ""}${cr.opmerking ? " — "+cr.opmerking : ""}`;
-            const newLog = [...(o.log||[]), {ts: respTs, actie: logActie}];
-            const updates = {log: newLog};
-            if(isAkkoord) { updates.planBevestigdDoorKlant = true; }
-            return {...o, ...updates};
-          });
-          return changed ? next : prev;
-        });
-      }
-    } catch(e) { console.warn("Offerte tracking fetch failed:", e); }
-  }, []);
-  useEffect(() => { if(user) fetchOfferteTracking(); }, [user, fetchOfferteTracking]);
-  // Auto-poll tracking elke 60s op dashboard
-  useEffect(() => {
-    if(!user || pg !== "dashboard") return;
-    const iv = setInterval(fetchOfferteTracking, 60000);
-    return () => clearInterval(iv);
-  }, [user, pg, fetchOfferteTracking]);
 
-
-  // saveKey: dual-write to Supabase + localStorage
-  // localStorage: strip base64 fiches (QuotaExceededError prevention)
-  // Supabase: full data
-  const stripBase64 = (key, val) => {
-    if(!Array.isArray(val)) return val;
-    if(key === "b4_prd") return val.map(p => {
-      const c = {...p};
-      if(c.technischeFiche && String(c.technischeFiche).length > 500) c.technischeFiche = "[PDF]";
-      if(c.technischeFiches) c.technischeFiches = c.technischeFiches.map(f => ({naam:f.naam||"",url:f.url||"",type:f.type||""}));
-      return c;
-    });
-    if(key === "b4_off" || key === "b4_fct") return val.map(d => {
-      const c = {...d};
-      if(c.lijnen) c.lijnen = c.lijnen.map(l => {
-        const cl = {...l};
-        if(cl.technischeFiche && String(cl.technischeFiche).length > 500) cl.technischeFiche = null;
-        if(cl.technischeFiches) cl.technischeFiches = cl.technischeFiches.map(f => ({naam:f.naam||"",url:f.url||"",type:f.type||""}));
-        return cl;
-      });
-      return c;
-    });
-    return val;
-  };
-
+  // saveKey: localStorage INSTANT + Supabase DEBOUNCED
+  const saveTimers = useRef({});
+  const pendingSaves = useRef({}); // Track pending Supabase saves
   const saveKey = useCallback(async (key, val) => { 
     if(!dataReady.current) return;
     
-    // localStorage: strip base64 fiches (QuotaExceeded prevention)
-    try {
-      const stripped = stripBase64(key, val);
-      localStorage.setItem(key, JSON.stringify(stripped));
-    } catch(e) {
-      console.warn(`localStorage save "${key}" failed:`, e);
-      try { localStorage.removeItem(key); } catch(_){}
+    // ⛔ VEILIGHEID: NOOIT lege arrays opslaan als Supabase eerder data had
+    if(Array.isArray(val) && val.length === 0 && _cloudCounts[key]) {
+      console.warn(`⛔ BLOCKED: "${key}" is leeg maar Supabase had ${_cloudCounts[key]} items — save geblokkeerd`);
+      return;
     }
+    // ⛔ VEILIGHEID: NOOIT lege settings opslaan als Supabase bedrijfsgegevens had
+    if(key === "b4_set" && _cloudCounts["b4_set_naam"] && !(val?.bedrijf?.naam)) {
+      console.warn(`⛔ BLOCKED: "b4_set" bedrijfsnaam is leeg maar Supabase had "${_cloudCounts["b4_set_naam"]}" — save geblokkeerd`);
+      return;
+    }
+    // Update tracking
+    if(Array.isArray(val) && val.length > 0) _cloudCounts[key] = val.length;
+    if(key === "b4_set" && val?.bedrijf?.naam) _cloudCounts["b4_set_naam"] = val.bedrijf.naam;
     
-    // Supabase: ALTIJD volledige data (geen stripping!)
-    if(user) {
-      const json = JSON.stringify(val);
-      const success = await sbSet(key, json, user.id);
-      if(!success) {
-        console.warn(`⚠️ Supabase save "${key}" failed (${(json.length/1024).toFixed(0)}KB)`);
+    const json = JSON.stringify(val);
+    
+    // STAP 1: localStorage INSTANT — strip base64 om quota niet te overschrijden
+    try {
+      let lsJson = json;
+      if(key === "b4_off" || key === "b4_fct" || key === "b4_prd") {
+        try {
+          const stripped = JSON.parse(json).map(item => ({
+            ...item,
+            technischeFiche: null,
+            technischeFiches: (item.technischeFiches||[]).map(f => ({naam: f.naam})),
+            lijnen: (item.lijnen||[]).map(l => ({
+              ...l, technischeFiche: null,
+              technischeFiches: (l.technischeFiches||[]).map(f => ({naam: f.naam}))
+            }))
+          }));
+          lsJson = JSON.stringify(stripped);
+        } catch(_) {}
       }
+      localStorage.setItem(key, lsJson);
+    } catch(e) { console.warn(`localStorage "${key}" failed:`, e); }
+    
+    // STAP 2: Supabase DEBOUNCED — 300ms na laatste wijziging + retry
+    if(user) {
+      pendingSaves.current[key] = { json, userId: user.id };
+      clearTimeout(saveTimers.current[key]);
+      saveTimers.current[key] = setTimeout(async () => {
+        let success = await sbSet(key, json, user.id);
+        if(success) {
+          delete pendingSaves.current[key];
+        } else {
+          // Retry na 3 seconden
+          console.warn(`⟳ Retry save "${key}" in 3s...`);
+          setTimeout(async () => {
+            success = await sbSet(key, json, user.id);
+            if(success) delete pendingSaves.current[key];
+            else console.error(`❌ Save "${key}" definitief mislukt`);
+          }, 3000);
+        }
+      }, 300);
     }
   }, [user]);
+  
+  // Cache auth token voor beforeunload flush
+  const authTokenRef = useRef(SB_KEY);
+  useEffect(() => {
+    sb.auth.getSession().then(({data:{session}}) => {
+      if(session?.access_token) authTokenRef.current = session.access_token;
+    }).catch(()=>{});
+  }, [user]);
+  
+  // Flush alle pending saves bij pagina sluiten
+  useEffect(() => {
+    const flush = () => {
+      Object.entries(pendingSaves.current).forEach(([key, {json, userId}]) => {
+        try {
+          const xhr = new XMLHttpRequest();
+          xhr.open("POST", `${SB_URL}/rest/v1/user_data`, false);
+          xhr.setRequestHeader("Content-Type", "application/json");
+          xhr.setRequestHeader("apikey", SB_KEY);
+          xhr.setRequestHeader("Authorization", `Bearer ${authTokenRef.current}`);
+          xhr.setRequestHeader("Prefer", "resolution=merge-duplicates");
+          xhr.send(JSON.stringify({ user_id: userId, key, value: json, updated_at: new Date().toISOString() }));
+        } catch(_) {}
+      });
+    };
+    window.addEventListener("beforeunload", flush);
+    return () => window.removeEventListener("beforeunload", flush);
+  }, []);
   useEffect(()=>{ saveKey("b4_off", offertes);  },[offertes,   saveKey]);
   useEffect(()=>{ saveKey("b4_fct", facturen);  },[facturen,   saveKey]);
   useEffect(()=>{ saveKey("b4_kln", klanten);   },[klanten,    saveKey]);
@@ -1807,87 +1818,23 @@ export default function App() {
   useEffect(()=>{ saveKey("b4_do",  dossiers);   },[dossiers,   saveKey]);
   useEffect(()=>{ saveKey("b4_ga",  garanties);  },[garanties,  saveKey]);
   useEffect(()=>{ saveKey("b4_at",  acceptTokens);},[acceptTokens,saveKey]);
-  useEffect(()=>{ if(widgetOrder) saveKey("b4_wo", widgetOrder);},[widgetOrder,saveKey]);
 
   // Apply theme CSS variables
   useEffect(()=>{
     const kleur = settings?.thema?.kleur || settings?.bedrijf?.kleur || "#1a2e4a";
     document.documentElement.style.setProperty("--theme", kleur);
+    // Contrast: lichte thema's krijgen donkere tekst, donkere thema's witte tekst
     const lum = getLuminance(kleur);
+    // Enhanced contrast: use text-shadow for readability on any background
     const rgb = lum > 0.4 ? "30,41,59" : "255,255,255";
+    // Add text-shadow for light themes to ensure readability
     document.documentElement.style.setProperty("--sb-text-shadow", lum > 0.4 ? "none" : "0 1px 2px rgba(0,0,0,.3)");
     document.documentElement.style.setProperty("--sb-txt-rgb", rgb);
   }, [settings]);
 
-  // ═══ MOBILE SYNC: herlaad data als user terugkomt naar de app ═══
-  useEffect(()=>{
-    let lastSync = Date.now();
-    const handleVisibility = async () => {
-      if(document.visibilityState==="visible" && user && Date.now()-lastSync > 30000) {
-        lastSync = Date.now();
-        console.log("📱 Tab/app weer zichtbaar — data herladen...");
-        try {
-          const allData = await Promise.race([
-            sbGetAll(user.id),
-            new Promise(r=>setTimeout(()=>r(null),5000))
-          ]);
-          if(allData && Object.keys(allData).length>0) {
-            const p = (k,fb) => { try { return allData[k]?JSON.parse(allData[k]):fb; } catch(_){return fb;} };
-            setSettings(p("b4_set",INIT_SETTINGS));
-            setKlanten(p("b4_kln",INIT_KLANTEN));
-            setProducten(p("b4_prd",INIT_PRODUCTS));
-            setOffertes(p("b4_off",[]));
-            setFacturen(p("b4_fct",[]));
-            setCreditnotas(p("b4_cn",[]));
-            setAanmaningen(p("b4_am",[]));
-            setBetalingen(p("b4_bt",[]));
-            setTijdslots(p("b4_ti",[]));
-            setDossiers(p("b4_do",[]));
-            setGaranties(p("b4_ga",[]));
-            setAcceptTokens(p("b4_at",{}));
-            setWidgetOrder(p("b4_wo",null));
-            console.log("✅ Data hersynced vanuit Supabase");
-          }
-        } catch(e) { console.warn("Sync mislukt:",e); }
-      }
-    };
-    document.addEventListener("visibilitychange", handleVisibility);
-    return ()=>document.removeEventListener("visibilitychange", handleVisibility);
-  },[user]);
-
   const notify = (msg,type="ok") => { setNotif({msg,type}); setTimeout(()=>setNotif(null),3400); };
-
-  // Expose settings for standalone Peppol functions
-  useEffect(()=>{ window.__billrSettings = settings; },[settings]);
-
-  // ═══ PEPPOL VERZENDING VIA BILLIT ═══
-  const sendPeppol = async (factuur) => {
-    if(!getBillitKey(settings)) { notify("Billit API key niet ingesteld. Ga naar Instellingen → Integraties.", "er"); return; }
-    const klant = factuur.klant || {};
-    if(!klant.btwnr) { notify("Klant heeft geen BTW-nummer — Peppol vereist een BTW-nummer.", "er"); return; }
-    
-    notify("📨 Peppol status controleren...", "in");
-    const peppolCheck = await checkPeppolBillit(klant.btwnr, settings);
-    if(!peppolCheck.registered) {
-      notify(`❌ ${klant.naam || "Klant"} is niet geregistreerd op Peppol. Verstuur via email.`, "er");
-      return;
-    }
-    
-    notify("📨 Factuur versturen via Peppol...", "in");
-    try {
-      const result = await sendViaBillit(factuur, settings);
-      updFact(factuur.id, { 
-        status: "verstuurd", 
-        peppolVerstuurd: true, 
-        peppolId: result.billitId,
-        logActie: `📨 Verzonden via Peppol (Billit ID: ${result.billitId})`
-      });
-      notify(`✅ Factuur ${factuur.nummer} verzonden via Peppol!`, "ok");
-    } catch(err) {
-      console.error("Peppol send error:", err);
-      notify(`❌ Peppol verzending mislukt: ${err.message}`, "er");
-    }
-  };
+  const notifyRef = useRef(notify);
+  notifyRef.current = notify; // Always latest
   const nextNr = (pre,list,fld) => {
     // Use custom prefix from settings if available
     const customPre = pre==="OFF" ? (settings?.voorwaarden?.nummerPrefix_off||"OFF") : pre==="FACT" ? (settings?.voorwaarden?.nummerPrefix_fct||"FACT") : pre;
@@ -1908,46 +1855,27 @@ export default function App() {
   const bulkUpdFact = (ids,upd) => setFacturen(p=>p.map(f=>ids.includes(f.id)?{...f,...upd,log:[...(f.log||[]),logEntry(upd.status?"Bulk → "+(FACT_STATUS[upd.status]?.l||upd.status):"Bulk gewijzigd")]}:f));
 
   const saveOff = (data) => {
-    // Auto-create products from vrije lijnen (productId===null met ingevulde naam)
-    const newProducts = [];
-    const updatedLijnen = (data.lijnen||[]).map(l => {
-      if(!l.productId && l.naam && l.naam.trim()) {
-        // Check if product with same naam already exists
-        const existing = producten.find(p => p.naam.toLowerCase().trim() === l.naam.toLowerCase().trim());
+    // Auto-create producten van vrije lijnen (zonder productId en niet isInfo)
+    const newProds = [];
+    const updatedLijnen = (data.lijnen||[]).map(l=>{
+      if(!l.productId && l.naam && l.prijs > 0 && !l.isInfo) {
+        // Zoek bestaand product op naam
+        const existing = producten.find(p=>(p.naam||"").toLowerCase()===l.naam.toLowerCase());
         if(existing) {
           return {...l, productId: existing.id};
+        } else {
+          const newId = uid();
+          newProds.push({id:newId, naam:l.naam, omschr:l.omschr||"", prijs:l.prijs, btw:l.btw||21, eenheid:l.eenheid||"stuk", cat:"Offerte items", actief:true, imageUrl:"", specs:[], merk:"", isManual:true});
+          return {...l, productId: newId};
         }
-        // Create new product
-        const newProd = {
-          id: uid(),
-          naam: l.naam.trim(),
-          omschr: l.omschr || "",
-          prijs: l.prijs || 0,
-          btw: l.btw || 21,
-          eenheid: l.eenheid || "stuk",
-          cat: l.groepId ? (data.groepen||[]).find(g=>g.id===l.groepId)?.naam || "Overige" : "Overige",
-          merk: "",
-          actief: true,
-          imageUrl: l.imageUrl || "",
-          specs: l.specs || [],
-          technischeFiche: l.technischeFiche || null,
-          fichNaam: l.fichNaam || "",
-          aangemaakt: new Date().toISOString()
-        };
-        newProducts.push(newProd);
-        return {...l, productId: newProd.id};
       }
       return l;
     });
-    
-    // Add new products to database
-    if(newProducts.length > 0) {
-      setProducten(p => [...newProducts, ...p]);
-      notify(`${newProducts.length} nieuw${newProducts.length>1?"e":""} product${newProducts.length>1?"en":""} aangemaakt`, "in");
+    if(newProds.length > 0) {
+      setProducten(p=>[...newProds,...p]);
+      notify(`${newProds.length} nieuw${newProds.length>1?"e":""} product${newProds.length>1?"en":""} aangemaakt`);
     }
-    
     const finalData = {...data, lijnen: updatedLijnen};
-    
     if(finalData.id && offertes.find(o=>o.id===finalData.id)){
       setOffertes(p=>p.map(o=>o.id===finalData.id?finalData:o)); notify("Offerte opgeslagen ✓");
     } else {
@@ -1960,35 +1888,6 @@ export default function App() {
   const maakFactuur = (off, extra={}) => {
     const n={id:uid(),nummer:nextNr("FACT",facturen,"nummer"),offerteId:off.id,offerteNr:off.nummer,klantId:off.klantId,klant:off.klant,groepen:off.groepen||[],lijnen:extra.lijnen||off.lijnen,notities:extra.notities||off.notities,betalingstermijn:extra.bt||settings.voorwaarden?.betalingstermijn||14,datum:today(),vervaldatum:addDays(today(),extra.bt||settings.voorwaarden?.betalingstermijn||14),status:"concept",installatieType:off.installatieType,btwRegime:off.btwRegime,voorschot:off.voorschot||settings.voorwaarden?.voorschot,aangemaakt:new Date().toISOString()};
     setFacturen(p=>[n,...p]); updOff(off.id,{status:"gefactureerd",factuurId:n.id}); setFactModal(null); notify("Factuur aangemaakt ✓"); setPg("facturen"); setPgFilter(null);
-  };
-
-  // ═══ OFFERTE SHARING — sla snapshot op voor publieke offerte.html pagina ═══
-  const shareOfferte = async (offerte) => {
-    try {
-      const bed = settings?.bedrijf || {};
-      const sj = settings?.sjabloon || {};
-      const lyt = settings?.layout || {};
-      const dc = sj.accentKleur || settings?.thema?.kleur || bed.kleur || "#1a2e4a";
-      // Strip base64 data van technischeFiches (te groot voor Supabase JSONB)
-      const cleanLijnen = (offerte.lijnen||[]).map(l => {
-        const clean = {...l};
-        if(clean.technischeFiches) clean.technischeFiches = clean.technischeFiches.map(f => ({naam:f.naam||"fiche.pdf", url:f.url||"", type:f.type||"application/pdf"}));
-        if(clean.technischeFiche && clean.technischeFiche.startsWith("data:")) clean.technischeFiche = null;
-        return clean;
-      });
-      const shareData = {
-        ...offerte,
-        lijnen: cleanLijnen,
-        _bed: { naam:bed.naam, adres:bed.adres, gemeente:bed.gemeente, tel:bed.tel, email:bed.email, btwnr:bed.btwnr, iban:bed.iban, bic:bed.bic, website:bed.website, logo:bed.logo },
-        _dc: dc,
-        _sj: { voorbladTitel:sj.voorbladTitel, handtekeningTekst:sj.handtekeningTekst, footerTekst:sj.footerTekst, toonProductpagina:sj.toonProductpagina, toonBevestigingslink:sj.toonBevestigingslink, accentKleur:sj.accentKleur },
-        _lyt: { font:lyt.font, fontSize:lyt.fontSize },
-        _voorwaarden: settings?.voorwaarden?.tekst || "",
-        _voorschot: settings?.voorwaarden?.voorschot || "50%"
-      };
-      await sb.from('offerte_shares').upsert({ id: offerte.id, offerte_data: shareData });
-      console.log("✅ Offerte gedeeld voor publieke view:", offerte.nummer);
-    } catch(e) { console.warn("Offerte share failed:", e); }
   };
 
   // ═══ EMAILJS VERZENDING ═══
@@ -2066,191 +1965,14 @@ export default function App() {
       }
     } catch(error) {
       console.error("EmailJS Error:", error);
-      notify(`❌ Email mislukt: ${error?.text || error?.message || "Controleer EmailJS instellingen"}`, "er");
+      const errMsg = error?.text || error?.message || "Onbekende fout";
+      const hint = errMsg.includes("service_id") ? " → Controleer Service ID in Instellingen → Email" 
+        : errMsg.includes("template_id") ? " → Controleer Template ID in Instellingen → Email"
+        : errMsg.includes("publicKey") || errMsg.includes("public_key") ? " → Controleer Public Key in Instellingen → Email"
+        : errMsg.includes("recipients") ? " → Klant heeft geen geldig e-mailadres"
+        : " → Controleer EmailJS instellingen (Instellingen → Email)";
+      notify(`❌ Email mislukt: ${errMsg}${hint}`, "er");
       return false;
-    }
-  };
-
-  // ═══ PLANNING EMAIL VERZENDING ═══
-  const sendPlanningEmail = async (offerte, planData, emailType="bevestiging") => {
-    if(!window.emailjs) { notify("EmailJS niet geladen", "er"); return false; }
-    const emailCfg = settings?.email || {};
-    const serviceId = emailCfg.emailjsServiceId || "service_qrkvr0d";
-    const templateId = emailCfg.emailjsTemplatePlanning || "template_5nckw9f";
-    const pubKey = emailCfg.emailjsPublicKey || "04zsVAk5imDpo-8GJ";
-    window.emailjs.init(pubKey);
-    const klantData = klanten.find(k => k.id === offerte.klantId) || offerte.klant || {};
-    const bed = settings?.bedrijf || {};
-    const dc = settings?.sjabloon?.accentKleur || settings?.thema?.kleur || bed.kleur || "#1a2e4a";
-    const totals = calcTotals(offerte.lijnen || []);
-    const isVoorstel = emailType === "bevestiging";
-
-    // Sla voorstel op in Supabase zodat klant via planning.html kan reageren
-    let planningUrl = "";
-    if(isVoorstel) {
-      try {
-        const proposalId = uid();
-        await sb.from('planning_proposals').upsert({
-          id: proposalId,
-          offerte_id: offerte.id,
-          plan_data: {
-            ...planData,
-            klant: klantData,
-            offerteNummer: offerte.nummer,
-            installatieType: offerte.installatieType,
-            totaal: fmtEuro(totals.totaal),
-            _bed: { naam:bed.naam, adres:bed.adres, gemeente:bed.gemeente, tel:bed.tel, email:bed.email },
-            _dc: dc
-          },
-          status: "voorstel"
-        });
-        planningUrl = `${window.location.origin}/planning.html?id=${proposalId}`;
-        console.log("✅ Planning voorstel opgeslagen:", proposalId);
-      } catch(e) { console.warn("Planning save failed:", e); }
-    }
-
-    // Professionele HTML email
-    const htmlEmail = isVoorstel ? `<div style="font-family:Inter,Arial,sans-serif;max-width:600px;margin:0 auto;background:#f8fafc">
-<div style="background:linear-gradient(135deg,${dc},${dc}cc);padding:28px 32px;text-align:center;border-radius:8px 8px 0 0">
-  <div style="font-size:22px;font-weight:900;color:#fff">📅 Installatieafspraak</div>
-  <div style="color:rgba(255,255,255,.8);font-size:13px;margin-top:4px">${bed.naam||""}</div>
-</div>
-<div style="background:#fff;padding:28px 32px;border:1px solid #e2e8f0;border-top:0">
-  <p style="font-size:15px;color:#1e293b">Beste <strong>${klantData.naam||"Klant"}</strong>,</p>
-  <p style="font-size:14px;color:#475569;line-height:1.6;margin-top:8px">Naar aanleiding van offerte <strong>${offerte.nummer}</strong> stellen wij de volgende afspraak voor:</p>
-  <div style="background:linear-gradient(135deg,#eff6ff,#dbeafe);border:2px solid #93c5fd;border-radius:12px;padding:24px;margin:20px 0;text-align:center">
-    <div style="font-size:11px;font-weight:700;color:#3b82f6;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Voorgestelde datum</div>
-    <div style="font-size:24px;font-weight:900;color:#1e40af">${planData.planDatum ? new Date(planData.planDatum+"T12:00:00").toLocaleDateString("nl-BE",{weekday:"long",day:"numeric",month:"long",year:"numeric"}) : "—"}</div>
-    <div style="font-size:18px;font-weight:700;color:#3b82f6;margin-top:4px">⏰ ${planData.planTijd||"Nog te bepalen"}</div>
-    ${planData.planNotities?`<div style="font-size:13px;color:#64748b;margin-top:10px;font-style:italic">💬 ${planData.planNotities}</div>`:""}
-  </div>
-  <table style="width:100%;border-collapse:collapse;margin:16px 0;font-size:13px">
-    <tr style="background:#f1f5f9"><td style="padding:8px 12px;border:1px solid #e2e8f0;font-weight:600">📍 Adres</td><td style="padding:8px 12px;border:1px solid #e2e8f0">${klantData.adres||""}, ${klantData.gemeente||""}</td></tr>
-    <tr><td style="padding:8px 12px;border:1px solid #e2e8f0;font-weight:600">💰 Totaal</td><td style="padding:8px 12px;border:1px solid #e2e8f0;font-weight:700;color:${dc}">${fmtEuro(totals.totaal)}</td></tr>
-  </table>
-  <div style="text-align:center;margin:24px 0">
-    <a href="${planningUrl}" style="display:inline-block;background:#10b981;color:#fff;padding:14px 40px;border-radius:10px;text-decoration:none;font-weight:800;font-size:16px">✅ Afspraak bekijken & bevestigen</a>
-  </div>
-  <div style="text-align:center;font-size:12px;color:#94a3b8">Past dit moment niet? Via bovenstaande link kunt u ook een ander moment voorstellen.</div>
-</div>
-<div style="text-align:center;padding:16px;font-size:11px;color:#94a3b8">${bed.naam||""} · ${bed.tel||""} · ${bed.email||""}</div>
-</div>` : `<div style="font-family:Inter,Arial,sans-serif;max-width:600px;margin:0 auto;background:#f8fafc">
-<div style="background:${dc};padding:28px 32px;text-align:center;border-radius:8px 8px 0 0">
-  <div style="font-size:22px;font-weight:900;color:#fff">Planning geannuleerd</div>
-</div>
-<div style="background:#fff;padding:28px 32px;border:1px solid #e2e8f0;border-top:0">
-  <p style="font-size:15px;color:#1e293b">Beste <strong>${klantData.naam||"Klant"}</strong>,</p>
-  <p style="font-size:14px;color:#475569;line-height:1.6;margin-top:8px">Helaas moeten wij de afspraak voor offerte <strong>${offerte.nummer}</strong> annuleren.</p>
-  ${planData.planNotities?`<p style="font-size:13px;color:#64748b;margin-top:8px">Reden: ${planData.planNotities}</p>`:""}
-  <p style="font-size:14px;color:#475569;margin-top:12px">Wij nemen zo snel mogelijk contact op voor een nieuwe datum.</p>
-</div>
-<div style="text-align:center;padding:16px;font-size:11px;color:#94a3b8">${bed.naam||""}</div>
-</div>`;
-
-    const templateParams = {
-      to_email: klantData.email || "",
-      to_name: klantData.naam || "Klant",
-      from_name: bed.naam || "BILLR",
-      reply_to: emailCfg.eigen || bed.email || "",
-      subject: isVoorstel 
-        ? `📅 Installatieafspraak — ${offerte.nummer} — Bevestig uw datum`
-        : `Planning geannuleerd — ${offerte.nummer}`,
-      html_body: htmlEmail,
-    };
-    try {
-      const response = await window.emailjs.send(serviceId, templateId, templateParams);
-      if(response.status === 200) {
-        notify(`📧 Planning ${isVoorstel?"voorstel":"annulering"} verzonden naar ${klantData.email}`, "ok");
-        return true;
-      }
-    } catch(error) {
-      console.error("Planning EmailJS Error:", error);
-      notify(`❌ Email mislukt: ${error?.text || error?.message || "Controleer EmailJS instellingen"}`, "er");
-      return false;
-    }
-  };
-
-  // ═══ PLANNING WORKFLOW HELPERS ═══
-  const updatePlanning = (offerteId, planData) => {
-    updOff(offerteId, {
-      ...planData,
-      logActie: planData.planStatus === "ingepland" 
-        ? `📅 Ingepland op ${planData.planDatum} ${planData.planTijd||""}`
-        : planData.planStatus === "uitgevoerd"
-        ? "✅ Installatie uitgevoerd"
-        : planData.planStatus === "geannuleerd"
-        ? "❌ Planning geannuleerd"
-        : "📅 Planning bijgewerkt"
-    });
-  };
-
-  // Definitieve bevestiging: stuur bevestigingsmail + update planner
-  const sendPlanningConfirmation = async (offerte, planData) => {
-    if(!window.emailjs) { notify("EmailJS niet geladen", "er"); return; }
-    const emailCfg = settings?.email || {};
-    const serviceId = emailCfg.emailjsServiceId || "service_qrkvr0d";
-    const templateId = emailCfg.emailjsTemplatePlanning || "template_5nckw9f";
-    const pubKey = emailCfg.emailjsPublicKey || "04zsVAk5imDpo-8GJ";
-    window.emailjs.init(pubKey);
-    const klantData = klanten.find(k => k.id === offerte.klantId) || offerte.klant || {};
-    const bed = settings?.bedrijf || {};
-    const dc = settings?.sjabloon?.accentKleur || settings?.thema?.kleur || bed.kleur || "#1a2e4a";
-    const totals = calcTotals(offerte.lijnen || []);
-    const datumStr = planData.planDatum ? new Date(planData.planDatum+"T12:00:00").toLocaleDateString("nl-BE",{weekday:"long",day:"numeric",month:"long",year:"numeric"}) : "—";
-
-    const html = `<div style="font-family:Inter,Arial,sans-serif;max-width:600px;margin:0 auto;background:#f8fafc">
-<div style="background:linear-gradient(135deg,${dc},#10b981);padding:28px 32px;text-align:center;border-radius:8px 8px 0 0">
-  <div style="font-size:22px;font-weight:900;color:#fff">✅ Afspraak bevestigd!</div>
-  <div style="color:rgba(255,255,255,.8);font-size:13px;margin-top:4px">${bed.naam||""}</div>
-</div>
-<div style="background:#fff;padding:28px 32px;border:1px solid #e2e8f0;border-top:0">
-  <p style="font-size:15px;color:#1e293b">Beste <strong>${klantData.naam||"Klant"}</strong>,</p>
-  <p style="font-size:14px;color:#475569;line-height:1.6;margin-top:8px">Uw installatie-afspraak is definitief bevestigd!</p>
-  <div style="background:#d1fae5;border:2px solid #10b981;border-radius:12px;padding:24px;margin:20px 0;text-align:center">
-    <div style="font-size:11px;font-weight:700;color:#065f46;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">✅ Bevestigde datum</div>
-    <div style="font-size:24px;font-weight:900;color:#065f46">${datumStr}</div>
-    <div style="font-size:18px;font-weight:700;color:#059669;margin-top:4px">⏰ ${planData.planTijd||"Nog te bepalen"}</div>
-  </div>
-  <table style="width:100%;border-collapse:collapse;margin:16px 0;font-size:13px">
-    <tr style="background:#f1f5f9"><td style="padding:8px 12px;border:1px solid #e2e8f0;font-weight:600">📍 Adres</td><td style="padding:8px 12px;border:1px solid #e2e8f0">${klantData.adres||""}, ${klantData.gemeente||""}</td></tr>
-    <tr><td style="padding:8px 12px;border:1px solid #e2e8f0;font-weight:600">📋 Offerte</td><td style="padding:8px 12px;border:1px solid #e2e8f0">${offerte.nummer||""}</td></tr>
-    <tr style="background:#f1f5f9"><td style="padding:8px 12px;border:1px solid #e2e8f0;font-weight:600">💰 Totaal</td><td style="padding:8px 12px;border:1px solid #e2e8f0;font-weight:700;color:${dc}">${fmtEuro(totals.totaal)}</td></tr>
-  </table>
-  <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:14px;margin-top:16px;font-size:12px;color:#92400e">
-    <strong>Voorbereiding:</strong><br>• Zorg voor vrije toegang tot de meterkast en installatielocatie<br>• Onze monteur komt op het afgesproken tijdstip<br>• Na afloop ontvangt u een werkbon
-  </div>
-</div>
-<div style="text-align:center;padding:16px;font-size:11px;color:#94a3b8">${bed.naam||""} · ${bed.tel||""} · ${bed.email||""}</div>
-</div>`;
-
-    try {
-      await window.emailjs.send(serviceId, templateId, {
-        to_email: klantData.email || "",
-        to_name: klantData.naam || "Klant",
-        from_name: bed.naam || "BILLR",
-        reply_to: emailCfg.eigen || bed.email || "",
-        subject: `✅ Afspraak bevestigd — ${offerte.nummer} — ${datumStr}`,
-        html_body: html,
-      });
-      notify(`✅ Bevestigingsmail verzonden naar ${klantData.email}`, "ok");
-      // Update offerte log
-      updOff(offerte.id, {planStatus:"ingepland", logActie:`✅ Afspraak definitief bevestigd: ${planData.planDatum} ${planData.planTijd||""} — bevestigingsmail verstuurd`});
-      // Post naar planner.html via iframe API
-      try {
-        const plannerFrame = document.querySelector('iframe[title="Agenda"]');
-        if(plannerFrame?.contentWindow?.WChargePlanner) {
-          plannerFrame.contentWindow.WChargePlanner.addFromBILLR({
-            client: klantData.naam||"", address: `${klantData.adres||""}, ${klantData.gemeente||""}`,
-            date: planData.planDatum, time: planData.planTijd||"09:00",
-            type: "Installatie", notes: `${offerte.nummer} — ${fmtEuro(totals.totaal)}`,
-            phone: klantData.tel||"", email: klantData.email||""
-          });
-          notify("📅 Afspraak toegevoegd aan agenda", "ok");
-        }
-      } catch(pe) { console.warn("Planner integration:", pe); }
-    } catch(error) {
-      console.error("Confirmation email error:", error);
-      notify(`❌ Email mislukt: ${error?.text||error?.message||"Fout"}`, "er");
     }
   };
 
@@ -2351,20 +2073,21 @@ export default function App() {
       <style>{CSS}</style>
       <div className="app" onClick={e=>{if(mobMenu&&!e.target.closest(".sb"))setMobMenu(false)}}>
         {mobMenu&&<div className="sb-overlay on" onClick={()=>setMobMenu(false)}/>}
-        <nav className={`sb${mobMenu?" mobile-open":""}`} style={{position:"relative"}}>
-          <div className="sb-logo">
+        <nav className={`sb${mobMenu?" mobile-open":""}${sbCollapsed?" sb-collapsed":""}`} style={{position:"relative",width:sbCollapsed?60:undefined,minWidth:sbCollapsed?60:undefined}}>
+          <div className="sb-logo" style={{justifyContent:sbCollapsed?"center":undefined,padding:sbCollapsed?"12px 8px":undefined}}>
             <div className="sb-logo-mark">{settings.bedrijf.logo?<img src={settings.bedrijf.logo} alt=""/>:"⚡"}</div>
-            <div><div className="sb-brand">BILLR</div><div className="sb-brand-sub">Offerte & Factuur</div></div>
+            {!sbCollapsed&&<div><div className="sb-brand">BILLR</div><div className="sb-brand-sub">Offerte & Factuur</div></div>}
           </div>
+          <div style={{padding:"4px 8px"}}><button onClick={toggleSb} style={{width:"100%",background:"rgba(255,255,255,.1)",border:"none",color:"rgba(255,255,255,.7)",borderRadius:6,padding:"6px",cursor:"pointer",fontSize:14}}>{sbCollapsed?"»":"«"}</button></div>
           <div className="sb-nav">
-            <div className="sb-sec">Menu</div>
+            {!sbCollapsed&&<div className="sb-sec">Menu</div>}
             {navItems.map(([v,ic,l,b])=>(
-              <div key={v} className={`ni${pg===v?" on":""}`} onClick={()=>{setPg(v);setPgFilter(null);setMobMenu(false);}}>
-                <span className="ni-ic">{ic}</span>{l}{b&&<span className="nb">{b}</span>}
+              <div key={v} className={`ni${pg===v?" on":""}`} onClick={()=>{setPg(v);setPgFilter(null);setMobMenu(false);}} title={sbCollapsed?l:undefined} style={sbCollapsed?{justifyContent:"center",padding:"10px 0"}:undefined}>
+                <span className="ni-ic">{ic}</span>{!sbCollapsed&&<>{l}{b&&<span className="nb">{b}</span>}</>}
               </div>
             ))}
           </div>
-          <div className="sb-foot">
+          {!sbCollapsed&&<div className="sb-foot">
             <div className="sb-user">
               <div className="ava">{(user.naam||user.email).slice(0,2).toUpperCase()}</div>
               <div style={{flex:1,minWidth:0}}>
@@ -2372,7 +2095,7 @@ export default function App() {
                 <div className="sb-user-role" style={{cursor:"pointer"}} onClick={doLogout}>Uitloggen →</div>
               </div>
             </div>
-          </div>
+          </div>}
         </nav>
 
         <button className="fab-menu" onClick={()=>setMobMenu(v=>!v)} style={{background:themaKleur}} aria-label="Menu">
@@ -2397,7 +2120,7 @@ export default function App() {
         <div className="main">
           <div className="topbar">
             <button className="mob-menu-btn" onClick={()=>setMobMenu(v=>!v)} aria-label="Menu">☰</button>
-            <div className="tb-title">{({dashboard:"Dashboard",offertes:"Offertes",facturen:"Facturen",creditnotas:"Creditnota's",aanmaningen:"Aanmaningen",klanten:"Klanten",producten:"Producten",tijdregistratie:"Tijdregistratie",dossiers:"Dossiers",garanties:"Garanties",btwaangifte:"BTW-aangifte",rapportage:"Rapportage",instellingen:"Instellingen",agenda:"Agenda"})[pg]||pg}</div>
+            <div className="tb-title">{({dashboard:"Dashboard",offertes:"Offertes",facturen:"Facturen",creditnotas:"Creditnota's",aanmaningen:"Aanmaningen",klanten:"Klanten",producten:"Producten",tijdregistratie:"Tijdregistratie",dossiers:"Dossiers",garanties:"Garanties",btwaangifte:"BTW-aangifte",rapportage:"Rapportage",instellingen:"Instellingen"})[pg]||pg}</div>
             <div className="flex gap2">
               {pg==="offertes"&&<button className="btn b2" onClick={()=>{setEditOff(null);setWizOpen(true)}}>＋ <span className="tb-btn-text">Nieuwe </span>Offerte</button>}
               {pg==="facturen"&&<button className="btn b2" onClick={()=>{setEditFact(null);setFactuurWizOpen(true)}}>＋ <span className="tb-btn-text">Nieuwe </span>Factuur</button>}
@@ -2410,11 +2133,11 @@ export default function App() {
           </div>
 
           <div className="content">
-            {pg==="dashboard"&&<Dashboard offertes={offertes} facturen={factMet} onGoto={gotoFiltered} onNew={()=>{setEditOff(null);setWizOpen(true)}} onFactuur={d=>setFactModal(d)} settings={settings} offerteViews={offerteViews} offerteResponses={offerteResponses} planningProposals={planningProposals} onLogboek={o=>setLogboekModal(o)} onPlan={o=>setPlanningModal(o)} widgetOrder={widgetOrder} setWidgetOrder={setWidgetOrder} onRefreshTracking={fetchOfferteTracking}/>}
+            {pg==="dashboard"&&<Dashboard offertes={offertes} facturen={factMet} onGoto={gotoFiltered} onNew={()=>{setEditOff(null);setWizOpen(true)}} onFactuur={d=>setFactModal(d)} onPlan={d=>setPlanningModal(d)} settings={settings}/>}
             {pg==="offertes"&&<OffertesPage offertes={offertes} initFilter={pgFilter} onView={d=>setViewDoc({doc:d,type:"offerte"})} onEdit={d=>{setEditOff(d);setWizOpen(true)}} onStatus={updOff} onBulkStatus={bulkUpdOff} onFactuur={d=>setFactModal(d)} onDelete={id=>{setOffertes(p=>p.filter(o=>o.id!==id));notify("Verwijderd")}} onNew={()=>{setEditOff(null);setWizOpen(true)}} onEmail={d=>setEmailModal({doc:d,type:"offerte"})} onPlan={d=>setPlanningModal(d)} settings={settings}/>}
             {pg==="facturen"&&<FacturenPage facturen={factMet} settings={settings} initFilter={pgFilter} onView={d=>setViewDoc({doc:d,type:"factuur"})} onEdit={f=>{setEditFact(f);setFactuurWizOpen(true);}} onStatus={updFact} onBulkStatus={bulkUpdFact} onDelete={id=>{setFacturen(p=>p.filter(f=>f.id!==id));notify("Verwijderd")}} notify={notify} onEmail={d=>setEmailModal({doc:d,type:"factuur"})} onBetaling={f=>setBetalingModal(f)} onAanmaning={f=>setAanmaningModal(f)} onNew={()=>{setEditFact(null);setFactuurWizOpen(true)}}/>}
-            {pg==="klanten"&&<KlantenPage klanten={klanten} offertes={offertes} facturen={factMet} view={klantView} onEdit={k=>setKlantModal(k)} onDelete={id=>{setKlanten(p=>p.filter(k=>k.id!==id));notify("Klant verwijderd")}}/>}
-            {pg==="producten"&&<ProductenPage producten={producten} settings={settings} onEdit={p=>setProdModal(p)} onDelete={id=>{setProducten(p=>p.filter(x=>x.id!==id));notify("Verwijderd")}} onToggle={id=>setProducten(p=>p.map(x=>x.id===id?{...x,actief:!x.actief}:x))} onEnrich={upd=>setProducten(p=>p.map(x=>x.id===upd.id?upd:x))} onDuplicate={p=>{const dup={...p,id:uid(),naam:p.naam+" (kopie)",aangemaakt:new Date().toISOString()};setProducten(prev=>[dup,...prev]);notify("Product gedupliceerd ✓");setProdModal(dup);}}/>}
+            {pg==="klanten"&&<KlantenPage klanten={klanten} offertes={offertes} facturen={factMet} view={klantView} onEdit={k=>setKlantModal(k)} onDelete={id=>{setKlanten(p=>p.filter(k=>k.id!==id));notify("Klant verwijderd")}} onNewOfferte={k=>{setEditOff({klant:k});setWizOpen(true);}} onNewFactuur={k=>{setEditFact({klant:k});setFactuurWizOpen(true);}}/>}
+            {pg==="producten"&&<ProductenPage producten={producten} settings={settings} onEdit={p=>setProdModal(p)} onDelete={id=>{setProducten(p=>p.filter(x=>x.id!==id));notify("Verwijderd")}} onToggle={id=>setProducten(p=>p.map(x=>x.id===id?{...x,actief:!x.actief}:x))} onEnrich={upd=>setProducten(p=>p.map(x=>x.id===upd.id?upd:x))} onDuplicate={p=>{const dup={...p,id:uid(),naam:p.naam+" (kopie)"};setProducten(pr=>[dup,...pr]);notify("Product gedupliceerd ✓");setProdModal(dup);}}/>}
             {pg==="agenda"&&<div style={{height:"calc(100vh - 70px)",margin:"-22px",overflow:"hidden"}}><iframe src={`${window.location.origin}/planner.html`} style={{width:"100%",height:"100%",border:"none"}} title="Agenda"/></div>}
             {pg==="rapportage"&&<Rapportage offertes={offertes} facturen={factMet}/>}
             {pg==="instellingen"&&<InstellingenPage settings={settings} setSettings={s=>{setSettings(s);notify("Instellingen opgeslagen ✓");}} notify={notify}/>}
@@ -2430,35 +2153,22 @@ export default function App() {
 
       {wizOpen&&<OfferteWizard klanten={klanten} producten={producten} offertes={offertes} editData={editOff} settings={settings} onSave={saveOff} onClose={()=>{setWizOpen(false);setEditOff(null);}} notify={notify}/>}
       {factuurWizOpen&&<FactuurWizard klanten={klanten} producten={producten} editData={editFact} onSave={f=>{
-        // Auto-create products from vrije lijnen
-        const newProds = [];
-        const updLijnen = (f.lijnen||[]).map(l => {
-          if(!l.productId && l.naam && l.naam.trim()) {
-            const existing = producten.find(p => p.naam.toLowerCase().trim() === l.naam.toLowerCase().trim());
-            if(existing) return {...l, productId: existing.id};
-            const np = {id:uid(),naam:l.naam.trim(),omschr:l.omschr||"",prijs:l.prijs||0,btw:l.btw||21,eenheid:l.eenheid||"stuk",cat:"Overige",merk:"",actief:true,imageUrl:"",specs:[],aangemaakt:new Date().toISOString()};
-            newProds.push(np);
-            return {...l, productId: np.id};
-          }
-          return l;
-        });
-        if(newProds.length>0){setProducten(p=>[...newProds,...p]);notify(`${newProds.length} nieuw${newProds.length>1?"e":""} product${newProds.length>1?"en":""} aangemaakt`,"in");}
-        const ff = {...f, lijnen: updLijnen};
-        if(ff.id) {
-          setFacturen(p=>p.map(x=>x.id===ff.id?{...x,...ff}:x));
+        if(f.id) {
+          // Bewerken bestaande factuur
+          setFacturen(p=>p.map(x=>x.id===f.id?{...x,...f}:x));
           notify("Factuur bijgewerkt ✓");
         } else {
           const nr = nextNr("FACT",facturen,"nummer");
-          const n={...ff,id:uid(),nummer:nr,datum:ff.datum||today(),vervaldatum:ff.vervaldatum||addDays(today(),ff.betalingstermijn||14),status:"concept",aangemaakt:new Date().toISOString()};
+          const n={...f,id:uid(),nummer:nr,datum:f.datum||today(),vervaldatum:f.vervaldatum||addDays(today(),f.betalingstermijn||14),status:"concept",aangemaakt:new Date().toISOString()};
           setFacturen(p=>[n,...p]);
           if(settings?.voorwaarden?.tegenNummer_fct) setSettings(s=>({...s,voorwaarden:{...s.voorwaarden,tegenNummer_fct:""}}));
           notify("Factuur aangemaakt ✓");
         }
         setFactuurWizOpen(false);setEditFact(null);
       }} onClose={()=>{setFactuurWizOpen(false);setEditFact(null);}} notify={notify}/>}
-      {viewDoc&&<DocModal doc={viewDoc.doc} type={viewDoc.type} settings={settings} producten={producten} onClose={()=>setViewDoc(null)} onFactuur={d=>{setFactModal(d);setViewDoc(null);}} onStatusOff={s=>{updOff(viewDoc.doc.id,{status:s});notify("Status: "+OFF_STATUS[s]?.l);}} onStatusFact={s=>{updFact(viewDoc.doc.id,{status:s});notify("Status: "+FACT_STATUS[s]?.l);}} onEmail={()=>setEmailModal({doc:viewDoc.doc,type:viewDoc.type})} onPeppol={viewDoc.type==="factuur"?()=>sendPeppol(viewDoc.doc):null}/>}
+      {viewDoc&&<DocModal doc={viewDoc.doc} type={viewDoc.type} settings={settings} producten={producten} onClose={()=>setViewDoc(null)} onFactuur={d=>{setFactModal(d);setViewDoc(null);}} onStatusOff={s=>{updOff(viewDoc.doc.id,{status:s});notify("Status: "+OFF_STATUS[s]?.l);}} onStatusFact={s=>{updFact(viewDoc.doc.id,{status:s});notify("Status: "+FACT_STATUS[s]?.l);}} onEmail={()=>setEmailModal({doc:viewDoc.doc,type:viewDoc.type})} onPlan={d=>setPlanningModal(d)}/>}
       {factModal&&<FactuurModal off={factModal} settings={settings} onMaak={maakFactuur} onClose={()=>setFactModal(null)}/>}
-      {klantModal!==null&&<KlantModal klant={klantModal} onSave={k=>{if(k.id){setKlanten(p=>p.map(x=>x.id===k.id?k:x));notify("Klant opgeslagen");}else{setKlanten(p=>[{...k,id:uid(),aangemaakt:new Date().toISOString()},...p]);notify("Klant toegevoegd ✓");}setKlantModal(null);}} onClose={()=>setKlantModal(null)}/>}
+      {klantModal!==null&&<KlantModal klant={klantModal} settings={settings} onSave={k=>{if(k.id){setKlanten(p=>p.map(x=>x.id===k.id?k:x));notify("Klant opgeslagen");}else{setKlanten(p=>[{...k,id:uid(),aangemaakt:new Date().toISOString()},...p]);notify("Klant toegevoegd ✓");}setKlantModal(null);}} onClose={()=>setKlantModal(null)}/>}
       {prodModal!==null&&<ProductModal prod={prodModal} settings={settings} onSave={p=>{if(p.id){setProducten(pr=>pr.map(x=>x.id===p.id?p:x));notify("Product opgeslagen");}else{setProducten(pr=>[{...p,id:uid(),actief:true},...pr]);notify("Product toegevoegd ✓");}setProdModal(null);}} onClose={()=>setProdModal(null)}/>}
       {klantImportOpen&&<KlantImportModal onImport={nieuweKlanten=>{setKlanten(p=>[...nieuweKlanten.map(k=>({...k,id:uid(),aangemaakt:new Date().toISOString()})),...p]);notify(`${nieuweKlanten.length} klanten geïmporteerd ✓`);setKlantImportOpen(false);}} onClose={()=>setKlantImportOpen(false)} notify={notify}/>}
       {importModal&&<ImportModal onImport={nieuweProds=>{setProducten(p=>[...nieuweProds.map(x=>({...x,id:uid(),actief:true})),...p]);notify(`${nieuweProds.length} producten geïmporteerd ✓`);setImportModal(false);}} onClose={()=>setImportModal(false)} notify={notify}/>}
@@ -2471,7 +2181,6 @@ export default function App() {
           if(success) {
             if(emailModal.type==="offerte") {
               updOff(emailModal.doc.id, {status:"verstuurd", logActie:`📧 Verzonden`});
-              shareOfferte(emailModal.doc); // Sla snapshot op voor publieke offerte.html
             } else {
               updFact(emailModal.doc.id, {status:"verstuurd", logActie:`📧 Verzonden`});
             }
@@ -2484,17 +2193,16 @@ export default function App() {
       {creditnotaModal!==null&&<CreditnotaModal facturen={facturen} creditnota={creditnotaModal} settings={settings} onSave={cn=>{if(cn.id){setCreditnotas(p=>p.map(x=>x.id===cn.id?cn:x));}else{const n={...cn,id:uid(),nummer:nextNr("CN",creditnotas,"nummer"),aangemaakt:new Date().toISOString(),type:"creditnota"};setCreditnotas(p=>[n,...p]);if(cn.factuurId){updFact(cn.factuurId,{gecrediteerd:true});}}notify("Creditnota opgeslagen ✓");setCreditnotaModal(null);}} onClose={()=>setCreditnotaModal(null)}/>}
       {betalingModal&&<BetalingModal factuur={betalingModal} betalingen={betalingen.filter(b=>b.factuurId===betalingModal.id)} onSave={b=>{const nb={...b,id:uid(),factuurId:betalingModal.id,datum:b.datum||today(),aangemaakt:new Date().toISOString()};setBetalingen(p=>[nb,...p]);const totBet=betalingen.filter(x=>x.factuurId===betalingModal.id).reduce((s,x)=>s+x.bedrag,0)+nb.bedrag;const factTot=calcTotals(betalingModal.lijnen||[]).totaal;if(totBet>=factTot-0.01)updFact(betalingModal.id,{status:"betaald"});else updFact(betalingModal.id,{status:"gedeeltelijk"});notify("Betaling geregistreerd ✓");setBetalingModal(null);}} onClose={()=>setBetalingModal(null)}/>}
       {aanmaningModal&&<AanmaningModal factuur={aanmaningModal} settings={settings} onSend={(am)=>{setAanmaningen(p=>[{...am,id:uid(),aangemaakt:new Date().toISOString(),status:"verzonden",verzonden:today()},...p]);notify("Aanmaning verzonden ✓");setAanmaningModal(null);}} onClose={()=>setAanmaningModal(null)}/>}
+      {planningModal&&<PlanningModal offerte={planningModal} settings={settings} notify={notify} onSave={(id,upd)=>{updOff(id,upd);}} onClose={()=>setPlanningModal(null)}/>}
       {dossierModal!==null&&<DossierModal dossier={dossierModal} klanten={klanten} offertes={offertes} facturen={facturen} onSave={d=>{if(d.id){setDossiers(p=>p.map(x=>x.id===d.id?d:x));}else{setDossiers(p=>[{...d,id:uid(),aangemaakt:new Date().toISOString()},...p]);}notify("Dossier opgeslagen ✓");setDossierModal(null);}} onClose={()=>setDossierModal(null)} notify={notify}/>}
       {tijdModal!==null&&<TijdModal tijdslot={tijdModal} klanten={klanten} offertes={offertes} onSave={t=>{if(t.id){setTijdslots(p=>p.map(x=>x.id===t.id?t:x));}else{setTijdslots(p=>[{...t,id:uid(),aangemaakt:new Date().toISOString()},...p]);}notify("Tijd opgeslagen ✓");setTijdModal(null);}} onClose={()=>setTijdModal(null)}/>}
-      {planningModal&&<PlanningModal offerte={planningModal} settings={settings} klanten={klanten} planningProposals={planningProposals} onSave={(id,planData)=>{updatePlanning(id,planData);setPlanningModal(null);notify("Planning opgeslagen ✓");}} onEmail={(off,planData,type)=>sendPlanningEmail(off,planData,type)} onConfirm={sendPlanningConfirmation} onClose={()=>setPlanningModal(null)}/>}
-      {logboekModal&&<OfferteLogboekModal offerte={logboekModal} views={offerteViews[logboekModal.id]||[]} responses={offerteResponses[logboekModal.id]||[]} onClose={()=>setLogboekModal(null)} onRefresh={fetchOfferteTracking}/>}
       {notif&&<div className={`notif ${notif.type}`}>{notif.type==="ok"?"✓":notif.type==="er"?"✕":"ℹ"} {notif.msg}</div>}
     </>
   );
 }
 
 // ─── DASHBOARD ────────────────────────────────────────────────────
-function Dashboard({offertes, facturen, onGoto, onNew, onFactuur, settings, offerteViews, offerteResponses, planningProposals, onLogboek, onPlan, widgetOrder, setWidgetOrder, onRefreshTracking}) {
+function Dashboard({offertes, facturen, onGoto, onNew, onFactuur, onPlan, settings}) {
   const instTypesSetting = settings;
   const openOff = offertes.filter(o=>o.status==="verstuurd");
   const openFact = facturen.filter(f=>f.status!=="betaald"&&f.status!=="concept");
@@ -2502,26 +2210,8 @@ function Dashboard({offertes, facturen, onGoto, onNew, onFactuur, settings, offe
   const openstaand = openFact.reduce((s,f)=>s+calcTotals(f.lijnen||[]).totaal,0);
   const conv = offertes.length ? Math.round(offertes.filter(o=>["goedgekeurd","gefactureerd"].includes(o.status)).length/offertes.length*100) : 0;
   const recOff = [...offertes].sort((a,b)=>new Date(b.aangemaakt)-new Date(a.aangemaakt)).slice(0,5);
-  const goedgekeurdDoorKlant = offertes.filter(o=>o.klantAkkoord);
 
-  // ── DRAG & DROP STATE ──
-  const [dragId, setDragId] = useState(null);
-  const [dragOverId, setDragOverId] = useState(null);
-  const [editMode, setEditMode] = useState(false);
-  const defaultOrder = ["statistieken","recenteOffertes","openFacturen","goedgekeurdeOffertes","offerteLogboek","afspraken","snelleActies","agenda"];
-  const order = widgetOrder || settings.dashboardWidgets?.widgetOrder || defaultOrder;
-  const dw = settings.dashboardWidgets || {};
-
-  const onDragStart = (e, id) => { setDragId(id); e.dataTransfer.effectAllowed="move"; };
-  const onDragOver = (e, id) => { e.preventDefault(); if(id!==dragId) setDragOverId(id); };
-  const onDragEnd = () => { 
-    if(dragId && dragOverId && dragId!==dragOverId) {
-      const arr = [...order];
-      const fi = arr.indexOf(dragId), ti = arr.indexOf(dragOverId);
-      if(fi>-1&&ti>-1){ arr.splice(fi,1); arr.splice(ti,0,dragId); setWidgetOrder(arr); }
-    }
-    setDragId(null); setDragOverId(null);
-  };
+  const goedgekeurdDoorKlant = offertes.filter(o=>o.klantAkkoord); // Toon ALLE goedgekeurde offertes (ook gefactureerd) voor planning
 
   const stats = [
     {l:"Open offertes",      v:openOff.length,       s:"verstuurd — wachten",     ic:"📋", c:"#2563eb", pg:"offertes", filter:"verstuurd"},
@@ -2530,476 +2220,117 @@ function Dashboard({offertes, facturen, onGoto, onNew, onFactuur, settings, offe
     {l:"Conversieratio",     v:conv+"%",             s:`${offertes.filter(o=>["goedgekeurd","gefactureerd"].includes(o.status)).length} / ${offertes.length}`, ic:"📈", c:"#f59e0b", pg:"rapportage", filter:null},
   ];
 
-  // ── Offerte Logboek data ──
-  const verstuurdOff = offertes.filter(o=>o.status!=="concept").sort((a,b)=>new Date(b.aangemaakt)-new Date(a.aangemaakt)).slice(0,8);
-
-  // ── WIDGET RENDER MAP ──
-  const widgetMap = {
-    statistieken: ()=> dw.statistieken!==false && (
-      <div className="sg" key="w-stats">
+  return(
+    <div>
+      {settings.dashboardWidgets?.statistieken!==false&&<div className="sg">
         {stats.map((s,i)=>(
           <div key={i} className="sc" style={{"--sc":s.c}} onClick={()=>onGoto(s.pg,s.filter)} title={`→ ${s.pg}`}>
             <div className="sl">{s.l}</div><div className="sv">{s.v}</div><div className="ss">{s.s}</div>
             <div className="si">{s.ic}</div><div className="sc-arrow">→</div>
           </div>
         ))}
-      </div>
-    ),
-    recenteOffertes: ()=> dw.recenteOffertes!==false && (
-      <div className="card" key="w-recoff">
-        <div className="card-h"><div className="card-t">Recente offertes</div><button className="btn bgh btn-sm" onClick={()=>onGoto("offertes",null)}>Alle →</button></div>
-        {recOff.length===0?<div className="es"><div style={{fontSize:40,opacity:.2}}>📋</div><p style={{marginBottom:10}}>Nog geen offertes</p><button className="btn b2 btn-sm" onClick={onNew}>Maak eerste offerte</button></div>:(
-          recOff.map(o=>{
-            const t=calcTotals(o.lijnen||[]);
-            const inst=INST_TYPES.find(x=>x.id===o.installatieType);
-            return(
-              <div key={o.id} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 0",borderBottom:"1px solid #f1f5f9"}}>
-                <div style={{width:34,height:34,borderRadius:7,background:inst?.bg||"#f1f5f9",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,flexShrink:0}}>{inst?.icon||"📋"}</div>
-                <div style={{flex:1,minWidth:0}}>
-                  <div style={{fontWeight:600,fontSize:13,overflow:"hidden",whiteSpace:"nowrap",textOverflow:"ellipsis"}}>{o.klant?.naam||"—"}</div>
-                  <div style={{fontSize:11,color:"#94a3b8"}}>{o.nummer} · {fmtDate(o.aangemaakt)}</div>
-                </div>
-                <div style={{textAlign:"right",flexShrink:0}}>
-                  <div style={{fontWeight:700,fontSize:13}}>{fmtEuro(t.totaal)}</div>
-                  <StatusBadge status={o.status} type="off"/>
-                </div>
-              </div>
-            );
-          })
-        )}
-      </div>
-    ),
-    openFacturen: ()=> dw.openFacturen!==false && (
-      <div className="card mb4" key="w-openfact">
-        <div className="card-t" style={{marginBottom:10}}>Facturen te vervallen</div>
-        {openFact.slice(0,4).map(f=>{
-          const vv=new Date(f.vervaldatum)<new Date()&&f.status!=="betaald";
-          return(
-            <div key={f.id} style={{display:"flex",alignItems:"center",gap:8,padding:"7px 0",borderBottom:"1px solid #f1f5f9"}}>
-              <div style={{flex:1}}>
-                <div style={{fontWeight:600,fontSize:13}}>{f.klant?.naam}</div>
-                <div style={{fontSize:11,color:vv?"#ef4444":"#94a3b8"}}>{f.nummer} · {vv?"⚠ Vervallen":"Vervalt"} {fmtDate(f.vervaldatum)}</div>
-              </div>
-              <div style={{textAlign:"right"}}>
-                <div style={{fontWeight:700,fontSize:13}}>{fmtEuro(calcTotals(f.lijnen||[]).totaal)}</div>
-                <StatusBadge status={f.status} type="fact"/>
-              </div>
-            </div>
-          );
-        })}
-        {openFact.length===0&&<div style={{color:"#94a3b8",textAlign:"center",padding:"12px 0",fontSize:13}}>Geen openstaande facturen 🎉</div>}
-      </div>
-    ),
-    goedgekeurdeOffertes: ()=> goedgekeurdDoorKlant.length>0 && dw.goedgekeurdeOffertes!==false && (
-      <div className="card mb4" style={{border:"2px solid #86efac",background:"#f0fdf4"}} key="w-goedoff">
-        <div className="card-h"><div className="card-t" style={{color:"#059669"}}>✅ Goedgekeurd - Planning ({goedgekeurdDoorKlant.length})</div></div>
-        {goedgekeurdDoorKlant.slice(0,5).map(o=>{
-          const t=calcTotals(o.lijnen||[]);
-          const ps = o.planStatus;
-          return(
-            <div key={o.id} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 0",borderBottom:"1px solid #d1fae5"}}>
-              <div style={{flex:1}}>
-                <div style={{fontWeight:600,fontSize:13}}>
-                  {o.klant?.naam}
-                  {o.factuurId&&<span style={{marginLeft:6,fontSize:10,background:"#dbeafe",color:"#1e40af",padding:"2px 6px",borderRadius:4,fontWeight:600}}>Gefactureerd</span>}
-                  {ps==="ingepland"&&<span style={{marginLeft:6,fontSize:10,background:"#fef3c7",color:"#92400e",padding:"2px 6px",borderRadius:4,fontWeight:600}}>📅 {o.planDatum}</span>}
-                  {ps==="uitgevoerd"&&<span style={{marginLeft:6,fontSize:10,background:"#d1fae5",color:"#065f46",padding:"2px 6px",borderRadius:4,fontWeight:600}}>✅ Uitgevoerd</span>}
-                </div>
-                <div style={{fontSize:11,color:"#059669"}}>{o.nummer} · akkoord op {fmtDate(o.klantAkkoordDatum)}</div>
-              </div>
-              <div style={{textAlign:"right"}}>
-                <div style={{fontWeight:700,color:"#059669"}}>{fmtEuro(t.totaal)}</div>
-                <div style={{display:"flex",gap:4,marginTop:3,flexWrap:"wrap",justifyContent:"flex-end"}}>
-                  {!o.factuurId&&<button className="btn bg btn-sm" style={{fontSize:10}} onClick={()=>onFactuur(o)}>🧾 Factuur</button>}
-                  <button className="btn" style={{fontSize:10,background:"#d4ff00",color:"#1a2e4c",fontWeight:700}} onClick={()=>onPlan(o)}>📅 Plan</button>
-                </div>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    ),
-    offerteLogboek: ()=> dw.offerteLogboek!==false && (
-      <div className="card mb4" key="w-logboek" style={{border:"1px solid #c7d2fe",background:"#fafafe"}}>
-        <div className="card-h">
-          <div className="card-t" style={{color:"#4338ca"}}>📊 Offerte Logboek</div>
-          <button className="btn btn-sm" onClick={onRefreshTracking}>🔄</button>
-        </div>
-        {verstuurdOff.length===0?<div style={{color:"#94a3b8",textAlign:"center",padding:"12px 0",fontSize:13}}>Nog geen offertes verstuurd</div>:(
-          verstuurdOff.map(o=>{
-            const views = offerteViews?.[o.id] || [];
-            const resp = offerteResponses?.[o.id] || [];
-            const plans = planningProposals?.[o.id] || [];
-            const lastResp = resp.length ? resp.sort((a,b)=>new Date(b.submitted_at)-new Date(a.submitted_at))[0] : null;
-            const lastPlan = plans.length ? plans.sort((a,b)=>new Date(b.created_at)-new Date(a.created_at))[0] : null;
-            const ps = lastPlan?.status;
-            const isIngepland = o.planStatus==="ingepland";
-
-            // Build visual timeline steps
-            const steps = [];
-            steps.push({icon:"📧",label:"Verstuurd",done:true,color:"#2563eb"});
-            steps.push({icon:"👁",label:`Bekeken (${views.length}×)`,done:views.length>0,color:"#6366f1"});
-            if(lastResp?.status==="goedgekeurd") steps.push({icon:"✅",label:"Goedgekeurd",done:true,color:"#059669"});
-            else if(lastResp?.status==="afgewezen") steps.push({icon:"❌",label:"Afgewezen",done:true,color:"#dc2626"});
-            else steps.push({icon:"⏳",label:"Wacht reactie",done:false,color:"#94a3b8"});
-            if(lastResp?.status==="goedgekeurd") {
-              if(isIngepland) steps.push({icon:"📅",label:"Ingepland",done:true,color:"#059669"});
-              else if(ps==="akkoord") steps.push({icon:"✅",label:"Klant akkoord",done:true,color:"#10b981"});
-              else if(ps==="alternatief") steps.push({icon:"🔄",label:"Herplannen",done:true,color:"#f59e0b"});
-              else if(ps==="voorstel") steps.push({icon:"⏳",label:"Wacht klant",done:false,color:"#3b82f6"});
-              else steps.push({icon:"📅",label:"Nog inplannen",done:false,color:"#94a3b8"});
-            }
-
-            return(
-              <div key={o.id} style={{borderBottom:"1px solid #e0e7ff",padding:"10px 0"}}>
-                {/* Header */}
-                <div style={{display:"flex",alignItems:"center",gap:10,cursor:"pointer"}} onClick={()=>onLogboek(o)}>
-                  <div style={{flex:1,minWidth:0}}>
-                    <div style={{fontWeight:700,fontSize:13}}>{o.klant?.naam||"—"} <span style={{fontWeight:400,color:"#94a3b8"}}>— {o.nummer}</span></div>
-                  </div>
-                  <span style={{fontSize:12,color:"#94a3b8"}}>→</span>
-                </div>
-                {/* Visual timeline */}
-                <div style={{display:"flex",gap:2,alignItems:"center",margin:"8px 0 4px",flexWrap:"wrap"}}>
-                  {steps.map((s,i)=>(
-                    <div key={i} style={{display:"flex",alignItems:"center",gap:2}}>
-                      <div style={{
-                        fontSize:10,padding:"2px 8px",borderRadius:10,fontWeight:700,
-                        background:s.done?s.color+"18":"#f1f5f9",
-                        color:s.done?s.color:"#cbd5e1",
-                        border:`1px solid ${s.done?s.color+"40":"#e2e8f0"}`
-                      }}>{s.icon} {s.label}</div>
-                      {i<steps.length-1&&<span style={{color:"#cbd5e1",fontSize:10}}>›</span>}
-                    </div>
-                  ))}
-                </div>
-                {/* Details */}
-                {ps==="alternatief"&&lastPlan?.client_response&&<div style={{fontSize:11,color:"#d97706",background:"#fffbeb",padding:"4px 8px",borderRadius:6,marginTop:4,border:"1px solid #fde68a"}}>
-                  ⚠ Klant wil ander moment{lastPlan.client_response.datum?": "+lastPlan.client_response.datum:""} {lastPlan.client_response.tijd||""} {lastPlan.client_response.opmerking?"— "+lastPlan.client_response.opmerking:""}
-                </div>}
-                {isIngepland&&o.planDatum&&<div style={{fontSize:11,color:"#059669",background:"#f0fdf4",padding:"4px 8px",borderRadius:6,marginTop:4,border:"1px solid #86efac"}}>
-                  ✅ Bevestigd: {fmtDate(o.planDatum)} ⏰ {o.planTijd||"—"}
-                </div>}
-                {/* Action buttons */}
-                {(o.status==="goedgekeurd"||lastResp?.status==="goedgekeurd")&&!isIngepland&&<div style={{marginTop:6,display:"flex",gap:6}}>
-                  {(!lastPlan||ps==="alternatief")&&<button className="btn btn-sm" style={{background:"#f59e0b",color:"#fff",fontWeight:700,fontSize:10}} onClick={e=>{e.stopPropagation();onPlan(o)}}>📅 {ps==="alternatief"?"Herplannen":"Inplannen"}</button>}
-                  {ps==="akkoord"&&<button className="btn btn-sm" style={{background:"#10b981",color:"#fff",fontWeight:700,fontSize:10}} onClick={e=>{e.stopPropagation();onPlan(o)}}>✅ Bevestig & plan in</button>}
-                  {ps==="voorstel"&&<button className="btn btn-sm" style={{background:"#dbeafe",color:"#1e40af",fontWeight:700,fontSize:10}} disabled>⏳ Wacht op klant</button>}
-                </div>}
-              </div>
-            );
-          })
-        )}
-      </div>
-    ),
-    snelleActies: ()=> dw.snelleActies!==false && (
-      <div className="card" key="w-acties">
-        <div className="card-t" style={{marginBottom:10}}>Snelle acties</div>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-          {getInstTypes(instTypesSetting).slice(0,4).map(t=>(
-            <button key={t.id} className="btn" style={{background:t.c,color:"#fff",justifyContent:"center"}} onClick={onNew}>{t.icon} {t.l}</button>
-          ))}
-        </div>
-      </div>
-    ),
-    agenda: ()=> dw.agenda!==false && (
-      <div className="card" key="w-agenda">
-        <div className="card-h" style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-          <div className="card-t">📅 Agenda</div>
-          <button className="btn btn-sm" onClick={()=>window.open(`${window.location.origin}/planner.html`,'_blank')}>↗ Open volledig</button>
-        </div>
-        <iframe src="./planner.html" style={{width:"100%",height:"500px",border:"1px solid #e2e8f0",borderRadius:8,marginTop:10}} title="Agenda"/>
-      </div>
-    ),
-    afspraken: ()=> (()=>{
-      const geplande = offertes.filter(o=>o.planStatus==="ingepland"&&o.planDatum).sort((a,b)=>(a.planDatum||"").localeCompare(b.planDatum||""));
-      const wachtend = offertes.filter(o=>{const pp=planningProposals?.[o.id]||[];const lp=pp.sort((a,b)=>new Date(b.created_at)-new Date(a.created_at))[0];return lp&&(lp.status==="voorstel"||lp.status==="alternatief");});
-      if(!geplande.length&&!wachtend.length) return null;
-      return(
-      <div className="card mb4" key="w-afspraken" style={{border:"1px solid #86efac",background:"#fafffe"}}>
-        <div className="card-h">
-          <div className="card-t" style={{color:"#059669"}}>📅 Afspraken overzicht</div>
-          <button className="btn btn-sm" onClick={onRefreshTracking}>🔄</button>
-        </div>
-        {wachtend.length>0&&<div style={{marginBottom:12}}>
-          <div style={{fontSize:10,fontWeight:700,color:"#f59e0b",textTransform:"uppercase",letterSpacing:".5px",marginBottom:4}}>⏳ Wacht op klant ({wachtend.length})</div>
-          {wachtend.map(o=>{const pp=(planningProposals?.[o.id]||[]).sort((a,b)=>new Date(b.created_at)-new Date(a.created_at))[0];return(
-            <div key={o.id} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 0",borderBottom:"1px solid #f0fdf4",cursor:"pointer"}} onClick={()=>onPlan(o)}>
-              <div style={{width:8,height:8,borderRadius:"50%",background:pp?.status==="alternatief"?"#f59e0b":"#93c5fd",flexShrink:0}}/>
-              <div style={{flex:1,minWidth:0}}>
-                <div style={{fontWeight:600,fontSize:12}}>{o.klant?.naam||"—"} <span style={{color:"#94a3b8",fontWeight:400}}>— {o.nummer}</span></div>
-                <div style={{fontSize:10,color:pp?.status==="alternatief"?"#d97706":"#64748b"}}>{pp?.status==="alternatief"?"📅 Ander moment voorgesteld":"⏳ Wacht op bevestiging"} — {pp?.plan_data?.planDatum||""} {pp?.plan_data?.planTijd||""}</div>
-              </div>
-              <span style={{fontSize:11,color:"#f59e0b"}}>→</span>
-            </div>
-          );})}
-        </div>}
-        {geplande.length>0&&<div>
-          <div style={{fontSize:10,fontWeight:700,color:"#059669",textTransform:"uppercase",letterSpacing:".5px",marginBottom:4}}>✅ Ingepland ({geplande.length})</div>
-          {geplande.map(o=>(
-            <div key={o.id} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 0",borderBottom:"1px solid #f0fdf4",cursor:"pointer"}} onClick={()=>onPlan(o)}>
-              <div style={{width:8,height:8,borderRadius:"50%",background:"#10b981",flexShrink:0}}/>
-              <div style={{flex:1,minWidth:0}}>
-                <div style={{fontWeight:600,fontSize:12}}>{o.klant?.naam||"—"} <span style={{color:"#94a3b8",fontWeight:400}}>— {o.nummer}</span></div>
-                <div style={{fontSize:10,color:"#059669"}}>📅 {fmtDate(o.planDatum)} ⏰ {o.planTijd||"—"}</div>
-              </div>
-              <div style={{fontSize:11,color:"#10b981",fontWeight:700}}>{fmtDate(o.planDatum)}</div>
-            </div>
-          ))}
-        </div>}
-      </div>);
-    })(),
-  };
-
-  const wrapDraggable = (id, content) => {
-    if(!content) return null;
-    if(!editMode) return content;
-    return (
-      <div
-        key={"drag-"+id}
-        draggable
-        onDragStart={e=>onDragStart(e,id)}
-        onDragOver={e=>onDragOver(e,id)}
-        onDragEnd={onDragEnd}
-        style={{
-          position:"relative",
-          border: dragOverId===id ? "2px dashed #6366f1" : "2px dashed transparent",
-          borderRadius:12,
-          opacity: dragId===id ? 0.5 : 1,
-          transition:"opacity .15s, border .15s",
-          cursor:"grab"
-        }}
-      >
-        <div style={{position:"absolute",top:4,left:4,background:"#6366f1",color:"#fff",borderRadius:6,padding:"2px 8px",fontSize:10,fontWeight:700,zIndex:5,pointerEvents:"none"}}>⠿ {id}</div>
-        {content}
-      </div>
-    );
-  };
-
-  return(
-    <div>
-      <div style={{display:"flex",justifyContent:"flex-end",marginBottom:8}}>
-        <button className="btn btn-sm" style={{background:editMode?"#6366f1":"#f1f5f9",color:editMode?"#fff":"#64748b",fontWeight:600,fontSize:12}} onClick={()=>setEditMode(v=>!v)}>
-          {editMode?"✓ Klaar":"⠿ Widgets herschikken"}
-        </button>
-      </div>
-      {order.filter(id=>id==="statistieken").map(id=>wrapDraggable(id, widgetMap[id]?.()))}
+      </div>}
       <div className="g2">
-        <div>{order.filter(id=>id==="recenteOffertes").map(id=>wrapDraggable(id, widgetMap[id]?.()))}</div>
-        <div>{order.filter(id=>!["statistieken","recenteOffertes"].includes(id)).map(id=>wrapDraggable(id, widgetMap[id]?.()))}</div>
-      </div>
-    </div>
-  );
-}
-
-// ─── PLANNING MODAL ───────────────────────────────────────────────
-function PlanningModal({offerte, settings, klanten, planningProposals, onSave, onEmail, onConfirm, onClose}) {
-  const klant = klanten?.find(k=>k.id===offerte.klantId) || offerte.klant || {};
-  const totals = calcTotals(offerte.lijnen || []);
-  const [planDatum, setPlanDatum] = useState(offerte.planDatum || "");
-  const [planTijd, setPlanTijd] = useState(offerte.planTijd || "");
-  const [planNotities, setPlanNotities] = useState(offerte.planNotities || "");
-  const [planStatus, setPlanStatus] = useState(offerte.planStatus || "bevestigd");
-  const [sending, setSending] = useState(false);
-
-  const proposals = (planningProposals?.[offerte.id] || []).sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
-  const latestPlan = proposals[0];
-  const klantAkkoord = latestPlan?.status === "akkoord";
-  const klantAlternatief = latestPlan?.status === "alternatief";
-  const klantResp = latestPlan?.client_response;
-
-  const statusOpts = [
-    {v:"bevestigd",l:"✅ Bevestigd",c:"#10b981"},
-    {v:"ingepland",l:"📅 Ingepland",c:"#f59e0b"},
-    {v:"uitgevoerd",l:"🏁 Uitgevoerd",c:"#2563eb"},
-    {v:"geannuleerd",l:"❌ Geannuleerd",c:"#ef4444"},
-  ];
-
-  const doSave = () => onSave(offerte.id, {planDatum, planTijd, planNotities, planStatus});
-  const doVoorstelSturen = async () => { 
-    setSending(true);
-    await onEmail(offerte, {planDatum, planTijd, planNotities, planStatus}, "bevestiging");
-    doSave();
-    setSending(false);
-  };
-  const doBevestigAfspraak = async () => {
-    setSending(true);
-    const pd = latestPlan?.plan_data || {};
-    await onConfirm(offerte, {planDatum: pd.planDatum||planDatum, planTijd: pd.planTijd||planTijd, planNotities});
-    onSave(offerte.id, {planDatum: pd.planDatum||planDatum, planTijd: pd.planTijd||planTijd, planNotities, planStatus:"ingepland"});
-    setSending(false);
-  };
-
-  return(
-    <div className="mo" onClick={e=>e.target===e.currentTarget&&onClose()}>
-      <div className="mdl mmd" style={{display:"flex",flexDirection:"column",maxHeight:"90vh"}}>
-        <div className="mh">
-          <div style={{fontWeight:800,fontSize:18}}>📅 Planning — {offerte.nummer}</div>
-          <button className="xbtn" onClick={onClose}>×</button>
-        </div>
-        <div className="mb-body" style={{flex:1,overflowY:"auto",padding:"16px"}}>
-        <div style={{background:"#f0fdf4",border:"1px solid #86efac",borderRadius:8,padding:14,marginBottom:16}}>
-          <div style={{fontWeight:700,fontSize:14}}>{klant.naam||"—"}</div>
-          <div style={{fontSize:12,color:"#059669"}}>{klant.adres}, {klant.gemeente} · {klant.tel||""}</div>
-          <div style={{fontSize:13,fontWeight:700,marginTop:4}}>Totaal: {fmtEuro(totals.totaal)}</div>
-        </div>
-
-        {klantAkkoord&&<div style={{background:"#d1fae5",border:"2px solid #10b981",borderRadius:10,padding:14,marginBottom:16,textAlign:"center"}}>
-          <div style={{fontSize:20,marginBottom:4}}>✅</div>
-          <div style={{fontWeight:800,color:"#065f46",fontSize:15}}>Klant akkoord met afspraak!</div>
-          <div style={{fontSize:12,color:"#059669",marginTop:4}}>📅 {latestPlan?.plan_data?.planDatum||"?"} ⏰ {latestPlan?.plan_data?.planTijd||"?"}</div>
-          <div style={{fontSize:11,color:"#047857",marginTop:8}}>Klik hieronder om te bevestigen en de klant een bevestigingsmail te sturen.</div>
-        </div>}
-        {klantAlternatief&&<div style={{background:"#fef3c7",border:"2px solid #f59e0b",borderRadius:10,padding:14,marginBottom:16}}>
-          <div style={{fontWeight:800,color:"#92400e",fontSize:14,marginBottom:6}}>📅 Klant vraagt ander moment</div>
-          {klantResp?.datum&&<div style={{fontSize:13,color:"#78350f"}}>Voorkeursdatum: <strong>{klantResp.datum}</strong></div>}
-          {klantResp?.tijd&&<div style={{fontSize:13,color:"#78350f"}}>Tijdstip: <strong>{klantResp.tijd}</strong></div>}
-          {klantResp?.opmerking&&<div style={{fontSize:12,color:"#92400e",marginTop:4,fontStyle:"italic"}}>"{klantResp.opmerking}"</div>}
-          <div style={{fontSize:11,color:"#a16207",marginTop:8}}>Pas datum/tijd aan en stuur een nieuw voorstel.</div>
-        </div>}
-
-        {proposals.length>0&&<div style={{marginBottom:16}}>
-          <div style={{fontSize:11,fontWeight:700,color:"#94a3b8",textTransform:"uppercase",letterSpacing:".5px",marginBottom:6}}>📋 Planning geschiedenis</div>
-          {proposals.slice(0,5).map((p,i)=>(
-            <div key={p.id} style={{display:"flex",gap:8,alignItems:"flex-start",marginBottom:4,padding:"4px 6px",background:i===0?"#f8fafc":"transparent",borderRadius:6,border:i===0?"1px solid #e2e8f0":"none"}}>
-              <div style={{fontSize:12,marginTop:1}}>{p.status==="akkoord"?"✅":p.status==="alternatief"?"📅":"⏳"}</div>
-              <div style={{flex:1,fontSize:11}}>
-                <span style={{fontWeight:600}}>{p.status==="akkoord"?"Klant akkoord":p.status==="alternatief"?"Ander moment":"Voorstel"}</span>
-                <span style={{color:"#64748b"}}> — {p.plan_data?.planDatum||""} {p.plan_data?.planTijd||""}</span>
-                {p.client_response?.datum&&<span style={{color:"#d97706"}}> → {p.client_response.datum} {p.client_response.tijd||""}</span>}
+        {settings.dashboardWidgets?.recenteOffertes!==false&&<div className="card">
+          <div className="card-h"><div className="card-t">Recente acties</div><button className="btn bgh btn-sm" onClick={()=>onGoto("offertes",null)}>Alle →</button></div>
+          {(()=>{
+            // Bouw activiteiten uit offertes + facturen, gesorteerd op datum
+            const acts = [
+              ...offertes.slice(0,20).flatMap(o => {
+                const items = [{ts:o.aangemaakt,type:"off",icon:"📋",txt:`Offerte ${o.nummer} aangemaakt`,sub:o.klant?.naam,status:o.status,id:o.id}];
+                if(o.status==="verstuurd") items.push({ts:o.verzondenOp||o.aangemaakt,type:"off",icon:"📤",txt:`${o.nummer} verstuurd`,sub:o.klant?.naam,status:o.status,id:o.id});
+                if(o.status==="goedgekeurd"||o.klantAkkoord) items.push({ts:o.klantAkkoordDatum||o.aangemaakt,type:"off",icon:"✅",txt:`${o.nummer} goedgekeurd`,sub:o.klant?.naam,status:"goedgekeurd",id:o.id});
+                if(o.status==="ingepland"&&o.planning) items.push({ts:o.planning.ingeplandOp||o.aangemaakt,type:"off",icon:"📅",txt:`Ingepland ${fmtDate(o.planning.datum)} om ${o.planning.tijd}`,sub:o.klant?.naam+` · ${o.nummer}`,status:"ingepland",id:o.id,highlight:true});
+                if(o.status==="afgewezen") items.push({ts:o.aangemaakt,type:"off",icon:"❌",txt:`${o.nummer} afgewezen`,sub:o.klant?.naam,status:"afgewezen",id:o.id});
+                return items;
+              }),
+              ...facturen.slice(0,20).flatMap(f => {
+                const items = [{ts:f.datum||f.aangemaakt,type:"fact",icon:"🧾",txt:`Factuur ${f.nummer}`,sub:f.klant?.naam,status:f.status,id:f.id}];
+                if(f.status==="betaald") items.push({ts:f.betaaldOp||f.datum,type:"fact",icon:"💶",txt:`${f.nummer} betaald`,sub:f.klant?.naam,status:"betaald",id:f.id});
+                return items;
+              })
+            ].sort((a,b)=>new Date(b.ts)-new Date(a.ts)).slice(0,8);
+            
+            if(!acts.length) return <div className="es"><div style={{fontSize:40,opacity:.2}}>📋</div><p style={{marginBottom:10}}>Nog geen activiteit</p><button className="btn b2 btn-sm" onClick={onNew}>Maak eerste offerte</button></div>;
+            return acts.map((a,i)=>(
+              <div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"7px 0",borderBottom:"1px solid #f1f5f9",cursor:"pointer",background:a.highlight?"#ecfeff":undefined,borderRadius:a.highlight?6:0,padding:a.highlight?"7px 8px":"7px 0"}} onClick={()=>onGoto(a.type==="off"?"offertes":"facturen",null)}>
+                <div style={{width:30,height:30,borderRadius:7,background:"#f0f4f8",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,flexShrink:0}}>{a.icon}</div>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{fontWeight:600,fontSize:12.5,overflow:"hidden",whiteSpace:"nowrap",textOverflow:"ellipsis"}}>{a.txt}</div>
+                  <div style={{fontSize:10.5,color:"#94a3b8"}}>{a.sub} · {fmtDate(a.ts)}</div>
+                </div>
+                <StatusBadge status={a.status} type={a.type==="off"?"off":"fact"}/>
               </div>
-              <div style={{fontSize:10,color:"#94a3b8",flexShrink:0}}>{new Date(p.created_at).toLocaleDateString("nl-BE",{day:"2-digit",month:"2-digit"})}</div>
-            </div>
-          ))}
+            ));
+          })()}
         </div>}
-
-        {!klantAkkoord&&<>
-        <div className="fg"><label className="fl">Status</label>
-          <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-            {statusOpts.map(s=>(<button key={s.v} className="btn btn-sm" style={{background:planStatus===s.v?s.c:"#f1f5f9",color:planStatus===s.v?"#fff":"#64748b",fontWeight:700}} onClick={()=>setPlanStatus(s.v)}>{s.l}</button>))}
-          </div>
-        </div>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
-          <div className="fg"><label className="fl">Datum</label><input className="fc" type="date" value={planDatum} onChange={e=>setPlanDatum(e.target.value)}/></div>
-          <div className="fg"><label className="fl">Tijdstip</label><input className="fc" type="time" value={planTijd} onChange={e=>setPlanTijd(e.target.value)}/></div>
-        </div>
-        <div className="fg"><label className="fl">Notities</label><textarea className="fc" rows={2} value={planNotities} onChange={e=>setPlanNotities(e.target.value)} placeholder="Extra info..."/></div>
-        </>}
-
-        <div style={{marginTop:8}}>
-          <div style={{fontSize:11,fontWeight:700,color:"#94a3b8",textTransform:"uppercase",letterSpacing:".5px",marginBottom:4}}>📋 Activiteitenlog</div>
-          <DocLog log={offerte.log}/>
-        </div>
-        </div>
-
-        <div className="mf">
-          {klantAkkoord ? <button className="btn" style={{background:"#10b981",color:"#fff",flex:1,fontWeight:800}} onClick={doBevestigAfspraak} disabled={sending}>
-            {sending?"Verzenden...":"✅ Bevestig afspraak & stuur bevestiging"}
-          </button> : <>
-            <button className="btn b2" style={{flex:1}} onClick={doSave}>💾 Opslaan</button>
-            <button className="btn" style={{background:"#f59e0b",color:"#fff",flex:1}} onClick={doVoorstelSturen} disabled={sending||!klant.email||!planDatum}>
-              {sending?"Verzenden...":"📅 Voorstel sturen"}
-            </button>
-          </>}
-          {!klant.email&&<div style={{fontSize:11,color:"#ef4444"}}>⚠ Geen email</div>}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ─── OFFERTE LOGBOEK MODAL ────────────────────────────────────────
-function OfferteLogboekModal({offerte, views, responses, onClose, onRefresh}) {
-  const fmtTs = ts => { try{ const d=new Date(ts); return `${d.toLocaleDateString("nl-BE")} ${d.toLocaleTimeString("nl-BE",{hour:"2-digit",minute:"2-digit"})}`; }catch(_){ return ts; }};
-  const sortedViews = [...views].sort((a,b)=>new Date(b.viewed_at)-new Date(a.viewed_at));
-  const sortedResp = [...responses].sort((a,b)=>new Date(b.submitted_at)-new Date(a.submitted_at));
-  const [tab, setTab] = useState("overzicht");
-
-  // Determine user agent device
-  const parseUA = (ua) => {
-    if(!ua) return "Onbekend";
-    if(/mobile|iphone|android/i.test(ua)) return "📱 Mobiel";
-    if(/tablet|ipad/i.test(ua)) return "📱 Tablet";
-    return "💻 Desktop";
-  };
-
-  return(
-    <div className="mo" onClick={e=>e.target===e.currentTarget&&onClose()}>
-      <div className="mdl mlg" style={{maxHeight:"90vh",overflowY:"auto"}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
-          <div style={{fontWeight:800,fontSize:18}}>📊 Logboek — {offerte.nummer}</div>
-          <div style={{display:"flex",gap:6}}>
-            <button className="btn btn-sm" onClick={onRefresh}>🔄</button>
-            <button className="btn btn-sm" onClick={onClose}>✕</button>
-          </div>
-        </div>
-        {/* Summary cards */}
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10,marginBottom:16}}>
-          <div style={{background:"#eff6ff",borderRadius:8,padding:12,textAlign:"center"}}>
-            <div style={{fontSize:24,fontWeight:800,color:"#2563eb"}}>{views.length}</div>
-            <div style={{fontSize:11,color:"#3b82f6",fontWeight:600}}>Bekeken</div>
-          </div>
-          <div style={{background:sortedResp.some(r=>r.status==="goedgekeurd")?"#f0fdf4":"#f8fafc",borderRadius:8,padding:12,textAlign:"center"}}>
-            <div style={{fontSize:24,fontWeight:800,color:sortedResp.some(r=>r.status==="goedgekeurd")?"#059669":"#94a3b8"}}>{sortedResp.filter(r=>r.status==="goedgekeurd").length}</div>
-            <div style={{fontSize:11,fontWeight:600,color:"#059669"}}>Goedgekeurd</div>
-          </div>
-          <div style={{background:sortedResp.some(r=>r.status==="afgewezen")?"#fef2f2":"#f8fafc",borderRadius:8,padding:12,textAlign:"center"}}>
-            <div style={{fontSize:24,fontWeight:800,color:sortedResp.some(r=>r.status==="afgewezen")?"#dc2626":"#94a3b8"}}>{sortedResp.filter(r=>r.status==="afgewezen").length}</div>
-            <div style={{fontSize:11,fontWeight:600,color:"#dc2626"}}>Afgewezen</div>
-          </div>
-        </div>
-        {/* Tabs */}
-        <div style={{display:"flex",gap:4,marginBottom:14,background:"#f1f5f9",borderRadius:8,padding:3}}>
-          {[["overzicht","📋 Overzicht"],["views","👁 Views"],["responses","💬 Responses"]].map(([v,l])=>(
-            <button key={v} className="btn btn-sm" style={{flex:1,background:tab===v?"#fff":"transparent",color:tab===v?"#1e293b":"#64748b",fontWeight:tab===v?700:500,boxShadow:tab===v?"0 1px 3px rgba(0,0,0,.1)":"none"}} onClick={()=>setTab(v)}>{l}</button>
-          ))}
-        </div>
-        <div style={{maxHeight:400,overflowY:"auto"}}>
-          {tab==="overzicht"&&<div>
-            {/* Timeline: combine views + responses, sorted by time */}
-            {[...sortedViews.map(v=>({type:"view",ts:v.viewed_at,ua:v.user_agent})), ...sortedResp.map(r=>({type:"resp",ts:r.submitted_at,status:r.status,periode:r.periode,opmerkingen:r.opmerkingen}))]
-              .sort((a,b)=>new Date(b.ts)-new Date(a.ts)).slice(0,20)
-              .map((item,i)=>(
-                <div key={i} style={{display:"flex",gap:10,padding:"8px 0",borderBottom:"1px solid #f1f5f9",alignItems:"center"}}>
-                  <div style={{width:28,height:28,borderRadius:7,background:item.type==="view"?"#eff6ff":"#f0fdf4",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,flexShrink:0}}>
-                    {item.type==="view"?"👁":item.status==="goedgekeurd"?"✅":"❌"}
-                  </div>
+        <div>
+          {settings.dashboardWidgets?.openFacturen!==false&&<div className="card mb4">
+            <div className="card-t" style={{marginBottom:10}}>Facturen te vervallen</div>
+            {openFact.slice(0,4).map(f=>{
+              const vv=new Date(f.vervaldatum)<new Date()&&f.status!=="betaald";
+              return(
+                <div key={f.id} style={{display:"flex",alignItems:"center",gap:8,padding:"7px 0",borderBottom:"1px solid #f1f5f9"}}>
                   <div style={{flex:1}}>
-                    <div style={{fontWeight:600,fontSize:13}}>{item.type==="view"?"Offerte bekeken":item.status==="goedgekeurd"?"Goedgekeurd door klant":"Afgewezen door klant"}</div>
-                    <div style={{fontSize:11,color:"#94a3b8"}}>{fmtTs(item.ts)}{item.type==="view"?" · "+parseUA(item.ua):""}{item.periode?" · Periode: "+item.periode:""}</div>
-                    {item.opmerkingen&&<div style={{fontSize:12,color:"#475569",marginTop:2,fontStyle:"italic"}}>"{item.opmerkingen}"</div>}
+                    <div style={{fontWeight:600,fontSize:13}}>{f.klant?.naam}</div>
+                    <div style={{fontSize:11,color:vv?"#ef4444":"#94a3b8"}}>{f.nummer} · {vv?"⚠ Vervallen":"Vervalt"} {fmtDate(f.vervaldatum)}</div>
+                  </div>
+                  <div style={{textAlign:"right"}}>
+                    <div style={{fontWeight:700,fontSize:13}}>{fmtEuro(calcTotals(f.lijnen||[]).totaal)}</div>
+                    <StatusBadge status={f.status} type="fact"/>
                   </div>
                 </div>
-              ))
-            }
-            {views.length===0&&responses.length===0&&<div style={{color:"#94a3b8",textAlign:"center",padding:20}}>Nog geen activiteit geregistreerd</div>}
+              );
+            })}
+            {openFact.length===0&&<div style={{color:"#94a3b8",textAlign:"center",padding:"12px 0",fontSize:13}}>Geen openstaande facturen 🎉</div>}
           </div>}
-          {tab==="views"&&<div>
-            {sortedViews.length===0?<div style={{color:"#94a3b8",textAlign:"center",padding:20}}>Nog niet bekeken</div>:
-              sortedViews.map((v,i)=>(
-                <div key={i} style={{display:"flex",gap:10,padding:"7px 0",borderBottom:"1px solid #f1f5f9"}}>
+          {goedgekeurdDoorKlant.length>0&&settings.dashboardWidgets?.goedgekeurdeOffertes!==false&&<div className="card mb4" style={{border:"2px solid #86efac",background:"#f0fdf4"}}>
+            <div className="card-h"><div className="card-t" style={{color:"#059669"}}>✅ Goedgekeurd - Planning ({goedgekeurdDoorKlant.length})</div></div>
+            {goedgekeurdDoorKlant.slice(0,3).map(o=>{
+              const t=calcTotals(o.lijnen||[]);
+              return(
+                <div key={o.id} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 0",borderBottom:"1px solid #d1fae5"}}>
                   <div style={{flex:1}}>
-                    <div style={{fontSize:13,fontWeight:600}}>{fmtTs(v.viewed_at)}</div>
-                    <div style={{fontSize:11,color:"#94a3b8"}}>{parseUA(v.user_agent)}</div>
+                    <div style={{fontWeight:600,fontSize:13}}>
+                      {o.klant?.naam}
+                      {o.factuurId&&<span style={{marginLeft:6,fontSize:10,background:"#dbeafe",color:"#1e40af",padding:"2px 6px",borderRadius:4,fontWeight:600}}>Gefactureerd</span>}
+                      {o.status==="ingepland"&&<span style={{marginLeft:6,fontSize:10,background:"#ecfeff",color:"#0891b2",padding:"2px 6px",borderRadius:4,fontWeight:600}}>📅 Ingepland</span>}
+                    </div>
+                    <div style={{fontSize:11,color:"#059669"}}>{o.nummer} · akkoord op {fmtDate(o.klantAkkoordDatum)}</div>
+                    {o.planning&&<div style={{fontSize:11,color:"#0891b2",fontWeight:600}}>📅 {fmtDate(o.planning.datum)} om {o.planning.tijd}</div>}
+                  </div>
+                  <div style={{textAlign:"right"}}>
+                    <div style={{fontWeight:700,color:"#059669"}}>{fmtEuro(t.totaal)}</div>
+                    <div style={{display:"flex",gap:4,marginTop:3}}>
+                      {!o.factuurId&&<button className="btn bg btn-sm" style={{fontSize:10}} onClick={()=>onFactuur(o)}>🧾 Factuur</button>}
+                      {o.status!=="ingepland"
+                        ?<button className="btn" style={{fontSize:10,background:"#d4ff00",color:"#1a2e4c",fontWeight:700}} onClick={()=>onPlan(o)}>📅 Inplannen</button>
+                        :<button className="btn" style={{fontSize:10,background:"#ecfeff",color:"#0891b2",fontWeight:700,border:"1px solid #a5f3fc"}} onClick={()=>onPlan(o)}>📅 Herplannen</button>
+                      }
+                    </div>
                   </div>
                 </div>
-              ))
-            }
+              );
+            })}
           </div>}
-          {tab==="responses"&&<div>
-            {sortedResp.length===0?<div style={{color:"#94a3b8",textAlign:"center",padding:20}}>Nog geen reacties</div>:
-              sortedResp.map((r,i)=>(
-                <div key={i} style={{padding:"10px 0",borderBottom:"1px solid #f1f5f9"}}>
-                  <div style={{display:"flex",gap:8,alignItems:"center"}}>
-                    <span style={{fontSize:14}}>{r.status==="goedgekeurd"?"✅":"❌"}</span>
-                    <span style={{fontWeight:700,fontSize:13,color:r.status==="goedgekeurd"?"#059669":"#dc2626"}}>{r.status==="goedgekeurd"?"Goedgekeurd":"Afgewezen"}</span>
-                    <span style={{fontSize:11,color:"#94a3b8"}}>{fmtTs(r.submitted_at)}</span>
-                  </div>
-                  {r.periode&&<div style={{fontSize:12,marginTop:4}}>📅 Gewenste periode: {r.periode}</div>}
-                  {r.opmerkingen&&<div style={{fontSize:12,marginTop:2,color:"#475569"}}>💬 {r.opmerkingen}</div>}
-                </div>
-              ))
-            }
+          {settings.dashboardWidgets?.snelleActies!==false&&<div className="card">
+            <div className="card-t" style={{marginBottom:10}}>Snelle acties</div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+              {getInstTypes(instTypesSetting).slice(0,4).map(t=>(
+                <button key={t.id} className="btn" style={{background:t.c,color:"#fff",justifyContent:"center"}} onClick={onNew}>{t.icon} {t.l}</button>
+              ))}
+            </div>
+          </div>}
+          {settings.dashboardWidgets?.agenda!==false&&<div className="card">
+            <div className="card-h" style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <div className="card-t">📅 Agenda</div>
+              <button className="btn btn-sm" onClick={()=>window.open(`${window.location.origin}/planner.html`,'_blank')}>↗ Open volledig</button>
+            </div>
+            <iframe 
+              src="./planner.html" 
+              style={{width:"100%",height:"500px",border:"1px solid #e2e8f0",borderRadius:8,marginTop:10}}
+              title="Agenda"
+            />
           </div>}
         </div>
       </div>
@@ -3030,16 +2361,168 @@ function DocIcons({doc, type}) {
 
 function DocLog({log=[]}) {
   const fmt = ts => { try{ const d=new Date(ts); return `${d.toLocaleDateString("nl-BE")} ${d.toLocaleTimeString("nl-BE",{hour:"2-digit",minute:"2-digit"})}`; }catch(_){ return ts; }};
-  const clean = log.filter(l => l.actie || l.txt); // Filter lege entries
-  if(!clean.length) return <div className="doc-log-empty">Nog geen acties geregistreerd</div>;
-  return [...clean].reverse().map((l,i)=>(
+  if(!log.length) return <div className="doc-log-empty">Nog geen acties geregistreerd</div>;
+  return [...log].reverse().map((l,i)=>(
     <div key={i} className="doc-log-entry">
       <span className="doc-log-ts">{fmt(l.ts)}</span>
-      <span className="doc-log-act">{l.actie || l.txt}</span>
+      <span className="doc-log-act">{l.actie}</span>
     </div>
   ));
 }
 
+// ═══════════════════════════════════════════════════════════════════
+//  KBO & PEPPOL INTEGRATIE FUNCTIES
+// ═══════════════════════════════════════════════════════════════════
+
+async function lookupKBO(vatNumber) {
+  try {
+    // Verwijder BE prefix en niet-cijfers
+    const cbeNr = vatNumber.replace(/^BE/i, '').replace(/\D/g, '');
+    if (cbeNr.length !== 10) throw new Error("Ongeldig BTW-nummer");
+    
+    // KBO API lookup (gratis, geen key vereist)
+    const response = await fetch(`https://kbopub.economie.fgov.be/kbopub/zoeknummerform.html?nummer=0${cbeNr}&actionLu=Zoek`);
+    if (!response.ok) throw new Error("KBO lookup mislukt");
+    
+    // Parse HTML response (KBO geeft geen JSON helaas)
+    const html = await response.text();
+    
+    // Fallback naar CBE API als beschikbaar
+    try {
+      const cbeResponse = await fetch(`https://cbeapi.be/api/enterprise/${cbeNr}`);
+      const kboData = await cbeResponse.json();
+      
+      return {
+        success: true,
+        data: {
+          naam: kboData.name || "",
+          btwnr: `BE${cbeNr}`,
+          adres: kboData.address || "",
+          postcode: kboData.postal_code || "",
+          gemeente: kboData.city || "",
+          status: kboData.status || "actief"
+        }
+      };
+    } catch (fallbackError) {
+      // Manual parsing of KBO HTML als fallback
+      return {
+        success: true,
+        data: {
+          naam: "",
+          btwnr: `BE${cbeNr}`,
+          adres: "",
+          postcode: "",
+          gemeente: "",
+          status: "onbekend"
+        },
+        message: "Gegevens gevonden maar automatische invulling niet beschikbaar. Vul handmatig aan."
+      };
+    }
+  } catch (error) {
+    return {
+      success: false,
+      error: error.message || "KBO lookup mislukt"
+    };
+  }
+}
+
+async function checkPEPPOL(cbeNr, apiKey) {
+  if (!apiKey) return {canReceive: false, reason: "Geen API key"};
+  
+  try {
+    // Check via e-invoice.be lookup endpoint
+    const response = await fetch(
+      `https://api.e-invoice.be/api/lookup?peppol_id=0208:${cbeNr}`,
+      {headers: {'Authorization': `Bearer ${apiKey}`}}
+    );
+    
+    if (response.ok) {
+      const data = await response.json();
+      return {
+        canReceive: true,
+        peppolId: `0208:${cbeNr}`,
+        provider: data.provider || "onbekend"
+      };
+    }
+    
+    return {canReceive: false, reason: "Niet geregistreerd op PEPPOL"};
+  } catch (error) {
+    return {canReceive: false, reason: error.message};
+  }
+}
+
+async function sendViaPEPPOL(invoice, apiKey) {
+  if (!apiKey) throw new Error("Geen PEPPOL API key ingesteld");
+  
+  try {
+    // Verstuur via e-invoice.be
+    const response = await fetch('https://api.e-invoice.be/api/documents/', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        document_type: 'invoice',
+        receiver_peppol_id: invoice.peppolId,
+        document_data: {
+          invoice_number: invoice.nummer,
+          invoice_date: invoice.datum,
+          due_date: invoice.vervaldatum,
+          currency: 'EUR',
+          total_amount: invoice.totaal,
+          vat_amount: invoice.btwBedrag,
+          // ... meer velden volgens PEPPOL BIS 3.0 spec
+        }
+      })
+    });
+    
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || "PEPPOL verzending mislukt");
+    }
+    
+    return await response.json();
+  } catch (error) {
+    throw new Error(`PEPPOL verzending mislukt: ${error.message}`);
+  }
+}
+
+// ─── OFFERTE VIEW STATS (fetches from offerte_views) ──────────
+function OfferteViewStats({offerteId}) {
+  const [views, setViews] = useState(null);
+  const [loading, setLoading] = useState(true);
+  useEffect(()=>{
+    if(!offerteId) return;
+    const fetchViews = async () => {
+      try {
+        const {data, error} = await sb.from('offerte_views').select('viewed_at,user_agent').eq('offerte_id', offerteId).order('viewed_at', {ascending: false}).limit(20);
+        if(!error && data) setViews(data);
+      } catch(e) { console.warn("View stats fetch failed:", e); }
+      setLoading(false);
+    };
+    fetchViews();
+  },[offerteId]);
+
+  if(loading) return <div style={{fontSize:11,color:"#94a3b8",padding:"4px 0"}}>⟳ Views laden...</div>;
+  if(!views || views.length === 0) return <div style={{fontSize:11,color:"#94a3b8",padding:"4px 0"}}>Nog niet bekeken door klant</div>;
+  
+  const isMobile = ua => /mobile|android|iphone/i.test(ua||"");
+  return (
+    <div style={{marginTop:6}}>
+      <div style={{fontSize:10.5,fontWeight:700,color:"#2563eb",marginBottom:4}}>👁 {views.length}× bekeken door klant</div>
+      <div style={{maxHeight:90,overflowY:"auto",fontSize:10.5,color:"#64748b"}}>
+        {views.slice(0,8).map((v,i) => (
+          <div key={i} style={{padding:"2px 0",display:"flex",gap:8,alignItems:"center"}}>
+            <span>{new Date(v.viewed_at).toLocaleString("nl-BE",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"})}</span>
+            <span style={{fontSize:10,opacity:.6}}>{isMobile(v.user_agent)?"📱":"💻"}</span>
+          </div>
+        ))}
+        {views.length > 8 && <div style={{fontSize:10,color:"#94a3b8",fontStyle:"italic"}}>+{views.length-8} meer...</div>}
+      </div>
+    </div>
+  );
+}
 
 function OffertesPage({offertes,initFilter,onView,onEdit,onStatus,onBulkStatus,onFactuur,onDelete,onNew,onEmail,onPlan,settings}) {
   const [q,setQ] = useState("");
@@ -3121,7 +2604,6 @@ function OffertesPage({offertes,initFilter,onView,onEdit,onStatus,onBulkStatus,o
                   <div className="flex gap2">
                     <button className="btn bs btn-sm" onClick={()=>onView(o)} title="Bekijken">👁</button>
                     <button className="btn bs btn-sm" onClick={()=>onEdit(o)} title="Bewerken">✏️</button>
-                    {(o.status==="goedgekeurd"||o.klantAkkoord)&&<button className="btn btn-sm" style={{background:"#d4ff00",color:"#1a2e4c",fontWeight:700,fontSize:11}} onClick={()=>onPlan(o)} title="Inplannen">📅</button>}
                     <button className="btn bgh btn-sm" onClick={()=>{if(window.confirm("Verwijderen?"))onDelete(o.id)}} title="Verwijderen">🗑</button>
                   </div>
                 </td>
@@ -3139,12 +2621,13 @@ function OffertesPage({offertes,initFilter,onView,onEdit,onStatus,onBulkStatus,o
                         <button className="btn bs btn-sm" onClick={()=>{onStatus(o.id,{status:"goedgekeurd",logActie:"✅ Goedgekeurd door klant"});}}>👍 Goedgekeurd</button>
                         <button className="btn bs btn-sm" onClick={()=>{onStatus(o.id,{status:"afgewezen",logActie:"❌ Afgewezen door klant"});}}>👎 Afgewezen</button>
                         {o.status==="goedgekeurd"&&!o.factuurId&&<button className="btn bg btn-sm" onClick={()=>onFactuur(o)}>🧾 → Factuur</button>}
-                        {(o.status==="goedgekeurd"||o.klantAkkoord)&&<button className="btn btn-sm" style={{background:"#d4ff00",color:"#1a2e4c",fontWeight:700}} onClick={()=>onPlan(o)}>📅 Inplannen</button>}
+                        {o.status==="goedgekeurd"&&<button className="btn btn-sm" style={{background:"#d4ff00",color:"#1a2e4c",fontWeight:700,border:"none"}} onClick={()=>onPlan(o)}>📅 Inplannen</button>}
                         <button className="btn bgh btn-sm" onClick={()=>{if(window.confirm("Verwijderen?"))onDelete(o.id)}}>🗑</button>
                       </div>
                       <div className="doc-log-wrap">
                         <div style={{fontSize:10.5,fontWeight:700,color:"#94a3b8",textTransform:"uppercase",letterSpacing:".5px",marginBottom:3}}>📋 Activiteitenlog</div>
                         <DocLog log={o.log}/>
+                        <OfferteViewStats offerteId={o.id}/>
                       </div>
                     </div>
                   </td>
@@ -3246,12 +2729,17 @@ function FacturenPage({facturen,settings,initFilter,onView,onEdit,onStatus,onBul
                       <div className="doc-act-btns">
                         <span className="doc-act-label">⚡ Acties:</span>
                         <button className="btn b2 btn-sm" onClick={()=>onView(f)}>👁 Bekijken</button>
-                        {onEdit&&<button className="btn bs btn-sm" onClick={()=>onEdit(f)}>✏️ Bewerken</button>}
-                        <button className="btn bs btn-sm" onClick={()=>onEmail(f)}>📧 Verzenden</button>
+                        {onEdit&&<button className="btn bs btn-sm" onClick={()=>{
+                          if(f.status!=="concept"){
+                            if(!window.confirm("Deze factuur is al verzonden. Wilt u toch bewerken?")) return;
+                          }
+                          onEdit(f);
+                        }}>{f.status!=="concept"?"🔒 Bewerken":"✏️ Bewerken"}</button>}
+                        <button className="btn bs btn-sm" onClick={()=>onEmail(f)}>📧 Verzenden klant</button>
+                        {emails.length>0&&<button className="btn bs btn-sm" onClick={()=>{onEmail(f);/* TODO: pre-fill boekhouder */onStatus(f.id,{status:"boekhouding",logActie:`📊 Verzonden naar boekhouder (${emails[0]})`});notify("📊 Naar boekhouder gemarkeerd");}}>📊 Verzenden boekhouder</button>}
                         <button className="btn bs btn-sm" onClick={()=>onView(f)} title="Opent document → druk Ctrl+P of klik 🖨">🖨 Afdrukken</button>
                         {f.status!=="betaald"&&<button className="btn bg btn-sm" onClick={()=>onBetaling(f)}>💶 Betaling registreren</button>}
                         {f.status!=="betaald"&&f.status!=="concept"&&<button className="btn bw btn-sm" onClick={()=>onAanmaning(f)}>🔔 Aanmaning sturen</button>}
-                        {emails.length>0&&<button className="btn bs btn-sm" onClick={()=>{onStatus(f.id,{status:"boekhouding",logActie:`📊 Verzonden naar boekhouder (${emails[0]})`});notify("Naar boekhouder gemarkeerd ✓");}}>📊 → Boekhouder</button>}
                         <button className="btn bs btn-sm" onClick={()=>onStatus(f.id,{status:"betaald",logActie:"✅ Betaald gemarkeerd"})}>✅ Betaald</button>
                         <button className="btn bgh btn-sm" onClick={()=>{if(window.confirm("Verwijderen?"))onDelete(f.id)}}>🗑</button>
                       </div>
@@ -3272,7 +2760,7 @@ function FacturenPage({facturen,settings,initFilter,onView,onEdit,onStatus,onBul
 }
 
 // ─── KLANTEN PAGE — LIST + PASSPORT ──────────────────────────────
-function KlantenPage({klanten,offertes,facturen,view,onEdit,onDelete}) {
+function KlantenPage({klanten,offertes,facturen,view,onEdit,onDelete,onNewOfferte,onNewFactuur}) {
   const [q,setQ]=useState("");
   const list=klanten.filter(k=>!q||(k.naam||"").toLowerCase().includes(q.toLowerCase())||(k.bedrijf||"").toLowerCase().includes(q.toLowerCase()))
     .sort((a,b)=>new Date(b.aangemaakt)-new Date(a.aangemaakt));
@@ -3319,8 +2807,10 @@ function KlantenPage({klanten,offertes,facturen,view,onEdit,onDelete}) {
                   <div className="klant-stat"><div className="klant-stat-v" style={{color:s.onbetaald>0?"#f59e0b":"#10b981",fontSize:12}}>{s.onbetaald>0?fmtEuro(s.onbetaald):"✓"}</div><div className="klant-stat-l">Open</div></div>
                 </div>
                 {s.hasVervallen&&<div style={{marginTop:8,padding:"4px 8px",background:"#fef2f2",border:"1px solid #fca5a5",borderRadius:5,fontSize:11,color:"#991b1b",fontWeight:600}}>🔴 Heeft vervallen factuur(en)</div>}
-                <div className="flex gap2" style={{marginTop:10}}>
-                  <button className="btn bs btn-sm" style={{flex:1}} onClick={()=>onEdit(k)}>✏️ Bewerken</button>
+                <div className="flex gap2" style={{marginTop:10,flexWrap:"wrap"}}>
+                  {onNewOfferte&&<button className="btn b2 btn-sm" style={{flex:1}} onClick={()=>onNewOfferte(k)}>📋 Offerte</button>}
+                  {onNewFactuur&&<button className="btn bs btn-sm" style={{flex:1}} onClick={()=>onNewFactuur(k)}>🧾 Factuur</button>}
+                  <button className="btn bs btn-sm" onClick={()=>onEdit(k)}>✏️</button>
                   <button className="btn bgh btn-sm" onClick={()=>{if(window.confirm("Verwijderen?"))onDelete(k.id)}}>🗑</button>
                 </div>
               </div>
@@ -3383,7 +2873,8 @@ async function fetchAIImageUrl(naam, merk) {
 
 function ProductenPage({producten,settings,onEdit,onDelete,onToggle,onEnrich,onDuplicate}) {
   const [q,setQ]=useState("");const [cat,setCat]=useState("alle");const [enriching,setEnriching]=useState(null);
-  const [prodView,setProdView]=useState(settings?.prodView||"tile");
+  const [prodView,setProdView_]=useState(()=>{try{return localStorage.getItem("billr_prodView")||"tile"}catch(_){return "tile"}});
+  const setProdView=(v)=>{setProdView_(v);try{localStorage.setItem("billr_prodView",v)}catch(_){}};
   const [sel,setSel]=useState(new Set());
   const [bulkPrijsPct,setBulkPrijsPct]=useState("");
   const [showBulkPrijs,setShowBulkPrijs]=useState(false);
@@ -3396,7 +2887,7 @@ function ProductenPage({producten,settings,onEdit,onDelete,onToggle,onEnrich,onD
   // Group by brand
   const merken = [...new Set(producten.map(p=>p.merk||"").filter(Boolean))];
   const dynCats = getProdCats(settings);
-  const catNamen = [...new Set([...dynCats.map(c=>c.naam),...producten.map(p=>p.cat)])];
+  const catNamen = [...new Set([...dynCats.map(c=>c.naam),...producten.map(p=>p.cat)])].filter(Boolean);
   const cats = ["alle",...catNamen];
   const list = producten.filter(p=>(cat==="alle"||p.cat===cat)&&(!q||(p.naam||"").toLowerCase().includes(q.toLowerCase())));
 
@@ -3424,8 +2915,6 @@ function ProductenPage({producten,settings,onEdit,onDelete,onToggle,onEnrich,onD
             <button className="bulk-act-btn" onClick={doBulkDelete}>🗑 Verwijderen</button>
             <button className="bulk-act-btn" onClick={()=>setShowBulkPrijs(!showBulkPrijs)}>💰 Prijs %</button>
             <button className="bulk-act-btn" onClick={()=>setShowBulkCat(!showBulkCat)}>📁 Categorie</button>
-            <button className="bulk-act-btn" onClick={()=>{[...sel].forEach(id=>{const p=producten.find(x=>x.id===id);if(p)onEnrich({...p,btw:p.btw===6?21:6});});setSel(new Set());}}>🔄 BTW wissel</button>
-            <button className="bulk-act-btn" onClick={async()=>{for(const id of [...sel]){const p=producten.find(x=>x.id===id);if(p){setEnriching(id);try{await doEnrich(p);}catch(_){}setEnriching(null);}}setSel(new Set());}}>✨ AI Bulk</button>
           </div>
           {showBulkPrijs&&(
             <div style={{display:"flex",gap:6,alignItems:"center",width:"100%",marginTop:4}}>
@@ -3436,7 +2925,7 @@ function ProductenPage({producten,settings,onEdit,onDelete,onToggle,onEnrich,onD
           )}
           {showBulkCat&&(
             <div style={{display:"flex",gap:6,alignItems:"center",width:"100%",marginTop:4}}>
-              <select value={bulkCat} onChange={e=>setBulkCat(e.target.value)} style={{padding:"5px 9px",border:"1.5px solid rgba(255,255,255,.4)",borderRadius:6,background:"rgba(255,255,255,.15)",color:"#fff",fontSize:12}}>
+              <select value={bulkCat} onChange={e=>setBulkCat(e.target.value)} style={{padding:"5px 9px",border:"1.5px solid rgba(255,255,255,.4)",borderRadius:6,background:"#fff",color:"#1e293b",fontSize:12}}>
                 <option value="">— Kies categorie —</option>
                 {catNamen.map(c=><option key={c} value={c}>{c}</option>)}
               </select>
@@ -3477,8 +2966,7 @@ function ProductenPage({producten,settings,onEdit,onDelete,onToggle,onEnrich,onD
                 <span style={{fontSize:11,color:p.btw===6?"#059669":"#2563eb",fontWeight:600}}>{p.btw}%</span>
               </div>
               <div style={{display:"flex",gap:4,marginTop:8}} onClick={e=>e.stopPropagation()}>
-                <button className="btn bs btn-sm" style={{flex:1,fontSize:10}} onClick={()=>doEnrich(p)} disabled={enriching===p.id}>{enriching===p.id?"⟳":"✨ AI"}</button>
-                <button className="btn bs btn-sm" style={{fontSize:10}} title="Dupliceren" onClick={()=>onDuplicate(p)}>📋</button>
+                <button className="btn bs btn-sm" style={{flex:1,fontSize:10}} title="Dupliceren" onClick={()=>onDuplicate(p)}>📋</button>
                 <button className="btn bs btn-sm" style={{fontSize:10}} onClick={()=>{if(window.confirm("Verwijderen?"))onDelete(p.id)}}>🗑</button>
               </div>
               {(p.technischeFiches||[]).length>0&&<div style={{fontSize:10,color:"#3b82f6",marginTop:4}}>📎 {p.technischeFiches.length} fiche(s)</div>}
@@ -3513,14 +3001,6 @@ function ProductenPage({producten,settings,onEdit,onDelete,onToggle,onEnrich,onD
             <td className="mob-hide"><span className="status-badge" style={{background:p.btw===6?"#f0fdf4":"#f0f4ff",color:p.btw===6?"#059669":"#2563eb"}}>{p.btw}%</span></td>
             <td className="mob-hide" style={{color:"#64748b",fontSize:12}}>{p.eenheid}</td>
             <td><div className="flex gap2" style={{flexWrap:"wrap"}}>
-              <button className="btn bs btn-sm" title="AI info ophalen (specs+beschrijving)" onClick={()=>doEnrich(p)} disabled={enriching===p.id}>{enriching===p.id?<span className="spin">⟳</span>:"✨ AI"}</button>
-              <button className="btn bs btn-sm" title="AI afbeelding ophalen" style={{fontSize:11}} disabled={enriching===p.id} onClick={async()=>{
-                setEnriching(p.id);
-                const url=await fetchAIImageUrl(p.naam,p.merk||"");
-                setEnriching(null);
-                if(url)onEnrich({...p,imageUrl:url});
-                else alert("Geen afbeelding gevonden. Vul de URL manueel in via het bewerk-formulier.");
-              }}>🖼 Beeld</button>
               <button className="btn bs btn-sm" onClick={()=>onEdit(p)}>✏️</button>
               <button className="btn bs btn-sm" title="Dupliceren" onClick={()=>onDuplicate(p)}>📋</button>
               <button className="btn bgh btn-sm" onClick={()=>{if(window.confirm("Verwijderen?"))onDelete(p.id)}}>🗑</button>
@@ -3537,8 +3017,22 @@ function ProductenPage({producten,settings,onEdit,onDelete,onToggle,onEnrich,onD
 // ─── KLANT IMPORT MODAL ───────────────────────────────────────────
 async function checkPeppolDirectory(btwnr, settings) {
   if(!btwnr) return false;
-  const result = await checkPeppolBillit(btwnr, settings || window.__billrSettings || {});
-  return result.registered;
+  const clean = (btwnr||"").replace(/[^0-9]/g,"");
+  if(clean.length < 9) return false;
+  // Eerst: probeer Billit API als key beschikbaar
+  const billitKey = settings?.integraties?.billitApiKey || getBillitKey(settings||{});
+  if(billitKey) {
+    try {
+      const result = await checkPeppol(btwnr, settings);
+      return result?.registered || false;
+    } catch(_){}
+  }
+  // Fallback: PEPPOL directory lookup
+  try {
+    const resp = await fetch(`https://directory.peppol.eu/public/search/2.0/json?participant=iso6523-actorid-upis%3A%3A0208%3A${clean}`);
+    if(resp.ok){ const d=await resp.json(); return (d.total_result_count||0)>0; }
+  } catch(_){}
+  return false;
 }
 
 function KlantImportModal({onImport, onClose, notify}) {
@@ -4049,16 +3543,12 @@ function ProductAutocomplete({producten, value, onChange, onSelect, placeholder=
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState(value||"");
   const ref = useRef();
-  // Search on naam + omschr + merk
-  const ql = (q||"").toLowerCase();
-  const matches = ql.length>0 ? producten.filter(p=>p.actief&&(
-    (p.naam||"").toLowerCase().includes(ql) ||
-    (p.omschr||"").toLowerCase().includes(ql) ||
-    (p.merk||"").toLowerCase().includes(ql)
+  useEffect(()=>{setQ(value||"")},[value]);
+  const matches = q.length>1 ? producten.filter(p=>p.actief&&(
+    (p.naam||"").toLowerCase().includes(q.toLowerCase())||
+    (p.omschr||"").toLowerCase().includes(q.toLowerCase())||
+    (p.merk||"").toLowerCase().includes(q.toLowerCase())
   )).slice(0,10) : [];
-
-  // Sync external value changes
-  useEffect(()=>{ if(value!==undefined && value!==q) setQ(value||""); },[value]);
 
   useEffect(()=>{
     const handler = e => { if(ref.current&&!ref.current.contains(e.target)) setOpen(false); };
@@ -4070,20 +3560,17 @@ function ProductAutocomplete({producten, value, onChange, onSelect, placeholder=
     <div ref={ref} style={{position:"relative",flex:1}}>
       <input className="fc" placeholder={placeholder} value={q}
         onChange={e=>{setQ(e.target.value);onChange(e.target.value);setOpen(true);}}
-        onFocus={()=>{if(q.length>0)setOpen(true);}}
+        onFocus={()=>{if(q.length>1)setOpen(true);}}
         style={{width:"100%",boxSizing:"border-box",fontSize:compact?12.5:undefined}}
       />
       {open&&matches.length>0&&(
-        <div style={{position:"absolute",top:"100%",left:0,right:0,background:"#fff",border:"1.5px solid #2563eb",borderRadius:10,boxShadow:"0 8px 24px rgba(0,0,0,.18)",zIndex:999,maxHeight:320,overflowY:"auto",marginTop:2}}>
+        <div style={{position:"absolute",top:"100%",left:0,right:0,background:"#fff",border:"1.5px solid #2563eb",borderRadius:8,boxShadow:"0 8px 24px rgba(0,0,0,.15)",zIndex:999,maxHeight:300,overflowY:"auto"}}>
           {matches.map(p=>(
-            <div key={p.id} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",cursor:"pointer",borderBottom:"1px solid #f1f5f9",transition:"background .1s"}}
-              onMouseOver={e=>e.currentTarget.style.background="#f0f7ff"}
-              onMouseOut={e=>e.currentTarget.style.background="transparent"}
+            <div key={p.id} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",cursor:"pointer",borderBottom:"1px solid #f1f5f9",transition:"background .1s"}}
+              onMouseEnter={e=>e.currentTarget.style.background="#f0f9ff"}
+              onMouseLeave={e=>e.currentTarget.style.background="transparent"}
               onMouseDown={e=>{e.preventDefault();setQ(p.naam);setOpen(false);onSelect(p);}}>
-              <div style={{width:40,height:40,borderRadius:6,background:"#f8fafc",border:"1px solid #e2e8f0",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,overflow:"hidden"}}>
-                {p.imageUrl?<img src={p.imageUrl} style={{width:40,height:40,objectFit:"contain"}} onError={e=>{e.target.style.display="none";e.target.nextElementSibling&&(e.target.nextElementSibling.style.display="flex")}} alt=""/>:null}
-                <span style={{fontSize:20,display:p.imageUrl?"none":"flex"}}>{getCatIcon(p.cat)}</span>
-              </div>
+              {p.imageUrl?<img src={p.imageUrl} style={{width:40,height:40,objectFit:"contain",borderRadius:6,flexShrink:0,border:"1px solid #e2e8f0"}} onError={e=>e.target.style.display="none"} alt=""/>:<span style={{fontSize:22,flexShrink:0,width:40,textAlign:"center"}}>{getCatIcon(p.cat)}</span>}
               <div style={{flex:1,minWidth:0}}>
                 <div style={{fontWeight:700,fontSize:13,overflow:"hidden",whiteSpace:"nowrap",textOverflow:"ellipsis",color:"#1e293b"}}>{p.naam}</div>
                 <div style={{fontSize:11,color:"#64748b",overflow:"hidden",whiteSpace:"nowrap",textOverflow:"ellipsis"}}>{p.merk?p.merk+" · ":""}{p.omschr||p.cat||""}</div>
@@ -4373,7 +3860,7 @@ function OfferteWizard({klanten,producten,offertes,editData,settings,onSave,onCl
 
   useEffect(()=>{
     if(lijnen.length===0)return;
-    setLijnen(p=>p.map(l=>{const nb=btwRegime==="verlegd"?0:btwRegime==="btw6"?6:21;return{...l,btw:nb};}));
+    setLijnen(p=>p.map(l=>{const src=producten.find(x=>x.id===l.productId);if(!src)return l;const nb=btwRegime==="verlegd"?0:btwRegime==="btw6"?6:21;return{...l,btw:nb};}));
   },[btwRegime]);
 
   const actProds=producten.filter(p=>p.actief);
@@ -4382,9 +3869,8 @@ function OfferteWizard({klanten,producten,offertes,editData,settings,onSave,onCl
 
   const setQty=(prod,gid,aantal)=>{
     const nb=btwRegime==="verlegd"?0:btwRegime==="btw6"?6:21;
-    const finalBtw=btwRegime==="verlegd"?0:btwRegime==="btw6"?6:(prod.btw!==undefined?prod.btw:nb);
     if(aantal<=0){setLijnen(p=>p.filter(l=>l.productId!==prod.id));return;}
-    setLijnen(p=>{const ex=p.find(l=>l.productId===prod.id);if(ex)return p.map(l=>l.productId===prod.id?{...l,aantal,groepId:gid||l.groepId}:l);return[...p,{id:uid(),productId:prod.id,naam:prod.naam,omschr:prod.omschr,prijs:prod.prijs,btw:finalBtw,aantal,eenheid:prod.eenheid||"stuk",groepId:gid,imageUrl:prod.imageUrl,specs:prod.specs,technischeFiches:prod.technischeFiches||[],technischeFiche:prod.technischeFiche||null,fichNaam:prod.fichNaam||""}];});
+    setLijnen(p=>{const ex=p.find(l=>l.productId===prod.id);if(ex)return p.map(l=>l.productId===prod.id?{...l,aantal,groepId:gid||l.groepId,btw:nb}:l);return[...p,{id:uid(),productId:prod.id,naam:prod.naam,omschr:prod.omschr,prijs:prod.prijs,btw:nb,aantal,eenheid:prod.eenheid||"stuk",groepId:gid,imageUrl:prod.imageUrl,specs:prod.specs,technischeFiche:prod.technischeFiche||null,fichNaam:prod.fichNaam||""}];});
   };
 
   const tot=calcTotals(lijnen);
@@ -4413,22 +3899,26 @@ function OfferteWizard({klanten,producten,offertes,editData,settings,onSave,onCl
       .sort((a,b)=>b[1]-a[1])
       .slice(0,4)
       .map(([id,cnt])=>({prod:producten.find(p=>p.id===id),cnt}))
-      .filter(x=>x.prod&&x.prod.actief);
+      .filter(x=>x.prod&&x.prod.actief&&!x.prod.isManual&&x.prod.cat!=="Offerte items");
   };
   const coRecs = getCoRecs(lijnen);
 
   return(
     <div className="mo"><div className="mdl mfull" style={{display:"flex",flexDirection:"column"}}>
       {/* STICKY HEADER */}
-      <div className="mh" style={{flexShrink:0,flexWrap:"wrap"}}>
-        <div style={{display:"flex",alignItems:"center",gap:12,width:"100%",minWidth:0}}>
+      <div className="mh" style={{flexShrink:0}}>
+        <div style={{display:"flex",alignItems:"center",gap:12,flex:1,minWidth:0}}>
           <div className="mt-m" style={{flexShrink:0}}>{editData?"Offerte bewerken":"Nieuwe offerte"}</div>
-          <span style={{flex:1}}/>
-          <button className="xbtn" onClick={onClose}>×</button>
+          {/* Stap indicators — horizontaal scrollbaar */}
+          <div className="wzs" style={{flex:1,margin:0}}>
+            {stappen.map(s=><div key={s.n} className={`wz ${stap===s.n?"on":stap>s.n?"dn":""}`} onClick={()=>setStap(s.n)}><span className="wzn">{stap>s.n?"✓":s.n}</span>{s.l}</div>)}
+          </div>
         </div>
-        {/* Stap indicators — eigen rij */}
-        <div className="wzs" style={{width:"100%",margin:"8px 0 0"}}>
-          {stappen.map(s=><div key={s.n} className={`wz ${stap===s.n?"on":stap>s.n?"dn":""}`} onClick={()=>setStap(s.n)}><span className="wzn">{stap>s.n?"✓":s.n}</span>{s.l}</div>)}
+        <div style={{display:"flex",gap:8,flexShrink:0,alignItems:"center"}}>
+          {stap>1&&<button className="btn bs btn-sm" onClick={()=>setStap(s=>s-1)}>← Vorige</button>}
+          {stap<5&&<button className="btn b2" onClick={()=>{if(stap===1&&!klant)return notify("Selecteer een klant","er");if(stap===2&&!instType)return notify("Kies een type","er");if(stap===3&&lijnen.length===0)return notify("Voeg producten toe","er");setStap(s=>s+1);}}>Volgende →</button>}
+          {stap===5&&<><button className="btn bs" onClick={doSave}>💾 Concept</button><button className="btn bg" onClick={doSave}>✓ Opslaan</button></>}
+          <button className="xbtn" onClick={onClose}>×</button>
         </div>
       </div>
       {/* SCROLLABLE BODY */}
@@ -4531,7 +4021,7 @@ function OfferteWizard({klanten,producten,offertes,editData,settings,onSave,onCl
                 </div>
               </div>
             )}
-            <div className="cat-tabs-mob" style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:14}}>
+            <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:14}}>
               {cats.map(c=>{
               const dynC=getProdCats(settings).find(x=>x.naam===c);
               const ac=activeCat===c;
@@ -4635,7 +4125,7 @@ function OfferteWizard({klanten,producten,offertes,editData,settings,onSave,onCl
             <div key={l.id} style={{display:"grid",gridTemplateColumns:"3fr 60px 80px 55px 26px",gap:5,marginBottom:4,alignItems:"start"}}>
               <ProductAutocomplete producten={actProds} value={l.naam} compact
                 onChange={v=>setLijnen(p=>p.map((x,j)=>j===i?{...x,naam:v}:x))}
-                onSelect={p=>setLijnen(prev=>prev.map((x,j)=>j===i?{...x,productId:p.id,naam:p.naam,omschr:p.omschr||"",prijs:p.prijs,btw:btwRegime==="verlegd"?0:btwRegime==="btw6"?6:(p.btw||21),eenheid:p.eenheid||"stuk",imageUrl:p.imageUrl||"",specs:p.specs||[],technischeFiches:p.technischeFiches||[],technischeFiche:p.technischeFiche||null,fichNaam:p.fichNaam||""}:x))}
+                onSelect={p=>setLijnen(prev=>prev.map((x,j)=>j===i?{...x,productId:p.id,naam:p.naam,omschr:p.omschr||"",prijs:p.prijs,btw:btwRegime==="verlegd"?0:btwRegime==="btw6"?6:(p.btw||21),eenheid:p.eenheid||"stuk",imageUrl:p.imageUrl||"",specs:p.specs||[],technischeFiche:p.technischeFiche||null,fichNaam:p.fichNaam||""}:x))}
                 placeholder="Typ productnaam…"/>
               <input type="number" className="fc" style={{fontSize:12.5,textAlign:"center"}} value={l.aantal} min={1} onChange={e=>setLijnen(p=>p.map((x,j)=>j===i?{...x,aantal:Number(e.target.value)}:x))}/>
               <input type="number" className="fc" style={{fontSize:12.5,textAlign:"right"}} value={l.prijs} step="0.01" onChange={e=>setLijnen(p=>p.map((x,j)=>j===i?{...x,prijs:Number(e.target.value)}:x))}/>
@@ -4645,10 +4135,9 @@ function OfferteWizard({klanten,producten,offertes,editData,settings,onSave,onCl
               <button style={{border:"none",background:"none",cursor:"pointer",color:"#ef4444",fontSize:16}} onClick={()=>setLijnen(p=>p.filter((_,j)=>j!==i))}>×</button>
             </div>
           ))}
-          <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
+          <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
             <button className="btn bs btn-sm" onClick={()=>setLijnen(p=>[...p,{id:uid(),productId:null,naam:"",omschr:"",prijs:0,btw:btwRegime==="verlegd"?0:btwRegime==="btw6"?6:21,aantal:1,eenheid:"stuk",groepId:groepen[0]?.id}])}>+ Vrije lijn</button>
-            <button className="btn btn-sm" style={{background:"#eff6ff",color:"#2563eb",border:"1px solid #bfdbfe"}} onClick={()=>setLijnen(p=>[...p,{id:uid(),productId:null,naam:"",omschr:"",prijs:0,btw:0,aantal:1,eenheid:"",groepId:groepen[0]?.id}])}>ℹ️ Informatieve lijn</button>
-            <span style={{fontSize:11,color:"#94a3b8"}}>💡 Typ in het naamveld om producten te zoeken · Info lijn = zonder prijs op offerte</span>
+            <button className="btn bs btn-sm" onClick={()=>setLijnen(p=>[...p,{id:uid(),productId:null,naam:"",omschr:"",prijs:0,btw:0,aantal:0,eenheid:"",groepId:groepen[0]?.id,isInfo:true}])} title="Informatieve regel zonder prijs">+ Info lijn</button>
           </div>
         </div>}
 
@@ -4657,23 +4146,18 @@ function OfferteWizard({klanten,producten,offertes,editData,settings,onSave,onCl
           <div style={{background:"#eff6ff",border:"1px solid #bfdbfe",borderRadius:8,padding:"8px 12px",marginBottom:10,fontSize:12,color:"#1d4ed8",fontWeight:600}}>
             👁 Voorontwerp — zo ziet uw offerte eruit (alle pagina's). Scroll om alles te bekijken.
           </div>
-          <div style={{border:"1px solid #e2e8f0",borderRadius:10,overflow:"hidden",boxShadow:"0 2px 12px rgba(0,0,0,.08)"}}>
-            <OfferteDocument doc={{klant,installatieType:instType,groepen,lijnen,notities,btwRegime,voorschot,vervaldatum,betalingstermijn,korting:Number(korting),kortingType,nummer:"VOORBEELD",aangemaakt:new Date().toISOString()}} settings={settings}/>
+          <div style={{border:"1px solid #e2e8f0",borderRadius:10,overflow:"hidden",boxShadow:"0 2px 12px rgba(0,0,0,.08)",maxWidth:"100%",overflowX:"auto"}}>
+            <div style={{minWidth:0,width:"100%"}}>
+              <OfferteDocument doc={{klant,installatieType:instType,groepen,lijnen,notities,btwRegime,voorschot,vervaldatum,betalingstermijn,korting:Number(korting),kortingType,nummer:"VOORBEELD",aangemaakt:new Date().toISOString()}} settings={settings}/>
+            </div>
           </div>
         </div>}
-      </div>
-      {/* STICKY FOOTER — navigatie knoppen */}
-      <div className="mf">
-        {stap>1&&<button className="btn bs" onClick={()=>setStap(s=>s-1)}>← Vorige</button>}
-        <button className="btn bs" onClick={onClose}>Annuleren</button>
-        <span style={{flex:1}}/>
-        {stap<5&&<button className="btn b2 btn-lg" onClick={()=>{if(stap===1&&!klant)return notify("Selecteer een klant","er");if(stap===2&&!instType)return notify("Kies een type","er");if(stap===3&&lijnen.length===0)return notify("Voeg producten toe","er");setStap(s=>s+1);}}>Volgende → <span style={{fontSize:12,opacity:.7}}>({stap}/5)</span></button>}
-        {stap===5&&<><button className="btn bs" onClick={doSave}>💾 Concept</button><button className="btn bg btn-lg" onClick={doSave}>✓ Opslaan</button></>}
       </div>
     </div></div>
   );
 }
 
+// ─── OFFERTE DOCUMENT (4 pages) ───────────────────────────────────
 // ─── TECHNISCHE FICHE PDF EMBED ──────────────────────────────────
 // Technische Fiche - Static placeholder (GEEN scrollbare PDF!)
 // Print-friendly: Renders PDF pages as images using PDF.js (printable!)
@@ -4697,20 +4181,22 @@ function FichePDFEmbed({fiche, naam, fichNaam, fullPage = false}) {
 
     const renderPdf = async () => {
       try {
-        let pdf;
-        if(fiche.startsWith('data:') || fiche.startsWith('http')) {
-          const resp = await fetch(fiche);
-          const buf = await resp.arrayBuffer();
-          pdf = await window.pdfjsLib.getDocument({data: buf}).promise;
+        // Extract base64 data
+        let pdfData;
+        if(fiche.startsWith('data:')) {
+          const base64 = fiche.split(',')[1];
+          pdfData = atob(base64);
         } else {
-          const clean = fiche.replace(/[\s\r\n]/g, '');
-          const raw = atob(clean);
-          const uint8 = new Uint8Array(raw.length);
-          for(let i = 0; i < raw.length; i++) uint8[i] = raw.charCodeAt(i);
-          pdf = await window.pdfjsLib.getDocument({data: uint8}).promise;
+          pdfData = atob(fiche);
         }
+        
+        const uint8 = new Uint8Array(pdfData.length);
+        for(let i = 0; i < pdfData.length; i++) uint8[i] = pdfData.charCodeAt(i);
+        
+        const pdf = await window.pdfjsLib.getDocument({data: uint8}).promise;
         const images = [];
         
+        // Render each page at 2x scale for sharp print quality (A4 = 210x297mm)
         for(let i = 1; i <= pdf.numPages; i++) {
           const page = await pdf.getPage(i);
           const scale = 2.0; // 2x for print quality
@@ -4783,31 +4269,24 @@ function FichePages({fiche, naam, fichNaam, omschr, dc, bed, docNummer}) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if(!fiche || fiche==="[PDF]" || !window.pdfjsLib) { 
-      console.warn("FichePages skip:", !fiche?"no fiche":fiche==="[PDF]"?"stripped":"no pdfjsLib");
-      setLoading(false); return; 
-    }
+    if(!fiche || !window.pdfjsLib) { setLoading(false); return; }
 
     const render = async () => {
       try {
-        let pdfDoc;
-        if(fiche.startsWith('data:') || fiche.startsWith('http')) {
-          // Use fetch to convert data URI or URL to ArrayBuffer — avoids atob issues
-          const resp = await fetch(fiche);
-          const buf = await resp.arrayBuffer();
-          pdfDoc = await window.pdfjsLib.getDocument({data: buf}).promise;
+        let pdfData;
+        if(fiche.startsWith('data:')) {
+          pdfData = atob(fiche.split(',')[1]);
         } else {
-          // Raw base64 string
-          const clean = fiche.replace(/[\s\r\n]/g, '');
-          const raw = atob(clean);
-          const uint8 = new Uint8Array(raw.length);
-          for(let i = 0; i < raw.length; i++) uint8[i] = raw.charCodeAt(i);
-          pdfDoc = await window.pdfjsLib.getDocument({data: uint8}).promise;
+          pdfData = atob(fiche);
         }
+        const uint8 = new Uint8Array(pdfData.length);
+        for(let i = 0; i < pdfData.length; i++) uint8[i] = pdfData.charCodeAt(i);
+
+        const pdf = await window.pdfjsLib.getDocument({data: uint8}).promise;
         const imgs = [];
-        for(let i = 1; i <= pdfDoc.numPages; i++) {
-          const page = await pdfDoc.getPage(i);
-          const scale = 2.0;
+        for(let i = 1; i <= pdf.numPages; i++) {
+          const page = await pdf.getPage(i);
+          const scale = 2.5; // High-res for sharp A4 print
           const viewport = page.getViewport({scale});
           const canvas = document.createElement('canvas');
           canvas.width = viewport.width;
@@ -4815,9 +4294,8 @@ function FichePages({fiche, naam, fichNaam, omschr, dc, bed, docNummer}) {
           await page.render({canvasContext: canvas.getContext('2d'), viewport}).promise;
           imgs.push(canvas.toDataURL('image/png'));
         }
-        console.log(`✅ Fiche gerenderd: ${fichNaam||naam} — ${imgs.length} pagina's`);
         setPageImages(imgs);
-      } catch(e) { console.error("Fiche render error:", fichNaam||naam, e.message); }
+      } catch(e) { console.error("Fiche render error:", e); }
       setLoading(false);
     };
     render();
@@ -5115,16 +4593,19 @@ function OfferteDocument({doc, settings}) {
                 <div key={i} style={{marginBottom:28,pageBreakInside:"avoid"}}>
                   {/* Product header with image + naam */}
                   <div style={{display:"flex",gap:16,alignItems:"flex-start",marginBottom:10}}>
-                    {l.imageUrl&&<div style={{flexShrink:0,width:90,height:90,borderRadius:10,overflow:"hidden",border:"1px solid #e2e8f0",background:"#f8fafc",display:"flex",alignItems:"center",justifyContent:"center"}}>
-                      <img src={l.imageUrl} alt="" style={{width:"100%",height:"100%",objectFit:"contain"}} onError={e=>{e.target.parentElement.style.display="none"}}/>
-                    </div>}
+                    <div style={{flexShrink:0,width:90,height:90,borderRadius:10,overflow:"hidden",border:"1px solid #e2e8f0",background:"#f8fafc",display:l.imageUrl?"flex":"none",alignItems:"center",justifyContent:"center"}}>
+                      {l.imageUrl
+                        ?<img src={l.imageUrl} alt="" style={{width:"100%",height:"100%",objectFit:"contain"}} onError={e=>{e.target.parentElement.style.display="none"}}/>
+                        :null
+                      }
+                    </div>
                     <div style={{flex:1}}>
                       <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
                         <span style={{background:dc,color:"#fff",borderRadius:5,padding:"2px 9px",fontSize:10,fontWeight:700}}>{groepen.find(g=>g.id===l.groepId)?.naam||l.cat||"Product"}</span>
                         <span style={{fontSize:11,color:"#94a3b8"}}>×{l.aantal} {l.eenheid}</span>
                       </div>
                       <div style={{fontWeight:800,fontSize:16,color:"#1e293b",lineHeight:1.3,marginBottom:4}}>{l.naam}</div>
-                      {l.omschr&&<div style={{fontSize:12.5,color:"#475569",lineHeight:1.6}}>{l.omschr}</div>}
+                      <div style={{fontSize:12.5,color:"#475569",lineHeight:1.6}}>{l.omschr||""}</div>
                     </div>
                     <div style={{flexShrink:0,textAlign:"right",background:"#f8fafc",borderRadius:8,padding:"10px 14px",border:"1px solid #e2e8f0"}}>
                       <div style={{fontSize:10,color:"#94a3b8",fontWeight:600}}>EENHEIDSPRIJS</div>
@@ -5155,14 +4636,6 @@ function OfferteDocument({doc, settings}) {
                     </div>
                   )}
                   {i<uniqueProds.length-1&&<div style={{height:1,background:"#e2e8f0",marginTop:20}}/>}
-                  {/* Technische fiches indicatie (label only, PDF's staan onderaan) */}
-                  {((l.technischeFiches||[]).length>0||l.technischeFiche)&&<div style={{marginTop:8,display:"flex",flexWrap:"wrap",gap:4}}>
-                    {(l.technischeFiches||[]).map((f,fi)=>(
-                      <span key={fi} style={{display:"inline-flex",alignItems:"center",gap:4,background:"#eff6ff",border:"1px solid #bfdbfe",borderRadius:5,padding:"3px 10px",fontSize:11,color:"#2563eb",fontWeight:600}}>📎 {f.naam||"Fiche "+(fi+1)}</span>
-                    ))}
-                    {l.technischeFiche&&!(l.technischeFiches||[]).length&&<span style={{display:"inline-flex",alignItems:"center",gap:4,background:"#eff6ff",border:"1px solid #bfdbfe",borderRadius:5,padding:"3px 10px",fontSize:11,color:"#2563eb",fontWeight:600}}>📎 {l.fichNaam||"Technische fiche"}</span>}
-                    <span style={{fontSize:10,color:"#94a3b8",alignSelf:"center"}}>→ zie onderaan</span>
-                  </div>}
                 </div>
               );
             })}
@@ -5179,7 +4652,7 @@ function OfferteDocument({doc, settings}) {
           <div className="qt-header">
             <div>
               {bed.logo?<img src={bed.logo} alt="" style={{maxWidth:logoOfferte.w,maxHeight:Math.min(logoOfferte.h,40),objectFit:"contain",position:"relative",zIndex:logoOfferte.zIndex}}/>:<div className="qt-from-name" style={{color:dc}}>⚡ {bed.naam}</div>}
-              <div className="qt-from-info">{bed.adres} · {bed.gemeente}<br/>{bed.tel} · {bed.email} · {fmtBtwnr(bed.btwnr)}</div>
+              {lyt.bedrijf?.toonOnderLogo!==false&&<div className="qt-from-info">{bed.adres} · {bed.gemeente}<br/>{bed.tel} · {bed.email} · {fmtBtwnr(bed.btwnr)}</div>}
             </div>
             <div style={{textAlign:"right"}}>
               <div className="qt-dtype" style={{color:dc}}>OFFERTE</div>
@@ -5194,33 +4667,24 @@ function OfferteDocument({doc, settings}) {
           </div>
           <div className="qt-parties" style={{direction: lyt.klant?.positie==="links" ? "rtl" : "ltr"}}>
             <div style={{direction:"ltr"}}>{bedVelden.naam!==false&&<div className="qt-party-name">{bed.naam}</div>}{bedVelden.adres!==false&&<div className="qt-party-info">{bed.adres}</div>}{bedVelden.gemeente!==false&&<div className="qt-party-info">{bed.gemeente}</div>}<div style={{fontFamily:"JetBrains Mono,monospace",fontSize:10.5,color:"#64748b",marginTop:3}}>{bedVelden.btwnr!==false&&<>{fmtBtwnr(bed.btwnr)}<br/></>}{bedVelden.iban!==false&&<>IBAN: {bed.iban}<br/></>}{bedVelden.tel!==false&&<>{bed.tel}<br/></>}{bedVelden.email!==false&&<>{bed.email}</>}</div></div>
-            <div style={{direction:"ltr"}}><div className="qt-party-lbl">Klant</div>{klantVelden.naam!==false&&<div className="qt-party-name">{doc.klant?.naam}</div>}{klantVelden.bedrijf!==false&&doc.klant?.bedrijf&&<div style={{fontWeight:600,color:"#475569",fontSize:12.5}}>{doc.klant.bedrijf}</div>}{klantVelden.adres!==false&&<div className="qt-party-info">{doc.klant?.adres}</div>}{klantVelden.gemeente!==false&&<div className="qt-party-info">{doc.klant?.gemeente}</div>}{klantVelden.btwnr!==false&&doc.klant?.btwnr&&<div style={{fontFamily:"JetBrains Mono,monospace",fontSize:10.5,color:"#64748b"}}>{fmtBtwnr(doc.klant.btwnr)}</div>}{klantVelden.tel!==false&&doc.klant?.tel&&<div style={{fontSize:11,color:"#64748b"}}>{doc.klant.tel}</div>}{klantVelden.email!==false&&doc.klant?.email&&<div style={{fontSize:11,color:"#64748b"}}>{doc.klant.email}</div>}</div>
+            <div style={{direction:"ltr"}}>{lyt.klant?.toonLabel!==false&&<div className="qt-party-lbl">Klant</div>}{klantVelden.naam!==false&&<div className="qt-party-name">{doc.klant?.naam}</div>}{klantVelden.bedrijf!==false&&doc.klant?.bedrijf&&<div style={{fontWeight:600,color:"#475569",fontSize:12.5}}>{doc.klant.bedrijf}</div>}{klantVelden.adres!==false&&<div className="qt-party-info">{doc.klant?.adres}</div>}{klantVelden.gemeente!==false&&<div className="qt-party-info">{doc.klant?.gemeente}</div>}{klantVelden.btwnr!==false&&doc.klant?.btwnr&&<div style={{fontFamily:"JetBrains Mono,monospace",fontSize:10.5,color:"#64748b"}}>{fmtBtwnr(doc.klant.btwnr)}</div>}{klantVelden.tel!==false&&doc.klant?.tel&&<div style={{fontSize:11,color:"#64748b"}}>{doc.klant.tel}</div>}{klantVelden.email!==false&&doc.klant?.email&&<div style={{fontSize:11,color:"#64748b"}}>{doc.klant.email}</div>}</div>
           </div>
           {lijnenPerGroep.map(g=>(
             <div key={g.id}>
               <div className="grp-hdr" style={{background:dc}}>{g.naam}</div>
               <table className="qt-tbl">
                 <thead><tr><th>Omschrijving</th><th>Eenh.</th><th className="c">Aantal</th><th className="r">Prijs excl.</th><th className="r">BTW</th><th className="r">Totaal</th></tr></thead>
-                <tbody>{g.items.map((l,i)=>{
-                  const isInfo = !l.productId && l.prijs===0 && l.naam;
-                  if(isInfo) return(
-                    <tr key={i} style={{background:"#f8fafc"}}>
-                      <td colSpan={6} style={{padding:"6px 10px",fontSize:12,color:"#475569",fontStyle:"italic",borderBottom:"1px solid #e2e8f0"}}>
-                        <span style={{fontWeight:600,color:"#64748b"}}>ℹ️ {l.naam}</span>
-                        {l.omschr&&<span style={{marginLeft:6,color:"#94a3b8"}}> — {l.omschr}</span>}
-                      </td>
-                    </tr>
-                  );
-                  return(
-                  <tr key={i} style={l.prijs<0?{color:"#ef4444",fontStyle:"italic"}:{}}>
+                <tbody>{g.items.map((l,i)=>(
+                  l.isInfo
+                    ?<tr key={i} style={{background:"#f8fafc"}}><td colSpan={6} style={{fontStyle:"italic",color:"#64748b",fontSize:12,padding:"6px 8px"}}>{l.naam}{l.omschr?` — ${l.omschr}`:""}</td></tr>
+                    :<tr key={i} style={l.prijs<0?{color:"#ef4444",fontStyle:"italic"}:{}}>
                     <td><div className="qt-item-main">{l.naam}</div>{l.omschr&&<div className="qt-item-sub">{l.omschr}</div>}</td>
                     <td>{l.eenheid||"stuk"}</td><td className="c">{l.aantal}</td>
                     <td className="r">{fmtEuro(l.prijs)}</td>
                     <td className="r">{l.btw}%</td>
                     <td className="r"><strong>{fmtEuro(l.prijs*l.aantal)}</strong></td>
                   </tr>
-                  );
-                })}</tbody>
+                ))}</tbody>
               </table>
               <div className="grp-sub"><span>Subtotaal {g.naam}:</span><strong>{fmtEuro(g.items.reduce((s,l)=>s+l.prijs*l.aantal,0))}</strong></div>
             </div>
@@ -5261,40 +4725,9 @@ function OfferteDocument({doc, settings}) {
       </div>
 
       {/* TECHNISCHE FICHES — AAN HET EINDE, elke PDF-pagina = eigen A4 */}
-      {uniqueProds.filter(l=>(l.technischeFiche&&l.technischeFiche!=="[PDF]")||(l.technischeFiches||[]).length>0).map((l,fi)=>{
-        console.log(`📎 Fiche sectie voor ${l.naam}:`, 
-          'technischeFiche:', l.technischeFiche ? (l.technischeFiche.length>100?l.technischeFiche.slice(0,50)+'...':l.technischeFiche) : 'null',
-          'technischeFiches:', (l.technischeFiches||[]).map(f=>({naam:f.naam, hasData:!!f.data, dataLen:f.data?.length||0, url:f.url||''}))
-        );
-        return(
-        <div key={`fiche-grp-${fi}`}>
-          {/* Legacy: single technischeFiche — alleen als GEEN array */}
-          {l.technischeFiche&&l.technischeFiche!=="[PDF]"&&l.technischeFiche.length>100&&!(l.technischeFiches||[]).length&&
-            <FichePages fiche={l.technischeFiche} naam={l.naam} fichNaam={l.fichNaam} omschr={l.omschr} dc={dc} bed={bed} docNummer={doc.nummer}/>}
-          {/* Nieuw: array technischeFiches — render ALLE met data */}
-          {(l.technischeFiches||[]).map((f,ffi)=>{
-            const ficheData = f.data || f.url || null;
-            if(!ficheData || ficheData.length < 100) {
-              // Geen base64 data — toon placeholder
-              return(
-                <div key={`fiche-ph-${fi}-${ffi}`}>
-                  <div className="doc-page-lbl">Technische fiche — {f.naam||l.naam}</div>
-                  <div className="doc-page" style={{pageBreakBefore:"always"}}>
-                    <div style={{height:5,background:dc,flexShrink:0}}/>
-                    <div style={{padding:"30mm 20mm",textAlign:"center"}}>
-                      <div style={{fontSize:36,marginBottom:16}}>📋</div>
-                      <div style={{fontWeight:800,fontSize:20,color:"#1e293b",marginBottom:8}}>{l.naam}</div>
-                      <div style={{fontSize:14,color:"#94a3b8",marginBottom:8}}>{f.naam||"Technische fiche"}</div>
-                      <div style={{fontSize:12,color:"#f59e0b",padding:"8px 16px",background:"#fffbeb",borderRadius:8,display:"inline-block"}}>⚠ PDF data niet beschikbaar — product opnieuw opslaan om fiches te herstellen</div>
-                    </div>
-                  </div>
-                </div>
-              );
-            }
-            return <FichePages key={`fiche-${fi}-${ffi}`} fiche={ficheData} naam={l.naam} fichNaam={f.naam} omschr={l.omschr} dc={dc} bed={bed} docNummer={doc.nummer}/>;
-          })}
-        </div>
-      );})}
+      {uniqueProds.filter(l=>l.technischeFiche).map((l,fi)=>(
+        <FichePages key={`fiche-${fi}`} fiche={l.technischeFiche} naam={l.naam} fichNaam={l.fichNaam} omschr={l.omschr} dc={dc} bed={bed} docNummer={doc.nummer}/>
+      ))}
     </div>
   );
 }
@@ -5334,7 +4767,7 @@ function FactuurDocument({doc, settings}) {
           {(ontwerp==="classic"||!ontwerp)&&<div className="qt-header">
             <div>
               {bed.logo?<img src={bed.logo} alt="" style={{maxWidth:logoOfferte.w,maxHeight:logoOfferte.h,objectFit:"contain",marginBottom:6,position:"relative",zIndex:logoOfferte.zIndex}}/>:<div className="qt-from-name" style={{color:dc}}>⚡ {bed.naam}</div>}
-              <div className="qt-from-info">{bed.adres} · {bed.gemeente}<br/>{bed.tel} · {bed.email} · {fmtBtwnr(bed.btwnr)}</div>
+              {lyt.bedrijf?.toonOnderLogo!==false&&<div className="qt-from-info">{bed.adres} · {bed.gemeente}<br/>{bed.tel} · {bed.email} · {fmtBtwnr(bed.btwnr)}</div>}
             </div>
             <div style={{textAlign:"right"}}>
               <div className="qt-dtype" style={{color:dc}}>FACTUUR</div>
@@ -5384,27 +4817,16 @@ function FactuurDocument({doc, settings}) {
           </div>
           <div className="qt-parties" style={{direction: lyt.klant?.positie==="links" ? "rtl" : "ltr"}}>
             <div style={{direction:"ltr"}}>{bedVelden.naam!==false&&<div className="qt-party-name">{bed.naam}</div>}{bedVelden.adres!==false&&<div className="qt-party-info">{bed.adres}</div>}{bedVelden.gemeente!==false&&<div className="qt-party-info">{bed.gemeente}</div>}<div style={{fontFamily:"JetBrains Mono,monospace",fontSize:10.5,color:"#64748b",marginTop:3}}>{bedVelden.btwnr!==false&&<>{fmtBtwnr(bed.btwnr)}<br/></>}{bedVelden.iban!==false&&<>IBAN: {bed.iban}</>}</div></div>
-            <div style={{direction:"ltr"}}><div className="qt-party-lbl">Gefactureerd aan</div>{klantVelden.naam!==false&&<div className="qt-party-name">{doc.klant?.naam}</div>}{klantVelden.bedrijf!==false&&doc.klant?.bedrijf&&<div style={{fontWeight:600,color:"#475569",fontSize:12.5}}>{doc.klant.bedrijf}</div>}{klantVelden.adres!==false&&<div className="qt-party-info">{doc.klant?.adres}</div>}{klantVelden.gemeente!==false&&<div className="qt-party-info">{doc.klant?.gemeente}</div>}{klantVelden.btwnr!==false&&doc.klant?.btwnr&&<div style={{fontFamily:"JetBrains Mono,monospace",fontSize:10.5,color:"#64748b"}}>{fmtBtwnr(doc.klant.btwnr)}</div>}</div>
+            <div style={{direction:"ltr"}}>{lyt.klant?.toonLabel!==false&&<div className="qt-party-lbl">Gefactureerd aan</div>}{klantVelden.naam!==false&&<div className="qt-party-name">{doc.klant?.naam}</div>}{klantVelden.bedrijf!==false&&doc.klant?.bedrijf&&<div style={{fontWeight:600,color:"#475569",fontSize:12.5}}>{doc.klant.bedrijf}</div>}{klantVelden.adres!==false&&<div className="qt-party-info">{doc.klant?.adres}</div>}{klantVelden.gemeente!==false&&<div className="qt-party-info">{doc.klant?.gemeente}</div>}{klantVelden.btwnr!==false&&doc.klant?.btwnr&&<div style={{fontFamily:"JetBrains Mono,monospace",fontSize:10.5,color:"#64748b"}}>{fmtBtwnr(doc.klant.btwnr)}</div>}</div>
           </div>
           {lijnenPerGroep.map(g=>(
             <div key={g.id}>
               <div className="grp-hdr" style={{background:dc}}>{g.naam}</div>
               <table className="qt-tbl">
                 <thead><tr><th>Omschrijving</th><th>Eenh.</th><th className="c">Aantal</th><th className="r">Prijs excl.</th><th className="r">BTW</th><th className="r">Totaal</th></tr></thead>
-                <tbody>{g.items.map((l,i)=>{
-                  const isInfo = !l.productId && l.prijs===0 && l.naam;
-                  if(isInfo) return(
-                    <tr key={i} style={{background:"#f8fafc"}}>
-                      <td colSpan={6} style={{padding:"6px 10px",fontSize:12,color:"#475569",fontStyle:"italic",borderBottom:"1px solid #e2e8f0"}}>
-                        <span style={{fontWeight:600,color:"#64748b"}}>ℹ️ {l.naam}</span>
-                        {l.omschr&&<span style={{marginLeft:6,color:"#94a3b8"}}> — {l.omschr}</span>}
-                      </td>
-                    </tr>
-                  );
-                  return(
-                  <tr key={i}><td><div className="qt-item-main">{l.naam}</div>{l.omschr&&<div className="qt-item-sub">{l.omschr}</div>}</td><td>{l.eenheid}</td><td className="c">{l.aantal}</td><td className="r">{fmtEuro(l.prijs)}</td><td className="r">{l.btw}%</td><td className="r"><strong>{fmtEuro(l.prijs*l.aantal)}</strong></td></tr>
-                  );
-                })}</tbody>
+                <tbody>{g.items.map((l,i)=>(
+                  <tr key={i}>{l.isInfo?<td colSpan={6} style={{fontStyle:"italic",color:"#64748b",fontSize:12,padding:"6px 8px"}}>{l.naam}{l.omschr?` — ${l.omschr}`:""}</td>:<><td><div className="qt-item-main">{l.naam}</div>{l.omschr&&<div className="qt-item-sub">{l.omschr}</div>}</td><td>{l.eenheid}</td><td className="c">{l.aantal}</td><td className="r">{fmtEuro(l.prijs)}</td><td className="r">{l.btw}%</td><td className="r"><strong>{fmtEuro(l.prijs*l.aantal)}</strong></td></>}</tr>
+                ))}</tbody>
               </table>
             </div>
           ))}
@@ -5477,7 +4899,7 @@ ${docWrapHtml}
 }
 
 // ─── DOC MODAL ───────────────────────────────────────────────────
-function DocModal({doc,type,settings,onClose,onFactuur,onStatusOff,onStatusFact,onEmail,onPeppol}) {
+function DocModal({doc,type,settings,onClose,onFactuur,onStatusOff,onStatusFact,onEmail,onPlan}) {
   const sc = type==="offerte" ? (OFF_STATUS[doc.status]||OFF_STATUS.concept) : (FACT_STATUS[doc.status]||FACT_STATUS.concept);
 
   const doPrint = () => {
@@ -5544,8 +4966,12 @@ function DocModal({doc,type,settings,onClose,onFactuur,onStatusOff,onStatusFact,
             </select>
           )}
           {type==="offerte"&&doc.status==="goedgekeurd"&&!doc.factuurId&&<button className="btn bg btn-sm" onClick={()=>onFactuur(doc)}>🧾 Factuur</button>}
+          {type==="offerte"&&doc.status==="goedgekeurd"&&onPlan&&<button className="btn btn-sm" style={{background:"#d4ff00",color:"#1a2e4c",fontWeight:700,border:"none"}} onClick={()=>{onClose();onPlan(doc);}}>📅 Inplannen</button>}
           <button className="btn bs btn-sm" onClick={onEmail}>📧 Verzenden</button>
-          {type==="factuur"&&onPeppol&&settings?.integraties?.peppolEnabled&&<button className="btn btn-sm" style={{background:"#7c3aed",color:"#fff",fontWeight:700}} onClick={onPeppol} title="Verstuur via Peppol/Billit">{doc.peppolVerstuurd?"✅ Peppol ✓":"📨 Peppol"}</button>}
+          {type==="factuur"&&getBillitKey(settings)&&doc.klant?.peppolActief&&<button className="btn bs btn-sm" style={{background:"#059669",color:"#fff",border:"none"}} onClick={async()=>{
+            if(!window.confirm(`Factuur ${doc.nummer} verzenden via PEPPOL naar ${doc.klant?.naam}?`))return;
+            try{await sendViaPeppol(doc,settings);alert("✓ Factuur verzonden via PEPPOL!");onStatusFact("verstuurd");}catch(e){alert("PEPPOL fout: "+e.message);}
+          }}>📨 Peppol</button>}
           <button id="doc-print-btn" className="btn bs btn-sm" title="Afdrukken — kies in printerinstellingen: Koptekst en voettekst UIT" onClick={doPrint}>🖨 Afdrukken</button>
           <button className="btn bs btn-sm" title="Download als HTML (open in browser → Afdrukken → PDF)" onClick={()=>{
             const docWrap=document.querySelector(".mb-body .doc-wrap");
@@ -5597,7 +5023,7 @@ function FactuurModal({off,settings,onMaak,onClose}) {
 }
 
 // ─── KLANT MODAL ─────────────────────────────────────────────────
-function KlantModal({klant,onSave,onClose}) {
+function KlantModal({klant,onSave,onClose,settings}) {
   const [form,setForm]=useState({naam:"",bedrijf:"",email:"",tel:"",adres:"",gemeente:"",btwnr:"",type:"particulier",btwRegime:"btw6",peppolActief:false,...klant});
   const [kboLoading,setKboLoading]=useState(false);const [kboError,setKboError]=useState("");
   const [addrSug,setAddrSug]=useState([]);const addrTimer=useRef();
@@ -5627,12 +5053,11 @@ function KlantModal({klant,onSave,onClose}) {
     const nr=forcedNr||stripBe(form.btwnr);if(nr.length<9)return;
     setKboLoading(true);setKboError("");
     try{
-      // ALTIJD gebruik API key - hardcoded als fallback
-      const HARDCODED_API_KEY = "OqzgVJ8I5wqgA8QjB0Aotu446pn7xqVI";
-      const settings = JSON.parse(localStorage.getItem("billr_settings") || "{}");
-      const cbeApiKey = settings.integraties?.cbeApiKey || HARDCODED_API_KEY;
+      // Gebruik opgeslagen settings (bevat Billit API key)
+      let appSettings;
+      try { appSettings = JSON.parse(localStorage.getItem("b4_set") || "{}"); } catch(_) { appSettings = {}; }
       
-      const kboData = await kboLookup(`BE${nr}`, cbeApiKey);
+      const kboData = await kboLookup(`BE${nr}`, appSettings);
       
       // Scenario 1: Helemaal gefaald (null)
       if(!kboData){
@@ -5643,31 +5068,32 @@ function KlantModal({klant,onSave,onClose}) {
       
       // Scenario 2: BTW geldig maar geen data gevonden
       if(!kboData.naam && kboData.btwnr){
-        setKboError("BTW-nummer is geldig, maar bedrijfsgegevens konden niet worden opgehaald. Vul handmatig in.");
-        // Zet wel het geformatteerde BTW-nummer
+        // Scenario 2: BTW geldig maar geen naam gevonden — normaal, geen fout
+        setKboError(""); // Geen error tonen
+        // Zet wel het geformatteerde BTW-nummer + PEPPOL status
+        let peppolStatus = kboData.peppolActief || false;
+        if(!peppolStatus && getBillitKey(appSettings)) {
+          try { const r = await checkPeppol(`BE${nr}`, appSettings); peppolStatus = r?.registered || false; } catch(_){}
+        }
         setForm(p=>({
           ...p,
           btwnr: kboData.btwnr,
           type: "bedrijf",
-          peppolId: kboData.peppolId
+          peppolId: kboData.peppolId,
+          peppolActief: peppolStatus
         }));
         setKboLoading(false);
         return;
       }
       
       // Scenario 3: Success met data
-      // Check PEPPOL status via Billit
-      let peppolStatus = false;
-      if(settings.integraties?.peppolEnabled && settings.integraties?.billitApiKey) {
+      // PEPPOL status is al meegenomen in kboLookup via Billit
+      let peppolStatus = kboData.peppolActief || false;
+      if(!peppolStatus && getBillitKey(appSettings)) {
         try {
-          const result = await checkPeppolBillit(`BE${nr}`, settings);
-          peppolStatus = result.registered;
-        } catch(e) {
-          console.log("PEPPOL check failed:", e);
-          peppolStatus = await checkPeppolDirectory(`BE${nr}`, settings);
-        }
-      } else {
-        peppolStatus = await checkPeppolDirectory(`BE${nr}`, settings);
+          const result = await checkPeppol(`BE${nr}`, appSettings);
+          peppolStatus = result?.registered || false;
+        } catch(e) { console.log("Billit PEPPOL check failed"); }
       }
       
       setForm(p=>({
@@ -5708,19 +5134,19 @@ function KlantModal({klant,onSave,onClose}) {
       <div className="mh"><div className="mt-m">{klant?.id?"Klant bewerken":"Nieuwe klant"}</div><button className="xbtn" onClick={onClose}>×</button></div>
       <div className="mb-body">
         <div style={{padding:"8px 12px",background:"#f0f4f8",borderRadius:7,marginBottom:12,fontSize:12,color:"#475569"}}>
-          ℹ Voer een BTW-nummer in → automatisch als bedrijf herkend. Adres heeft autocomplete via OpenStreetMap.
+          ℹ Voer een BTW-nummer in → automatisch gevalideerd + PEPPOL status. Adres heeft autocomplete via OpenStreetMap.
         </div>
         <div className="fg">
-          <label className="fl">BTW-nummer <span style={{fontWeight:400,color:"#64748b"}}>— Belgisch bedrijf: automatisch ingevuld via KBO</span></label>
+          <label className="fl">BTW-nummer <span style={{fontWeight:400,color:"#64748b"}}>— BTW validatie + PEPPOL check</span></label>
           <div style={{display:"flex",gap:7}}>
             <input className="fc" style={{flex:1,fontFamily:"JetBrains Mono,monospace",fontWeight:600}} value={form.btwnr} onChange={e=>set("btwnr",e.target.value)} placeholder="BE0123456789"/>
             {stripBe(form.btwnr).length>=9&&(
               <button className="btn b2 btn-sm" onClick={()=>zoekKBO()} disabled={kboLoading} style={{minWidth:90}}>
-                {kboLoading?<><span className="spin" style={{display:"inline-block"}}>⟳</span> Bezig…</>:"🔍 KBO opzoeken"}
+                {kboLoading?<><span className="spin" style={{display:"inline-block"}}>⟳</span> Bezig…</>:"🔍 Controleren"}
               </button>
             )}
           </div>
-          {kboLoading&&<div style={{background:"#eff6ff",border:"1px solid #93c5fd",borderRadius:6,padding:"7px 10px",marginTop:6,fontSize:12,color:"#1d4ed8",fontWeight:600}}>🔍 Bedrijfsgegevens ophalen via KBO-databank…</div>}
+          {kboLoading&&<div style={{background:"#eff6ff",border:"1px solid #93c5fd",borderRadius:6,padding:"7px 10px",marginTop:6,fontSize:12,color:"#1d4ed8",fontWeight:600}}>🔍 BTW valideren + PEPPOL status controleren…</div>}
           {kboError&&<div style={{background:"#fef2f2",border:"1px solid #fca5a5",borderRadius:6,padding:"6px 10px",marginTop:5,fontSize:12,color:"#991b1b"}}>⚠ {kboError}</div>}
           {stripBe(form.btwnr).length<9&&form.btwnr.length>0&&<div style={{fontSize:11,color:"#94a3b8",marginTop:3}}>Voer 9+ cijfers in voor automatische opzoeking</div>}
           {form.type==="bedrijf"&&stripBe(form.btwnr).length>=9&&!kboLoading&&(
@@ -5815,46 +5241,41 @@ function ProductModal({prod,onSave,onClose,settings}) {
   return(
     <div className="mo"><div className="mdl mmd">
       <div className="mh"><div className="mt-m">{prod?.id?"Product bewerken":"Nieuw product"}</div><button className="xbtn" onClick={onClose}>×</button></div>
-      <div className="mb-body">
+      <div className="mb-body" style={{padding:"12px 16px"}}>
         <div className="fr2">
-          <div className="fg"><label className="fl">Productnaam *</label><input className="fc" value={form.naam} onChange={e=>set("naam",e.target.value)}/></div>
-          <div className="fg"><label className="fl">Merk</label><input className="fc" value={form.merk} onChange={e=>set("merk",e.target.value)} placeholder="Smappee, SMA, …"/></div>
+          <div className="fg" style={{marginBottom:8}}><label className="fl">Productnaam *</label><input className="fc" value={form.naam} onChange={e=>set("naam",e.target.value)}/></div>
+          <div className="fg" style={{marginBottom:8}}><label className="fl">Merk</label><input className="fc" value={form.merk} onChange={e=>set("merk",e.target.value)} placeholder="Smappee, SMA, …"/></div>
         </div>
-        <div className="fr2">
-          <div className="fg"><label className="fl">Categorie</label>
-            <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-              {cats.map(c=>{
-                const dynC=dynCats.find(x=>x.naam===c);
-                const sel=form.cat===c;
-                return(
-                  <button key={c} type="button" className={`btn btn-sm ${sel?"bp":"bs"}`}
-                    style={{background:sel?(dynC?.kleur||"#2563eb"):undefined,borderColor:sel?(dynC?.kleur||"#2563eb"):undefined}}
-                    onClick={()=>set("cat",c)}>
-                    {dynC?.icoon||"📦"} {c}
-                  </button>
-                );
-              })}
-              <input className="fc" placeholder="Nieuwe categorie…" style={{maxWidth:160,fontSize:12}} 
-                value={cats.includes(form.cat)?"":(form.cat==="Aangepast"?"":form.cat)}
-                onChange={e=>set("cat",e.target.value)}
-                onFocus={()=>{if(cats.includes(form.cat))set("cat","");}}
-              />
-            </div>
+        <div className="fg" style={{marginBottom:8}}><label className="fl">Categorie</label>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(120px,1fr))",gap:5}}>
+            {cats.map(c=>{
+              const dynC=dynCats.find(x=>x.naam===c);
+              const sel=form.cat===c;
+              return(
+                <button key={c} type="button" className={`btn btn-sm ${sel?"bp":"bs"}`}
+                  style={{background:sel?(dynC?.kleur||"#2563eb"):undefined,borderColor:sel?(dynC?.kleur||"#2563eb"):undefined,padding:"7px 10px",fontSize:12,justifyContent:"center"}}
+                  onClick={()=>set("cat",c)}>
+                  {dynC?.icoon||"📦"} {c}
+                </button>
+              );
+            })}
           </div>
-          <div className="fg"><label className="fl">Eenheid</label><select className="fc" value={form.eenheid} onChange={e=>set("eenheid",e.target.value)}>{["stuk","m","uur","dag","jaar","forfait"].map(u=><option key={u} value={u}>{u}</option>)}</select></div>
         </div>
-        <div className="fg"><label className="fl">Beschrijving</label><textarea className="fc" rows={2} value={form.omschr} onChange={e=>set("omschr",e.target.value)}/></div>
         <div className="fr2">
-          <div className="fg"><label className="fl">Prijs excl. BTW (€)</label><input type="number" className="fc" value={form.prijs} step="0.01" min={0} onChange={e=>set("prijs",Number(e.target.value))}/></div>
-          <div className="fg"><label className="fl">BTW tarief</label><select className="fc" value={form.btw} onChange={e=>set("btw",Number(e.target.value))}><option value={6}>6% (renovatie)</option><option value={21}>21% (standaard)</option></select></div>
+          <div className="fg" style={{marginBottom:8}}><label className="fl">Eenheid</label><select className="fc" value={form.eenheid} onChange={e=>set("eenheid",e.target.value)}>{["stuk","m","uur","dag","jaar","forfait"].map(u=><option key={u} value={u}>{u}</option>)}</select></div>
+          <div className="fg" style={{marginBottom:8}}><label className="fl">Beschrijving</label><input className="fc" value={form.omschr} onChange={e=>set("omschr",e.target.value)}/></div>
         </div>
-        <div className="fg"><label className="fl">Afbeelding URL</label>
+        <div className="fr2">
+          <div className="fg" style={{marginBottom:8}}><label className="fl">Prijs excl. BTW (€)</label><input type="number" className="fc" value={form.prijs} step="0.01" min={0} onChange={e=>set("prijs",Number(e.target.value))}/></div>
+          <div className="fg" style={{marginBottom:8}}><label className="fl">BTW tarief</label><select className="fc" value={form.btw} onChange={e=>set("btw",Number(e.target.value))}><option value={6}>6% (renovatie)</option><option value={21}>21% (standaard)</option></select></div>
+        </div>
+        <div className="fg" style={{marginBottom:8}}><label className="fl">Afbeelding URL</label>
           <div style={{display:"flex",gap:8,alignItems:"center"}}>
             <input className="fc" value={form.imageUrl} onChange={e=>set("imageUrl",e.target.value)} placeholder="https://…"/>
             {form.imageUrl&&<img src={form.imageUrl} alt="" style={{width:44,height:44,objectFit:"contain",borderRadius:5,background:"#f8fafc",border:"1px solid #e2e8f0",flexShrink:0}} onError={e=>{e.target.style.display="none"}}/>}
           </div>
         </div>
-        <div className="fg"><label className="fl">Technische specs (één per lijn)</label><textarea className="fc" rows={3} value={specsStr} onChange={e=>{setSpecsStr(e.target.value);set("specs",e.target.value.split("\n").filter(Boolean));}}/></div>
+        <div className="fg" style={{marginBottom:8}}><label className="fl">Technische specs (één per lijn)</label><textarea className="fc" rows={2} value={specsStr} onChange={e=>{setSpecsStr(e.target.value);set("specs",e.target.value.split("\n").filter(Boolean));}}/></div>
         <div className="fg">
           <label className="fl">📎 Technische fiche (PDF)</label>
           <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
@@ -5915,9 +5336,9 @@ function buildOfferteHtml(doc, bed, tot, acceptUrl, rejectUrl, customHtml, extra
     <tr><td style="padding:10px 14px;border:1px solid #e2e8f0;font-weight:600;font-size:16px">Totaal incl. BTW</td><td style="padding:10px 14px;border:1px solid #e2e8f0;font-size:16px;font-weight:700;color:${dc}">${fmtEuro(tot.totaal)}</td></tr>
   </table>
   <div style="text-align:center;margin:28px 0">
-    <a href="${acceptUrl}" style="display:inline-block;background:${dc};color:#fff;padding:14px 36px;border-radius:8px;text-decoration:none;font-weight:700;font-size:15px">📋 Offerte bekijken</a>
+    <a href="${acceptUrl}" style="display:inline-block;background:${dc};color:#fff;padding:14px 36px;border-radius:8px;text-decoration:none;font-weight:700;font-size:15px">📄 Bekijk uw offerte</a>
   </div>
-  <div style="text-align:center;margin:6px 0;font-size:12px;color:#94a3b8">U kunt de offerte bekijken, goedkeuren of afwijzen via bovenstaande link.</div>
+  ${''}
   <div style="margin-top:24px;padding-top:16px;border-top:1px solid #e2e8f0;font-size:13px;color:#64748b;line-height:1.6">
     <p style="margin:0"><strong>${bed.naam}</strong></p>
     <p style="margin:4px 0">${bed.adres||''} · ${bed.gemeente||''}</p>
@@ -5968,16 +5389,61 @@ function EmailModal({doc,type,settings,onClose,onSend,onAcceptToken}) {
 
   // Accept/reject tokens voor offerte
   const token = useRef(genToken());
-  // Link naar publieke offerte pagina (offerte.html) — klant kan daar bekijken + goedkeuren/afwijzen
-  const offerteViewUrl = type==="offerte" ? `${window.location.origin}/offerte.html?id=${doc.id}&nr=${encodeURIComponent(doc.nummer||"")}` : "";
-  const acceptUrl = offerteViewUrl; // Email knop linkt naar view pagina
-  const rejectUrl = ""; // Niet meer nodig — afwijzen gebeurt op offerte.html
+  // Store full offerte in Supabase shared_offertes and use token-based URL
+  const [acceptUrl, setAcceptUrl] = useState("");
+  useEffect(()=>{
+    if(type!=="offerte") return;
+    const storeSharedOfferte = async ()=>{
+      try {
+        const t = token.current;
+        const cleanLogo = (bed.logo||"").startsWith("data:") ? "" : (bed.logo||"");
+        const cleanBed = {naam:bed.naam||"",adres:bed.adres||"",gemeente:bed.gemeente||"",tel:bed.tel||"",email:bed.email||"",btwnr:bed.btwnr||"",website:bed.website||"",iban:bed.iban||"",bic:bed.bic||"",tagline:bed.tagline||"",logo:cleanLogo};
+        const cleanLijnen = (doc.lijnen||[]).map(l=>({
+          id:l.id,productId:l.productId,naam:l.naam||"",omschr:l.omschr||"",prijs:l.prijs||0,btw:l.btw||21,aantal:l.aantal||1,
+          eenheid:l.eenheid||"stuk",groepId:l.groepId,isInfo:l.isInfo||false,
+          imageUrl:(l.imageUrl||"").startsWith("data:")?"":l.imageUrl||"",
+          specs:l.specs||[],cat:l.cat||"",technischeFiche:null,technischeFiches:[]
+        }));
+        const cleanSj = {...(settings?.sjabloon||{})}; delete cleanSj.achtergrondImg;
+        const payload = {
+          id:doc.id,nummer:doc.nummer||"",aangemaakt:doc.aangemaakt,vervaldatum:doc.vervaldatum,
+          klant:doc.klant,lijnen:cleanLijnen,groepen:doc.groepen||[],
+          notities:doc.notities||"",installatieType:doc.installatieType||"",btwRegime:doc.btwRegime||"btw21",
+          voorschot:doc.voorschot||"",betalingstermijn:doc.betalingstermijn||14,
+          korting:doc.korting||0,kortingType:doc.kortingType||"pct",
+          _dc:dc,_bed:cleanBed,_sj:cleanSj,_lyt:settings?.layout||{},_vw:settings?.voorwaarden||{}
+        };
+        const sz = Math.round(JSON.stringify(payload).length/1024);
+        console.log(`☁️ shared_offertes payload: ${sz}KB`);
+        
+        const result = await Promise.race([
+          sb.from("shared_offertes").insert({token:t, offerte_data:payload, settings_data:{bedrijf:cleanBed,sjabloon:cleanSj,layout:settings?.layout||{},voorwaarden:settings?.voorwaarden||{},thema:settings?.thema||{},email:settings?.email||{}}}),
+          new Promise(r => setTimeout(()=>r({error:{message:"timeout 10s"}}), 10000))
+        ]);
+        if(result.error) { console.error("shared_offertes:", result.error.message); throw new Error(result.error.message); }
+        setAcceptUrl(`${window.location.origin}/offerte.html?token=${t}`);
+        console.log("☁️ ✓ Link aangemaakt:", t);
+      } catch(e) {
+        console.warn("Supabase link mislukt, fallback URL:", e.message);
+        try {
+          const fb = {id:doc.id,nummer:doc.nummer,aangemaakt:doc.aangemaakt,vervaldatum:doc.vervaldatum,klant:doc.klant,
+            lijnen:(doc.lijnen||[]).map(l=>({id:l.id,naam:l.naam,omschr:l.omschr||"",prijs:l.prijs,btw:l.btw,aantal:l.aantal,eenheid:l.eenheid,groepId:l.groepId,isInfo:l.isInfo,imageUrl:(l.imageUrl||"").startsWith("data:")?"":l.imageUrl||"",specs:l.specs||[]})),
+            notities:doc.notities,installatieType:doc.installatieType,btwRegime:doc.btwRegime,groepen:doc.groepen,voorschot:doc.voorschot,betalingstermijn:doc.betalingstermijn,korting:doc.korting,kortingType:doc.kortingType,
+            _dc:dc,_bed:{naam:bed.naam,adres:bed.adres,gemeente:bed.gemeente,tel:bed.tel,email:bed.email,btwnr:bed.btwnr,website:bed.website,iban:bed.iban}};
+          setAcceptUrl(`${window.location.origin}/offerte.html?data=${btoa(encodeURIComponent(JSON.stringify(fb)))}`);
+          console.log("☁️ Fallback URL aangemaakt");
+        } catch(_){ console.error("Fallback URL mislukt"); }
+      }
+    };
+    storeSharedOfferte();
+  },[doc.id]);
+  const rejectUrl = "";
 
   // Email modus: automatisch (EmailJS), handmatig (mailto), of PEPPOL
   const hasEmailJS = !!(ejCfg.emailjsServiceId && ejCfg.emailjsPublicKey);
-  const hasPeppol = type==="factuur" && settings?.integraties?.peppolEnabled && settings?.integraties?.billitApiKey && doc.klant?.peppolActief;
+  const hasPeppol = type==="factuur" && getBillitKey(settings) && doc.klant?.peppolActief;
   const [modus, setModus] = useState(hasPeppol ? "peppol" : hasEmailJS ? "auto" : "handmatig");
-  const [tab, setTab] = useState("preview"); // "bewerk" | "preview" — standaard preview
+  const [tab, setTab] = useState("preview"); // Default: voorbeeld tonen
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
   const [error, setError] = useState("");
@@ -5998,7 +5464,17 @@ function EmailModal({doc,type,settings,onClose,onSend,onAcceptToken}) {
   const [subject, setSubject] = useState(`${type==="offerte"?"Offerte":"Factuur"} ${doc.nummer} — ${bed.naam}`);
   const [htmlBody, setHtmlBody] = useState(isHtml ? buildOfferteHtml(doc,bed,tot,acceptUrl,rejectUrl,rawTmpl,{dc}) : defaultHtml);
   const [txtBody, setTxtBody] = useState(!isHtml ? rawTmpl.replace(/{naam}/g,doc.klant?.naam||"").replace(/{nummer}/g,doc.nummer||"").replace(/{datum}/g,fmtDate(doc.datum||doc.aangemaakt)).replace(/{vervaldatum}/g,fmtDate(doc.vervaldatum)).replace(/{bedrijf}/g,bed.naam||"").replace(/{totaal}/g,fmtEuro(tot.totaal)).replace(/{iban}/g,bed.iban||"").replace(/{tel}/g,bed.tel||"") : "");
-  const [bodyMode, setBodyMode] = useState("html"); // Altijd HTML als standaard
+  const [bodyMode, setBodyMode] = useState("html"); // Always default to HTML
+
+  // Rebuild HTML wanneer acceptUrl beschikbaar wordt (async Supabase token)
+  useEffect(()=>{
+    if(acceptUrl && type==="offerte") {
+      const fresh = isHtml 
+        ? buildOfferteHtml(doc,bed,tot,acceptUrl,rejectUrl,rawTmpl,{dc})
+        : buildOfferteHtml(doc, bed, tot, acceptUrl, rejectUrl, null, {dc});
+      setHtmlBody(fresh);
+    }
+  },[acceptUrl]);
 
   const doAutoSend = async () => {
     if(!to) return setError("Voer een e-mailadres in");
@@ -6041,7 +5517,7 @@ function EmailModal({doc,type,settings,onClose,onSend,onAcceptToken}) {
               <tr><td style="padding:8px;border:1px solid #e2e8f0;font-weight:600">${type==="offerte"?"Geldig tot":"Vervaldatum"}</td><td style="padding:8px;border:1px solid #e2e8f0">${fmtDate(doc.vervaldatum)}</td></tr>
               <tr><td style="padding:8px;border:1px solid #e2e8f0;font-weight:600">Totaal incl. BTW</td><td style="padding:8px;border:1px solid #e2e8f0"><strong>${fmtEuro(tot.totaal)}</strong></td></tr>
             </table>
-            ${type==="offerte"&&acceptUrl?`<p><a href="${acceptUrl}" style="background:${dc};color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;display:inline-block;font-weight:600">📋 Offerte bekijken</a></p>`:""}
+            ${type==="offerte"&&acceptUrl?`<p><a href="${acceptUrl}" style="background:${dc};color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;display:inline-block;font-weight:600">📄 Bekijk uw offerte</a></p>`:""}
             <p>Met vriendelijke groeten,<br/><strong>${bed.naam||""}</strong><br/>${bed.tel||""} · ${bed.email||""}</p>
           </div>
         </div>`;
@@ -6160,7 +5636,7 @@ function EmailModal({doc,type,settings,onClose,onSend,onAcceptToken}) {
         {tab==="preview"&&(
           <div style={{border:"1px solid #e2e8f0",borderRadius:8,overflow:"hidden",maxHeight:420,overflowY:"auto"}}>
             {bodyMode==="html"
-              ? <iframe srcDoc={htmlBody} style={{width:"100%",height:380,border:"none"}} title="Email preview"/>
+              ? <iframe srcDoc={htmlBody} sandbox="allow-same-origin" style={{width:"100%",height:420,border:"none"}} title="Email preview"/>
               : <pre style={{padding:16,fontSize:12.5,fontFamily:"Arial",margin:0,whiteSpace:"pre-wrap"}}>{txtBody}</pre>
             }
           </div>
@@ -6186,7 +5662,12 @@ function EmailModal({doc,type,settings,onClose,onSend,onAcceptToken}) {
         {type==="offerte"&&(
           <div style={{background:"#f0fdf4",border:"1px solid #86efac",borderRadius:7,padding:"9px 12px",marginTop:10,fontSize:12,color:"#166534"}}>
             🔗 <strong>Acceptatie-link:</strong> Klant klikt op "Goedkeuren" → status wordt automatisch bijgewerkt in BILLR.
-            <div style={{fontFamily:"monospace",fontSize:10,color:"#94a3b8",marginTop:3,wordBreak:"break-all"}}>{acceptUrl}</div>
+            <div style={{fontFamily:"monospace",fontSize:10,color:"#94a3b8",marginTop:3,wordBreak:"break-all"}}>
+              {acceptUrl 
+                ? <a href={acceptUrl} target="_blank" rel="noopener noreferrer" style={{color:"#2563eb",textDecoration:"underline"}}>{acceptUrl}</a>
+                : <span style={{color:"#f59e0b"}}>⏳ Link wordt aangemaakt...</span>
+              }
+            </div>
           </div>
         )}
       </div>
@@ -6231,6 +5712,133 @@ function Rapportage({offertes,facturen}) {
 }
 
 // ─── INSTELLINGEN ─────────────────────────────────────────────────
+// ─── PLANNING MODAL ──────────────────────────────────────────────
+function PlanningModal({offerte, settings, onSave, onClose, notify}) {
+  const [datum, setDatum] = useState("");
+  const [tijd, setTijd] = useState("09:00");
+  const [duur, setDuur] = useState("4");
+  const [notities, setNotities] = useState("");
+  const [sending, setSending] = useState(false);
+  const bed = settings?.bedrijf || {};
+  const dc = settings?.sjabloon?.accentKleur || settings?.thema?.kleur || "#1a2e4a";
+
+  const doInplannen = async () => {
+    if(!datum) { notify("Kies een datum","er"); return; }
+    setSending(true);
+    
+    // Build planning email HTML
+    const emailHtml = `<div style="font-family:Arial,sans-serif;max-width:640px;margin:0 auto;background:#f8fafc">
+<div style="background:${dc};padding:28px 32px;text-align:center;border-radius:8px 8px 0 0">
+  <h1 style="color:#fff;margin:0;font-size:22px">📅 Uw installatie is ingepland!</h1>
+  <p style="color:rgba(255,255,255,.8);margin:6px 0 0;font-size:14px">${bed.naam||""}</p>
+</div>
+<div style="background:#fff;padding:28px 32px;border:1px solid #e2e8f0;border-top:0">
+  <p style="font-size:15px;color:#1e293b">Beste <strong>${offerte.klant?.naam||""}</strong>,</p>
+  <p style="font-size:14px;color:#475569;line-height:1.6">Goed nieuws! Uw installatie is ingepland. Hieronder vindt u de details.</p>
+  <div style="background:#f0fdf4;border:2px solid #86efac;border-radius:12px;padding:24px;margin:20px 0;text-align:center">
+    <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#059669;margin-bottom:8px">GEPLANDE INSTALLATIE</div>
+    <div style="font-size:28px;font-weight:900;color:#059669">${new Date(datum).toLocaleDateString("nl-BE",{weekday:"long",day:"numeric",month:"long",year:"numeric"})}</div>
+    <div style="font-size:18px;font-weight:700;color:#1e293b;margin-top:4px">${tijd} uur</div>
+    <div style="font-size:14px;color:#64748b;margin-top:4px">Geschatte duur: ${duur} uur</div>
+  </div>
+  <table style="width:100%;border-collapse:collapse;margin:20px 0;font-size:14px">
+    <tr style="background:#f1f5f9"><td style="padding:10px 14px;border:1px solid #e2e8f0;font-weight:600">Offerte</td><td style="padding:10px 14px;border:1px solid #e2e8f0">${offerte.nummer||""}</td></tr>
+    <tr><td style="padding:10px 14px;border:1px solid #e2e8f0;font-weight:600">Adres installatie</td><td style="padding:10px 14px;border:1px solid #e2e8f0">${offerte.klant?.adres||""}, ${offerte.klant?.gemeente||""}</td></tr>
+    <tr style="background:#f1f5f9"><td style="padding:10px 14px;border:1px solid #e2e8f0;font-weight:600">Type</td><td style="padding:10px 14px;border:1px solid #e2e8f0">${offerte.installatieType||""}</td></tr>
+    ${notities?`<tr><td style="padding:10px 14px;border:1px solid #e2e8f0;font-weight:600">Opmerking</td><td style="padding:10px 14px;border:1px solid #e2e8f0">${notities}</td></tr>`:""}
+  </table>
+  <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:14px 18px;font-size:13px;color:#78350f;margin:16px 0">
+    ⚠️ <strong>Belangrijk:</strong> Zorg dat de meterkast en het installatieadres bereikbaar zijn. Bij verhindering, neem minstens 48u op voorhand contact op.
+  </div>
+  <div style="margin-top:20px;padding-top:16px;border-top:1px solid #e2e8f0;font-size:13px;color:#64748b;line-height:1.6">
+    <p style="margin:0"><strong>${bed.naam}</strong> · ${bed.adres||""} · ${bed.gemeente||""}</p>
+    <p style="margin:4px 0">${bed.tel||""} · ${bed.email||""}</p>
+  </div>
+</div>
+<div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px;padding:20px;margin:0 auto;max-width:600px;text-align:center">
+  <div style="font-weight:700;font-size:14px;color:#1d4ed8;margin-bottom:8px">📅 Voeg toe aan uw agenda</div>
+  <p style="font-size:12px;color:#475569;margin-bottom:12px">Zo vergeet u de afspraak niet!</p>
+  <a href="https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(`Installatie ${offerte.nummer||""} — ${bed.naam||""}`)}&details=${encodeURIComponent(`Installatie ${offerte.nummer||""}\nAdres: ${offerte.klant?.adres||""}, ${offerte.klant?.gemeente||""}\n${notities?`Opmerking: ${notities}`:""}`)}&location=${encodeURIComponent(`${offerte.klant?.adres||""}, ${offerte.klant?.gemeente|""}`)}&dates=${datum.replace(/-/g,"")}T${tijd.replace(":","")}00/${datum.replace(/-/g,"")}T${String(Math.min(23,parseInt(tijd)+parseInt(duur))).padStart(2,"0")}${tijd.slice(3)}00" target="_blank" style="display:inline-block;background:#2563eb;color:#fff;padding:10px 24px;border-radius:8px;text-decoration:none;font-weight:700;font-size:13px;margin:4px">📅 Google Agenda</a>
+</div>
+<div style="text-align:center;padding:16px;font-size:11px;color:#94a3b8">${bed.naam} · ${bed.website||""}</div>
+</div>`;
+
+    // Send email via EmailJS
+    if(window.emailjs && offerte.klant?.email) {
+      try {
+        const ejCfg = settings?.email || {};
+        const serviceId = ejCfg.emailjsServiceId || "service_qrkvr0d";
+        const pubKey = ejCfg.emailjsPublicKey || "04zsVAk5imDpo-8GJ";
+        window.emailjs.init(pubKey);
+        
+        // Use offerte template but with planning content
+        const templateId = ejCfg.emailjsTemplateOfferte || "template_5nckw9f";
+        await window.emailjs.send(serviceId, templateId, {
+          to_email: offerte.klant.email,
+          to_name: offerte.klant?.naam || "",
+          from_name: bed.naam,
+          reply_to: bed.email,
+          subject: `Installatie ingepland — ${offerte.nummer} — ${new Date(datum).toLocaleDateString("nl-BE")}`,
+          html_body: emailHtml,
+          message: emailHtml
+        });
+        notify("📧 Planning email verzonden naar " + offerte.klant.email);
+      } catch(e) {
+        console.error("Planning email failed:", e);
+        notify("⚠️ Ingepland maar email verzending mislukt: " + (e?.text||e?.message||""), "er");
+      }
+    }
+
+    // Save planning data to offerte
+    onSave(offerte.id, {
+      status: "ingepland",
+      planning: { datum, tijd, duur, notities, ingeplandOp: new Date().toISOString() },
+      logActie: `📅 Ingepland op ${new Date(datum).toLocaleDateString("nl-BE")} om ${tijd}`
+    });
+    setSending(false);
+    onClose();
+  };
+
+  return(
+    <div className="mo"><div className="mdl mmd">
+      <div className="mh"><div className="mt-m">📅 Installatie inplannen</div><button className="xbtn" onClick={onClose}>×</button></div>
+      <div className="mb-body">
+        <div style={{background:"#f0fdf4",border:"1px solid #86efac",borderRadius:8,padding:12,marginBottom:16,display:"flex",gap:10,alignItems:"center"}}>
+          <span style={{fontSize:24}}>✅</span>
+          <div>
+            <div style={{fontWeight:700,color:"#059669"}}>Goedgekeurd door {offerte.klant?.naam}</div>
+            <div style={{fontSize:12,color:"#16a34a"}}>{offerte.nummer} · {fmtEuro(calcTotals(offerte.lijnen||[]).totaal)}</div>
+            {offerte.klantReactie?.periode&&<div style={{fontSize:11,color:"#059669"}}>Gewenst: {offerte.klantReactie.periode}</div>}
+            {offerte.klantReactie?.opmerkingen&&<div style={{fontSize:11,color:"#059669"}}>"{offerte.klantReactie.opmerkingen}"</div>}
+          </div>
+        </div>
+        <div className="fr2">
+          <div className="fg"><label className="fl">📅 Datum</label><input type="date" className="fc" value={datum} onChange={e=>setDatum(e.target.value)} min={new Date().toISOString().split("T")[0]}/></div>
+          <div className="fg"><label className="fl">🕐 Startuur</label><input type="time" className="fc" value={tijd} onChange={e=>setTijd(e.target.value)}/></div>
+        </div>
+        <div className="fr2">
+          <div className="fg"><label className="fl">⏱ Geschatte duur (uren)</label>
+            <select className="fc" value={duur} onChange={e=>setDuur(e.target.value)}>
+              {["2","3","4","5","6","7","8"].map(d=><option key={d} value={d}>{d} uur</option>)}
+            </select>
+          </div>
+          <div className="fg"><label className="fl">📍 Adres</label><input className="fc" readOnly value={`${offerte.klant?.adres||""}, ${offerte.klant?.gemeente||""}`}/></div>
+        </div>
+        <div className="fg"><label className="fl">📝 Notities (optioneel)</label><textarea className="fc" rows={2} value={notities} onChange={e=>setNotities(e.target.value)} placeholder="Bijv: extra materiaal meenemen..."/></div>
+        {offerte.klant?.email&&<div style={{background:"#eff6ff",border:"1px solid #bfdbfe",borderRadius:7,padding:"8px 12px",fontSize:12,color:"#1d4ed8"}}>
+          📧 Klant ontvangt automatisch een planning-email op <strong>{offerte.klant.email}</strong>
+        </div>}
+      </div>
+      <div className="mf">
+        <button className="btn bs" onClick={onClose}>Annuleren</button>
+        <button className="btn bg btn-lg" onClick={doInplannen} disabled={sending} style={{background:"#d4ff00",color:"#1a2e4c",borderColor:"#d4ff00"}}>
+          {sending?"⟳ Bezig…":"📅 Inplannen & klant verwittigen"}
+        </button>
+      </div>
+    </div></div>
+  );
+}
+
 function InstellingenPage({settings,setSettings,notify}) {
   const isFirstRun = !settings?.bedrijf?.naam;
   const [tab,setTab]=useState(isFirstRun?"bedrijf":"bedrijf");
@@ -6301,7 +5909,7 @@ function InstellingenPage({settings,setSettings,notify}) {
   };
   
   return(
-    <div style={{maxWidth: showPreview ? 1400 : 720, margin: "0 auto"}}>
+    <div style={{maxWidth: showPreview ? 1400 : 720, margin: "0 auto", overflow: "hidden"}}>
       {isFirstRun&&<div style={{background:"linear-gradient(135deg,#eff6ff,#e0f2fe)",border:"2px solid #3b82f6",borderRadius:10,padding:"14px 16px",marginBottom:14,display:"flex",gap:12,alignItems:"center"}}>
         <span style={{fontSize:28}}>👋</span>
         <div>
@@ -6309,7 +5917,7 @@ function InstellingenPage({settings,setSettings,notify}) {
           <div style={{fontSize:13,color:"#1e40af"}}>Vul hieronder uw bedrijfsgegevens in. Deze verschijnen op al uw offertes en facturen.</div>
         </div>
       </div>}
-      <div className="tabs">{[["bedrijf","🏢 Bedrijf"],["email","📧 Email"],["voorwaarden","📄 Voorwaarden"],["thema","🎨 Thema"],["sjabloon","📐 Ontwerpen"],["layout","📋 Layout"],["categorieen","📦 Categorieën"],["dashboard","📊 Dashboard"]].map(([v,l])=><div key={v} className={`tab ${tab===v?"on":""}`} onClick={()=>setTab(v)}>{l}</div>)}</div>
+      <div className="tabs" style={{maxWidth:"100%"}}>{[["bedrijf","🏢 Bedrijf"],["email","📧 Email"],["voorwaarden","📄 Voorwaarden"],["thema","🎨 Thema"],["sjabloon","📐 Ontwerpen"],["layout","📋 Layout"],["categorieen","📦 Categorieën"],["dashboard","📊 Dashboard"]].map(([v,l])=><div key={v} className={`tab ${tab===v?"on":""}`} onClick={()=>setTab(v)}>{l}</div>)}</div>
 
       {/* Split screen layout voor tabs met preview */}
       <div className="settings-grid" style={{display: showPreview ? "grid" : "block", gridTemplateColumns: showPreview ? "1fr 650px" : "1fr", gap: 20, alignItems: "start"}}>
@@ -6351,6 +5959,28 @@ function InstellingenPage({settings,setSettings,notify}) {
           <input type="file" ref={logoRef} accept="image/*" style={{display:"none"}} onChange={handleLogo}/>
         </div>
         <div className="fr2">{[["naam","Bedrijfsnaam"],["tagline","Tagline"],["adres","Adres"],["gemeente","Gemeente"],["tel","Telefoon"],["email","Email"],["website","Website"],["btwnr","BTW-nummer"],["iban","IBAN"],["bic","BIC"]].map(([k,l])=><div className="fg" key={k}><label className="fl">{l}</label><input className="fc" value={form.bedrijf[k]||""} onChange={e=>set("bedrijf",k,e.target.value)}/></div>)}</div>
+        {getBillitKey(form)&&<div style={{background:"#eff6ff",border:"1px solid #bfdbfe",borderRadius:8,padding:12,marginBottom:14,display:"flex",gap:12,alignItems:"center",flexWrap:"wrap"}}>
+          <span style={{fontSize:20}}>🔄</span>
+          <div style={{flex:1,minWidth:200}}>
+            <div style={{fontWeight:700,fontSize:13,color:"#1d4ed8"}}>Automatisch invullen via Billit</div>
+            <div style={{fontSize:11,color:"#3b82f6"}}>Haalt bedrijfsnaam, adres, BTW, IBAN, telefoon en email op uit uw Billit account.</div>
+          </div>
+          <button className="btn b2 btn-sm" onClick={async()=>{
+            try{
+              const d=await fetchBillitCompanyData(form);
+              if(d.naam)set("bedrijf","naam",d.naam);
+              if(d.adres)set("bedrijf","adres",d.adres);
+              if(d.gemeente)set("bedrijf","gemeente",d.gemeente);
+              if(d.btwnr)set("bedrijf","btwnr",d.btwnr);
+              if(d.tel)set("bedrijf","tel",d.tel);
+              if(d.email)set("bedrijf","email",d.email);
+              if(d.iban)set("bedrijf","iban",d.iban);
+              if(d.bic)set("bedrijf","bic",d.bic);
+              if(d.website)set("bedrijf","website",d.website);
+              notify("✅ Bedrijfsgegevens opgehaald uit Billit");
+            }catch(e){notify("❌ Billit ophalen mislukt: "+e.message,"er");}
+          }}>🔄 Ophalen uit Billit</button>
+        </div>}
         <button className="btn b2" onClick={doSave}>Opslaan</button>
       </div>}
 
@@ -6398,76 +6028,57 @@ function InstellingenPage({settings,setSettings,notify}) {
 
           {form.integraties?.kboEnabled&&(
             <div style={{marginTop:12,marginBottom:12,padding:12,background:"rgba(255,255,255,.6)",borderRadius:8}}>
-              <div className="fg">
-                <label className="fl">🔑 CBE API Key (optioneel - voor betere resultaten)</label>
-                <input 
-                  className="fc" 
-                  type="password"
-                  value={form.integraties?.cbeApiKey||""} 
-                  onChange={e=>set("integraties","cbeApiKey",e.target.value)} 
-                  placeholder="HFEaHnWgOYc1KQuLipH1b2nMb1d1hS4g"
-                  style={{fontFamily:"JetBrains Mono,monospace"}}
-                />
-                <div style={{fontSize:11,color:"#16a34a",marginTop:4}}>
-                  Optioneel: Registreer op <a href="https://cbeapi.be" target="_blank" rel="noopener noreferrer" style={{color:"#15803d",fontWeight:600}}>cbeapi.be</a> voor een gratis API key. Werkt ook zonder key (beperkte toegang).
-                </div>
-              </div>
-              <div style={{fontSize:11,color:"#15803d",padding:"8px 10px",background:"rgba(34,197,94,.1)",borderRadius:6,marginTop:8}}>
-                <strong>KBO Status:</strong> {form.integraties?.cbeApiKey ? "✓ API key ingesteld (beste resultaten)" : "⚠ Geen API key (beperkte toegang, kan CORS errors geven)"}
+              <div style={{fontSize:12,color:"#15803d",lineHeight:1.6}}>
+                ✅ BTW-nummers worden automatisch gevalideerd (modulo 97).<br/>
+                {form.integraties?.billitApiKey 
+                  ? "✅ Bedrijfsnaam wordt opgehaald via Billit PEPPOL (indien geregistreerd)."
+                  : "⚠ Stel een Billit API key in hieronder voor automatische bedrijfsnaam-lookup via PEPPOL."}
               </div>
             </div>
           )}
 
-          <div style={{marginBottom:12}}>
-            <label style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer",fontSize:13,fontWeight:600,color:"#15803d"}}>
-              <input type="checkbox" checked={form.integraties?.peppolEnabled||false} onChange={e=>set("integraties","peppolEnabled",e.target.checked)} style={{width:16,height:16}}/>
-              PEPPOL E-invoicing via Billit
-            </label>
-            <div style={{fontSize:11,color:"#4ade80",marginTop:4,marginLeft:24}}>
-              ✓ Elektronische facturen via PEPPOL netwerk (Billit Access Point)<br/>
-              ✓ Verplicht voor B2B facturen sinds 1 jan 2026 in België
+          {/* BILLIT PEPPOL */}
+          <div style={{borderTop:"1px solid #86efac",paddingTop:12,marginTop:12}}>
+            <div style={{fontWeight:700,fontSize:13,color:"#15803d",marginBottom:8}}>📨 Billit — PEPPOL E-invoicing</div>
+            <div className="fg">
+              <label className="fl">Billit API Key</label>
+              <input 
+                className="fc" 
+                type="password"
+                value={form.integraties?.billitApiKey||""} 
+                onChange={e=>set("integraties","billitApiKey",e.target.value)} 
+                placeholder="Voer uw Billit API key in"
+                style={{fontFamily:"JetBrains Mono,monospace"}}
+              />
+              <div style={{fontSize:11,color:"#16a34a",marginTop:4}}>
+                Haal uw API key op via <a href="https://app.billit.eu" target="_blank" rel="noopener noreferrer" style={{color:"#15803d",fontWeight:600}}>app.billit.eu</a> → My Profile → API
+              </div>
             </div>
+            <div className="fg" style={{marginTop:8}}>
+              <label className="fl">Omgeving</label>
+              <select className="fc" value={form.integraties?.billitEnv||"production"} onChange={e=>set("integraties","billitEnv",e.target.value)}>
+                <option value="production">Productie (live facturen)</option>
+                <option value="sandbox">Sandbox (test)</option>
+              </select>
+            </div>
+            {form.integraties?.billitApiKey&&(
+              <div style={{marginTop:8,display:"flex",gap:8,alignItems:"center"}}>
+                <button className="btn bs btn-sm" onClick={async()=>{
+                  const result = await testBillitConnection({...form});
+                  if(result.ok) alert("✓ Billit verbinding OK! Account: "+(result.account?.Name||"Verbonden"));
+                  else alert("✗ Billit verbinding mislukt: "+result.error);
+                }}>🔌 Test verbinding</button>
+                <div style={{fontSize:11,color:"#15803d",padding:"6px 10px",background:"rgba(34,197,94,.1)",borderRadius:6}}>
+                  ✓ API key ingesteld · {form.integraties?.billitEnv==="sandbox"?"🧪 Sandbox":"🟢 Productie"}
+                </div>
+              </div>
+            )}
+            {!form.integraties?.billitApiKey&&(
+              <div style={{fontSize:11,color:"#94a3b8",padding:"8px 10px",background:"#f8fafc",borderRadius:6,marginTop:8}}>
+                ⚠ Zonder Billit API key is PEPPOL verzending niet mogelijk. Klant PEPPOL-status wordt via de openbare directory gecontroleerd.
+              </div>
+            )}
           </div>
-
-          {form.integraties?.peppolEnabled&&(
-            <div style={{marginTop:12,padding:12,background:"rgba(255,255,255,.6)",borderRadius:8}}>
-              <div className="fg">
-                <label className="fl">🔑 Billit API Key</label>
-                <input 
-                  className="fc" 
-                  type="password"
-                  value={form.integraties?.billitApiKey||""} 
-                  onChange={e=>set("integraties","billitApiKey",e.target.value)} 
-                  placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-                  style={{fontFamily:"JetBrains Mono,monospace"}}
-                />
-                <div style={{fontSize:11,color:"#16a34a",marginTop:4}}>
-                  Login op <a href="https://my.billit.be" target="_blank" rel="noopener noreferrer" style={{color:"#15803d",fontWeight:600}}>my.billit.be</a> → Profiel → API → Kopieer key
-                </div>
-              </div>
-              <div className="fg">
-                <label className="fl">Omgeving</label>
-                <div style={{display:"flex",gap:6}}>
-                  {[["production","🟢 Productie"],["sandbox","🟡 Sandbox (test)"]].map(([v,l])=>(
-                    <button key={v} className={`btn btn-sm ${form.integraties?.billitEnv===v||(!form.integraties?.billitEnv&&v==="production")?"bp":"bs"}`} onClick={()=>set("integraties","billitEnv",v)}>{l}</button>
-                  ))}
-                </div>
-              </div>
-              <button className="btn btn-sm" style={{background:"#7c3aed",color:"#fff",fontWeight:700,marginTop:8}} onClick={async()=>{
-                const result = await testBillitConnection({integraties:form.integraties});
-                if(result.ok) notify("✅ Billit verbinding OK!","ok");
-                else notify("❌ Billit verbinding mislukt: "+result.error,"er");
-              }}>🔌 Test verbinding</button>
-              <div style={{fontSize:11,color:"#15803d",padding:"8px 10px",background:"rgba(34,197,94,.1)",borderRadius:6,marginTop:8}}>
-                <strong>Billit Status:</strong> {form.integraties?.billitApiKey ? "✓ API key ingesteld" : "⚠ API key vereist"} · Omgeving: {form.integraties?.billitEnv==="sandbox"?"Sandbox (test)":"Productie"}
-              </div>
-              <div style={{fontSize:10.5,color:"#059669",marginTop:6,lineHeight:1.5}}>
-                📨 <strong>Peppol versturen:</strong> Open een factuur → klik "📨 Peppol" knop<br/>
-                🔍 <strong>Peppol check:</strong> Bij klant aanmaken wordt automatisch gecheckt of ze op Peppol staan<br/>
-                💡 <strong>120% fiscaal aftrekbaar</strong> tot 2027 voor e-facturatie kosten
-              </div>
-            </div>
-          )}
         </div>
 
         {/* BOEKHOUDER */}
@@ -6699,6 +6310,7 @@ function InstellingenPage({settings,setSettings,notify}) {
             <AccRow id="klant" title="Klantgegevens" icon="👤">
               <FG label="Positie op pagina"><PosBtn val={lyt.klant?.positie||"links"} onChange={v=>sl("klant","positie",v)}/></FG>
               <Sld label="Tekstgrootte" val={lyt.klant?.fontSize||12} min={8} max={16} unit="px" onChange={v=>sl("klant","fontSize",v)}/>
+              <Chk label="Label tonen ('Gefactureerd aan' / 'Opgemaakt voor')" val={lyt.klant?.toonLabel!==false} onChange={v=>sl("klant","toonLabel",v)}/>
               <div style={{fontWeight:600,fontSize:12,marginTop:8,marginBottom:4,color:"#64748b"}}>Velden weergeven</div>
               {[["naam","Klantnaam"],["bedrijf","Bedrijfsnaam"],["adres","Adres"],["gemeente","Gemeente/Postcode"],["btwnr","BTW-nummer"],["tel","Telefoonnummer"],["email","E-mailadres"]].map(([k,l])=>(
                 <Veld key={k} label={l} val={lyt.klant?.velden?.[k]!==false} onChange={v=>slv("klant",k,v)}/>
@@ -6712,6 +6324,9 @@ function InstellingenPage({settings,setSettings,notify}) {
                 <div><Chk label="Bedrijfsnaam vet" val={lyt.bedrijf?.naamVet!==false} onChange={v=>sl("bedrijf","naamVet",v)}/></div>
                 <Sld label="Bedrijfsnaam grootte" val={lyt.bedrijf?.naamFontSize||12} min={9} max={20} unit="px" onChange={v=>sl("bedrijf","naamFontSize",v)}/>
               </FR2>
+              <Chk label="Adresregel onder logo tonen (op offerte/factuur pagina)" val={lyt.bedrijf?.toonOnderLogo!==false} onChange={v=>sl("bedrijf","toonOnderLogo",v)}/>
+              <Chk label="Bevestigingslink tonen (offerte)" val={form.sjabloon?.toonBevestigingslink!==false} onChange={v=>set("sjabloon","toonBevestigingslink",v)}/>
+              <Chk label="Productpagina tonen (technische fiches)" val={form.sjabloon?.toonProductpagina!==false} onChange={v=>set("sjabloon","toonProductpagina",v)}/>
               <div style={{fontWeight:600,fontSize:12,marginTop:8,marginBottom:4,color:"#64748b"}}>Velden weergeven</div>
               {[["naam","Bedrijfsnaam"],["adres","Adres"],["gemeente","Gemeente"],["btwnr","BTW-nummer"],["iban","IBAN"],["tel","Telefoon"],["email","E-mail"]].map(([k,l])=>(
                 <Veld key={k} label={l} val={lyt.bedrijf?.velden?.[k]!==false} onChange={v=>slv("bedrijf",k,v)}/>
@@ -6830,12 +6445,11 @@ function InstellingenPage({settings,setSettings,notify}) {
           <div style={{display:"grid",gap:10}}>
             {[
               {key:'statistieken',label:'📈 Statistieken',desc:'4 tegels met kerngetallen (open offertes, facturen, omzet, conversie)'},
-              {key:'recenteOffertes',label:'📋 Recente Offertes',desc:'Laatste 5 offertes met status en bedrag'},
+              {key:'recenteOffertes',label:'📋 Recente Acties',desc:'Laatste activiteiten: offertes, facturen, planningen'},
               {key:'openFacturen',label:'💶 Openstaande Facturen',desc:'Facturen die nog betaald moeten worden'},
               {key:'goedgekeurdeOffertes',label:'✅ Goedgekeurde Offertes',desc:'Offertes die door klant zijn goedgekeurd (met Plan knop)'},
               {key:'snelleActies',label:'⚡ Snelle Acties',desc:'4 knoppen voor snel nieuwe offerte aanmaken per type'},
-              {key:'agenda',label:'📅 Agenda',desc:'Agenda voor afspraken en planning'},
-              {key:'offerteLogboek',label:'📊 Offerte Logboek',desc:'Offerte views, klantreacties en tracking vanuit Supabase'}
+              {key:'agenda',label:'📅 Agenda',desc:'Agenda agenda voor afspraken en planning'}
             ].map(w=>(
               <label key={w.key} style={{display:"flex",alignItems:"flex-start",gap:12,padding:12,background:"#f8f9fa",borderRadius:8,cursor:"pointer",border:"2px solid "+(form.dashboardWidgets?.[w.key]!==false?"#10b981":"#e2e8f0"),transition:"all 0.2s"}}>
                 <input 
@@ -6914,11 +6528,11 @@ function InstellingenPage({settings,setSettings,notify}) {
                 <div className="fr2" style={{marginBottom:6}}>
                   <div className="fg" style={{marginBottom:0}}>
                     <label className="fl">Breedte: {form.sjabloon?.logoBreedte||140}px</label>
-                    <input type="range" min={40} max={280} value={form.sjabloon?.logoBreedte||140} onChange={e=>set("sjabloon","logoBreedte",+e.target.value)} style={{width:"100%"}}/>
+                    <input type="range" min={40} max={400} value={form.sjabloon?.logoBreedte||140} onChange={e=>set("sjabloon","logoBreedte",+e.target.value)} style={{width:"100%"}}/>
                   </div>
                   <div className="fg" style={{marginBottom:0}}>
                     <label className="fl">Hoogte: {form.sjabloon?.logoHoogte||52}px</label>
-                    <input type="range" min={20} max={100} value={form.sjabloon?.logoHoogte||52} onChange={e=>set("sjabloon","logoHoogte",+e.target.value)} style={{width:"100%"}}/>
+                    <input type="range" min={20} max={200} value={form.sjabloon?.logoHoogte||52} onChange={e=>set("sjabloon","logoHoogte",+e.target.value)} style={{width:"100%"}}/>
                   </div>
                 </div>
                 <div className="fg" style={{marginBottom:0}}>
