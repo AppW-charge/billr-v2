@@ -4,257 +4,131 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Offerte bekijken</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-body{font-family:Inter,Arial,sans-serif;background:#f0f4f8;color:#1e293b}
-.sticky-bar{position:sticky;top:0;z-index:100;background:#fff;border-bottom:2px solid #e2e8f0;padding:12px 20px;display:flex;align-items:center;justify-content:space-between;gap:12px;box-shadow:0 2px 12px rgba(0,0,0,.08);flex-wrap:wrap}
-.sticky-bar h2{font-size:16px;color:#1e293b;flex:1}
-.btn{padding:12px 24px;border:none;border-radius:8px;font-weight:700;font-size:14px;cursor:pointer;transition:all .2s}
-.btn-accept{background:#10b981;color:#fff}.btn-accept:hover{background:#059669}
-.btn-reject{background:#f1f5f9;color:#64748b;border:1px solid #e2e8f0}.btn-reject:hover{background:#fef2f2;color:#ef4444}
-.container{max-width:900px;margin:0 auto;padding:20px}
-.card{background:#fff;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,.06);padding:28px;margin-bottom:20px}
-.header-band{padding:32px;text-align:center;border-radius:12px 12px 0 0;color:#fff;margin:-28px -28px 24px}
-.meta-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin:20px 0}
-.meta-item{background:#f8fafc;padding:12px 16px;border-radius:8px;border:1px solid #e2e8f0}
-.meta-label{font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.5px}
-.meta-value{font-size:16px;font-weight:700;color:#1e293b;margin-top:2px}
-.product-row{display:flex;gap:16px;padding:16px 0;border-bottom:1px solid #f1f5f9;align-items:center}
-.product-img{width:64px;height:64px;border-radius:8px;object-fit:contain;background:#f8fafc;border:1px solid #e2e8f0;flex-shrink:0}
-.product-info{flex:1}
-.product-name{font-weight:700;font-size:15px}
-.product-desc{font-size:13px;color:#64748b;margin-top:2px}
-.product-price{font-weight:800;font-size:16px;text-align:right;white-space:nowrap}
-.total-bar{padding:16px 20px;border-radius:8px;display:flex;justify-content:space-between;align-items:center;margin-top:20px;color:#fff;font-weight:800;font-size:18px}
+body{font-family:'Inter',Arial,sans-serif;background:#e8ecf1;color:#1e293b;font-size:13.5px;line-height:1.5}
+.fab{position:fixed;bottom:0;left:0;right:0;z-index:100;background:#fff;border-top:2px solid #e2e8f0;padding:12px 20px;display:flex;align-items:center;justify-content:center;gap:12px;box-shadow:0 -4px 20px rgba(0,0,0,.12)}
+.fab-btn{padding:14px 32px;border:none;border-radius:10px;font-weight:800;font-size:15px;cursor:pointer;transition:all .2s;display:inline-flex;align-items:center;gap:8px}
+.fab-accept{background:#10b981;color:#fff}.fab-accept:hover{background:#059669}
+.fab-reject{background:#f1f5f9;color:#64748b;border:1px solid #e2e8f0}.fab-reject:hover{background:#fef2f2;color:#ef4444}
+.doc-wrap{max-width:860px;margin:0 auto;padding:20px 16px 100px}
+.doc-page{background:#fff;margin-bottom:16px;border-radius:6px;box-shadow:0 2px 12px rgba(0,0,0,.08);overflow:hidden}
+.doc-page-lbl{text-align:center;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#94a3b8;margin:12px 0 4px}
+.cov{display:grid;grid-template-columns:42% 58%;min-height:300px}
+.cov-l{display:flex;flex-direction:column;padding:44px 32px;position:relative;overflow:hidden;color:#fff;justify-content:center}
+.cov-l::after{content:'';position:absolute;bottom:-80px;right:-80px;width:240px;height:240px;border-radius:50%;background:rgba(255,255,255,.06)}
+.cov-r{padding:44px 36px;display:flex;flex-direction:column;justify-content:center}
+.qt-wrap{padding:32px 36px}
+.qt-meta-item{background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:8px 14px;flex:1;min-width:120px}
+.qt-meta-lbl{font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.5px}
+.qt-meta-val{font-size:14px;font-weight:700;color:#1e293b;margin-top:2px}
+.qt-parties{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:24px}
+.qt-party-lbl{font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px}
+.qt-party-name{font-weight:800;font-size:15px}
+.qt-party-info{font-size:12.5px;color:#475569}
+.grp-hdr{color:#fff;padding:8px 14px;font-weight:700;font-size:13px;border-radius:6px 6px 0 0}
+.qt-tbl{width:100%;border-collapse:collapse;font-size:12.5px;margin-bottom:16px}
+.qt-tbl th{text-align:left;padding:8px 10px;background:#f8fafc;border-bottom:2px solid #e2e8f0;font-weight:700;color:#64748b;font-size:11px;text-transform:uppercase;letter-spacing:.3px}
+.qt-tbl td{padding:8px 10px;border-bottom:1px solid #f1f5f9}
+.qt-tbl .c{text-align:center}.qt-tbl .r{text-align:right}
+.qt-item-main{font-weight:600}.qt-item-sub{font-size:11.5px;color:#64748b;margin-top:1px}
+.grp-sub{display:flex;justify-content:space-between;padding:6px 14px;background:#f8fafc;border-radius:0 0 6px 6px;font-size:12px;color:#475569;margin-bottom:16px}
+.qt-tot-box{margin-left:auto;min-width:260px;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden}
+.qt-tot-row{display:flex;justify-content:space-between;padding:8px 16px;font-size:13px;border-bottom:1px solid #f1f5f9}
+.qt-tot-row.last{font-size:16px;font-weight:800;border-bottom:none}
+.prod-page{padding:28px 36px}
+.prod-item{display:flex;gap:16px;margin-bottom:24px;padding-bottom:20px;border-bottom:1px solid #e2e8f0}
+.prod-img{width:80px;height:80px;border-radius:8px;object-fit:contain;background:#f8fafc;border:1px solid #e2e8f0;flex-shrink:0}
+.prod-name{font-weight:800;font-size:15px;margin-bottom:4px}
+.prod-desc{font-size:12.5px;color:#475569;line-height:1.5}
 .spec-tag{display:inline-block;background:#f1f5f9;border-radius:4px;padding:2px 8px;font-size:11px;color:#475569;margin:2px 2px 0 0}
-.fiche-link{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;color:#2563eb;text-decoration:none;font-weight:600;font-size:13px;margin:6px 4px 0 0}
-/* Modal */
+.prod-price-box{flex-shrink:0;text-align:right;background:#f8fafc;border-radius:8px;padding:10px 14px;border:1px solid #e2e8f0}
+.voorw-page{padding:28px 36px;font-size:11.5px;color:#475569;line-height:1.7;white-space:pre-line}
+.doc-footer{padding:10px 20px;text-align:center;color:#fff;font-size:11px}
 .modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:200;align-items:center;justify-content:center}
 .modal-bg.active{display:flex}
 .modal{background:#fff;border-radius:16px;max-width:500px;width:95%;padding:32px;max-height:90vh;overflow-y:auto}
-.fg{margin-bottom:16px}
-.fl{display:block;font-weight:600;font-size:13px;margin-bottom:6px;color:#1e293b}
-.fc{width:100%;padding:10px 14px;border:2px solid #e2e8f0;border-radius:8px;font-size:14px;font-family:inherit}
-.fc:focus{outline:none;border-color:#2563eb}
-.status-msg{text-align:center;padding:40px 20px}
-.status-msg .icon{font-size:64px;margin-bottom:16px}
-.status-msg h2{font-size:24px;margin-bottom:8px}
-.status-msg p{color:#64748b;font-size:15px}
-@media(max-width:640px){.sticky-bar{padding:10px 14px}.sticky-bar h2{font-size:14px}.btn{padding:10px 16px;font-size:13px}.card{padding:16px}.product-row{flex-wrap:wrap}}
+.fg{margin-bottom:16px}.fl{display:block;font-weight:600;font-size:13px;margin-bottom:6px}.fc{width:100%;padding:10px 14px;border:2px solid #e2e8f0;border-radius:8px;font-size:14px;font-family:inherit}.fc:focus{outline:none;border-color:#2563eb}
+.status-msg{text-align:center;padding:60px 20px}.status-msg .icon{font-size:64px;margin-bottom:16px}
+@media(max-width:700px){.cov{grid-template-columns:1fr!important;min-height:auto}.cov-l{padding:28px 20px}.cov-r{padding:24px 20px}.qt-wrap,.prod-page,.voorw-page{padding:16px}.qt-parties{grid-template-columns:1fr;gap:12px}.qt-tbl{font-size:11px}.qt-tbl th,.qt-tbl td{padding:5px 6px}.qt-tot-box{min-width:0;width:100%}.prod-item{flex-wrap:wrap}.fab-btn{padding:12px 20px;font-size:13px}.doc-wrap{padding:10px 8px 100px}}
 </style>
 </head>
 <body>
-<div id="app">
-  <div class="status-msg"><div class="icon">⏳</div><h2>Offerte laden...</h2><p>Even geduld</p></div>
-</div>
-
+<div id="app"><div class="status-msg"><div class="icon">⏳</div><h2>Offerte laden...</h2><p>Even geduld</p></div></div>
 <script>
 const SB_URL="https://qxnxbqkdvvblfkihmjxy.supabase.co";
 const SB_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF4bnhicWtkdnZibGZraWhtanh5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMzNTI3MTMsImV4cCI6MjA4ODkyODcxM30.1JDvrHgxLpU1GZqSjDVGtfnFJg8PHuD-aFpHOxAY1To";
-
 const params=new URLSearchParams(window.location.search);
-const offerteData=params.get('data');
-const action=params.get('action');
 const offId=params.get('id');
-
+const offerteData=params.get('data');
 const fmtEuro=n=>"€\u00A0"+Number(n||0).toFixed(2).replace(".",",").replace(/\B(?=(\d{3})+(?!\d))/g,".");
 const fmtDate=d=>d?new Date(d).toLocaleDateString("nl-BE",{day:"2-digit",month:"2-digit",year:"numeric"}):"—";
+const fmtBtwnr=b=>(b||"").replace(/^BE\s*/,"BE ").replace(/(\d{4})(\d{3})(\d{3})/,"$1.$2.$3");
 
-// Track offerte view
-async function trackView(offerteId){
-  try{
-    const sb=window.supabase.createClient(SB_URL,SB_KEY);
-    await sb.from('offerte_views').insert({offerte_id:offerteId,viewed_at:new Date().toISOString(),user_agent:navigator.userAgent.slice(0,200)});
-    console.log('📊 View tracked');
-  }catch(e){console.warn('View tracking failed:',e)}
-}
+async function trackView(id){try{const s=window.supabase.createClient(SB_URL,SB_KEY);await s.from('offerte_views').insert({offerte_id:id,viewed_at:new Date().toISOString(),user_agent:navigator.userAgent.slice(0,200)});}catch(e){}}
 
-// Submit response (accept/reject) — stays on page, shows thank-you
-async function submitResponse(offerteId,status,data={}){
-  try{
-    const sb=window.supabase.createClient(SB_URL,SB_KEY);
-    await sb.from('offerte_responses').insert({offerte_id:offerteId,status,periode:data.periode||'',opmerkingen:data.opmerkingen||'',submitted_at:new Date().toISOString()});
-    console.log('✅ Response saved:', status);
-  }catch(e){
-    console.error('Submit failed:',e);
-  }
-  // Show thank-you page — NO redirect to login!
-  const isAccept = status === 'goedgekeurd';
-  document.getElementById('app').innerHTML=`
-  <div class="status-msg" style="padding:60px 20px">
-    <div class="icon">${isAccept?'✅':'❌'}</div>
-    <h2 style="color:${isAccept?'#059669':'#dc2626'}">${isAccept?'Offerte goedgekeurd!':'Offerte afgewezen'}</h2>
-    <p style="margin-top:12px">${isAccept
-      ?'Bedankt voor uw vertrouwen! We gaan aan de slag en houden u op de hoogte van de planning.'
-      :'Uw reactie is geregistreerd. Bedankt voor uw feedback.'}</p>
-    <div style="margin-top:24px;padding:16px;background:#f8fafc;border-radius:10px;border:1px solid #e2e8f0;display:inline-block">
-      <div style="font-size:13px;color:#64748b">${isAccept
-        ?'📧 U ontvangt binnenkort een bevestigingsmail met verdere details over de planning.'
-        :'📧 We hebben uw reactie ontvangen.'}</div>
-    </div>
-  </div>`;
+async function submitResponse(id,status,data={}){
+  try{const s=window.supabase.createClient(SB_URL,SB_KEY);await s.from('offerte_responses').insert({offerte_id:id,status,periode:data.periode||'',opmerkingen:data.opmerkingen||'',submitted_at:new Date().toISOString()});}catch(e){}
+  const ok=status==='goedgekeurd';
+  document.getElementById('app').innerHTML='<div class="status-msg"><div class="icon">'+(ok?'✅':'❌')+'</div><h2 style="color:'+(ok?'#059669':'#dc2626')+'">'+(ok?'Offerte goedgekeurd!':'Offerte afgewezen')+'</h2><p style="margin-top:12px">'+(ok?'Bedankt voor uw vertrouwen! We gaan aan de slag en houden u op de hoogte.':'Uw reactie is geregistreerd. Bedankt voor uw feedback.')+'</p><div style="margin-top:20px;padding:14px;background:#f8fafc;border-radius:10px;border:1px solid #e2e8f0;display:inline-block;font-size:13px;color:#64748b">'+(ok?'📧 U ontvangt binnenkort een bevestigingsmail met de planning.':'📧 We hebben uw reactie ontvangen.')+'</div></div>';
 }
 
 function renderOfferte(doc){
-  const dc=doc._dc||'#1a2e4a';
-  const bed=doc._bed||{};
-  const lijnen=doc.lijnen||[];
-  const sub=lijnen.reduce((s,l)=>s+(l.prijs*l.aantal),0);
-  const btw=lijnen.reduce((s,l)=>s+(l.prijs*l.aantal*(l.btw||21)/100),0);
-  const totaal=sub+btw;
+  const dc=doc._dc||'#1a2e4a';const bed=doc._bed||{};const sj=doc._sj||{};const groepen=doc.groepen||[];const lijnen=doc.lijnen||[];const vw=doc._voorwaarden||'';
+  const sub=lijnen.reduce((s,l)=>s+(l.prijs||0)*(l.aantal||1),0);
+  const bg={};lijnen.forEach(l=>{const b=l.btw||0;const a=(l.prijs||0)*(l.aantal||1)*(b/100);if(!bg[b])bg[b]=0;bg[b]+=a;});
+  const btw=Object.values(bg).reduce((s,v)=>s+v,0);const tot=sub+btw;
+  const gl=[...groepen.map(g=>({...g,items:lijnen.filter(l=>l.groepId===g.id)})).filter(g=>g.items.length>0)];
+  const rest=lijnen.filter(l=>!l.groepId||!groepen.find(g=>g.id===l.groepId));
+  if(rest.length)gl.push({id:'rest',naam:'Producten',items:rest});
+  const up=lijnen.filter((l,i,a)=>a.findIndex(x=>x.naam===l.naam)===i&&(l.imageUrl||l.omschr||(l.specs||[]).length));
+  trackView(doc.id);window._offId=doc.id;
 
-  trackView(doc.id);
-
-  document.getElementById('app').innerHTML=`
-  <div class="sticky-bar">
-    <h2>📋 ${doc.nummer||'Offerte'} — ${bed.naam||''}</h2>
-    <div style="display:flex;gap:8px">
-      <button class="btn btn-accept" onclick="showAcceptModal()">✅ Goedkeuren</button>
-      <button class="btn btn-reject" onclick="showRejectModal()">❌ Afwijzen</button>
-    </div>
-  </div>
-  <div class="container">
-    <div class="card">
-      <div class="header-band" style="background:${dc}">
-        <h1 style="font-size:28px;margin-bottom:4px">${doc.nummer||'OFFERTE'}</h1>
-        <p style="opacity:.8">${bed.naam||''}</p>
-      </div>
-      <div class="meta-grid">
-        <div class="meta-item"><div class="meta-label">Datum</div><div class="meta-value">${fmtDate(doc.aangemaakt)}</div></div>
-        <div class="meta-item"><div class="meta-label">Geldig tot</div><div class="meta-value">${fmtDate(doc.vervaldatum)}</div></div>
-        <div class="meta-item"><div class="meta-label">Klant</div><div class="meta-value">${doc.klant?.naam||''}</div></div>
-        <div class="meta-item"><div class="meta-label">Totaal incl. BTW</div><div class="meta-value" style="color:${dc};font-size:20px">${fmtEuro(totaal)}</div></div>
-      </div>
-    </div>
-
-    <div class="card">
-      <h3 style="margin-bottom:16px">Producten & Diensten</h3>
-      ${lijnen.map(l=>`
-        <div class="product-row">
-          ${l.imageUrl?`<img class="product-img" src="${l.imageUrl}" alt="" onerror="this.style.display='none'"/>`:'<div class="product-img" style="display:flex;align-items:center;justify-content:center;font-size:24px">📦</div>'}
-          <div class="product-info">
-            <div class="product-name">${l.naam||''}</div>
-            <div class="product-desc">${l.omschr||''}</div>
-            ${(l.specs||[]).length?`<div style="margin-top:4px">${l.specs.map(s=>`<span class="spec-tag">✓ ${s}</span>`).join('')}</div>`:''}
-            ${(l.technischeFiches||[]).length?`<div style="margin-top:6px">${l.technischeFiches.map(f=>`<a class="fiche-link" href="${f.data}" download="${f.naam}">📎 ${f.naam}</a>`).join('')}</div>`:''}
-            ${l.technischeFiche&&!(l.technischeFiches||[]).length?`<a class="fiche-link" href="${l.technischeFiche}" download="${l.fichNaam||'fiche.pdf'}">📎 Technische fiche</a>`:''}
-          </div>
-          <div class="product-price">
-            <div>${fmtEuro(l.prijs*l.aantal)}</div>
-            <div style="font-size:11px;color:#94a3b8;font-weight:400">${l.aantal}× ${fmtEuro(l.prijs)}</div>
-          </div>
-        </div>
-      `).join('')}
-      <div class="total-bar" style="background:${dc}">
-        <span>TOTAAL incl. BTW</span>
-        <span>${fmtEuro(totaal)}</span>
-      </div>
-    </div>
-
-    ${doc.notities?`<div class="card"><h3>Opmerking</h3><p style="margin-top:8px;color:#475569">${doc.notities}</p></div>`:''}
-
-    <div class="card" style="text-align:center;padding:32px">
-      <h3 style="margin-bottom:16px">Uw beslissing</h3>
-      <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap">
-        <button class="btn btn-accept" style="font-size:16px;padding:16px 40px" onclick="showAcceptModal()">✅ Offerte goedkeuren</button>
-        <button class="btn btn-reject" style="font-size:16px;padding:16px 40px" onclick="showRejectModal()">❌ Offerte afwijzen</button>
-      </div>
-    </div>
-
-    <div style="text-align:center;padding:24px;font-size:12px;color:#94a3b8">
-      ${bed.naam||''} · ${bed.adres||''} · ${bed.gemeente||''}<br/>
-      ${bed.tel||''} · ${bed.email||''} · BTW: ${bed.btwnr||''}
-    </div>
-  </div>
-
-  <!-- Accept Modal -->
-  <div class="modal-bg" id="acceptModal">
-    <div class="modal">
-      <h2 style="margin-bottom:20px;color:#10b981">✅ Offerte goedkeuren</h2>
-      <p style="margin-bottom:20px;color:#64748b">Bevestig uw akkoord met offerte <strong>${doc.nummer}</strong> voor <strong>${fmtEuro(totaal)}</strong>.</p>
-      <div class="fg">
-        <label class="fl">Gewenste installatieperiode</label>
-        <select class="fc" id="acceptPeriode">
-          <option value="">— Kies een periode —</option>
-          <option>Zo snel mogelijk</option>
-          <option>Binnen 2 weken</option>
-          <option>Binnen 1 maand</option>
-          <option>Binnen 2 maanden</option>
-          <option>Na overleg</option>
-        </select>
-      </div>
-      <div class="fg">
-        <label class="fl">Extra informatie / opmerkingen</label>
-        <textarea class="fc" id="acceptNotes" rows="3" placeholder="Bijv: bij voorkeur 's morgens, parkeerplaats beschikbaar..."></textarea>
-      </div>
-      <div style="display:flex;gap:10px;margin-top:20px">
-        <button class="btn btn-reject" style="flex:1" onclick="closeModals()">Annuleren</button>
-        <button class="btn btn-accept" style="flex:1" onclick="doAccept()">✅ Bevestig</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Reject Modal -->
-  <div class="modal-bg" id="rejectModal">
-    <div class="modal">
-      <h2 style="margin-bottom:20px;color:#ef4444">❌ Offerte afwijzen</h2>
-      <div class="fg">
-        <label class="fl">Reden (optioneel)</label>
-        <textarea class="fc" id="rejectReason" rows="3" placeholder="Bijv: prijs te hoog, ander aanbod gekozen..."></textarea>
-      </div>
-      <div style="display:flex;gap:10px;margin-top:20px">
-        <button class="btn" style="flex:1;background:#f1f5f9;color:#64748b" onclick="closeModals()">Annuleren</button>
-        <button class="btn" style="flex:1;background:#ef4444;color:#fff" onclick="doReject()">❌ Afwijzen</button>
-      </div>
-    </div>
-  </div>`;
+  document.getElementById('app').innerHTML=
+  '<div class="fab"><button class="fab-btn fab-accept" onclick="showAcceptModal()">✅ Offerte goedkeuren</button><button class="fab-btn fab-reject" onclick="showRejectModal()">❌ Afwijzen</button></div>'+
+  '<div class="doc-wrap">'+
+  '<div class="doc-page-lbl">Voorblad</div><div class="doc-page"><div class="cov"><div class="cov-l" style="background:linear-gradient(155deg,'+dc+' 0%,'+dc+'ee 70%,#0f172a 100%)">'+(bed.logo?'<img src="'+bed.logo+'" alt="" style="max-height:60px;max-width:180px;margin-bottom:16px;object-fit:contain"/>':'<div style="font-size:24px;font-weight:900;letter-spacing:-1px;margin-bottom:12px">'+(bed.naam||'')+'</div>')+'<div style="font-size:12px;opacity:.7;margin-top:auto">'+(bed.adres||'')+'<br>'+(bed.gemeente||'')+'<br>'+(bed.tel||'')+'<br>'+(bed.email||'')+'</div></div>'+
+  '<div class="cov-r"><div style="color:'+dc+';font-size:28px;font-weight:900;letter-spacing:-1px">'+(sj.voorbladTitel||'OFFERTE')+'</div><div style="font-family:JetBrains Mono,monospace;font-size:14px;color:#94a3b8;margin-top:4px">'+(doc.nummer||'')+'</div>'+
+  '<div style="margin-top:24px"><div class="qt-party-lbl">Klant</div><div class="qt-party-name">'+(doc.klant?.naam||'')+'</div>'+(doc.klant?.bedrijf?'<div style="font-weight:600;color:#475569;font-size:12.5px">'+doc.klant.bedrijf+'</div>':'')+'<div class="qt-party-info">'+(doc.klant?.adres||'')+'</div><div class="qt-party-info">'+(doc.klant?.gemeente||'')+'</div>'+(doc.klant?.btwnr?'<div style="font-family:JetBrains Mono,monospace;font-size:10.5px;color:#64748b;margin-top:3px">'+fmtBtwnr(doc.klant.btwnr)+'</div>':'')+'</div>'+
+  '<div style="margin-top:20px;display:grid;grid-template-columns:1fr 1fr;gap:8px"><div class="qt-meta-item"><div class="qt-meta-lbl">Datum</div><div class="qt-meta-val">'+fmtDate(doc.datum||doc.aangemaakt)+'</div></div><div class="qt-meta-item"><div class="qt-meta-lbl">Geldig tot</div><div class="qt-meta-val">'+fmtDate(doc.vervaldatum)+'</div></div><div class="qt-meta-item"><div class="qt-meta-lbl">Referentie</div><div class="qt-meta-val" style="font-family:JetBrains Mono,monospace;font-size:12px">'+(doc.nummer||'')+'</div></div><div class="qt-meta-item"><div class="qt-meta-lbl">Totaal incl. BTW</div><div class="qt-meta-val" style="color:'+dc+';font-size:16px">'+fmtEuro(tot)+'</div></div></div></div></div></div>'+
+  
+  '<div class="doc-page-lbl">Offertelijnen</div><div class="doc-page"><div style="height:5px;background:'+dc+'"></div><div class="qt-wrap">'+
+  '<div class="qt-parties"><div><div class="qt-party-name">'+(bed.naam||'')+'</div><div class="qt-party-info">'+(bed.adres||'')+'</div><div class="qt-party-info">'+(bed.gemeente||'')+'</div><div style="font-family:JetBrains Mono,monospace;font-size:10.5px;color:#64748b;margin-top:3px">'+fmtBtwnr(bed.btwnr||'')+'<br>IBAN: '+(bed.iban||'')+'</div></div><div><div class="qt-party-lbl">Klant</div><div class="qt-party-name">'+(doc.klant?.naam||'')+'</div><div class="qt-party-info">'+(doc.klant?.adres||'')+'</div><div class="qt-party-info">'+(doc.klant?.gemeente||'')+'</div>'+(doc.klant?.btwnr?'<div style="font-family:JetBrains Mono,monospace;font-size:10.5px;color:#64748b">'+fmtBtwnr(doc.klant.btwnr)+'</div>':'')+'</div></div>'+
+  
+  gl.map(function(g){return '<div class="grp-hdr" style="background:'+dc+'">'+g.naam+'</div><table class="qt-tbl"><thead><tr><th>Omschrijving</th><th>Eenh.</th><th class="c">Aantal</th><th class="r">Prijs excl.</th><th class="r">BTW</th><th class="r">Totaal</th></tr></thead><tbody>'+g.items.map(function(l){
+    if(!l.productId&&l.prijs===0&&l.naam)return '<tr style="background:#f8fafc"><td colspan="6" style="padding:6px 10px;font-size:12px;color:#475569;font-style:italic">ℹ️ '+l.naam+(l.omschr?' — '+l.omschr:'')+'</td></tr>';
+    return '<tr><td><div class="qt-item-main">'+(l.naam||'')+'</div>'+(l.omschr?'<div class="qt-item-sub">'+l.omschr+'</div>':'')+'</td><td>'+(l.eenheid||'stuk')+'</td><td class="c">'+(l.aantal||1)+'</td><td class="r">'+fmtEuro(l.prijs||0)+'</td><td class="r">'+(l.btw||0)+'%</td><td class="r"><strong>'+fmtEuro((l.prijs||0)*(l.aantal||1))+'</strong></td></tr>';
+  }).join('')+'</tbody></table><div class="grp-sub"><span>Subtotaal '+g.naam+':</span><strong>'+fmtEuro(g.items.reduce(function(s,l){return s+(l.prijs||0)*(l.aantal||1)},0))+'</strong></div>';}).join('')+
+  
+  '<div style="display:flex;justify-content:flex-end;margin-top:8px"><div class="qt-tot-box"><div class="qt-tot-row"><span>Subtotaal excl. BTW</span><span>'+fmtEuro(sub)+'</span></div>'+Object.entries(bg).map(function(e){return '<div class="qt-tot-row"><span>BTW '+e[0]+'%</span><span>'+fmtEuro(e[1])+'</span></div>';}).join('')+'<div class="qt-tot-row last" style="background:'+dc+';color:#fff"><span>TOTAAL incl. BTW</span><span>'+fmtEuro(tot)+'</span></div></div></div>'+
+  '<div style="margin-top:20px;font-size:12px;color:#64748b"><strong>Betaling:</strong> IBAN '+(bed.iban||'')+' · BIC '+(bed.bic||'')+' · Mededeling: '+(doc.nummer||'')+'</div>'+
+  (doc.voorschot&&doc.voorschot!=='Geen voorschot'?'<div style="margin-top:8px;padding:10px 14px;background:#fffbeb;border:1px solid #fde68a;border-radius:6px;font-size:12px;color:#92400e">💡 <strong>Voorschot:</strong> '+doc.voorschot+' te betalen vóór aanvang van de werken.</div>':'')+
+  (doc.notities?'<div style="margin-top:8px;padding:10px 14px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;color:#475569"><strong>Opmerking:</strong> '+doc.notities+'</div>':'')+
+  '<div style="margin-top:28px;border:2px dashed #e2e8f0;border-radius:8px;padding:20px;text-align:center"><div style="font-size:13px;color:#64748b">'+(sj.handtekeningTekst||'Akkoord klant — datum, handtekening & naam')+'</div><div style="height:60px"></div></div>'+
+  '</div><div class="doc-footer" style="background:'+dc+'"><strong>'+(bed.naam||'')+'</strong> · '+(bed.adres||'')+', '+(bed.gemeente||'')+' · BTW: '+fmtBtwnr(bed.btwnr||'')+' · IBAN: '+(bed.iban||'')+'</div></div>'+
+  
+  (up.length>0?'<div class="doc-page-lbl">Productinformatie</div><div class="doc-page"><div style="height:5px;background:'+dc+'"></div><div class="prod-page"><div style="font-weight:900;font-size:18px;color:'+dc+';margin-bottom:16px">Productinformatie & Technische Fiches</div>'+up.map(function(l){return '<div class="prod-item">'+(l.imageUrl?'<img class="prod-img" src="'+l.imageUrl+'" alt="" onerror="this.style.display=\'none\'"/>':'')+'<div style="flex:1"><div class="prod-name">'+(l.naam||'')+'</div>'+(l.omschr?'<div class="prod-desc">'+l.omschr+'</div>':'')+((l.specs||[]).length?'<div style="margin-top:6px">'+l.specs.map(function(s){return '<span class="spec-tag">✓ '+s+'</span>';}).join('')+'</div>':'')+'</div><div class="prod-price-box"><div style="font-size:10px;color:#94a3b8;font-weight:600">EENHEIDSPRIJS</div><div style="font-weight:800;font-size:16px;color:'+dc+'">'+fmtEuro(l.prijs||0)+'</div><div style="font-size:10px;color:#94a3b8">BTW '+(l.btw||0)+'%</div></div></div>';}).join('')+'</div></div>':'')+
+  
+  (vw?'<div class="doc-page-lbl">Voorwaarden</div><div class="doc-page"><div style="height:5px;background:'+dc+'"></div><div class="voorw-page"><div style="font-weight:800;font-size:16px;color:'+dc+';margin-bottom:12px">Algemene Voorwaarden</div>'+vw+'</div><div class="doc-footer" style="background:'+dc+'"><strong>'+(bed.naam||'')+'</strong> · '+(bed.adres||'')+', '+(bed.gemeente||'')+'</div></div>':'')+
+  '</div>'+
+  
+  '<div class="modal-bg" id="acceptModal"><div class="modal"><h2 style="margin-bottom:20px;color:#10b981">✅ Offerte goedkeuren</h2><p style="margin-bottom:20px;color:#64748b">Bevestig uw akkoord met offerte <strong>'+doc.nummer+'</strong> voor <strong>'+fmtEuro(tot)+'</strong>.</p><div class="fg"><label class="fl">Gewenste installatieperiode</label><select class="fc" id="acceptPeriode"><option value="">— Kies —</option><option>Zo snel mogelijk</option><option>Binnen 2 weken</option><option>Binnen 1 maand</option><option>Binnen 2 maanden</option><option>Na overleg</option></select></div><div class="fg"><label class="fl">Opmerkingen</label><textarea class="fc" id="acceptNotes" rows="3" placeholder="Bijv: voorkeur ochtend..."></textarea></div><div style="display:flex;gap:10px;margin-top:20px"><button class="fab-btn fab-reject" style="flex:1;font-size:14px;padding:12px" onclick="closeModals()">Annuleren</button><button class="fab-btn fab-accept" style="flex:1;font-size:14px;padding:12px" onclick="doAccept()">✅ Bevestig</button></div></div></div>'+
+  '<div class="modal-bg" id="rejectModal"><div class="modal"><h2 style="margin-bottom:20px;color:#ef4444">❌ Offerte afwijzen</h2><div class="fg"><label class="fl">Reden (optioneel)</label><textarea class="fc" id="rejectReason" rows="3" placeholder="Bijv: prijs te hoog..."></textarea></div><div style="display:flex;gap:10px;margin-top:20px"><button class="fab-btn" style="flex:1;background:#f1f5f9;color:#64748b;font-size:14px;padding:12px" onclick="closeModals()">Annuleren</button><button class="fab-btn" style="flex:1;background:#ef4444;color:#fff;font-size:14px;padding:12px" onclick="doReject()">❌ Afwijzen</button></div></div></div>';
 }
 
-window.showAcceptModal=()=>{document.getElementById('acceptModal').classList.add('active')};
-window.showRejectModal=()=>{document.getElementById('rejectModal').classList.add('active')};
-window.closeModals=()=>{document.querySelectorAll('.modal-bg').forEach(m=>m.classList.remove('active'))};
-window.doAccept=()=>{
-  const periode=document.getElementById('acceptPeriode')?.value||'';
-  const notes=document.getElementById('acceptNotes')?.value||'';
-  submitResponse(window._offId,'goedgekeurd',{periode,opmerkingen:notes});
-};
-window.doReject=()=>{
-  const reason=document.getElementById('rejectReason')?.value||'';
-  submitResponse(window._offId,'afgewezen',{opmerkingen:reason});
-};
+window.showAcceptModal=function(){document.getElementById('acceptModal').classList.add('active')};
+window.showRejectModal=function(){document.getElementById('rejectModal').classList.add('active')};
+window.closeModals=function(){document.querySelectorAll('.modal-bg').forEach(function(m){m.classList.remove('active')})};
+window.doAccept=function(){submitResponse(window._offId,'goedgekeurd',{periode:document.getElementById('acceptPeriode')?.value||'',opmerkingen:document.getElementById('acceptNotes')?.value||''})};
+window.doReject=function(){submitResponse(window._offId,'afgewezen',{opmerkingen:document.getElementById('rejectReason')?.value||''})};
 
-// Init — fetch offerte from Supabase offerte_shares table
-async function loadOfferte() {
-  // Method 1: ID-based (new flow — from email "Offerte bekijken" link)
-  if(offId) {
-    try {
-      const sb = window.supabase.createClient(SB_URL, SB_KEY);
-      const { data, error } = await sb.from('offerte_shares').select('offerte_data').eq('id', offId).single();
-      if(data && data.offerte_data) {
-        window._offId = offId;
-        renderOfferte(data.offerte_data);
-        return;
-      }
-    } catch(e) { console.warn('Supabase fetch failed:', e); }
-    // Fallback: show error
-    document.getElementById('app').innerHTML='<div class="status-msg"><div class="icon">⏳</div><h2>Offerte niet gevonden</h2><p>De offerte is nog niet beschikbaar of de link is verlopen. Neem contact op met uw leverancier.</p></div>';
-    return;
-  }
-  // Method 2: Base64 data param (legacy)
-  if(offerteData) {
-    try {
-      const doc = JSON.parse(decodeURIComponent(atob(offerteData)));
-      window._offId = doc.id;
-      renderOfferte(doc);
-      return;
-    } catch(e) {
-      document.getElementById('app').innerHTML='<div class="status-msg"><div class="icon">❌</div><h2>Ongeldige offerte link</h2><p>'+e.message+'</p></div>';
-      return;
-    }
-  }
-  // No params
-  document.getElementById('app').innerHTML='<div class="status-msg"><div class="icon">📋</div><h2>Geen offerte opgegeven</h2><p>Gebruik de link uit uw email om de offerte te bekijken.</p></div>';
+async function loadOfferte(){
+  if(offId){try{const s=window.supabase.createClient(SB_URL,SB_KEY);const{data}=await s.from('offerte_shares').select('offerte_data').eq('id',offId).single();if(data?.offerte_data){renderOfferte(data.offerte_data);return;}}catch(e){console.warn(e)}
+  document.getElementById('app').innerHTML='<div class="status-msg"><div class="icon">⏳</div><h2>Offerte niet gevonden</h2><p>Neem contact op met uw leverancier.</p></div>';return;}
+  if(offerteData){try{renderOfferte(JSON.parse(decodeURIComponent(atob(offerteData))));return;}catch(e){}}
+  document.getElementById('app').innerHTML='<div class="status-msg"><div class="icon">📋</div><h2>Geen offerte</h2><p>Gebruik de link uit uw email.</p></div>';
 }
 loadOfferte();
 </script>
