@@ -1924,13 +1924,21 @@ export default function App() {
       const sj = settings?.sjabloon || {};
       const lyt = settings?.layout || {};
       const dc = sj.accentKleur || settings?.thema?.kleur || bed.kleur || "#1a2e4a";
+      // Strip base64 data van technischeFiches (te groot voor Supabase JSONB)
+      const cleanLijnen = (offerte.lijnen||[]).map(l => {
+        const clean = {...l};
+        if(clean.technischeFiches) clean.technischeFiches = clean.technischeFiches.map(f => ({naam:f.naam||"fiche.pdf", url:f.url||"", type:f.type||"application/pdf"}));
+        if(clean.technischeFiche && clean.technischeFiche.startsWith("data:")) clean.technischeFiche = null;
+        return clean;
+      });
       const shareData = {
         ...offerte,
+        lijnen: cleanLijnen,
         _bed: { naam:bed.naam, adres:bed.adres, gemeente:bed.gemeente, tel:bed.tel, email:bed.email, btwnr:bed.btwnr, iban:bed.iban, bic:bed.bic, website:bed.website, logo:bed.logo },
         _dc: dc,
-        _sj: { voorbladTitel:sj.voorbladTitel, handtekeningTekst:sj.handtekeningTekst, footerTekst:sj.footerTekst, toonProductpagina:sj.toonProductpagina, toonBevestigingslink:sj.toonBevestigingslink },
+        _sj: { voorbladTitel:sj.voorbladTitel, handtekeningTekst:sj.handtekeningTekst, footerTekst:sj.footerTekst, toonProductpagina:sj.toonProductpagina, toonBevestigingslink:sj.toonBevestigingslink, accentKleur:sj.accentKleur },
         _lyt: { font:lyt.font, fontSize:lyt.fontSize },
-        _voorwaarden: settings?.voorwaarden?.tekst?.slice(0,3000) || "",
+        _voorwaarden: settings?.voorwaarden?.tekst || "",
         _voorschot: settings?.voorwaarden?.voorschot || "50%"
       };
       await sb.from('offerte_shares').upsert({ id: offerte.id, offerte_data: shareData });
