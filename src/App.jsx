@@ -1857,12 +1857,17 @@ export default function App() {
   const shareOfferte = async (offerte) => {
     try {
       const bed = settings?.bedrijf || {};
-      const dc = settings?.sjabloon?.accentKleur || settings?.thema?.kleur || bed.kleur || "#1a2e4a";
+      const sj = settings?.sjabloon || {};
+      const lyt = settings?.layout || {};
+      const dc = sj.accentKleur || settings?.thema?.kleur || bed.kleur || "#1a2e4a";
       const shareData = {
         ...offerte,
         _bed: { naam:bed.naam, adres:bed.adres, gemeente:bed.gemeente, tel:bed.tel, email:bed.email, btwnr:bed.btwnr, iban:bed.iban, bic:bed.bic, website:bed.website, logo:bed.logo },
         _dc: dc,
-        _voorwaarden: settings?.voorwaarden?.tekst?.slice(0,2000) || ""
+        _sj: { voorbladTitel:sj.voorbladTitel, handtekeningTekst:sj.handtekeningTekst, footerTekst:sj.footerTekst, toonProductpagina:sj.toonProductpagina, toonBevestigingslink:sj.toonBevestigingslink },
+        _lyt: { font:lyt.font, fontSize:lyt.fontSize },
+        _voorwaarden: settings?.voorwaarden?.tekst?.slice(0,3000) || "",
+        _voorschot: settings?.voorwaarden?.voorschot || "50%"
       };
       await sb.from('offerte_shares').upsert({ id: offerte.id, offerte_data: shareData });
       console.log("✅ Offerte gedeeld voor publieke view:", offerte.nummer);
