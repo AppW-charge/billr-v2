@@ -1608,7 +1608,11 @@ export default function App() {
         };
         if(sbData["b4_set"]) setSettings(parse("b4_set", INIT_SETTINGS));
         if(sbData["b4_kln"]) setKlanten(parse("b4_kln", INIT_KLANTEN));
-        if(sbData["b4_prd"]) setProducten(parse("b4_prd", INIT_PRODUCTS));
+        if(sbData["b4_prd"]) {
+          const prods = parse("b4_prd", INIT_PRODUCTS);
+          saveFicheCache(prods); // sla fiches op in aparte cache
+          setProducten(prods);
+        }
         if(sbData["b4_off"]) setOffertes(parse("b4_off", []));
         if(sbData["b4_fct"]) setFacturen(parse("b4_fct", []));
         if(sbData["b4_cn"])  setCreditnotas(parse("b4_cn", []));
@@ -1634,7 +1638,8 @@ export default function App() {
           console.log("✅ localStorage heeft data — laden");
           setSettings(lsSettings || INIT_SETTINGS);
           setKlanten(lsKlanten || INIT_KLANTEN);
-          setProducten(lsProducten || INIT_PRODUCTS);
+          const prodsWithFiches = restoreFicheCache(lsProducten || INIT_PRODUCTS);
+          setProducten(prodsWithFiches);
           setOffertes(lsOffertes || []);
           setFacturen(get('b4_fct',[]));
           setCreditnotas(get('b4_cn',[]));
@@ -1785,6 +1790,38 @@ export default function App() {
   // saveKey: dual-write to Supabase + localStorage
   // localStorage: strip base64 fiches (QuotaExceededError prevention)
   // Supabase: full data
+  // ── FICHE CACHE: sla base64 fiche data apart op per product ID ──
+  // Zo gaan fiches nooit verloren bij localStorage strips of Supabase timeouts
+  const saveFicheCache = useCallback((productenArr) => {
+    try {
+      const cache = {};
+      productenArr.forEach(p => {
+        if(p.technischeFiches?.some(f => f.data)) {
+          cache[p.id] = p.technischeFiches.filter(f => f.data);
+        } else if(p.technischeFiche && p.technischeFiche !== "[PDF]" && p.technischeFiche.length > 100) {
+          cache[p.id] = [{data: p.technischeFiche, naam: p.fichNaam||"fiche.pdf"}];
+        }
+      });
+      if(Object.keys(cache).length > 0) {
+        localStorage.setItem("billr_fiche_cache", JSON.stringify(cache));
+      }
+    } catch(_) {}
+  }, []);
+
+  const restoreFicheCache = useCallback((productenArr) => {
+    try {
+      const raw = localStorage.getItem("billr_fiche_cache");
+      if(!raw) return productenArr;
+      const cache = JSON.parse(raw);
+      return productenArr.map(p => {
+        if(cache[p.id] && !(p.technischeFiches?.some(f => f.data))) {
+          return { ...p, technischeFiches: cache[p.id] };
+        }
+        return p;
+      });
+    } catch(_) { return productenArr; }
+  }, []);
+
   const stripBase64 = (key, val) => {
     if(!Array.isArray(val)) return val;
     if(key === "b4_prd") return val.map(p => {
@@ -1845,7 +1882,7 @@ export default function App() {
   useEffect(()=>{ saveKey("b4_off", offertes);  },[offertes,   saveKey]);
   useEffect(()=>{ saveKey("b4_fct", facturen);  },[facturen,   saveKey]);
   useEffect(()=>{ saveKey("b4_kln", klanten);   },[klanten,    saveKey]);
-  useEffect(()=>{ saveKey("b4_prd", producten); },[producten,  saveKey]);
+  useEffect(()=>{ saveKey("b4_prd", producten); saveFicheCache(producten); },[producten, saveKey, saveFicheCache]);
   useEffect(()=>{ saveKey("b4_set", settings);  },[settings,   saveKey]);
   useEffect(()=>{ saveKey("b4_cn",  creditnotas);},[creditnotas,saveKey]);
   useEffect(()=>{ saveKey("b4_am",  aanmaningen);},[aanmaningen,saveKey]);
