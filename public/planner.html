@@ -755,13 +755,45 @@
                     .select('*').in('status', ['ingepland','akkoord','voorstel']);
                 if (error) throw error;
                 sbAppointments = (data || []).map(proposalToApt).filter(a => a.date);
+                
+                // ── PERSISTENTIE: sla 'ingepland' afspraken ook lokaal op als backup ──
+                // Zo blijven ze zichtbaar ook als de Supabase-rij later verdwijnt
+                const bevestigd = sbAppointments.filter(a => a._status === 'ingepland');
+                bevestigd.forEach(sba => {
+                    const localKey = 'billr_' + sba.id.replace('billr_','');
+                    const alreadySaved = appointments.some(a => 
+                        a._billrId === sba.id || (a.offerteNummer && a.offerteNummer === sba.offerteNummer)
+                    );
+                    if (!alreadySaved && sba.date && sba.client) {
+                        const localApt = {
+                            id: Date.now() + Math.random(),
+                            date: sba.date,
+                            time: sba.time,
+                            client: sba.client,
+                            type: sba.type,
+                            location: sba.location,
+                            notes: sba.notes,
+                            offerteNummer: sba.offerteNummer,
+                            _billrId: sba.id,
+                            _billrStatus: 'ingepland'
+                        };
+                        appointments.push(localApt);
+                        localStorage.setItem('wcharge_apts', JSON.stringify(appointments));
+                        console.log('💾 BILLR afspraak lokaal opgeslagen:', sba.client, sba.date);
+                    }
+                });
+
                 const cnt = sbAppointments.length;
                 if (el) el.textContent = cnt + ' BILLR ' + (cnt===1?'afspraak':'afspraken') +
                     ' · ' + new Date().toLocaleTimeString('nl-BE',{hour:'2-digit',minute:'2-digit'});
                 renderCalendar();
+                // Als afspraken-tab actief is, ook refreshen
+                if (document.getElementById('appointmentsTab')?.classList.contains('active')) {
+                    renderAppointments();
+                }
             } catch(e) {
                 console.warn('Supabase sync:', e);
-                if (el) el.textContent = 'BILLR sync mislukt';
+                if (el) el.textContent = 'BILLR sync mislukt — lokale data gebruikt';
             }
         }
 
@@ -1290,51 +1322,84 @@
 
         function renderAppointments() {
             const list = document.getElementById('appointmentList');
-            if (appointments.length === 0) {
+            
+            // Merge lokale + Supabase afspraken, vermijd duplicaten via _billrId
+            const localIds = new Set(appointments.map(a => a._billrId).filter(Boolean));
+            const extraSB = sbAppointments.filter(a => !localIds.has(a.id));
+            const allApts = [...appointments, ...extraSB]
+                .sort((a, b) => (a.date + (a.time||'')).localeCompare(b.date + (b.time||'')));
+
+            if (allApts.length === 0) {
                 list.innerHTML = '<p style="color: #64748b;">Nog geen afspraken</p>';
                 return;
             }
 
-            list.innerHTML = '';
-            const sorted = [...appointments].sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time));
-            
-            console.log('📋 Rendering', sorted.length, 'afspraken in lijst');
+            // Groepeer per maand voor overzichtelijkheid
+            const byMonth = {};
+            allApts.forEach(a => {
+                const mk = a.date ? a.date.slice(0,7) : 'onbekend';
+                if (!byMonth[mk]) byMonth[mk] = [];
+                byMonth[mk].push(a);
+            });
 
-            sorted.forEach(a => {
-                console.log('Afspraak in lijst:', a.id, a.date, a.time, a.client);
-                
-                const item = document.createElement('div');
-                item.className = 'appointment-item';
-                
-                const info = document.createElement('div');
-                info.innerHTML = `
-                    <h4>${a.date} ${a.time} - ${a.client}</h4>
-                    <p><strong>${a.type}</strong>${a.location ? ' • ' + a.location : ''}</p>
-                    ${a.notes ? `<p>${a.notes}</p>` : ''}
-                `;
-                item.appendChild(info);
-                
-                const deleteBtn = document.createElement('button');
-                deleteBtn.className = 'btn btn-danger';
-                deleteBtn.style.cssText = 'margin-top: 10px; width: 100%;';
-                deleteBtn.textContent = '🗑️ Verwijderen';
-                
-                // Verberg in read-only mode
-                if (isReadOnly) {
-                    deleteBtn.style.display = 'none';
-                }
-                
-                // Gebruik closure om ID vast te leggen
-                const appointmentId = a.id;
-                deleteBtn.addEventListener('click', function(e) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    console.log('🔴 DELETE BUTTON CLICKED! ID:', appointmentId);
-                    deleteApt(appointmentId);
+            const monthNames = ['','Januari','Februari','Maart','April','Mei','Juni',
+                                'Juli','Augustus','September','Oktober','November','December'];
+            const statusLabels = {ingepland:'✅ Bevestigd', akkoord:'🟡 Akkoord klant', voorstel:'⏳ Voorstel'};
+            const statusColors = {ingepland:'#059669', akkoord:'#d97706', voorstel:'#3b82f6'};
+
+            list.innerHTML = '';
+            Object.entries(byMonth).forEach(([mk, apts]) => {
+                // Maand header
+                const [y, m] = mk.split('-');
+                const mh = document.createElement('h3');
+                mh.style.cssText = 'color:#1a2e4c;margin:20px 0 10px;font-size:1.1rem;border-bottom:2px solid #d4ff00;padding-bottom:6px;';
+                mh.textContent = (monthNames[parseInt(m)] || mk) + ' ' + y;
+                list.appendChild(mh);
+
+                apts.forEach(a => {
+                    const isBillr = a._source === 'billr' || a._billrStatus;
+                    const sbStatus = a._status || a._billrStatus || '';
+                    const sc = isBillr ? (statusColors[sbStatus]||'#d4ff00') : '#d4ff00';
+                    const sl = isBillr ? (statusLabels[sbStatus]||'BILLR') : '';
+
+                    const fmtDate = d => {
+                        if (!d) return '—';
+                        const parts = d.split('-');
+                        const dayNames2 = ['zo','ma','di','wo','do','vr','za'];
+                        const dt = new Date(parseInt(parts[0]), parseInt(parts[1])-1, parseInt(parts[2]));
+                        return dayNames2[dt.getDay()] + ' ' + parseInt(parts[2]) + '/' + parseInt(parts[1]) + '/' + parts[0];
+                    };
+
+                    const item = document.createElement('div');
+                    item.className = 'appointment-item';
+                    item.style.borderLeftColor = sc;
+                    if (isBillr) item.style.background = sc + '18';
+
+                    item.innerHTML = `
+                        ${isBillr ? `<div style="font-size:0.78rem;font-weight:700;color:${sc};margin-bottom:4px">BILLR · ${sl}</div>` : ''}
+                        <h4 style="color:#1a2e4c;margin-bottom:6px">${fmtDate(a.date)} · ${(a.time||'').slice(0,5)} — ${a.client}</h4>
+                        <p><strong>${a.type||''}</strong>${a.location ? ' · ' + a.location : ''}</p>
+                        ${a.phone ? `<p>📞 <a href="tel:${a.phone}" style="color:#1a2e4c;font-weight:600">${a.phone}</a></p>` : ''}
+                        ${a.offerteNummer ? `<p style="font-size:0.85rem;color:#64748b">📄 ${a.offerteNummer}</p>` : ''}
+                        ${a.notes ? `<p style="font-size:0.85rem;color:#64748b;margin-top:4px">${a.notes}</p>` : ''}
+                    `;
+
+                    // Verwijder-knop enkel voor lokale (niet-BILLR) afspraken
+                    if (!isBillr && !isReadOnly) {
+                        const deleteBtn = document.createElement('button');
+                        deleteBtn.className = 'btn btn-danger';
+                        deleteBtn.style.cssText = 'margin-top: 10px; width: 100%; font-size:0.9rem;';
+                        deleteBtn.textContent = '🗑️ Verwijderen';
+                        const appointmentId = a.id;
+                        deleteBtn.addEventListener('click', function(e) {
+                            e.preventDefault(); e.stopPropagation();
+                            deleteApt(appointmentId);
+                        });
+                        item.appendChild(deleteBtn);
+                    }
+
+                    list.appendChild(item);
                 });
-                
-                item.appendChild(deleteBtn);
-                list.appendChild(item);
             });
         }
 
@@ -1547,7 +1612,12 @@
             } else if (tab === 'appointments') {
                 document.querySelectorAll('.tab-btn')[1].classList.add('active');
                 document.getElementById('appointmentsTab').classList.add('active');
-                renderAppointments();
+                // Ververs Supabase data dan render (of render direct als al geladen)
+                if (sbAppointments.length > 0) {
+                    renderAppointments();
+                } else {
+                    loadSBAppointments().then(() => renderAppointments());
+                }
             } else if (tab === 'settings') {
                 document.querySelectorAll('.tab-btn')[2].classList.add('active');
                 document.getElementById('settingsTab').classList.add('active');
