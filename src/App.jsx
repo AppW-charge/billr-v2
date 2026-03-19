@@ -1766,8 +1766,8 @@ export default function App() {
             const isAkkoord = latest.status === "akkoord";
             const pd = latest.plan_data || {};
             const logActie = isAkkoord
-              ? `✅ Klant akkoord met afspraak op ${pd.planDatum||"?"} ${pd.planTijd||""}`
-              : `📅 Klant vraagt ander moment${cr.datum ? ": "+cr.datum : ""}${cr.tijd ? " "+cr.tijd : ""}${cr.opmerking ? " — "+cr.opmerking : ""}`;
+              ? `✅ Klant akkoord met afspraak: ${fmtPlanDatum(pd.planDatum, pd.planTijd)}`
+              : `📅 Klant vraagt ander moment${cr.datum ? ": "+new Date(cr.datum+"T12:00:00").toLocaleDateString("nl-BE",{weekday:"short",day:"numeric",month:"short"}) : ""}${cr.tijd ? " om "+cr.tijd : ""}${cr.opmerking ? " — "+cr.opmerking : ""}`;
             const newLog = [...(o.log||[]), {ts: respTs, actie: logActie}];
             const updates = {log: newLog};
             if(isAkkoord) { updates.planBevestigdDoorKlant = true; }
@@ -2362,15 +2362,25 @@ export default function App() {
   };
 
   // ═══ PLANNING WORKFLOW HELPERS ═══
+  const fmtPlanDatum = (d, t) => {
+    if(!d) return "";
+    const dt = new Date(d+"T12:00:00");
+    const dag = dt.toLocaleDateString("nl-BE",{weekday:"short",day:"numeric",month:"short"});
+    return t ? `${dag} om ${t}` : dag;
+  };
+
   const updatePlanning = (offerteId, planData) => {
+    const dtStr = fmtPlanDatum(planData.planDatum, planData.planTijd);
     updOff(offerteId, {
       ...planData,
       logActie: planData.planStatus === "ingepland" 
-        ? `📅 Ingepland op ${planData.planDatum} ${planData.planTijd||""}`
+        ? `📅 Voorstel verstuurd: ${dtStr}`
         : planData.planStatus === "uitgevoerd"
         ? "✅ Installatie uitgevoerd"
         : planData.planStatus === "geannuleerd"
         ? "❌ Planning geannuleerd"
+        : planData.planDatum
+        ? `📅 Planning bijgewerkt: ${dtStr}`
         : "📅 Planning bijgewerkt"
     });
   };
@@ -2425,7 +2435,7 @@ export default function App() {
       });
       notify(`✅ Bevestigingsmail verzonden naar ${klantData.email}`, "ok");
       // Update offerte log
-      updOff(offerte.id, {planStatus:"ingepland", planBevestigingVerstuurd: true, logActie:`✅ Afspraak definitief bevestigd: ${planData.planDatum} ${planData.planTijd||""} — bevestigingsmail verstuurd`});
+      updOff(offerte.id, {planStatus:"ingepland", planBevestigingVerstuurd: true, logActie:`✅ Afspraak bevestigd: ${fmtPlanDatum(planData.planDatum, planData.planTijd)} — bevestigingsmail verstuurd`});
       // Update planning_proposal → ingepland zodat planner.html dit via Supabase oppikt
       try {
         await sb.from('planning_proposals')
@@ -3462,7 +3472,13 @@ function OffertesPage({offertes,initFilter,onView,onEdit,onStatus,onBulkStatus,o
                   <div className="flex gap2">
                     <button className="btn bs btn-sm" onClick={()=>onView(o)} title="Bekijken">👁</button>
                     <button className="btn bs btn-sm" onClick={()=>onEdit(o)} title="Bewerken">✏️</button>
-                    {(o.status==="goedgekeurd"||o.klantAkkoord)&&<button className="btn btn-sm" style={{background:"#d4ff00",color:"#1a2e4c",fontWeight:700,fontSize:11}} onClick={()=>onPlan(o)} title="Inplannen">📅</button>}
+                    {(o.status==="goedgekeurd"||o.klantAkkoord)&&(
+                      o.planStatus==="ingepland" && o.planDatum
+                        ? <button className="btn btn-sm" style={{background:"#10b981",color:"#fff",fontWeight:700,fontSize:11}} onClick={()=>onPlan(o)} title="Herplannen">
+                            ✅ {new Date(o.planDatum+"T12:00:00").toLocaleDateString("nl-BE",{day:"numeric",month:"short"})} {o.planTijd||""}
+                          </button>
+                        : <button className="btn btn-sm" style={{background:"#d4ff00",color:"#1a2e4c",fontWeight:700,fontSize:11}} onClick={()=>onPlan(o)} title="Inplannen">📅 Inplannen</button>
+                    )}
                     <button className="btn bgh btn-sm" onClick={()=>{if(window.confirm("Verwijderen?"))onDelete(o.id)}} title="Verwijderen">🗑</button>
                   </div>
                 </td>
@@ -3480,7 +3496,13 @@ function OffertesPage({offertes,initFilter,onView,onEdit,onStatus,onBulkStatus,o
                         <button className="btn bs btn-sm" onClick={()=>{onStatus(o.id,{status:"goedgekeurd",logActie:"✅ Goedgekeurd door klant"});}}>👍 Goedgekeurd</button>
                         <button className="btn bs btn-sm" onClick={()=>{onStatus(o.id,{status:"afgewezen",logActie:"❌ Afgewezen door klant"});}}>👎 Afgewezen</button>
                         {o.status==="goedgekeurd"&&!o.factuurId&&<button className="btn bg btn-sm" onClick={()=>onFactuur(o)}>🧾 → Factuur</button>}
-                        {(o.status==="goedgekeurd"||o.klantAkkoord)&&<button className="btn btn-sm" style={{background:"#d4ff00",color:"#1a2e4c",fontWeight:700}} onClick={()=>onPlan(o)}>📅 Inplannen</button>}
+                        {(o.status==="goedgekeurd"||o.klantAkkoord)&&(
+                          o.planStatus==="ingepland" && o.planDatum
+                            ? <button className="btn btn-sm" style={{background:"#10b981",color:"#fff",fontWeight:700}} onClick={()=>onPlan(o)}>
+                                ✅ Ingepland: {new Date(o.planDatum+"T12:00:00").toLocaleDateString("nl-BE",{weekday:"short",day:"numeric",month:"short"})} {o.planTijd||""}
+                              </button>
+                            : <button className="btn btn-sm" style={{background:"#d4ff00",color:"#1a2e4c",fontWeight:700}} onClick={()=>onPlan(o)}>📅 Inplannen</button>
+                        )}
                         <button className="btn bgh btn-sm" onClick={()=>{if(window.confirm("Verwijderen?"))onDelete(o.id)}}>🗑</button>
                       </div>
                       <div className="doc-log-wrap">
