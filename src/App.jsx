@@ -153,7 +153,7 @@ function billitHeaders(settings) {
   };
 }
 
-// ── KBO Lookup via CBE API ──
+// ── KBO Lookup — meerdere bronnen voor maximale dekking ──
 async function kboLookup(vatNumber, cbeApiKey = null) {
   console.log("[KBO] ==> Start lookup:", vatNumber);
   try {
@@ -168,8 +168,32 @@ async function kboLookup(vatNumber, cbeApiKey = null) {
     
     const formattedBTW = `BE ${cleaned.slice(0,4)}.${cleaned.slice(4,7)}.${cleaned.slice(7)}`;
     const baseResult = { naam:"", bedrijf:"", adres:"", gemeente:"", btwnr:formattedBTW, tel:"", email:"", peppolId:`0208:${cleaned}` };
-    
-    // CBE API lookup
+
+    // ── BRON 1: kbo.party (gratis, geen key nodig, meest complete dekking) ──
+    try {
+      const r = await fetch(`https://kbo.party/api/v1/enterprise/${cleaned}`, {
+        headers: { 'Accept': 'application/json' }
+      });
+      if(r.ok) {
+        const d = await r.json();
+        // kbo.party response: { enterpriseNumber, names:[{language,name}], addresses:[{streetNl,municipalityNl,zipCode}] }
+        const nameNl = d.names?.find(n=>n.language==="NL")?.name || d.names?.[0]?.name || "";
+        const addr = d.addresses?.find(a=>a.typeCode==="1") || d.addresses?.[0];
+        if(nameNl) {
+          baseResult.naam = nameNl;
+          baseResult.bedrijf = nameNl;
+          if(addr) {
+            const straat = [addr.streetNl||addr.street||"", addr.houseNumber||"", addr.box?"bus "+addr.box:""].filter(Boolean).join(" ").trim();
+            baseResult.adres = straat;
+            baseResult.gemeente = `${addr.zipCode||""} ${addr.municipalityNl||addr.municipality||""}`.trim();
+          }
+          console.log("[KBO] ✓ kbo.party SUCCESS:", baseResult.naam);
+          return baseResult;
+        }
+      }
+    } catch(e) { console.warn("[KBO] kbo.party failed:", e.message); }
+
+    // ── BRON 2: cbeapi.be (met API key) ──
     if(cbeApiKey) {
       try {
         const cbeResp = await fetch(`https://cbeapi.be/api/enterprise/${cleaned}`, {
@@ -184,12 +208,34 @@ async function kboLookup(vatNumber, cbeApiKey = null) {
             baseResult.gemeente = `${d.address?.zipcode||""} ${d.address?.city||""}`.trim();
             baseResult.tel = d.contact?.phone || "";
             baseResult.email = d.contact?.email || "";
-            console.log("[KBO] ✓ CBE API SUCCESS:", baseResult.naam);
+            console.log("[KBO] ✓ cbeapi.be SUCCESS:", baseResult.naam);
+            return baseResult;
           }
         }
-      } catch(e) { console.warn("[KBO] CBE API failed:", e.message); }
+      } catch(e) { console.warn("[KBO] cbeapi.be failed:", e.message); }
     }
-    return baseResult;
+
+    // ── BRON 3: cbeapi.be zonder key (beperkte toegang) ──
+    try {
+      const r2 = await fetch(`https://cbeapi.be/api/enterprise/${cleaned}`, {
+        headers: { 'Accept': 'application/json' }
+      });
+      if(r2.ok) {
+        const d = await r2.json();
+        if(d?.denomination || d?.name) {
+          baseResult.naam = d.denomination || d.name || "";
+          baseResult.bedrijf = d.name || d.denomination || "";
+          baseResult.adres = d.address?.street || "";
+          baseResult.gemeente = `${d.address?.zipcode||""} ${d.address?.city||""}`.trim();
+          console.log("[KBO] ✓ cbeapi.be (no key) SUCCESS:", baseResult.naam);
+          return baseResult;
+        }
+      }
+    } catch(e) { console.warn("[KBO] cbeapi.be (no key) failed:", e.message); }
+
+    // Alle bronnen gefaald — BTW is geldig maar geen gegevens gevonden
+    console.warn("[KBO] Alle bronnen gefaald voor:", cleaned);
+    return baseResult; // Geeft geldig BTW-nummer terug, naam leeg
   } catch(err) { console.error("[KBO] Fatal error:", err); return null; }
 }
 
