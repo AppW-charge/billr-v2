@@ -767,6 +767,10 @@
         // ── SUPABASE SYNC ────────────────────────────────────────────────
         const SB_URL = "https://qxnxbqkdvvblfkihmjxy.supabase.co";
         const SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF4bnhicWtkdnZibGZraWhtanh5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMzNTI3MTMsImV4cCI6MjA4ODkyODcxM30.1JDvrHgxLpU1GZqSjDVGtfnFJg8PHuD-aFpHOxAY1To";
+        // Één gedeelde client — aparte storageKey zodat er GEEN conflict met BILLR auth
+        const sbPlanner = window.supabase.createClient(SB_URL, SB_KEY, {
+            auth: { storageKey: 'planner-sb-auth', persistSession: false, autoRefreshToken: false }
+        });
         let sbAppointments = []; // BILLR afspraken uit Supabase
 
         function proposalToApt(p) {
@@ -798,7 +802,7 @@
             localStorage.setItem('wcharge_' + key + '_ts', new Date().toISOString());
             // Supabase op de achtergrond
             try {
-                const s = window.supabase.createClient(SB_URL, SB_KEY);
+                const s = sbPlanner;
                 await s.from('planner_data').upsert(
                     { key, value: JSON.stringify(value), updated_at: new Date().toISOString() },
                     { onConflict: 'key' }
@@ -809,7 +813,7 @@
         async function loadPlannerDataFromSB() {
             const sbEl = document.getElementById('sbTxt');
             try {
-                const s = window.supabase.createClient(SB_URL, SB_KEY);
+                const s = sbPlanner;
                 const { data, error } = await s.from('planner_data').select('key,value,updated_at');
                 if (error) throw error;
                 if (!data || data.length === 0) return false; // Supabase leeg → gebruik localStorage
@@ -836,7 +840,7 @@
         async function loadSBAppointments() {
             const el = document.getElementById('sbTxt');
             try {
-                const s = window.supabase.createClient(SB_URL, SB_KEY);
+                const s = sbPlanner;
                 const { data, error } = await s.from('planning_proposals')
                     .select('*').in('status', ['ingepland','akkoord','voorstel']);
                 if (error) throw error;
