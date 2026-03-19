@@ -637,7 +637,38 @@
 
     <div class="tooltip" id="tooltip"></div>
 
-    <!-- Share Link Modal -->
+    <!-- Edit Afspraak Modal -->
+    <div class="modal" id="editAptModal" onclick="if(event.target.id==='editAptModal')closeEditAptModal()">
+        <div class="modal-content" onclick="event.stopPropagation()" style="max-width:500px">
+            <div class="modal-header">✏️ Afspraak Bewerken</div>
+            <input type="hidden" id="editAptId">
+            <div class="form-group">
+                <label>Datum</label>
+                <input type="date" id="editAptDate" style="width:100%;padding:10px;border:2px solid #e0e4e8;border-radius:6px;font-family:Rajdhani,sans-serif;font-size:1rem">
+            </div>
+            <div class="form-group">
+                <label>Tijd</label>
+                <input type="time" id="editAptTime" style="width:100%;padding:10px;border:2px solid #e0e4e8;border-radius:6px;font-family:Rajdhani,sans-serif;font-size:1rem">
+            </div>
+            <div class="form-group">
+                <label>Klant</label>
+                <input type="text" id="editAptClient" style="width:100%;padding:10px;border:2px solid #e0e4e8;border-radius:6px;font-family:Rajdhani,sans-serif;font-size:1rem">
+            </div>
+            <div class="form-group">
+                <label>Locatie</label>
+                <input type="text" id="editAptLocation" style="width:100%;padding:10px;border:2px solid #e0e4e8;border-radius:6px;font-family:Rajdhani,sans-serif;font-size:1rem">
+            </div>
+            <div class="form-group">
+                <label>Notities</label>
+                <textarea id="editAptNotes" rows="2" style="width:100%;padding:10px;border:2px solid #e0e4e8;border-radius:6px;font-family:Rajdhani,sans-serif;font-size:1rem;resize:vertical"></textarea>
+            </div>
+            <div style="display:flex;gap:10px;margin-top:20px">
+                <button class="btn" onclick="saveEditApt()" style="flex:2">💾 Opslaan</button>
+                <button class="btn btn-danger" onclick="deleteEditApt()" style="flex:1">🗑️ Verwijderen</button>
+                <button class="btn btn-secondary" onclick="closeEditAptModal()" style="flex:1">✖</button>
+            </div>
+        </div>
+    </div>
     <div class="modal" id="shareLinkModal" onclick="closeShareLinkModal(event)">
         <div class="modal-content" onclick="event.stopPropagation()" style="max-width: 600px;">
             <div class="modal-header">🔗 Deel Link Gegenereerd</div>
@@ -755,6 +786,10 @@
                     .select('*').in('status', ['ingepland','akkoord','voorstel']);
                 if (error) throw error;
                 sbAppointments = (data || []).map(proposalToApt).filter(a => a.date);
+                
+                // ── CLEANUP: verwijder lokale kopieën die niet meer in Supabase staan ──
+                const activeSBIds = new Set(sbAppointments.map(a => a.id));
+                const needsCleanup = cleanupRemovedBILLRAppointments(activeSBIds);
                 
                 // ── PERSISTENTIE: sla 'ingepland' afspraken ook lokaal op als backup ──
                 // Zo blijven ze zichtbaar ook als de Supabase-rij later verdwijnt
@@ -1152,6 +1187,33 @@
                         });
                         item.appendChild(deleteBtn);
                     }
+                    // Bewerkknop voor ALLE afspraken (ook BILLR)
+                    if (!isReadOnly) {
+                        const editBtn = document.createElement('button');
+                        editBtn.className = 'btn btn-secondary';
+                        editBtn.style.cssText = 'margin-top:6px;width:100%;font-size:0.85rem;';
+                        editBtn.textContent = '✏️ Datum/tijd aanpassen';
+                        editBtn.addEventListener('click', function(e) {
+                            e.preventDefault(); e.stopPropagation();
+                            document.getElementById('dayModal').classList.remove('active');
+                            if (isBillr && !appointments.some(x => x._billrId === a.id)) {
+                                const localCopy = {
+                                    id: Date.now() + Math.random(),
+                                    date: a.date, time: a.time, client: a.client,
+                                    type: a.type, location: a.location, notes: a.notes,
+                                    offerteNummer: a.offerteNummer, phone: a.phone,
+                                    _billrId: a.id, _billrStatus: a._status
+                                };
+                                appointments.push(localCopy);
+                                localStorage.setItem('wcharge_apts', JSON.stringify(appointments));
+                                openEditAptModal(localCopy);
+                            } else {
+                                const localApt = appointments.find(x => x._billrId === a.id) || a;
+                                openEditAptModal(localApt);
+                            }
+                        });
+                        item.appendChild(editBtn);
+                    }
                     aptList.appendChild(item);
                 });
             }
@@ -1325,6 +1387,80 @@
             console.log('✅ Verwijderd:', foundApt.time, '-', foundApt.client);
         }
 
+        // ── EDIT AFSPRAAK ────────────────────────────────────────────────
+        let _editAptData = null; // houdt de volledige afspraak vast tijdens bewerking
+
+        function openEditAptModal(apt) {
+            _editAptData = apt;
+            document.getElementById('editAptId').value = apt.id;
+            document.getElementById('editAptDate').value = apt.date || '';
+            document.getElementById('editAptTime').value = (apt.time||'').slice(0,5);
+            document.getElementById('editAptClient').value = apt.client || '';
+            document.getElementById('editAptLocation').value = apt.location || '';
+            document.getElementById('editAptNotes').value = apt.notes || '';
+            document.getElementById('editAptModal').classList.add('active');
+        }
+
+        function closeEditAptModal() {
+            document.getElementById('editAptModal').classList.remove('active');
+            _editAptData = null;
+        }
+
+        function saveEditApt() {
+            if (!_editAptData) return;
+            const newDate = document.getElementById('editAptDate').value;
+            const newTime = document.getElementById('editAptTime').value;
+            if (!newDate || !newTime) { alert('Datum en tijd zijn verplicht'); return; }
+
+            // Zoek in lokale appointments (ook BILLR-kopieën)
+            const idx = appointments.findIndex(a => String(a.id) === String(_editAptData.id));
+            if (idx >= 0) {
+                appointments[idx] = {
+                    ...appointments[idx],
+                    date: newDate,
+                    time: newTime,
+                    client: document.getElementById('editAptClient').value,
+                    location: document.getElementById('editAptLocation').value,
+                    notes: document.getElementById('editAptNotes').value,
+                    _manuallyEdited: true
+                };
+                localStorage.setItem('wcharge_apts', JSON.stringify(appointments));
+            }
+            closeEditAptModal();
+            renderCalendar();
+            renderAppointments();
+        }
+
+        function deleteEditApt() {
+            if (!_editAptData) return;
+            if (!confirm('Afspraak verwijderen?\n' + (_editAptData.client||'') + ' · ' + (_editAptData.date||''))) return;
+            appointments = appointments.filter(a => String(a.id) !== String(_editAptData.id));
+            localStorage.setItem('wcharge_apts', JSON.stringify(appointments));
+            closeEditAptModal();
+            // Sluit ook dag-modal als die open is
+            document.getElementById('dayModal').classList.remove('active');
+            renderCalendar();
+            renderAppointments();
+        }
+
+        // ── CLEANUP: verwijder lokale BILLR-kopieën die niet meer in Supabase staan ──
+        function cleanupRemovedBILLRAppointments(activeSBIds) {
+            const before = appointments.length;
+            // Verwijder lokale BILLR-kopieën waarvan het _billrId niet meer actief is in Supabase
+            // MAAR alleen als ze NIET handmatig bewerkt zijn (_manuallyEdited)
+            appointments = appointments.filter(a => {
+                if (!a._billrId) return true; // geen BILLR-koppeling → behouden
+                if (a._manuallyEdited) return true; // handmatig bewerkt → altijd behouden
+                return activeSBIds.has(a._billrId); // behouden als nog actief in Supabase
+            });
+            if (appointments.length < before) {
+                localStorage.setItem('wcharge_apts', JSON.stringify(appointments));
+                console.log(`🧹 ${before - appointments.length} verwijderde BILLR afspraken opgeschoond`);
+                return true;
+            }
+            return false;
+        }
+
         function renderAppointments() {
             const list = document.getElementById('appointmentList');
             
@@ -1389,18 +1525,34 @@
                         ${a.notes ? `<p style="font-size:0.85rem;color:#64748b;margin-top:4px">${a.notes}</p>` : ''}
                     `;
 
-                    // Verwijder-knop enkel voor lokale (niet-BILLR) afspraken
-                    if (!isBillr && !isReadOnly) {
-                        const deleteBtn = document.createElement('button');
-                        deleteBtn.className = 'btn btn-danger';
-                        deleteBtn.style.cssText = 'margin-top: 10px; width: 100%; font-size:0.9rem;';
-                        deleteBtn.textContent = '🗑️ Verwijderen';
-                        const appointmentId = a.id;
-                        deleteBtn.addEventListener('click', function(e) {
+                    if (!isReadOnly) {
+                        // Alle afspraken (ook BILLR) zijn bewerkbaar
+                        // BILLR-afspraken worden als lokale kopie opgeslagen bij eerste edit
+                        const editBtn = document.createElement('button');
+                        editBtn.className = 'btn btn-secondary';
+                        editBtn.style.cssText = 'margin-top:10px;width:100%;font-size:0.9rem;';
+                        editBtn.textContent = '✏️ Bewerken / Verwijderen';
+                        const aptData = a;
+                        editBtn.addEventListener('click', function(e) {
                             e.preventDefault(); e.stopPropagation();
-                            deleteApt(appointmentId);
+                            // Als het een puur Supabase-afspraak is (geen lokale kopie), maak lokale kopie
+                            if (a._source === 'billr' && !appointments.some(x => x._billrId === a.id)) {
+                                const localCopy = {
+                                    id: Date.now() + Math.random(),
+                                    date: a.date, time: a.time, client: a.client,
+                                    type: a.type, location: a.location, notes: a.notes,
+                                    offerteNummer: a.offerteNummer, phone: a.phone,
+                                    _billrId: a.id, _billrStatus: a._status
+                                };
+                                appointments.push(localCopy);
+                                localStorage.setItem('wcharge_apts', JSON.stringify(appointments));
+                                openEditAptModal(localCopy);
+                            } else {
+                                const localApt = appointments.find(x => x._billrId === a.id) || a;
+                                openEditAptModal(localApt);
+                            }
                         });
-                        item.appendChild(deleteBtn);
+                        item.appendChild(editBtn);
                     }
 
                     list.appendChild(item);
