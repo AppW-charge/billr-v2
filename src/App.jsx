@@ -3701,15 +3701,15 @@ function ProductenPage({producten,settings,onEdit,onDelete,onToggle,onEnrich,onD
   const dynCats = getProdCats(settings);
   const catOrder2 = dynCats.map(c=>c.naam);
   const allCatNames = [...new Set(producten.map(p=>p.cat).filter(Boolean))];
-  // Alle categorieën: settings volgorde + producten die niet in settings staan + Vrije lijnen onderaan
-  const catNamen = [
-    ...catOrder2.filter(c=>c!=="Vrije lijnen"), // alle settings cats (ook lege)
+  // catNamenUniq voor dropdown: ALTIJD alle settings categorieën + extra uit producten + Vrije lijnen onderaan
+  const catNamenUniq = [
+    ...catOrder2,                                                        // alle settings cats (ook lege)
     ...allCatNames.filter(c=>!catOrder2.includes(c)&&c!=="Vrije lijnen"), // extra uit producten
-    ...allCatNames.filter(c=>c==="Vrije lijnen") // Vrije lijnen altijd onderaan
-  ];
-  // Deduplicate
-  const catNamenUniq = [...new Set(catNamen)];
-  const cats2 = ["alle",...catNamenUniq];
+    ...allCatNames.filter(c=>c==="Vrije lijnen")                         // Vrije lijnen onderaan
+  ].filter((c,i,arr)=>arr.indexOf(c)===i); // deduplicate
+  // catNamen voor tabs: enkel cats die ook producten hebben
+  const catNamen = catNamenUniq.filter(c=>allCatNames.includes(c)||catOrder2.includes(c));
+  const cats2 = ["alle",...catNamenUniq.filter(c=>allCatNames.includes(c))];
   const list = [...producten.filter(p=>(cat==="alle"||p.cat===cat)&&(!q||(p.naam||"").toLowerCase().includes(q.toLowerCase())))]
     .sort((a,b)=>new Date(b.aangemaakt||0)-new Date(a.aangemaakt||0));
 
