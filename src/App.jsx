@@ -169,9 +169,9 @@ async function kboLookup(vatNumber, cbeApiKey = null) {
     const formattedBTW = `BE ${cleaned.slice(0,4)}.${cleaned.slice(4,7)}.${cleaned.slice(7)}`;
     const baseResult = { naam:"", bedrijf:"", adres:"", gemeente:"", btwnr:formattedBTW, tel:"", email:"", peppolId:`0208:${cleaned}` };
 
-    // ── BRON 1: kbo.party (gratis, geen key nodig, meest complete dekking) ──
+    // ── BRON 1: kbo.party via lokale proxy (geen CORS probleem) ──
     try {
-      const r = await fetch(`https://kbo.party/api/v1/enterprise/${cleaned}`, {
+      const r = await fetch(`/api/kbo/enterprise/${cleaned}`, {
         headers: { 'Accept': 'application/json' }
       });
       if(r.ok) {
