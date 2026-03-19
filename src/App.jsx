@@ -1816,6 +1816,34 @@ export default function App() {
     creditnotas, aanmaningen, betalingen, tijdslots, dossiers, garanties,
   });
 
+  // ─── AUTO-BACKUP naar Supabase (elk uur) ────────────────────────
+  const saveBackupToSB = async (label) => {
+    if(!user) return;
+    try {
+      const data = getBackupData();
+      const lbl = label || `Auto ${new Date().toLocaleString("nl-BE",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"})}`;
+      await sb.from("billr_backups").insert({ user_id: user.id, label: lbl, data });
+      // Bewaar max 48 backups (2 dagen) — verwijder oudste
+      const { data: old } = await sb.from("billr_backups").select("id,created_at").eq("user_id", user.id).order("created_at", {ascending:true});
+      if(old && old.length > 48) {
+        const toDelete = old.slice(0, old.length - 48).map(r => r.id);
+        await sb.from("billr_backups").delete().in("id", toDelete);
+      }
+      console.log("☁️ Auto-backup opgeslagen:", lbl);
+      return true;
+    } catch(e) { console.warn("Auto-backup mislukt:", e.message); return false; }
+  };
+
+  // Auto-backup interval: elk uur
+  useEffect(()=>{
+    if(!user) return;
+    // Eerste backup na 2 minuten (na volledig laden)
+    const initial = setTimeout(()=>saveBackupToSB(), 2 * 60 * 1000);
+    // Dan elk uur
+    const interval = setInterval(()=>saveBackupToSB(), 60 * 60 * 1000);
+    return ()=>{ clearTimeout(initial); clearInterval(interval); };
+  }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const doExportBackup = () => {
     try {
       const data = getBackupData();
@@ -2488,7 +2516,7 @@ export default function App() {
             {pg==="producten"&&<ProductenPage producten={producten} settings={settings} onEdit={p=>setProdModal(p)} onDelete={id=>{setProducten(p=>p.filter(x=>x.id!==id));notify("Verwijderd")}} onToggle={id=>setProducten(p=>p.map(x=>x.id===id?{...x,actief:!x.actief}:x))} onEnrich={upd=>setProducten(p=>p.map(x=>x.id===upd.id?upd:x))} onDuplicate={p=>{const dup={...p,id:uid(),naam:p.naam+" (kopie)",aangemaakt:new Date().toISOString()};setProducten(prev=>[dup,...prev]);notify("Product gedupliceerd ✓");setProdModal(dup);}}/>}
             {pg==="agenda"&&<div style={{height:"calc(100vh - 70px)",margin:"-22px",overflow:"hidden"}}><iframe src={`${window.location.origin}/planner.html`} style={{width:"100%",height:"100%",border:"none"}} title="Agenda"/></div>}
             {pg==="rapportage"&&<Rapportage offertes={offertes} facturen={factMet}/>}
-            {pg==="instellingen"&&<InstellingenPage settings={settings} setSettings={s=>{setSettings(s);notify("Instellingen opgeslagen ✓");}} notify={notify} onExportBackup={doExportBackup} onImportBackup={doImportBackup}/>}
+            {pg==="instellingen"&&<InstellingenPage settings={settings} setSettings={s=>{setSettings(s);notify("Instellingen opgeslagen ✓");}} notify={notify} onExportBackup={doExportBackup} onImportBackup={doImportBackup} onSaveBackupSB={saveBackupToSB} sbClient={sb} userId={user?.id}/>}
             {pg==="creditnotas"&&<CreditnotasPage creditnotas={creditnotas} facturen={facturen} onDelete={id=>{setCreditnotas(p=>p.filter(c=>c.id!==id));notify("Verwijderd");}} onCreate={()=>setCreditnotaModal({})} onView={cn=>setViewDoc({doc:cn,type:"creditnota"})} settings={settings}/>}
             {pg==="aanmaningen"&&<AanmaningenPage facturen={factMet} aanmaningen={aanmaningen} onVerzend={(am)=>{setAanmaningen(p=>p.map(a=>a.id===am.id?{...a,status:"verzonden",verzonden:today()}:a));notify("Aanmaning verzonden ✓");}} onCreate={(am)=>{setAanmaningen(p=>[{...am,id:uid(),aangemaakt:new Date().toISOString(),status:"openstaand"},...p]);notify("Aanmaning aangemaakt ✓");}} settings={settings}/>}
             {pg==="tijdregistratie"&&<TijdregistratiePage tijdslots={tijdslots} klanten={klanten} offertes={offertes} onDelete={id=>{setTijdslots(p=>p.filter(t=>t.id!==id));}} onNew={()=>setTijdModal({})} onEdit={t=>setTijdModal(t)}/>}
@@ -6331,7 +6359,118 @@ function Rapportage({offertes,facturen}) {
 }
 
 // ─── INSTELLINGEN ─────────────────────────────────────────────────
-function InstellingenPage({settings,setSettings,notify,onExportBackup,onImportBackup}) {
+// ─── BACKUP TAB ───────────────────────────────────────────────
+function BackupTab({onExportBackup, onImportBackup, onSaveBackupSB, sbClient, userId, notify}) {
+  const [backups, setBackups] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  const loadBackups = async () => {
+    if(!sbClient || !userId) { setLoading(false); return; }
+    try {
+      const { data } = await sbClient.from("billr_backups").select("id,label,created_at,data").eq("user_id", userId).order("created_at", {ascending:false}).limit(20);
+      setBackups(data || []);
+    } catch(e) { console.warn("Backups laden:", e); }
+    setLoading(false);
+  };
+
+  useEffect(()=>{ loadBackups(); }, []); // eslint-disable-line
+
+  const doManualSave = async () => {
+    setSaving(true);
+    const ok = await onSaveBackupSB(`Manueel ${new Date().toLocaleString("nl-BE",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"})}`);
+    if(ok !== false) { notify("☁️ Backup opgeslagen in cloud ✓"); await loadBackups(); }
+    else notify("❌ Backup mislukt — controleer verbinding","er");
+    setSaving(false);
+  };
+
+  const doRestoreSB = async (backup) => {
+    if(!window.confirm(`Herstellen van backup:\n"${backup.label}"\n\nAlle huidige data wordt overschreven! Doorgaan?`)) return;
+    const file = new File([JSON.stringify(backup.data)], "backup.json", {type:"application/json"});
+    onImportBackup(file);
+  };
+
+  const doDeleteSB = async (id) => {
+    if(!window.confirm("Backup verwijderen?")) return;
+    await sbClient.from("billr_backups").delete().eq("id", id);
+    await loadBackups();
+  };
+
+  const fmtDate = ts => new Date(ts).toLocaleString("nl-BE",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"});
+
+  return(
+    <div style={{maxWidth:720}}>
+      {/* ── AUTO BACKUP STATUS ── */}
+      <div className="card" style={{marginBottom:12,border:"2px solid #86efac",background:"#f0fdf4"}}>
+        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}>
+          <span style={{fontSize:22}}>🤖</span>
+          <div>
+            <div style={{fontWeight:800,fontSize:15,color:"#065f46"}}>Automatische cloud backup</div>
+            <div style={{fontSize:12,color:"#059669"}}>Elke 60 minuten automatisch opgeslagen in Supabase — max 48 backups (2 dagen)</div>
+          </div>
+        </div>
+        <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+          <button className="btn bp btn-sm" onClick={doManualSave} disabled={saving} style={{fontWeight:700}}>
+            {saving ? "⏳ Opslaan..." : "☁️ Nu opslaan in cloud"}
+          </button>
+          <button className="btn bgh btn-sm" onClick={loadBackups}>🔄 Vernieuwen</button>
+        </div>
+      </div>
+
+      {/* ── CLOUD BACKUPS LIJST ── */}
+      <div className="card" style={{marginBottom:12}}>
+        <div style={{fontWeight:700,fontSize:15,marginBottom:12}}>☁️ Cloud backups ({backups.length})</div>
+        {loading ? <div style={{color:"#94a3b8",fontSize:13}}>⏳ Laden...</div>
+          : backups.length === 0 ? <div style={{color:"#94a3b8",fontSize:13,padding:"12px 0"}}>Nog geen cloud backups. Klik "Nu opslaan" om de eerste te maken.</div>
+          : backups.map(b => {
+            const meta = b.data?._meta || {};
+            const nOff = b.data?.offertes?.length || 0;
+            const nFct = b.data?.facturen?.length || 0;
+            const nKln = b.data?.klanten?.length || 0;
+            return(
+              <div key={b.id} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 0",borderBottom:"1px solid #f1f5f9",flexWrap:"wrap"}}>
+                <div style={{flex:1,minWidth:180}}>
+                  <div style={{fontWeight:600,fontSize:13}}>{b.label}</div>
+                  <div style={{fontSize:11,color:"#94a3b8",marginTop:2}}>{nOff} offertes · {nFct} facturen · {nKln} klanten</div>
+                </div>
+                <div style={{display:"flex",gap:6,flexShrink:0}}>
+                  <button className="btn b2 btn-sm" style={{fontSize:11}} onClick={()=>doRestoreSB(b)}>♻️ Herstel</button>
+                  <button className="btn bgh btn-sm" style={{fontSize:11}} onClick={()=>doDeleteSB(b.id)}>🗑</button>
+                </div>
+              </div>
+            );
+          })
+        }
+      </div>
+
+      {/* ── HANDMATIGE DOWNLOAD/UPLOAD ── */}
+      <div className="card" style={{marginBottom:12}}>
+        <div style={{fontWeight:700,fontSize:15,marginBottom:10}}>📁 Lokale backup</div>
+        <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+          <button className="btn bp btn-lg" style={{flex:1}} onClick={onExportBackup}>⬇️ Download JSON</button>
+          <label style={{flex:1}}>
+            <div className="btn bgh btn-lg" style={{width:"100%",cursor:"pointer",textAlign:"center"}}>📂 Importeer JSON</div>
+            <input type="file" accept=".json,application/json" style={{display:"none"}} onChange={e=>{if(e.target.files[0])onImportBackup(e.target.files[0]);e.target.value="";}}/>
+          </label>
+        </div>
+        <div style={{marginTop:10,padding:"10px 12px",background:"#fef2f2",border:"1px solid #fca5a5",borderRadius:8,fontSize:12,color:"#991b1b"}}>
+          ⚠️ Importeren overschrijft alle huidige data. Sla eerst een cloud backup op.
+        </div>
+      </div>
+
+      <div className="card" style={{background:"#eff6ff",border:"1.5px solid #bfdbfe"}}>
+        <div style={{fontWeight:700,fontSize:13,color:"#1e40af",marginBottom:6}}>💡 Tips</div>
+        <div style={{fontSize:12.5,color:"#1e40af",lineHeight:1.7}}>
+          <div>• Cloud backups zijn toegankelijk vanuit elk toestel na inloggen</div>
+          <div>• Download ook periodiek een lokale JSON naar OneDrive voor extra zekerheid</div>
+          <div>• API keys en wachtwoorden zitten niet in de backup — die vul je na herstel opnieuw in</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function InstellingenPage({settings,setSettings,notify,onExportBackup,onImportBackup,onSaveBackupSB,sbClient,userId}) {
   const isFirstRun = !settings?.bedrijf?.naam;
   const [tab,setTab]=useState(isFirstRun?"bedrijf":"bedrijf");
   const [openLyt,setOpenLyt]=useState({algemeen:true});
@@ -6967,57 +7106,7 @@ function InstellingenPage({settings,setSettings,notify,onExportBackup,onImportBa
         <button className="btn b2 btn-lg" style={{width:"100%"}} onClick={doSave}>💾 Dashboard opslaan</button>
       </div>}
 
-      {tab==="backup"&&<div style={{maxWidth:720}}>
-        {/* ── EXPORT ── */}
-        <div className="card" style={{marginBottom:12}}>
-          <div style={{fontWeight:700,fontSize:15,marginBottom:6}}>📤 Backup exporteren</div>
-          <p style={{fontSize:13,color:"#64748b",marginBottom:16,lineHeight:1.6}}>
-            Download een volledige backup van alle BILLR data als JSON-bestand: offertes, facturen, klanten, producten, instellingen en meer. 
-            Sla dit bestand veilig op als reservekopie.
-          </p>
-          <div style={{padding:"14px 16px",background:"#f0fdf4",border:"1.5px solid #86efac",borderRadius:10,marginBottom:16,fontSize:13,color:"#166534"}}>
-            <div style={{fontWeight:700,marginBottom:4}}>✅ Wat zit in de backup?</div>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"3px 16px"}}>
-              {["Offertes","Facturen","Klanten","Producten","Creditnota's","Aanmaningen","Betalingen","Tijdregistratie","Dossiers","Garanties","Alle instellingen"].map(x=>(
-                <div key={x} style={{fontSize:12}}>✓ {x}</div>
-              ))}
-            </div>
-          </div>
-          <button className="btn bp btn-lg" style={{width:"100%",fontSize:15}} onClick={onExportBackup}>
-            ⬇️ Download backup JSON
-          </button>
-        </div>
-
-        {/* ── IMPORT ── */}
-        <div className="card" style={{marginBottom:12}}>
-          <div style={{fontWeight:700,fontSize:15,marginBottom:6}}>📥 Backup herstellen</div>
-          <p style={{fontSize:13,color:"#64748b",marginBottom:14,lineHeight:1.6}}>
-            Herstel alle data vanuit een eerder gedownloade BILLR backup. 
-            <strong style={{color:"#dc2626"}}> Alle huidige data wordt overschreven!</strong>
-          </p>
-          <div style={{padding:"12px 14px",background:"#fef2f2",border:"1.5px solid #fca5a5",borderRadius:8,marginBottom:14,fontSize:13,color:"#991b1b"}}>
-            ⚠️ <strong>Waarschuwing:</strong> Importeren overschrijft alle bestaande offertes, facturen, klanten en producten. 
-            Maak eerst een nieuwe backup als je de huidige data wil bewaren.
-          </div>
-          <label style={{display:"block",width:"100%"}}>
-            <div className="btn bgh btn-lg" style={{width:"100%",fontSize:15,cursor:"pointer",textAlign:"center",display:"block"}}>
-              📂 Kies backup bestand (.json)
-            </div>
-            <input type="file" accept=".json,application/json" style={{display:"none"}} onChange={e=>{ if(e.target.files[0]) onImportBackup(e.target.files[0]); e.target.value=""; }}/>
-          </label>
-        </div>
-
-        {/* ── TIPS ── */}
-        <div className="card" style={{background:"#eff6ff",border:"1.5px solid #bfdbfe"}}>
-          <div style={{fontWeight:700,fontSize:13,color:"#1e40af",marginBottom:8}}>💡 Backup tips</div>
-          <div style={{fontSize:12.5,color:"#1e40af",lineHeight:1.7}}>
-            <div>• Maak wekelijks een backup, zeker voor grote wijzigingen</div>
-            <div>• Sla backups op in OneDrive of Google Drive voor veiligheid</div>
-            <div>• Backup bevat géén wachtwoorden of API keys (die vul je na herstel opnieuw in)</div>
-            <div>• Technische PDF fiches worden als verwijzing opgeslagen — upload ze na herstel opnieuw</div>
-          </div>
-        </div>
-      </div>}
+      {tab==="backup"&&<BackupTab onExportBackup={onExportBackup} onImportBackup={onImportBackup} onSaveBackupSB={onSaveBackupSB} sbClient={sbClient} userId={userId} notify={notify}/>}
 
       {tab==="sjabloon"&&<div className="inst-wrap" style={{maxWidth:780}}>
 
