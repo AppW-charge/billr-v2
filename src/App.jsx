@@ -2280,7 +2280,7 @@ export default function App() {
       });
       notify(`✅ Bevestigingsmail verzonden naar ${klantData.email}`, "ok");
       // Update offerte log
-      updOff(offerte.id, {planStatus:"ingepland", logActie:`✅ Afspraak definitief bevestigd: ${planData.planDatum} ${planData.planTijd||""} — bevestigingsmail verstuurd`});
+      updOff(offerte.id, {planStatus:"ingepland", planBevestigingVerstuurd: true, logActie:`✅ Afspraak definitief bevestigd: ${planData.planDatum} ${planData.planTijd||""} — bevestigingsmail verstuurd`});
       // Post naar planner.html via iframe API
       try {
         const plannerFrame = document.querySelector('iframe[title="Agenda"]');
@@ -2300,6 +2300,23 @@ export default function App() {
     }
   };
 
+  // ═══ AUTO-BEVESTIGING: wanneer klant akkoord geeft op planning.html ═══
+  // Detecteert automatisch "akkoord" status in planning_proposals → stuurt bevestigingsmail
+  const autoConfirmedRef = useRef(new Set());
+  useEffect(() => {
+    if(!user || !planningProposals || Object.keys(planningProposals).length === 0) return;
+    Object.entries(planningProposals).forEach(([offerteId, proposals]) => {
+      const latest = [...proposals].sort((a,b) => new Date(b.created_at) - new Date(a.created_at))[0];
+      if(!latest || latest.status !== "akkoord") return;
+      if(autoConfirmedRef.current.has(latest.id)) return; // Al verwerkt deze sessie
+      const offerte = offertes.find(o => o.id === offerteId);
+      if(!offerte || offerte.planBevestigingVerstuurd) return; // Al bevestigd
+      autoConfirmedRef.current.add(latest.id);
+      console.log("🤖 Auto-bevestiging: klant akkoord voor", offerte.nummer);
+      sendPlanningConfirmation(offerte, latest.plan_data || {});
+      notify(`✅ Klant gaf akkoord! Bevestigingsmail verstuurd naar ${(klanten.find(k=>k.id===offerte.klantId)||offerte.klant||{}).naam||"klant"}.`, "ok");
+    });
+  }, [planningProposals]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const doLogin = (u) => { setUser(u); };
   const doLogout = async () => {
@@ -2550,7 +2567,17 @@ function Dashboard({offertes, facturen, onGoto, onNew, onFactuur, settings, offe
   const recOff = [...offertes].sort((a,b)=>new Date(b.aangemaakt)-new Date(a.aangemaakt)).slice(0,5);
   const goedgekeurdDoorKlant = offertes.filter(o=>o.klantAkkoord);
 
-  // ── DRAG & DROP STATE ──
+  // ── ACTIE INBOX: detecteer openstaande acties ──
+  const actiesVereist = [];
+  offertes.forEach(o => {
+    const pp = planningProposals?.[o.id] || [];
+    const lp = pp.sort((a,b)=>new Date(b.created_at)-new Date(a.created_at))[0];
+    const ps = lp?.status;
+    if(o.status==="goedgekeurd" && !o.planBevestigingVerstuurd && !lp) actiesVereist.push({type:"plan",label:`${o.klant?.naam||o.nummer} — planningsvoorstel sturen`,offerte:o,kleur:"#f59e0b"});
+    if(ps==="alternatief" && !o.planBevestigingVerstuurd) actiesVereist.push({type:"herplan",label:`${o.klant?.naam||o.nummer} — wil ander moment (${lp.client_response?.datum||"datum TBD"})`,offerte:o,kleur:"#ef4444"});
+    if(ps==="akkoord" && !o.planBevestigingVerstuurd) actiesVereist.push({type:"bevestig",label:`${o.klant?.naam||o.nummer} — klant akkoord, bevestiging pending`,offerte:o,kleur:"#10b981"});
+  });
+
   const [dragId, setDragId] = useState(null);
   const [dragOverId, setDragOverId] = useState(null);
   const [editMode, setEditMode] = useState(false);
@@ -2824,6 +2851,25 @@ function Dashboard({offertes, facturen, onGoto, onNew, onFactuur, settings, offe
 
   return(
     <div>
+      {/* ── ACTIE INBOX ── */}
+      {actiesVereist.length>0&&(
+        <div style={{background:"#fff",border:"2px solid #fbbf24",borderRadius:12,padding:"12px 16px",marginBottom:14,boxShadow:"0 2px 12px rgba(251,191,36,.15)"}}>
+          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+            <span style={{fontSize:18}}>⚡</span>
+            <div style={{fontWeight:800,fontSize:14,color:"#92400e"}}>Acties vereist ({actiesVereist.length})</div>
+            <div style={{marginLeft:"auto",fontSize:11,color:"#94a3b8"}}>Automatisch bijgewerkt</div>
+          </div>
+          {actiesVereist.map((a,i)=>(
+            <div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"7px 10px",background:a.kleur+"11",borderRadius:8,marginBottom:4,border:`1px solid ${a.kleur}33`,cursor:"pointer"}} onClick={()=>onPlan(a.offerte)}>
+              <div style={{width:8,height:8,borderRadius:"50%",background:a.kleur,flexShrink:0}}/>
+              <div style={{flex:1,fontSize:12.5,fontWeight:600,color:"#1e293b"}}>{a.label}</div>
+              <div style={{fontSize:11,color:a.kleur,fontWeight:700,flexShrink:0}}>
+                {a.type==="plan"?"📅 Plan in":a.type==="herplan"?"🔄 Herplan":a.type==="bevestig"?"✅ Bevestig":"→"}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
       <div style={{display:"flex",justifyContent:"flex-end",marginBottom:8}}>
         <button className="btn btn-sm" style={{background:editMode?"#6366f1":"#f1f5f9",color:editMode?"#fff":"#64748b",fontWeight:600,fontSize:12}} onClick={()=>setEditMode(v=>!v)}>
           {editMode?"✓ Klaar":"⠿ Widgets herschikken"}
