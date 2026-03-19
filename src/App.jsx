@@ -2281,7 +2281,15 @@ export default function App() {
       notify(`✅ Bevestigingsmail verzonden naar ${klantData.email}`, "ok");
       // Update offerte log
       updOff(offerte.id, {planStatus:"ingepland", planBevestigingVerstuurd: true, logActie:`✅ Afspraak definitief bevestigd: ${planData.planDatum} ${planData.planTijd||""} — bevestigingsmail verstuurd`});
-      // Post naar planner.html via iframe API
+      // Update planning_proposal → ingepland zodat planner.html dit via Supabase oppikt
+      try {
+        await sb.from('planning_proposals')
+          .update({ status: 'ingepland' })
+          .eq('offerte_id', offerte.id)
+          .in('status', ['akkoord', 'voorstel']);
+        console.log('✅ Planning_proposal → ingepland in Supabase');
+      } catch(spe) { console.warn('Planning proposal status update:', spe); }
+      // Post naar planner.html iframe indien open
       try {
         const plannerFrame = document.querySelector('iframe[title="Agenda"]');
         if(plannerFrame?.contentWindow?.WChargePlanner) {
