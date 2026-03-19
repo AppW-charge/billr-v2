@@ -788,6 +788,52 @@
             };
         }
 
+        // ── PLANNER DATA SYNC (cross-device) ────────────────────────────
+        // Alle plannerdata wordt gesynchroniseerd via Supabase planner_data tabel
+        // Strategie: Supabase = master, localStorage = snelle cache
+        // newest_updated_at wint bij conflict
+
+        async function savePlannerData(key, value) {
+            // Altijd lokaal opslaan (instant)
+            try { localStorage.setItem('wcharge_' + key, JSON.stringify(value)); } catch(_) {}
+            localStorage.setItem('wcharge_' + key + '_ts', new Date().toISOString());
+            // Supabase op de achtergrond
+            try {
+                const s = window.supabase.createClient(SB_URL, SB_KEY);
+                await s.from('planner_data').upsert(
+                    { key, value: JSON.stringify(value), updated_at: new Date().toISOString() },
+                    { onConflict: 'key' }
+                );
+            } catch(e) { console.warn('Supabase save planner_data "' + key + '":', e.message); }
+        }
+
+        async function loadPlannerDataFromSB() {
+            const sbEl = document.getElementById('sbTxt');
+            try {
+                const s = window.supabase.createClient(SB_URL, SB_KEY);
+                const { data, error } = await s.from('planner_data').select('key,value,updated_at');
+                if (error) throw error;
+                if (!data || data.length === 0) return false; // Supabase leeg → gebruik localStorage
+
+                let changed = false;
+                data.forEach(row => {
+                    const sbTs = new Date(row.updated_at).getTime();
+                    const localTs = new Date(localStorage.getItem('wcharge_' + row.key + '_ts') || 0).getTime();
+                    // Supabase wint als nieuwer dan lokale cache
+                    if (sbTs > localTs) {
+                        try { localStorage.setItem('wcharge_' + row.key, row.value); } catch(_) {}
+                        localStorage.setItem('wcharge_' + row.key + '_ts', row.updated_at);
+                        changed = true;
+                        console.log('☁️ Supabase → lokaal: ' + row.key + ' (nieuwer)');
+                    }
+                });
+                return changed;
+            } catch(e) {
+                console.warn('Supabase load planner_data:', e.message);
+                return false;
+            }
+        }
+
         async function loadSBAppointments() {
             const el = document.getElementById('sbTxt');
             try {
@@ -823,7 +869,7 @@
                             _billrStatus: 'ingepland'
                         };
                         appointments.push(localApt);
-                        localStorage.setItem('wcharge_apts', JSON.stringify(appointments));
+                        savePlannerData('apts', appointments);
                         console.log('💾 BILLR afspraak lokaal opgeslagen:', sba.client, sba.date);
                     }
                 });
@@ -1217,7 +1263,7 @@
                                     _billrId: a.id, _billrStatus: a._status
                                 };
                                 appointments.push(localCopy);
-                                localStorage.setItem('wcharge_apts', JSON.stringify(appointments));
+                                savePlannerData('apts', appointments);
                                 openEditAptModal(localCopy);
                             } else {
                                 const localApt = appointments.find(x => x._billrId === a.id) || a;
@@ -1275,7 +1321,7 @@
             
             const dateStr = localDateStr(selectedDate);
             shiftOverrides[dateStr] = { label: selectedShiftLabel, type: selectedShiftClass };
-            localStorage.setItem('wcharge_overrides', JSON.stringify(shiftOverrides));
+            savePlannerData('overrides', shiftOverrides);
             
             alert('✅ Ploeg aangepast naar: ' + selectedShiftLabel);
             renderCalendar();
@@ -1285,7 +1331,7 @@
         function resetShiftOverride() {
             const dateStr = localDateStr(selectedDate);
             delete shiftOverrides[dateStr];
-            localStorage.setItem('wcharge_overrides', JSON.stringify(shiftOverrides));
+            savePlannerData('overrides', shiftOverrides);
             alert('✅ Ploeg hersteld!');
             renderCalendar();
             openDayModal(selectedDate);
@@ -1323,7 +1369,7 @@
             console.log('Array na push:', appointments.length, 'afspraken');
             
             try {
-                localStorage.setItem('wcharge_apts', JSON.stringify(appointments));
+                savePlannerData('apts', appointments);
                 console.log('✅ Opgeslagen in localStorage');
             } catch (e) {
                 console.error('❌ Fout bij opslaan:', e);
@@ -1374,7 +1420,7 @@
             }
             
             try {
-                localStorage.setItem('wcharge_apts', JSON.stringify(appointments));
+                savePlannerData('apts', appointments);
                 console.log('✅ Opgeslagen in localStorage');
                 console.log('Nieuwe array:', appointments);
             } catch (e) {
@@ -1436,7 +1482,7 @@
                     notes: document.getElementById('editAptNotes').value,
                     _manuallyEdited: true
                 };
-                localStorage.setItem('wcharge_apts', JSON.stringify(appointments));
+                savePlannerData('apts', appointments);
             }
             closeEditAptModal();
             renderCalendar();
@@ -1447,7 +1493,7 @@
             if (!_editAptData) return;
             if (!confirm('Afspraak verwijderen?\n' + (_editAptData.client||'') + ' · ' + (_editAptData.date||''))) return;
             appointments = appointments.filter(a => String(a.id) !== String(_editAptData.id));
-            localStorage.setItem('wcharge_apts', JSON.stringify(appointments));
+            savePlannerData('apts', appointments);
             closeEditAptModal();
             // Sluit ook dag-modal als die open is
             document.getElementById('dayModal').classList.remove('active');
@@ -1466,7 +1512,7 @@
                 return activeSBIds.has(a._billrId); // behouden als nog actief in Supabase
             });
             if (appointments.length < before) {
-                localStorage.setItem('wcharge_apts', JSON.stringify(appointments));
+                savePlannerData('apts', appointments);
                 console.log(`🧹 ${before - appointments.length} verwijderde BILLR afspraken opgeschoond`);
                 return true;
             }
@@ -1557,7 +1603,7 @@
                                     _billrId: a.id, _billrStatus: a._status
                                 };
                                 appointments.push(localCopy);
-                                localStorage.setItem('wcharge_apts', JSON.stringify(appointments));
+                                savePlannerData('apts', appointments);
                                 openEditAptModal(localCopy);
                             } else {
                                 const localApt = appointments.find(x => x._billrId === a.id) || a;
@@ -1616,8 +1662,8 @@
             
             try {
                 // Sla als lokale YYYY-MM-DD string op (geen UTC conversie nodig)
-                localStorage.setItem('wcharge_cycle_start', localDateStr(cycleStart));
-                localStorage.setItem('wcharge_schema', JSON.stringify(weekSchema));
+                savePlannerData('cycle_start', localDateStr(cycleStart));
+                savePlannerData('schema', weekSchema);
                 console.log('✅ Schema opgeslagen:', localDateStr(cycleStart));
             } catch (e) {
                 console.error('❌ Fout bij opslaan:', e);
@@ -1669,7 +1715,7 @@
             colors.afspraak = document.getElementById('colorAfspraak').value;
             colors.afspraakIngepland = document.getElementById('colorAfspraakIngepland').value;
             colors.afspraakVoorstel = document.getElementById('colorAfspraakVoorstel').value;
-            try { localStorage.setItem('wcharge_colors', JSON.stringify(colors)); } catch(e) {}
+            savePlannerData('colors', colors);
             applyColors();
             alert('✅ Kleuren opgeslagen!');
         }
@@ -1683,7 +1729,7 @@
                 afspraak: '#ef4444', afspraakIngepland: '#10b981', afspraakVoorstel: '#f59e0b'
             };
             updateColorInputs();
-            localStorage.setItem('wcharge_colors', JSON.stringify(colors));
+            savePlannerData('colors', colors);
             applyColors();
             alert('✅ Standaard kleuren hersteld!');
         }
@@ -1718,14 +1764,13 @@
                     console.log('✅ Overrides geladen:', Object.keys(shiftOverrides).length);
                 }
 
-                const cs = localStorage.getItem('wcharge_cycle_start');
+                const cs_raw = localStorage.getItem('wcharge_cycle_start');
+                const cs = cs_raw ? (cs_raw.startsWith('"') ? JSON.parse(cs_raw) : cs_raw) : null;
                 if (cs) {
                     // Ondersteun zowel nieuw formaat (YYYY-MM-DD) als oud ISO-formaat
                     if (/^\d{4}-\d{2}-\d{2}$/.test(cs)) {
-                        // Nieuw formaat: lokale datum → gebruik T12:00:00 om UTC-verschuiving te vermijden
                         cycleStart = new Date(cs + 'T12:00:00');
                     } else {
-                        // Oud ISO-formaat: extraheer lokale datum en hermaak als T12:00:00
                         const tmp = new Date(cs);
                         cycleStart = new Date(tmp.getFullYear(), tmp.getMonth(), tmp.getDate(), 12, 0, 0);
                     }
@@ -1810,30 +1855,39 @@
         }
 
         // Init
-        window.onload = function() {
+        window.onload = async function() {
             console.log('🚀 App laden...');
             
             // Check eerst of het een share link is
             const isShareLink = loadFromURL();
             
-            // Als het geen share link is, laad dan uit localStorage
             if (!isShareLink) {
+                // Stap 1: laad localStorage direct (snelle weergave)
                 loadData();
+                applyColors();
+                if (!weekSchema || weekSchema.length !== 49) initDefaultSchema();
+                renderCalendar();
+                renderAppointments();
+
+                // Stap 2: haal Supabase plannerdata op (kan nieuwer zijn van ander toestel)
+                const sbEl = document.getElementById('sbTxt');
+                if (sbEl) sbEl.textContent = 'Synchroniseren...';
+                const sbUpdated = await loadPlannerDataFromSB();
+                if (sbUpdated) {
+                    // Supabase had nieuwere data → herlaad en re-render
+                    console.log('🔄 Supabase data nieuwer — herlaad...');
+                    loadData();
+                    applyColors();
+                    if (!weekSchema || weekSchema.length !== 49) initDefaultSchema();
+                    renderCalendar();
+                    renderAppointments();
+                }
+            } else {
+                applyColors();
+                if (!weekSchema || weekSchema.length !== 49) initDefaultSchema();
+                renderCalendar();
+                renderAppointments();
             }
-            
-            applyColors();
-            
-            console.log('Schema check:', weekSchema ? weekSchema.length + ' dagen' : 'UNDEFINED');
-            
-            // Garantie dat schema bestaat
-            if (!weekSchema || weekSchema.length !== 49) {
-                console.warn('⚠️ Schema probleem, opnieuw initialiseren...');
-                initDefaultSchema();
-                console.log('✅ Schema geïnitialiseerd:', weekSchema.length, 'dagen');
-            }
-            
-            renderCalendar();
-            renderAppointments();
             
             // Laad BILLR afspraken uit Supabase + auto-refresh elke 60s
             loadSBAppointments();
@@ -1862,7 +1916,7 @@
                     notes: 'Dit is een test afspraak'
                 };
                 appointments.push(testApt);
-                localStorage.setItem('wcharge_apts', JSON.stringify(appointments));
+                savePlannerData('apts', appointments);
                 console.log('✅ Test afspraak toegevoegd:', testApt);
                 console.log('Gebruik deleteApt(' + testApt.id + ') om te verwijderen');
                 renderCalendar();
@@ -1932,7 +1986,7 @@
                         appointment.notes = (appointment.notes ? appointment.notes + '\n' : '') + '📄 Offerte: ' + data.offerteNummer;
                     }
                     appointments.push(appointment);
-                    localStorage.setItem('wcharge_apts', JSON.stringify(appointments));
+                    savePlannerData('apts', appointments);
                     
                     // Spring naar de juiste maand
                     const aptDate = new Date(data.date + 'T12:00:00');
@@ -1976,7 +2030,7 @@
                 appointments = appointments.filter(a => a.id !== appointmentId);
                 
                 if (appointments.length < beforeCount) {
-                    localStorage.setItem('wcharge_apts', JSON.stringify(appointments));
+                    savePlannerData('apts', appointments);
                     renderCalendar();
                     renderAppointments();
                     console.log('✅ Afspraak verwijderd:', appointmentId);
