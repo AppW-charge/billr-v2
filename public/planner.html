@@ -842,7 +842,8 @@
             try {
                 const s = sbPlanner;
                 const { data, error } = await s.from('planning_proposals')
-                    .select('*').in('status', ['ingepland','akkoord','voorstel']);
+                    .select('*')
+                    .in('status', ['ingepland']); // Enkel bevestigde afspraken in kalender!
                 if (error) throw error;
                 sbAppointments = (data || []).map(proposalToApt).filter(a => a.date);
                 
