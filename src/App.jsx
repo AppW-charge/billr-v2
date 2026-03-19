@@ -600,11 +600,7 @@ const INIT_PRODUCTS = [
   {id:"p71",cat:"Arbeid", merk:"", naam:"Klein materiaal (forfait)", omschr:"Verbindingen, schroeven, kabelbinders e.d.", prijs:35, btw:21, eenheid:"stuk", actief:true, imageUrl:"", specs:[]},
 ];
 
-const INIT_KLANTEN = [
-  {id:"c1",naam:"Thomas Declercq",bedrijf:"Declercq Engineering BV",email:"thomas@declercq-eng.be",tel:"0477 55 12 34",adres:"Industrielaan 14",gemeente:"9000 Gent",btwnr:"BE0512345678",type:"bedrijf",btwRegime:"verlegd",aangemaakt:new Date(Date.now()-86400000*5).toISOString()},
-  {id:"c2",naam:"Sophie Vermeersch",bedrijf:"",email:"sophie.v@telenet.be",tel:"0468 22 87 41",adres:"Kapelstraat 7",gemeente:"9050 Gentbrugge",btwnr:"",type:"particulier",btwRegime:"btw6",aangemaakt:new Date(Date.now()-86400000*2).toISOString()},
-  {id:"c3",naam:"Pieter Janssen",bedrijf:"",email:"pieter.j@outlook.com",tel:"0485 33 69 20",adres:"Molenweg 52",gemeente:"9040 Sint-Amandsberg",btwnr:"",type:"particulier",btwRegime:"btw6",aangemaakt:new Date().toISOString()},
-];
+const INIT_KLANTEN = [];
 
 const INIT_SETTINGS = {
   bedrijf:{naam:"",tagline:"",adres:"",gemeente:"",tel:"",email:"",btwnr:"",iban:"",bic:"",website:"",kleur:"#1a2e4a",logo:""},
@@ -1815,15 +1811,17 @@ export default function App() {
     
     const json = JSON.stringify(val);
     
-    // ── HARDE BESCHERMING: nooit lege data naar Supabase schrijven ──
-    if(key === "b4_set") {
-      const s = typeof val === "object" ? val : {};
-      if(!s?.bedrijf?.naam && !s?.email?.eigen && !s?.bedrijf?.btwnr) {
-        console.warn(`⛔ "${key}" geblokkeerd: lege settings`); return;
+    // ── HARDE BESCHERMING: nooit lege/default data naar Supabase schrijven ──
+    // Als sbHadData=true betekent het dat Supabase al echte data had.
+    // In dat geval blokkeren we elke schrijfoperatie met lege/default waarden.
+    if(sbHadData.current) {
+      if(key === "b4_set") {
+        const s = typeof val === "object" ? val : {};
+        if(!s?.bedrijf?.naam && !s?.email?.eigen && !s?.bedrijf?.btwnr) {
+          console.warn(`⛔ "${key}" geblokkeerd: lege settings`); return;
+        }
       }
-    }
-    if(["b4_off","b4_fct","b4_kln","b4_prd"].includes(key) && Array.isArray(val) && val.length === 0) {
-      if(sbHadData.current) {
+      if(["b4_off","b4_fct","b4_kln","b4_prd"].includes(key) && Array.isArray(val) && val.length === 0) {
         console.warn(`⛔ "${key}" geblokkeerd: [] zou bestaande Supabase data wissen`); return;
       }
     }
@@ -1867,12 +1865,15 @@ export default function App() {
 
   // ─── AUTO-BACKUP naar Supabase (elk uur) ────────────────────────
   const saveBackupToSB = async (label) => {
-    if(!user) return;
+    if(!user) return false;
+    // Bescherming: alleen backuppen als er echte data is
+    const hasRealData = settings?.bedrijf?.naam || klanten.length > 0 || 
+                        offertes.length > 0 || facturen.length > 0 || producten.length > 0;
+    if(!hasRealData) { console.warn("⛔ Auto-backup overgeslagen: geen echte data"); return false; }
     try {
       const data = getBackupData();
       const lbl = label || `Auto ${new Date().toLocaleString("nl-BE",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"})}`;
       await sb.from("billr_backups").insert({ user_id: user.id, label: lbl, data });
-      // Bewaar max 48 backups (2 dagen) — verwijder oudste
       const { data: old } = await sb.from("billr_backups").select("id,created_at").eq("user_id", user.id).order("created_at", {ascending:true});
       if(old && old.length > 48) {
         const toDelete = old.slice(0, old.length - 48).map(r => r.id);
@@ -1948,30 +1949,32 @@ export default function App() {
     const handleVisibility = async () => {
       if(document.visibilityState==="visible" && user && Date.now()-lastSync > 30000) {
         lastSync = Date.now();
-        console.log("📱 Tab/app weer zichtbaar — data herladen...");
         try {
           const allData = await Promise.race([
             sbGetAll(user.id),
-            new Promise(r=>setTimeout(()=>r(null),5000))
+            new Promise(r=>setTimeout(()=>r(null),10000))
           ]);
-          if(allData && Object.keys(allData).length>0) {
-            const p = (k,fb) => { try { return allData[k]?JSON.parse(allData[k]):fb; } catch(_){return fb;} };
-            setSettings(p("b4_set",INIT_SETTINGS));
-            setKlanten(p("b4_kln",INIT_KLANTEN));
-            setProducten(p("b4_prd",INIT_PRODUCTS));
-            setOffertes(p("b4_off",[]));
-            setFacturen(p("b4_fct",[]));
-            setCreditnotas(p("b4_cn",[]));
-            setAanmaningen(p("b4_am",[]));
-            setBetalingen(p("b4_bt",[]));
-            setTijdslots(p("b4_ti",[]));
-            setDossiers(p("b4_do",[]));
-            setGaranties(p("b4_ga",[]));
-            setAcceptTokens(p("b4_at",{}));
-            setWidgetOrder(p("b4_wo",null));
-            console.log("✅ Data hersynced vanuit Supabase");
-          }
-        } catch(e) { console.warn("Sync mislukt:",e); }
+          // Zelfde bescherming als hoofdload: alleen overnemen als er echte data is
+          const hasReal = allData && Object.keys(allData).length > 0 &&
+            Object.values(allData).some(v => v && v.length > 10);
+          if(!hasReal) return; // Geen data of timeout → niets aanpassen
+          const p = (k,fb) => { try { return allData[k]?JSON.parse(allData[k]):fb; } catch(_){return fb;} };
+          // Alleen overnemen als de Supabase waarde ook echt inhoud heeft
+          if(allData["b4_set"]) { const s=p("b4_set",null); if(s?.bedrijf?.naam||s?.email?.eigen) setSettings(s); }
+          if(allData["b4_kln"]) setKlanten(p("b4_kln",[]));
+          if(allData["b4_prd"]) setProducten(p("b4_prd",[]));
+          if(allData["b4_off"]) setOffertes(p("b4_off",[]));
+          if(allData["b4_fct"]) setFacturen(p("b4_fct",[]));
+          if(allData["b4_cn"])  setCreditnotas(p("b4_cn",[]));
+          if(allData["b4_am"])  setAanmaningen(p("b4_am",[]));
+          if(allData["b4_bt"])  setBetalingen(p("b4_bt",[]));
+          if(allData["b4_ti"])  setTijdslots(p("b4_ti",[]));
+          if(allData["b4_do"])  setDossiers(p("b4_do",[]));
+          if(allData["b4_ga"])  setGaranties(p("b4_ga",[]));
+          if(allData["b4_at"])  setAcceptTokens(p("b4_at",{}));
+          if(allData["b4_wo"])  setWidgetOrder(p("b4_wo",null));
+          console.log("✅ Mobile sync vanuit Supabase");
+        } catch(e) { console.warn("Mobile sync mislukt:",e); }
       }
     };
     document.addEventListener("visibilitychange", handleVisibility);
@@ -2092,13 +2095,40 @@ export default function App() {
       const sj = settings?.sjabloon || {};
       const lyt = settings?.layout || {};
       const dc = sj.accentKleur || settings?.thema?.kleur || bed.kleur || "#1a2e4a";
-      // Strip base64 data van technischeFiches (te groot voor Supabase JSONB)
+
+      // Bouw cleanLijnen: gebruik producten als bron voor technische fiches
+      // zodat de klant de fiches ook ziet op offerte.html
       const cleanLijnen = (offerte.lijnen||[]).map(l => {
         const clean = {...l};
-        if(clean.technischeFiches) clean.technischeFiches = clean.technischeFiches.map(f => ({naam:f.naam||"fiche.pdf", url:f.url||"", type:f.type||"application/pdf"}));
-        if(clean.technischeFiche && clean.technischeFiche.startsWith("data:")) clean.technischeFiche = null;
+        // Zoek het product op in de producten array voor de volledige fiche data
+        const prod = producten.find(p => p.id === l.productId);
+        // Gebruik fiche data van product (heeft de base64), of van de lijn zelf
+        const fichesBron = prod?.technischeFiches || clean.technischeFiches || [];
+        if(fichesBron.length > 0) {
+          clean.technischeFiches = fichesBron.map(f => ({
+            naam: f.naam || "fiche.pdf",
+            data: f.data || f.url || "",  // bewaar base64 data!
+            url:  f.url  || f.data || "",
+            type: f.type || "application/pdf"
+          })).filter(f => f.data || f.url); // enkel fiches met echte data
+        }
+        // Oud formaat: single fiche
+        if(!clean.technischeFiches?.length) {
+          const ficheData = prod?.technischeFiche || clean.technischeFiche;
+          if(ficheData && ficheData !== "[PDF]" && ficheData.length > 100) {
+            clean.technischeFiches = [{
+              naam: prod?.fichNaam || clean.fichNaam || "fiche.pdf",
+              data: ficheData,
+              url:  ficheData,
+              type: "application/pdf"
+            }];
+          }
+        }
+        // Strip base64 van technischeFiche veld (vervangen door technischeFiches array)
+        clean.technischeFiche = null;
         return clean;
       });
+
       const shareData = {
         ...offerte,
         lijnen: cleanLijnen,
@@ -2110,7 +2140,8 @@ export default function App() {
         _voorschot: settings?.voorwaarden?.voorschot || "50%"
       };
       await sb.from('offerte_shares').upsert({ id: offerte.id, offerte_data: shareData });
-      console.log("✅ Offerte gedeeld voor publieke view:", offerte.nummer);
+      console.log("✅ Offerte gedeeld met fiches:", offerte.nummer,
+        cleanLijnen.filter(l=>l.technischeFiches?.length).length + " lijnen met fiches");
     } catch(e) { console.warn("Offerte share failed:", e); }
   };
 
