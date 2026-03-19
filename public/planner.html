@@ -3,65 +3,369 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Agenda — W-Charge</title>
+    <title>W-Charge Planner - Verbeterd</title>
     <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Rajdhani', sans-serif; background: #f5f7fa; color: #1e293b; }
+        
+        body {
+            font-family: 'Rajdhani', sans-serif;
+            background: #f5f7fa;
+            color: #1e293b;
+        }
+
         .container { max-width: 1600px; margin: 0 auto; padding: 20px; }
-        header { background: linear-gradient(135deg, #1a2e4c 0%, #2d4a6f 100%); padding: 30px; border-radius: 12px; margin-bottom: 25px; color: white; }
+
+        header {
+            background: linear-gradient(135deg, #1a2e4c 0%, #2d4a6f 100%);
+            padding: 30px;
+            border-radius: 12px;
+            margin-bottom: 25px;
+            color: white;
+        }
+
         h1 { font-size: 2rem; margin-bottom: 10px; }
         h1::before { content: '⚡ '; color: #d4ff00; }
-        .tabs { display: flex; gap: 10px; margin-bottom: 25px; border-bottom: 2px solid #e0e4e8; }
-        .tab-btn { background: none; border: none; padding: 12px 24px; font-family: 'Rajdhani', sans-serif; font-size: 1.1rem; font-weight: 600; cursor: pointer; color: #64748b; border-bottom: 3px solid transparent; margin-bottom: -2px; }
-        .tab-btn.active { color: #1a2e4c; border-bottom-color: #d4ff00; }
+
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 25px;
+            border-bottom: 2px solid #e0e4e8;
+        }
+
+        .tab-btn {
+            background: none;
+            border: none;
+            padding: 12px 24px;
+            font-family: 'Rajdhani', sans-serif;
+            font-size: 1.1rem;
+            font-weight: 600;
+            cursor: pointer;
+            color: #64748b;
+            border-bottom: 3px solid transparent;
+            margin-bottom: -2px;
+        }
+
+        .tab-btn.active {
+            color: #1a2e4c;
+            border-bottom-color: #d4ff00;
+        }
+
         .tab-content { display: none; }
         .tab-content.active { display: block; }
-        .card { background: white; padding: 25px; border-radius: 12px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
-        .btn { background: #d4ff00; border: none; padding: 12px 24px; font-family: 'Rajdhani', sans-serif; font-size: 1rem; font-weight: 600; cursor: pointer; border-radius: 6px; color: #1a2e4c; }
+
+        .card {
+            background: white;
+            padding: 25px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+
+        .btn {
+            background: #d4ff00;
+            border: none;
+            padding: 12px 24px;
+            font-family: 'Rajdhani', sans-serif;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            border-radius: 6px;
+            color: #1a2e4c;
+        }
+
         .btn:hover { background: #1a2e4c; color: #d4ff00; }
         .btn-secondary { background: #64748b; color: white; }
         .btn-danger { background: #dc2626; color: white; }
+
         .form-group { margin-bottom: 20px; }
-        label { display: block; margin-bottom: 8px; font-weight: 600; }
-        input, select, textarea { width: 100%; padding: 10px; border: 2px solid #e0e4e8; border-radius: 6px; font-family: 'Rajdhani', sans-serif; font-size: 1rem; }
-        .week-config { background: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #1a2e4c; }
-        .week-header { font-size: 1.2rem; font-weight: 700; margin-bottom: 15px; color: #1a2e4c; }
-        .week-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; margin-top: 10px; }
-        .day-config { padding: 12px 8px; text-align: center; border: 2px solid #e0e4e8; border-radius: 6px; cursor: pointer; transition: all 0.2s; font-weight: 600; font-size: 0.9rem; color: white; }
-        .day-config:hover { transform: scale(1.05); box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
-        .day-config .day-name { font-size: 0.75rem; display: block; opacity: 0.8; }
+        
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+        }
+
+        input, select, textarea {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #e0e4e8;
+            border-radius: 6px;
+            font-family: 'Rajdhani', sans-serif;
+            font-size: 1rem;
+        }
+
+        /* Schema configuratie - 7 weken overzicht */
+        .week-config {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            border-left: 4px solid #1a2e4c;
+        }
+
+        .week-header {
+            font-size: 1.2rem;
+            font-weight: 700;
+            margin-bottom: 15px;
+            color: #1a2e4c;
+        }
+
+        .week-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 8px;
+            margin-top: 10px;
+        }
+
+        .day-config {
+            padding: 12px 8px;
+            text-align: center;
+            border: 2px solid #e0e4e8;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-weight: 600;
+            font-size: 0.9rem;
+            color: white;
+        }
+
+        .day-config.active { background: #d4ff00; border-color: #1a2e4c; }
+        .day-config:hover { 
+            transform: scale(1.05); 
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        .day-config .day-name { 
+            font-size: 0.75rem; 
+            display: block; 
+            opacity: 0.8;
+        }
         .day-config .day-type { margin-top: 4px; font-size: 0.85rem; font-weight: 700; }
-        .shift-type-selector { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 15px 0; }
-        .shift-type-btn { padding: 10px; border: 2px solid #e0e4e8; border-radius: 6px; cursor: pointer; font-weight: 600; transition: all 0.2s; }
-        .shift-type-btn:hover { transform: translateY(-2px); box-shadow: 0 4px 8px rgba(0,0,0,0.15); border-color: currentColor; }
-        .shift-type-btn.selected { border: 4px solid #1a2e4c; transform: scale(1.08); box-shadow: 0 6px 16px rgba(26, 46, 76, 0.4); }
-        .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; }
-        .calendar-header { background: #1a2e4c; color: white; padding: 12px; text-align: center; font-weight: 700; border-radius: 6px 6px 0 0; }
-        .calendar-day { background: white; border: 2px solid #e0e4e8; border-radius: 6px; padding: 10px; min-height: 120px; cursor: pointer; position: relative; transition: all 0.2s; }
-        .calendar-day.other-month { opacity: 0.4; background: #f8f9fa; }
-        .calendar-day.today { border: 3px solid #d4ff00; background: #fffef0; box-shadow: 0 0 12px rgba(212, 255, 0, 0.4); }
-        .calendar-day:hover { border-color: #d4ff00; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(212, 255, 0, 0.3); }
-        .day-number { font-weight: 700; font-size: 1.2rem; color: #1a2e4c; margin-bottom: 5px; }
-        .day-shift { font-size: 0.85rem; padding: 6px 8px; border-radius: 4px; margin-bottom: 4px; font-weight: 600; text-align: center; }
-        .day-appointment { font-size: 0.75rem; padding: 3px 6px; background: #d4ff00; border-radius: 3px; margin-top: 4px; font-weight: 600; color: #1a2e4c; }
-        .month-nav { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
-        .month-title { font-size: 1.8rem; font-weight: 700; color: #1a2e4c; }
-        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 1000; align-items: center; justify-content: center; }
+
+        .shift-type-selector {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+            margin: 15px 0;
+        }
+
+        .shift-type-btn {
+            padding: 10px;
+            border: 2px solid #e0e4e8;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+
+        .shift-type-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+            border-color: currentColor;
+        }
+
+        .shift-type-btn.selected {
+            border: 4px solid #1a2e4c;
+            transform: scale(1.08);
+            box-shadow: 0 6px 16px rgba(26, 46, 76, 0.4);
+        }
+
+        .calendar-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 8px;
+        }
+
+        .calendar-header {
+            background: #1a2e4c;
+            color: white;
+            padding: 12px;
+            text-align: center;
+            font-weight: 700;
+            border-radius: 6px 6px 0 0;
+        }
+
+        .calendar-day {
+            background: white;
+            border: 2px solid #e0e4e8;
+            border-radius: 6px;
+            padding: 10px;
+            min-height: 120px;
+            cursor: pointer;
+            position: relative;
+            transition: all 0.2s;
+        }
+
+        .calendar-day.other-month {
+            opacity: 0.4;
+            background: #f8f9fa;
+        }
+
+        .calendar-day.other-month .day-number {
+            color: #94a3b8;
+        }
+
+        .calendar-day.today {
+            border: 3px solid #d4ff00;
+            background: #fffef0;
+            box-shadow: 0 0 12px rgba(212, 255, 0, 0.4);
+        }
+
+        .calendar-day.today .day-number {
+            color: #1a2e4c;
+            font-weight: 700;
+            font-size: 1.4rem;
+        }
+
+        .calendar-day:hover {
+            border-color: #d4ff00;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(212, 255, 0, 0.3);
+        }
+
+        .day-number {
+            font-weight: 700;
+            font-size: 1.2rem;
+            color: #1a2e4c;
+            margin-bottom: 5px;
+        }
+
+        .day-shift {
+            font-size: 0.85rem;
+            padding: 6px 8px;
+            border-radius: 4px;
+            margin-bottom: 4px;
+            font-weight: 600;
+            text-align: center;
+        }
+
+        .day-appointment {
+            font-size: 0.75rem;
+            padding: 3px 6px;
+            background: #d4ff00;
+            border-radius: 3px;
+            margin-top: 4px;
+            font-weight: 600;
+            color: #1a2e4c;
+        }
+        .day-appointment.billr-ingepland { background: #d4ff00; color: #1a2e4c; border-left: 2px solid #059669; }
+        .day-appointment.billr-akkoord   { background: #f59e0b; color: #fff; }
+        .day-appointment.billr-voorstel  { background: #3b82f6; color: #fff; opacity: 0.9; }
+        .sb-bar { display:flex; align-items:center; gap:8px; padding:6px 14px; background:#f0fdf4; border-bottom:1px solid #d1fae5; font-size:0.82rem; color:#059669; font-weight:600; }
+        .sb-dot { width:7px; height:7px; border-radius:50%; background:#10b981; display:inline-block; animation:pulse 2s infinite; }
+        @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+
+        .month-nav {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .month-title {
+            font-size: 1.8rem;
+            font-weight: 700;
+            color: #1a2e4c;
+        }
+
+        /* Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+
         .modal.active { display: flex; }
-        .modal-content { background: white; border-radius: 12px; padding: 30px; max-width: 600px; width: 90%; max-height: 90vh; overflow-y: auto; }
-        .modal-header { font-size: 1.5rem; font-weight: 700; color: #1a2e4c; margin-bottom: 20px; padding-bottom: 15px; border-bottom: 3px solid #d4ff00; }
-        .modal-section { margin-bottom: 25px; padding: 15px; background: #f8f9fa; border-radius: 8px; }
-        .modal-section h3 { margin-bottom: 10px; color: #1a2e4c; }
-        .shift-selector { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-top: 10px; }
-        .shift-option { padding: 10px; border: 2px solid #e0e4e8; border-radius: 6px; text-align: center; cursor: pointer; font-weight: 600; transition: all 0.2s; }
+
+        .modal-content {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            max-width: 600px;
+            width: 90%;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+
+        .modal-header {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #1a2e4c;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 3px solid #d4ff00;
+        }
+
+        .modal-section {
+            margin-bottom: 25px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+
+        .modal-section h3 {
+            margin-bottom: 10px;
+            color: #1a2e4c;
+        }
+
+        .shift-selector {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 8px;
+            margin-top: 10px;
+        }
+
+        .shift-option {
+            padding: 10px;
+            border: 2px solid #e0e4e8;
+            border-radius: 6px;
+            text-align: center;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+
         .shift-option:hover { border-color: #1a2e4c; }
-        .shift-option.selected { background: #d4ff00; border-color: #1a2e4c; }
-        .appointment-item { padding: 15px; background: #f8f9fa; border-left: 4px solid #d4ff00; margin-bottom: 10px; border-radius: 4px; }
-        .tooltip { position: fixed; background: #1a2e4c; color: white; padding: 15px; border-radius: 8px; z-index: 999; display: none; max-width: 300px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); pointer-events: none; }
+        .shift-option.selected {
+            background: #d4ff00;
+            border-color: #1a2e4c;
+        }
+
+        .appointment-item {
+            padding: 15px;
+            background: #f8f9fa;
+            border-left: 4px solid #d4ff00;
+            margin-bottom: 10px;
+            border-radius: 4px;
+        }
+
+        .tooltip {
+            position: fixed;
+            background: #1a2e4c;
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            z-index: 999;
+            display: none;
+            max-width: 300px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            pointer-events: none;
+        }
+
         .tooltip.active { display: block; }
         .tooltip h4 { color: #d4ff00; margin-bottom: 10px; }
         .tooltip p { margin: 5px 0; font-size: 0.9rem; }
+
+        /* Shift type colors */
         .shift-wacht { background: #10b981; color: white; }
         .shift-rust-oproepbaar { background: #94a3b8; color: white; }
         .shift-dagweek { background: #06b6d4; color: white; }
@@ -71,54 +375,1549 @@
         .shift-nacht { background: #8b5cf6; color: white; }
         .shift-rust { background: #64748b; color: white; }
         .shift-vrij { background: #e0e4e8; color: #1e293b; }
+        
+        /* Day config specific overrides */
         .day-config.shift-vrij .day-name { color: #64748b; }
         .day-config.shift-vrij .day-type { color: #1e293b; }
-        @media (max-width: 1024px) { .container { padding: 10px; } header { padding: 20px; } h1 { font-size: 1.5rem; } .tabs { overflow-x: auto; } .tab-btn { padding: 10px 16px; font-size: 1rem; white-space: nowrap; } .calendar-grid { gap: 4px; } .calendar-day { padding: 6px; min-height: 90px; } .day-number { font-size: 1rem; } .day-shift { font-size: 0.75rem; padding: 4px 6px; } .day-appointment { font-size: 0.7rem; } .week-grid { gap: 4px; } .day-config { padding: 8px 4px; font-size: 0.8rem; } }
-        @media (max-width: 640px) { h1 { font-size: 1.2rem; } .calendar-day { min-height: 70px; padding: 4px; } .day-number { font-size: 0.9rem; } .day-shift { font-size: 0.7rem; padding: 3px 4px; } .shift-type-selector { grid-template-columns: 1fr; } }
+
+        /* Responsive voor tablet en mobiel */
+        @media (max-width: 1024px) {
+            .container { padding: 10px; }
+            header { padding: 20px; }
+            h1 { font-size: 1.5rem; }
+            
+            .tabs { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+            .tab-btn { padding: 10px 16px; font-size: 1rem; white-space: nowrap; }
+            
+            .calendar-grid { gap: 4px; }
+            .calendar-day { padding: 6px; min-height: 90px; }
+            .day-number { font-size: 1rem; }
+            .day-shift { font-size: 0.75rem; padding: 4px 6px; }
+            .day-appointment { font-size: 0.7rem; }
+            
+            .modal-content { width: 95%; padding: 20px; }
+            .shift-selector { grid-template-columns: 1fr; }
+            
+            .week-grid { gap: 4px; }
+            .day-config { padding: 8px 4px; font-size: 0.8rem; }
+            
+            .month-nav { flex-wrap: wrap; gap: 10px; }
+            .month-title { font-size: 1.3rem; }
+        }
+
+        @media (max-width: 640px) {
+            h1 { font-size: 1.2rem; }
+            .calendar-day { min-height: 70px; padding: 4px; }
+            .day-number { font-size: 0.9rem; }
+            .day-shift { font-size: 0.7rem; padding: 3px 4px; }
+            .day-appointment { font-size: 0.65rem; padding: 2px 4px; }
+            
+            .modal-content { padding: 15px; }
+            .modal-header { font-size: 1.2rem; }
+            
+            .shift-type-selector { grid-template-columns: 1fr; }
+            .day-config .day-name { font-size: 0.7rem; }
+            .day-config .day-type { font-size: 0.75rem; }
+        }
     </style>
 </head>
 <body>
-<div class="container">
-    <header><div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:15px"><div><h1>Agenda</h1><p>Klik op een dag om afspraken toe te voegen of ploeg aan te passen</p></div><button class="btn" onclick="generateShareLink()" id="shareLinkBtn">🔗 Deel Link</button></div></header>
-    <div class="tabs"><button class="tab-btn active" onclick="switchTab('calendar')">📅 Kalender</button><button class="tab-btn" onclick="switchTab('appointments')">📋 Afspraken</button><button class="tab-btn" onclick="switchTab('settings')">⚙️ Schema Instellen</button></div>
-    <div id="calendarTab" class="tab-content active"><div class="card"><div class="month-nav"><button class="btn btn-secondary" onclick="prevMonth()">‹</button><div style="display:flex;gap:10px;align-items:center"><div class="month-title" id="monthTitle"></div><button class="btn" onclick="goToToday()" style="padding:8px 16px;font-size:0.9rem">📅 Vandaag</button></div><button class="btn btn-secondary" onclick="nextMonth()">›</button></div><div class="calendar-grid" id="calendar"></div></div></div>
-    <div id="appointmentsTab" class="tab-content"><div class="card"><h2 style="margin-bottom:20px">Alle Afspraken</h2><div id="appointmentList"></div></div></div>
-    <div id="settingsTab" class="tab-content"><div class="card"><h2>7-Weken Cyclus Configureren</h2><p style="margin:15px 0;color:#64748b">Klik op elke dag om aan te geven welk type dienst/rust het is.</p><div class="form-group"><label>Startdatum Cyclus</label><input type="date" id="cycleStart" value="2026-01-26"></div><div style="background:#f8f9fa;padding:15px;border-radius:8px;margin-bottom:20px"><h3 style="margin-bottom:10px">🎨 Kleuren Legende</h3><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px"><div style="display:flex;align-items:center;gap:8px"><div class="day-shift shift-wacht" style="padding:5px 10px;margin:0">Wacht</div></div><div style="display:flex;align-items:center;gap:8px"><div class="day-shift shift-dagweek" style="padding:5px 10px;margin:0">Dagweek</div></div><div style="display:flex;align-items:center;gap:8px"><div class="day-shift shift-vroege" style="padding:5px 10px;margin:0">Vroege</div></div><div style="display:flex;align-items:center;gap:8px"><div class="day-shift shift-late" style="padding:5px 10px;margin:0">Late</div></div><div style="display:flex;align-items:center;gap:8px"><div class="day-shift shift-nacht" style="padding:5px 10px;margin:0">Nacht</div></div><div style="display:flex;align-items:center;gap:8px"><div class="day-shift shift-adv" style="padding:5px 10px;margin:0">ADV</div></div><div style="display:flex;align-items:center;gap:8px"><div class="day-shift shift-rust-oproepbaar" style="padding:5px 10px;margin:0">Rust (opro.)</div></div><div style="display:flex;align-items:center;gap:8px"><div class="day-shift shift-rust" style="padding:5px 10px;margin:0">Rust</div></div><div style="display:flex;align-items:center;gap:8px"><div class="day-shift shift-vrij" style="padding:5px 10px;margin:0">Vrij</div></div></div></div><div id="weekConfigs"></div><button class="btn" onclick="saveFullSchema()" style="margin-top:20px">💾 Volledig Schema Opslaan</button></div><div class="card" style="margin-top:20px"><h2>🎨 Kleuren Aanpassen</h2><p style="margin:15px 0;color:#64748b">Pas de kleuren aan voor ploegen en afspraken.</p><h3 style="margin:20px 0 10px">Ploeg Kleuren</h3><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:15px"><div class="form-group"><label>Wacht</label><input type="color" id="colorWacht" value="#10b981"></div><div class="form-group"><label>Rust (oproepbaar)</label><input type="color" id="colorRustOproepbaar" value="#94a3b8"></div><div class="form-group"><label>Dagweek</label><input type="color" id="colorDagweek" value="#06b6d4"></div><div class="form-group"><label>ADV</label><input type="color" id="colorAdv" value="#ec4899"></div><div class="form-group"><label>Vroege dienst</label><input type="color" id="colorVroege" value="#3b82f6"></div><div class="form-group"><label>Late dienst</label><input type="color" id="colorLate" value="#f59e0b"></div><div class="form-group"><label>Nachtdienst</label><input type="color" id="colorNacht" value="#8b5cf6"></div><div class="form-group"><label>Rust</label><input type="color" id="colorRust" value="#64748b"></div><div class="form-group"><label>Vrij</label><input type="color" id="colorVrij" value="#e0e4e8"></div></div><h3 style="margin:20px 0 10px">Afspraak Kleur</h3><div class="form-group"><label>Afspraak achtergrond</label><input type="color" id="colorAfspraak" value="#d4ff00"></div><button class="btn" onclick="saveColors()" style="margin-top:20px">💾 Kleuren Opslaan</button><button class="btn btn-secondary" onclick="resetColors()" style="margin-top:20px;margin-left:10px">🔄 Standaard</button></div></div>
-</div>
-<div class="modal" id="dayModal" onclick="if(event.target.id==='dayModal')closeModal()"><div class="modal-content" onclick="event.stopPropagation()"><div class="modal-header" id="modalDate"></div><div class="modal-section"><h3>📋 Huidige Ploeg</h3><div id="currentShift"></div><h3 style="margin-top:20px">Wijzig Ploeg</h3><div class="shift-selector" id="shiftSelector"><div class="shift-option" onclick="selectShift('Wacht','wacht')">Wacht</div><div class="shift-option" onclick="selectShift('Rust (oproepbaar)','rust-oproepbaar')">Rust (opro.)</div><div class="shift-option" onclick="selectShift('Dagweek','dagweek')">Dagweek</div><div class="shift-option" onclick="selectShift('ADV','adv')">ADV</div><div class="shift-option" onclick="selectShift('Vroege','vroege')">Vroege</div><div class="shift-option" onclick="selectShift('Late','late')">Late</div><div class="shift-option" onclick="selectShift('Nacht','nacht')">Nacht</div><div class="shift-option" onclick="selectShift('Rust','rust')">Rust</div><div class="shift-option" onclick="selectShift('Vrij','vrij')">Vrij</div></div><button class="btn" onclick="saveShiftOverride()" style="margin-top:10px;width:100%">💾 Ploeg Opslaan</button></div><div class="modal-section"><h3>➕ Afspraak Toevoegen</h3><div class="form-group" style="margin-top:15px"><label>Tijd</label><input type="time" id="modalTime"></div><div class="form-group"><label>Klant</label><input type="text" id="modalClient"></div><div class="form-group"><label>Type Werk</label><select id="modalType"><option>EV Lader</option><option>Zonnepanelen</option><option>Batterij</option><option>Domotica</option><option>Onderhoud</option></select></div><div class="form-group"><label>Locatie</label><input type="text" id="modalLocation"></div><div class="form-group"><label>Notities</label><textarea id="modalNotes" rows="2"></textarea></div><button class="btn" onclick="addAppointmentFromModal()" style="width:100%">💾 Afspraak Opslaan</button></div><div class="modal-section"><h3>📅 Afspraken vandaag</h3><div id="modalAppointments"></div></div><button class="btn btn-secondary" onclick="closeModal()" style="width:100%;margin-top:20px">✖ Sluiten</button></div></div>
-<div class="tooltip" id="tooltip"></div>
-<div class="modal" id="shareLinkModal" onclick="if(event.target.id==='shareLinkModal')document.getElementById('shareLinkModal').classList.remove('active')"><div class="modal-content" onclick="event.stopPropagation()" style="max-width:600px"><div class="modal-header">🔗 Deel Link</div><p style="margin:20px 0;color:#64748b">Kopieer deze link om je agenda read-only te delen:</p><textarea id="shareLinkText" readonly style="width:100%;height:120px;padding:15px;font-family:monospace;font-size:0.9rem;border:2px solid #d4ff00;border-radius:8px;background:#f8f9fa;resize:none;margin:10px 0"></textarea><div style="display:flex;gap:10px;margin-top:20px"><button class="btn" onclick="var t=document.getElementById('shareLinkText');t.select();document.execCommand('copy');alert('✅ Gekopieerd!')" style="flex:1">📋 Kopieer</button><button class="btn btn-secondary" onclick="document.getElementById('shareLinkModal').classList.remove('active')" style="flex:1">✖ Sluiten</button></div></div></div>
-<script>
-let currentMonth=new Date(2026,2,1);let appointments=[];let shiftOverrides={};let selectedDate=null;let selectedShiftLabel=null;let selectedShiftClass=null;let cycleStart=new Date(2026,0,26);let isReadOnly=false;let weekSchema=[];
-let colors={wacht:'#10b981',rustOproepbaar:'#94a3b8',dagweek:'#06b6d4',adv:'#ec4899',vroege:'#3b82f6',late:'#f59e0b',nacht:'#8b5cf6',rust:'#64748b',vrij:'#e0e4e8',afspraak:'#d4ff00'};
-function initDefaultSchema(){weekSchema=[];for(let d=0;d<49;d++){let c={type:'vrij',label:'Vrij'};if(d>=0&&d<=6)c={type:'wacht',label:'Wacht (7:45-16:15)'};else if(d>=7&&d<=11)c={type:'dagweek',label:'Dagweek'};else if(d>=14&&d<=17)c={type:'dagweek',label:'Dagweek'};else if(d===18)c={type:'adv',label:'ADV'};else if(d===21)c={type:'rust',label:'Rust'};else if(d>=22&&d<=28)c={type:'vroege',label:'Vroege (6-14)'};else if(d>=29&&d<=30)c={type:'rust',label:'Rust'};else if(d>=31&&d<=37)c={type:'late',label:'Late (14-22)'};else if(d===38)c={type:'rust',label:'Rust'};else if(d>=39&&d<=45)c={type:'nacht',label:'Nacht (22-06)'};weekSchema.push(c);}}
-function renderWeekConfigs(){const ct=document.getElementById('weekConfigs');if(!ct)return;if(!weekSchema||!weekSchema.length)initDefaultSchema();ct.innerHTML='';const dn=['Ma','Di','Wo','Do','Vr','Za','Zo'];const st=[{type:'wacht',label:'Wacht'},{type:'dagweek',label:'Dagweek'},{type:'vroege',label:'Vroege'},{type:'late',label:'Late'},{type:'nacht',label:'Nacht'},{type:'adv',label:'ADV'},{type:'rust-oproepbaar',label:'Rust (opro.)'},{type:'rust',label:'Rust'},{type:'vrij',label:'Vrij'}];for(let w=0;w<7;w++){const wc=document.createElement('div');wc.className='week-config';const wh=document.createElement('div');wh.className='week-header';wh.textContent='Week '+(w+1);wc.appendChild(wh);const ts=document.createElement('div');ts.className='shift-type-selector';const ins=document.createElement('p');ins.style.cssText='grid-column:span 3;font-weight:600;margin-bottom:5px';ins.textContent='Klik eerst op een type, dan op de dagen:';ts.appendChild(ins);let selType='vroege';st.forEach(s=>{const b=document.createElement('div');b.className='shift-type-btn shift-'+s.type;b.textContent=s.label;if(s.type==='vroege')b.classList.add('selected');b.onclick=function(){selType=s.type;ts.querySelectorAll('.shift-type-btn').forEach(x=>x.classList.remove('selected'));b.classList.add('selected');};ts.appendChild(b);});wc.appendChild(ts);const g=document.createElement('div');g.className='week-grid';for(let d=0;d<7;d++){const di=w*7+d;const dc=weekSchema[di]||{type:'vrij',label:'Vrij'};const de=document.createElement('div');de.className='day-config shift-'+dc.type;de.innerHTML='<span class="day-name">'+dn[d]+'</span><span class="day-type">'+dc.label+'</span>';de.onclick=function(){const s=st.find(x=>x.type===selType);if(s){weekSchema[di]={type:selType,label:s.label};renderWeekConfigs();}};g.appendChild(de);}wc.appendChild(g);ct.appendChild(wc);}}
-function getShift(date){const ds=date.toISOString().split('T')[0];if(shiftOverrides[ds])return shiftOverrides[ds];const diff=Math.floor((date-cycleStart)/(864e5));const dc=((diff%49)+49)%49;return weekSchema[dc]||{type:'vrij',label:'Vrij'};}
-function renderCalendar(){const y=currentMonth.getFullYear(),m=currentMonth.getMonth();const mn=['Januari','Februari','Maart','April','Mei','Juni','Juli','Augustus','September','Oktober','November','December'];document.getElementById('monthTitle').textContent=mn[m]+' '+y;const fd=new Date(y,m,1);const sd=new Date(fd);sd.setDate(sd.getDate()-(sd.getDay()===0?6:sd.getDay()-1));const cal=document.getElementById('calendar');cal.innerHTML='';['Ma','Di','Wo','Do','Vr','Za','Zo'].forEach(d=>{const h=document.createElement('div');h.className='calendar-header';h.textContent=d;cal.appendChild(h);});let d=new Date(sd);const td=new Date().toISOString().split('T')[0];for(let i=0;i<42;i++){const dy=document.createElement('div');dy.className='calendar-day';const ds=d.toISOString().split('T')[0];if(d.getMonth()!==m)dy.classList.add('other-month');if(ds===td)dy.classList.add('today');const nm=document.createElement('div');nm.className='day-number';nm.textContent=d.getDate();dy.appendChild(nm);const sh=getShift(new Date(d));const ov=!!shiftOverrides[ds];const se=document.createElement('div');se.className='day-shift shift-'+sh.type;se.textContent=sh.label+(ov?' ⚠️':'');if(ov){se.style.fontWeight='700';se.style.border='2px solid #f59e0b';}dy.appendChild(se);const ap=appointments.filter(a=>a.date===ds);ap.forEach(a=>{const ae=document.createElement('div');ae.className='day-appointment';ae.textContent=a.time+' '+a.client;dy.appendChild(ae);});const dc2=new Date(d);dy.onclick=()=>openDayModal(dc2);const dh=new Date(d);dy.onmouseenter=e=>showTooltip(e,dh,ap);dy.onmouseleave=()=>document.getElementById('tooltip').classList.remove('active');dy.onmousemove=e=>{const t=document.getElementById('tooltip');t.style.left=(e.clientX+15)+'px';t.style.top=(e.clientY+15)+'px';};cal.appendChild(dy);d.setDate(d.getDate()+1);}}
-function openDayModal(date){selectedDate=date;selectedShiftLabel=null;selectedShiftClass=null;const dn=['Zondag','Maandag','Dinsdag','Woensdag','Donderdag','Vrijdag','Zaterdag'];const mn=['januari','februari','maart','april','mei','juni','juli','augustus','september','oktober','november','december'];document.getElementById('modalDate').textContent=dn[date.getDay()]+' '+date.getDate()+' '+mn[date.getMonth()]+' '+date.getFullYear();const sh=getShift(date);const ds=date.toISOString().split('T')[0];const ov=!!shiftOverrides[ds];let html='<div class="day-shift shift-'+sh.type+'">'+sh.label+'</div>';if(ov)html+='<p style="color:#f59e0b;margin-top:10px;font-weight:600">⚠️ Handmatig aangepast</p><button class="btn btn-secondary" onclick="resetShiftOverride()" style="margin-top:10px;width:100%">🔄 Herstel</button>';document.getElementById('currentShift').innerHTML=html;document.querySelectorAll('.shift-option').forEach(o=>o.classList.remove('selected'));const ap=appointments.filter(a=>a.date===ds);const al=document.getElementById('modalAppointments');if(!ap.length){al.innerHTML='<p style="color:#64748b">Geen afspraken</p>';}else{al.innerHTML='';ap.forEach(a=>{const it=document.createElement('div');it.className='appointment-item';const info=document.createElement('div');info.innerHTML='<strong>'+a.time+' - '+a.client+'</strong><br>'+a.type+(a.location?' • '+a.location:'')+(a.notes?'<br>'+a.notes:'');it.appendChild(info);if(!isReadOnly){const db=document.createElement('button');db.className='btn btn-danger';db.style.cssText='margin-top:10px;width:100%';db.textContent='🗑️ Verwijderen';const aid=a.id;db.addEventListener('click',function(e){e.preventDefault();e.stopPropagation();deleteApt(aid);});it.appendChild(db);}al.appendChild(it);});}if(isReadOnly){const ms=document.querySelectorAll('.modal-section');if(ms[0])ms[0].style.display='none';if(ms[1])ms[1].style.display='none';}else{const ms=document.querySelectorAll('.modal-section');if(ms[0])ms[0].style.display='block';if(ms[1])ms[1].style.display='block';}document.getElementById('dayModal').classList.add('active');}
-function closeModal(){document.getElementById('dayModal').classList.remove('active');}
-function selectShift(label,type){selectedShiftLabel=label;selectedShiftClass=type;document.querySelectorAll('.shift-option').forEach(o=>o.classList.remove('selected'));event.target.classList.add('selected');}
-function saveShiftOverride(){if(!selectedShiftLabel)return alert('Selecteer eerst een ploeg!');const ds=selectedDate.toISOString().split('T')[0];shiftOverrides[ds]={label:selectedShiftLabel,type:selectedShiftClass};localStorage.setItem('wcharge_overrides',JSON.stringify(shiftOverrides));alert('✅ Ploeg aangepast!');renderCalendar();openDayModal(selectedDate);}
-function resetShiftOverride(){const ds=selectedDate.toISOString().split('T')[0];delete shiftOverrides[ds];localStorage.setItem('wcharge_overrides',JSON.stringify(shiftOverrides));alert('✅ Hersteld!');renderCalendar();openDayModal(selectedDate);}
-function addAppointmentFromModal(){const t=document.getElementById('modalTime').value;const c=document.getElementById('modalClient').value;if(!t||!c)return alert('Vul tijd en klant in!');const a={id:Date.now(),date:selectedDate.toISOString().split('T')[0],time:t,client:c,type:document.getElementById('modalType').value,location:document.getElementById('modalLocation').value,notes:document.getElementById('modalNotes').value};appointments.push(a);localStorage.setItem('wcharge_apts',JSON.stringify(appointments));alert('✅ Afspraak toegevoegd!');document.getElementById('modalTime').value='';document.getElementById('modalClient').value='';document.getElementById('modalLocation').value='';document.getElementById('modalNotes').value='';renderCalendar();openDayModal(selectedDate);}
-function deleteApt(id){const f=appointments.find(a=>a.id===id);if(!f)return;appointments=appointments.filter(a=>a.id!==id);localStorage.setItem('wcharge_apts',JSON.stringify(appointments));renderCalendar();renderAppointments();if(selectedDate)openDayModal(selectedDate);}
-function renderAppointments(){const l=document.getElementById('appointmentList');if(!appointments.length){l.innerHTML='<p style="color:#64748b">Nog geen afspraken</p>';return;}l.innerHTML='';[...appointments].sort((a,b)=>(a.date+a.time).localeCompare(b.date+b.time)).forEach(a=>{const it=document.createElement('div');it.className='appointment-item';const info=document.createElement('div');info.innerHTML='<h4>'+a.date+' '+a.time+' - '+a.client+'</h4><p><strong>'+a.type+'</strong>'+(a.location?' • '+a.location:'')+'</p>'+(a.notes?'<p>'+a.notes+'</p>':'');it.appendChild(info);if(!isReadOnly){const db=document.createElement('button');db.className='btn btn-danger';db.style.cssText='margin-top:10px;width:100%';db.textContent='🗑️ Verwijderen';const aid=a.id;db.addEventListener('click',function(e){e.preventDefault();deleteApt(aid);});it.appendChild(db);}l.appendChild(it);});}
-function showTooltip(e,date,apts){const t=document.getElementById('tooltip');const dn=['Zo','Ma','Di','Wo','Do','Vr','Za'];let h='<h4>'+dn[date.getDay()]+' '+date.getDate()+'/'+(date.getMonth()+1)+'</h4><p><strong>Ploeg:</strong> '+getShift(date).label+'</p>';if(apts.length){h+='<p style="margin-top:10px"><strong>Afspraken:</strong></p>';apts.forEach(a=>{h+='<div style="margin:8px 0;padding:8px;background:rgba(212,255,0,0.1);border-left:3px solid #d4ff00;border-radius:3px"><p style="margin:0;font-weight:700">'+a.time+' - '+a.client+'</p>'+(a.type?'<p style="margin:2px 0 0;font-size:0.85rem">'+a.type+'</p>':'')+(a.location?'<p style="margin:2px 0 0;font-size:0.85rem">'+a.location+'</p>':'')+'</div>';});}t.innerHTML=h;t.classList.add('active');t.style.left=(e.clientX+15)+'px';t.style.top=(e.clientY+15)+'px';}
-function saveFullSchema(){cycleStart=new Date(document.getElementById('cycleStart').value+'T00:00:00');localStorage.setItem('wcharge_cycle_start',cycleStart.toISOString());localStorage.setItem('wcharge_schema',JSON.stringify(weekSchema));alert('✅ Schema opgeslagen!');renderCalendar();switchTab('calendar');}
-function applyColors(){let s=document.getElementById('customColors');if(!s){s=document.createElement('style');s.id='customColors';document.head.appendChild(s);}s.textContent='.shift-wacht{background:'+colors.wacht+'!important;color:white!important}.shift-rust-oproepbaar{background:'+colors.rustOproepbaar+'!important;color:white!important}.shift-dagweek{background:'+colors.dagweek+'!important;color:white!important}.shift-adv{background:'+colors.adv+'!important;color:white!important}.shift-vroege{background:'+colors.vroege+'!important;color:white!important}.shift-late{background:'+colors.late+'!important;color:white!important}.shift-nacht{background:'+colors.nacht+'!important;color:white!important}.shift-rust{background:'+colors.rust+'!important;color:white!important}.shift-vrij{background:'+colors.vrij+'!important;color:#1e293b!important}.day-appointment{background:'+colors.afspraak+'!important}';}
-function saveColors(){colors.wacht=document.getElementById('colorWacht').value;colors.rustOproepbaar=document.getElementById('colorRustOproepbaar').value;colors.dagweek=document.getElementById('colorDagweek').value;colors.adv=document.getElementById('colorAdv').value;colors.vroege=document.getElementById('colorVroege').value;colors.late=document.getElementById('colorLate').value;colors.nacht=document.getElementById('colorNacht').value;colors.rust=document.getElementById('colorRust').value;colors.vrij=document.getElementById('colorVrij').value;colors.afspraak=document.getElementById('colorAfspraak').value;localStorage.setItem('wcharge_colors',JSON.stringify(colors));applyColors();alert('✅ Kleuren opgeslagen!');}
-function resetColors(){if(!confirm('Kleuren resetten?'))return;colors={wacht:'#10b981',rustOproepbaar:'#94a3b8',dagweek:'#06b6d4',adv:'#ec4899',vroege:'#3b82f6',late:'#f59e0b',nacht:'#8b5cf6',rust:'#64748b',vrij:'#e0e4e8',afspraak:'#d4ff00'};updateColorInputs();localStorage.setItem('wcharge_colors',JSON.stringify(colors));applyColors();alert('✅ Hersteld!');}
-function updateColorInputs(){document.getElementById('colorWacht').value=colors.wacht;document.getElementById('colorRustOproepbaar').value=colors.rustOproepbaar;document.getElementById('colorDagweek').value=colors.dagweek;document.getElementById('colorAdv').value=colors.adv;document.getElementById('colorVroege').value=colors.vroege;document.getElementById('colorLate').value=colors.late;document.getElementById('colorNacht').value=colors.nacht;document.getElementById('colorRust').value=colors.rust;document.getElementById('colorVrij').value=colors.vrij;document.getElementById('colorAfspraak').value=colors.afspraak;}
-function loadData(){try{const a=localStorage.getItem('wcharge_apts');if(a)appointments=JSON.parse(a);const o=localStorage.getItem('wcharge_overrides');if(o)shiftOverrides=JSON.parse(o);const cs=localStorage.getItem('wcharge_cycle_start');if(cs)cycleStart=new Date(cs);const sc=localStorage.getItem('wcharge_schema');if(sc){const l=JSON.parse(sc);if(l&&l.length===49)weekSchema=l;else initDefaultSchema();}else initDefaultSchema();const cl=localStorage.getItem('wcharge_colors');if(cl)colors=JSON.parse(cl);}catch(e){initDefaultSchema();}}
-function switchTab(tab){document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));document.querySelectorAll('.tab-content').forEach(c=>c.classList.remove('active'));if(tab==='calendar'){document.querySelectorAll('.tab-btn')[0].classList.add('active');document.getElementById('calendarTab').classList.add('active');}else if(tab==='appointments'){document.querySelectorAll('.tab-btn')[1].classList.add('active');document.getElementById('appointmentsTab').classList.add('active');renderAppointments();}else if(tab==='settings'){document.querySelectorAll('.tab-btn')[2].classList.add('active');document.getElementById('settingsTab').classList.add('active');document.getElementById('cycleStart').value=cycleStart.toISOString().split('T')[0];if(!weekSchema||weekSchema.length!==49)initDefaultSchema();updateColorInputs();renderWeekConfigs();}}
-function prevMonth(){currentMonth.setMonth(currentMonth.getMonth()-1);renderCalendar();}
-function nextMonth(){currentMonth.setMonth(currentMonth.getMonth()+1);renderCalendar();}
-function goToToday(){const t=new Date();currentMonth=new Date(t.getFullYear(),t.getMonth(),1);renderCalendar();}
-function generateShareLink(){const data={appointments,shiftOverrides,cycleStart:cycleStart.toISOString(),weekSchema,colors};try{const j=JSON.stringify(data);const b=btoa(encodeURIComponent(j));let base=location.origin.includes('null')||location.protocol==='file:'?'https://billr-v2.pages.dev/planner.html':location.origin+location.pathname;const url=base+'?share='+b;document.getElementById('shareLinkText').value=url;document.getElementById('shareLinkModal').classList.add('active');}catch(e){alert('Fout: '+e.message);}}
-function loadFromURL(){const p=new URLSearchParams(location.search);const s=p.get('share');const bd=p.get('billr');if(s){isReadOnly=true;try{const d=JSON.parse(decodeURIComponent(atob(s)));appointments=d.appointments||[];shiftOverrides=d.shiftOverrides||{};cycleStart=new Date(d.cycleStart);weekSchema=d.weekSchema||[];colors=d.colors||colors;return true;}catch(e){alert('Ongeldige link');return false;}}if(bd){try{const d=JSON.parse(decodeURIComponent(atob(bd)));console.log('BILLR data:',d);}catch(e){}}return false;}
-function applyReadOnlyMode(){if(!isReadOnly)return;const eb=[document.getElementById('shareLinkBtn'),...document.querySelectorAll('.tab-btn:not(:first-child)')];eb.forEach(b=>{if(b)b.style.display='none';});const h=document.querySelector('header p');if(h){h.textContent='🔒 Read-only — bekijk afspraken en ploegen';h.style.color='#f59e0b';h.style.fontWeight='600';}}
-window.WChargePlanner={addFromBILLR:function(data){if(!data.date||!data.time||!data.client)return false;try{const a={id:Date.now(),date:data.date,time:data.time,client:data.client,type:data.type||'EV Lader',location:data.location||'',notes:(data.notes||'')+(data.offerteNummer?'\n📄 Offerte: '+data.offerteNummer:'')};appointments.push(a);localStorage.setItem('wcharge_apts',JSON.stringify(appointments));const ad=new Date(data.date);currentMonth=new Date(ad.getFullYear(),ad.getMonth(),1);renderCalendar();renderAppointments();return true;}catch(e){return false;}},getAppointments:function(){return appointments;},getAppointmentsByClient:function(n){return appointments.filter(a=>a.client.toLowerCase().includes(n.toLowerCase()));},deleteAppointment:function(id){const b=appointments.length;appointments=appointments.filter(a=>a.id!==id);if(appointments.length<b){localStorage.setItem('wcharge_apts',JSON.stringify(appointments));renderCalendar();renderAppointments();return true;}return false;}};
-window.onload=function(){const isSL=loadFromURL();if(!isSL)loadData();applyColors();if(!weekSchema||weekSchema.length!==49)initDefaultSchema();renderCalendar();renderAppointments();applyReadOnlyMode();document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeModal();document.getElementById('shareLinkModal').classList.remove('active');}});};
-</script>
+    <div class="container">
+        <header>
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px;">
+                <div>
+                    <h1>W-Charge Planner</h1>
+                    <p>Klik op een dag om afspraken toe te voegen of ploeg aan te passen</p>
+                </div>
+                <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+                    <div class="sb-bar" id="sbBar"><div class="sb-dot"></div><span id="sbTxt">BILLR laden...</span></div>
+                    <button class="btn" onclick="loadSBAppointments()" style="padding:8px 16px;font-size:0.9rem;">🔄 Sync</button>
+                    <button class="btn" onclick="generateShareLink()" id="shareLinkBtn">🔗 Deel Link</button>
+                </div>
+            </div>
+        </header>
+
+        <div class="tabs">
+            <button class="tab-btn active" onclick="switchTab('calendar')">📅 Kalender</button>
+            <button class="tab-btn" onclick="switchTab('appointments')">📋 Afspraken</button>
+            <button class="tab-btn" onclick="switchTab('settings')">⚙️ Schema Instellen</button>
+        </div>
+
+        <!-- KALENDER TAB -->
+        <div id="calendarTab" class="tab-content active">
+            <div class="card">
+                <div class="month-nav">
+                    <button class="btn btn-secondary" onclick="prevMonth()">‹</button>
+                    <div style="display: flex; gap: 10px; align-items: center;">
+                        <div class="month-title" id="monthTitle"></div>
+                        <button class="btn" onclick="goToToday()" style="padding: 8px 16px; font-size: 0.9rem;">📅 Vandaag</button>
+                    </div>
+                    <button class="btn btn-secondary" onclick="nextMonth()">›</button>
+                </div>
+                <div class="calendar-grid" id="calendar"></div>
+            </div>
+        </div>
+
+        <!-- AFSPRAKEN TAB -->
+        <div id="appointmentsTab" class="tab-content">
+            <div class="card">
+                <h2 style="margin-bottom: 20px;">Alle Afspraken</h2>
+                <div id="appointmentList"></div>
+            </div>
+        </div>
+
+        <!-- INSTELLINGEN TAB -->
+        <div id="settingsTab" class="tab-content">
+            <div class="card">
+                <h2>7-Weken Cyclus Configureren</h2>
+                <p style="margin: 15px 0; color: #64748b;">Klik op elke dag om aan te geven welk type dienst/rust het is.</p>
+                
+                <div class="form-group">
+                    <label>Startdatum Cyclus</label>
+                    <input type="date" id="cycleStart" value="2026-01-26">
+                </div>
+
+                <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+                    <h3 style="margin-bottom: 10px;">🎨 Kleuren Legende</h3>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px;">
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <div class="day-shift shift-wacht" style="padding: 5px 10px; margin: 0;">Wacht</div>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <div class="day-shift shift-dagweek" style="padding: 5px 10px; margin: 0;">Dagweek</div>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <div class="day-shift shift-vroege" style="padding: 5px 10px; margin: 0;">Vroege</div>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <div class="day-shift shift-late" style="padding: 5px 10px; margin: 0;">Late</div>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <div class="day-shift shift-nacht" style="padding: 5px 10px; margin: 0;">Nacht</div>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <div class="day-shift shift-adv" style="padding: 5px 10px; margin: 0;">ADV</div>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <div class="day-shift shift-rust-oproepbaar" style="padding: 5px 10px; margin: 0;">Rust (opro.)</div>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <div class="day-shift shift-rust" style="padding: 5px 10px; margin: 0;">Rust</div>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <div class="day-shift shift-vrij" style="padding: 5px 10px; margin: 0;">Vrij</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="weekConfigs"></div>
+
+                <button class="btn" onclick="saveFullSchema()" style="margin-top: 20px;">💾 Volledig Schema Opslaan</button>
+            </div>
+
+            <div class="card" style="margin-top: 20px;">
+                <h2>🎨 Kleuren Aanpassen</h2>
+                <p style="margin: 15px 0; color: #64748b;">Pas de kleuren aan voor ploegen en afspraken.</p>
+
+                <h3 style="margin: 20px 0 10px 0;">Ploeg Kleuren</h3>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
+                    <div class="form-group">
+                        <label>Wacht</label>
+                        <input type="color" id="colorWacht" value="#10b981">
+                    </div>
+                    <div class="form-group">
+                        <label>Rust (oproepbaar)</label>
+                        <input type="color" id="colorRustOproepbaar" value="#94a3b8">
+                    </div>
+                    <div class="form-group">
+                        <label>Dagweek</label>
+                        <input type="color" id="colorDagweek" value="#06b6d4">
+                    </div>
+                    <div class="form-group">
+                        <label>ADV</label>
+                        <input type="color" id="colorAdv" value="#ec4899">
+                    </div>
+                    <div class="form-group">
+                        <label>Vroege dienst</label>
+                        <input type="color" id="colorVroege" value="#3b82f6">
+                    </div>
+                    <div class="form-group">
+                        <label>Late dienst</label>
+                        <input type="color" id="colorLate" value="#f59e0b">
+                    </div>
+                    <div class="form-group">
+                        <label>Nachtdienst</label>
+                        <input type="color" id="colorNacht" value="#8b5cf6">
+                    </div>
+                    <div class="form-group">
+                        <label>Rust</label>
+                        <input type="color" id="colorRust" value="#64748b">
+                    </div>
+                    <div class="form-group">
+                        <label>Vrij</label>
+                        <input type="color" id="colorVrij" value="#e0e4e8">
+                    </div>
+                </div>
+
+                <h3 style="margin: 20px 0 10px 0;">Afspraak Kleur</h3>
+                <div class="form-group">
+                    <label>Afspraak achtergrond</label>
+                    <input type="color" id="colorAfspraak" value="#d4ff00">
+                </div>
+
+                <button class="btn" onclick="saveColors()" style="margin-top: 20px;">💾 Kleuren Opslaan</button>
+                <button class="btn btn-secondary" onclick="resetColors()" style="margin-top: 20px; margin-left: 10px;">🔄 Standaard Kleuren</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- DAG MODAL -->
+    <div class="modal" id="dayModal" onclick="closeModalOnOutsideClick(event)">
+        <div class="modal-content" onclick="event.stopPropagation()">
+            <div class="modal-header" id="modalDate"></div>
+
+            <div class="modal-section">
+                <h3>📋 Huidige Ploeg</h3>
+                <div id="currentShift"></div>
+                
+                <h3 style="margin-top: 20px;">Wijzig Ploeg</h3>
+                <div class="shift-selector" id="shiftSelector">
+                    <div class="shift-option" onclick="selectShift('Wacht', 'wacht')">Wacht</div>
+                    <div class="shift-option" onclick="selectShift('Rust (oproepbaar)', 'rust-oproepbaar')">Rust (opro.)</div>
+                    <div class="shift-option" onclick="selectShift('Dagweek', 'dagweek')">Dagweek</div>
+                    <div class="shift-option" onclick="selectShift('ADV', 'adv')">ADV</div>
+                    <div class="shift-option" onclick="selectShift('Vroege', 'vroege')">Vroege</div>
+                    <div class="shift-option" onclick="selectShift('Late', 'late')">Late</div>
+                    <div class="shift-option" onclick="selectShift('Nacht', 'nacht')">Nacht</div>
+                    <div class="shift-option" onclick="selectShift('Rust', 'rust')">Rust</div>
+                    <div class="shift-option" onclick="selectShift('Vrij', 'vrij')">Vrij</div>
+                </div>
+                <button class="btn" onclick="saveShiftOverride()" style="margin-top: 10px; width: 100%;">💾 Ploeg Opslaan</button>
+            </div>
+
+            <div class="modal-section">
+                <h3>➕ Afspraak Toevoegen</h3>
+                <div class="form-group" style="margin-top: 15px;">
+                    <label>Tijd</label>
+                    <input type="time" id="modalTime">
+                </div>
+                <div class="form-group">
+                    <label>Klant</label>
+                    <input type="text" id="modalClient">
+                </div>
+                <div class="form-group">
+                    <label>Type Werk</label>
+                    <select id="modalType">
+                        <option>EV Lader</option>
+                        <option>Zonnepanelen</option>
+                        <option>Batterij</option>
+                        <option>Domotica</option>
+                        <option>Onderhoud</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Locatie</label>
+                    <input type="text" id="modalLocation">
+                </div>
+                <div class="form-group">
+                    <label>Notities</label>
+                    <textarea id="modalNotes" rows="2"></textarea>
+                </div>
+                <button class="btn" onclick="addAppointmentFromModal()" style="width: 100%;">💾 Afspraak Opslaan</button>
+            </div>
+
+            <div class="modal-section">
+                <h3>📅 Afspraken vandaag</h3>
+                <div id="modalAppointments"></div>
+            </div>
+
+            <button class="btn btn-secondary" onclick="closeModal()" style="width: 100%; margin-top: 20px;">✖ Sluiten</button>
+        </div>
+    </div>
+
+    <div class="tooltip" id="tooltip"></div>
+
+    <!-- Share Link Modal -->
+    <div class="modal" id="shareLinkModal" onclick="closeShareLinkModal(event)">
+        <div class="modal-content" onclick="event.stopPropagation()" style="max-width: 600px;">
+            <div class="modal-header">🔗 Deel Link Gegenereerd</div>
+            
+            <p style="margin: 20px 0; color: #64748b;">
+                Kopieer deze link om je agenda read-only te delen met anderen:
+            </p>
+            
+            <textarea id="shareLinkText" readonly style="
+                width: 100%;
+                height: 120px;
+                padding: 15px;
+                font-family: monospace;
+                font-size: 0.9rem;
+                border: 2px solid #d4ff00;
+                border-radius: 8px;
+                background: #f8f9fa;
+                resize: none;
+                margin: 10px 0;
+            "></textarea>
+            
+            <div style="display: flex; gap: 10px; margin-top: 20px;">
+                <button class="btn" onclick="copyShareLink()" style="flex: 1;">📋 Kopieer Link</button>
+                <button class="btn btn-secondary" onclick="closeShareLinkModal()" style="flex: 1;">✖ Sluiten</button>
+            </div>
+            
+            <p style="margin-top: 15px; font-size: 0.85rem; color: #64748b;">
+                💡 <strong>Let op:</strong> De ontvanger kan de agenda bekijken maar niet aanpassen.
+            </p>
+        </div>
+    </div>
+
+    <script>
+        /*
+        ================================================================================
+        W-CHARGE PLANNER - BILLR INTEGRATIE DOCUMENTATIE
+        ================================================================================
+        
+        Deze planner kan geïntegreerd worden met BILLR voor automatisch plannen van
+        afspraken na het accepteren van offertes.
+        
+        GEBRUIK IN BILLR:
+        -----------------
+        
+        1. AFSPRAAK TOEVOEGEN VANUIT OFFERTE:
+        
+           WChargePlanner.addFromBILLR({
+               date: '2026-03-20',              // YYYY-MM-DD (verplicht)
+               time: '14:00',                   // HH:MM (verplicht)
+               client: 'Jan Janssens',          // Klant naam (verplicht)
+               type: 'EV Lader',                // Type: EV Lader, Zonnepanelen, Batterij, etc.
+               location: 'Gentstraat 123, Gent', // Volledig adres
+               notes: 'Tesla Model 3',          // Extra notities
+               offerteNummer: 'OFF-2026-001'    // BILLR offerte nummer (wordt toegevoegd aan notities)
+           });
+        
+        2. ALLE AFSPRAKEN OPHALEN:
+        
+           const afspraken = WChargePlanner.getAppointments();
+           // Returns: Array van alle afspraken
+        
+        3. AFSPRAKEN VOOR SPECIFIEKE KLANT:
+        
+           const klantAfspraken = WChargePlanner.getAppointmentsByClient('Jan Janssens');
+           // Returns: Array van afspraken voor deze klant
+        
+        4. AFSPRAAK VERWIJDEREN:
+        
+           const success = WChargePlanner.deleteAppointment(1234567890);
+           // Returns: true als succesvol verwijderd
+        
+        5. TESTEN IN CONSOLE:
+        
+           testBILLRIntegration()  // Voegt test afspraak toe
+        
+        ================================================================================
+        */
+        
+        // ── DATUM HELPER: lokale tijdzone, geen UTC offset bug ──────────
+        function localDateStr(d) {
+            const y = d.getFullYear();
+            const m = String(d.getMonth()+1).padStart(2,'0');
+            const day = String(d.getDate()).padStart(2,'0');
+            return y + '-' + m + '-' + day;
+        }
+
+        // ── SUPABASE SYNC ────────────────────────────────────────────────
+        const SB_URL = "https://qxnxbqkdvvblfkihmjxy.supabase.co";
+        const SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF4bnhicWtkdnZibGZraWhtanh5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMzNTI3MTMsImV4cCI6MjA4ODkyODcxM30.1JDvrHgxLpU1GZqSjDVGtfnFJg8PHuD-aFpHOxAY1To";
+        let sbAppointments = []; // BILLR afspraken uit Supabase
+
+        function proposalToApt(p) {
+            const d = p.plan_data || {};
+            const klant = d.klant || {};
+            return {
+                id: 'billr_' + p.id,
+                date: d.planDatum || '',
+                time: (d.planTijd || '09:00').slice(0,5),
+                client: klant.naam || '',
+                type: d.installatieType || 'Installatie',
+                location: [(klant.adres||''), (klant.gemeente||'')].filter(Boolean).join(', '),
+                notes: [d.offerteNummer, d.totaal, klant.tel].filter(Boolean).join(' · '),
+                offerteNummer: d.offerteNummer || '',
+                phone: klant.tel || '',
+                _source: 'billr',
+                _status: p.status
+            };
+        }
+
+        async function loadSBAppointments() {
+            const el = document.getElementById('sbTxt');
+            try {
+                const s = window.supabase.createClient(SB_URL, SB_KEY);
+                const { data, error } = await s.from('planning_proposals')
+                    .select('*').in('status', ['ingepland','akkoord','voorstel']);
+                if (error) throw error;
+                sbAppointments = (data || []).map(proposalToApt).filter(a => a.date);
+                const cnt = sbAppointments.length;
+                if (el) el.textContent = cnt + ' BILLR ' + (cnt===1?'afspraak':'afspraken') +
+                    ' · ' + new Date().toLocaleTimeString('nl-BE',{hour:'2-digit',minute:'2-digit'});
+                renderCalendar();
+            } catch(e) {
+                console.warn('Supabase sync:', e);
+                if (el) el.textContent = 'BILLR sync mislukt';
+            }
+        }
+
+        // Data
+        let currentMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+        let appointments = [];
+        let shiftOverrides = {};
+        let selectedDate = null;
+        let selectedShiftLabel = null;
+        let selectedShiftClass = null;
+        let cycleStart = new Date(2026, 0, 26); // 26 januari 2026
+        let isReadOnly = false; // Read-only modus voor gedeelde links
+        
+        // 7 weken x 7 dagen = 49 dagen configuratie
+        let weekSchema = [];
+        
+        // Kleuren configuratie
+        let colors = {
+            wacht: '#10b981',
+            rustOproepbaar: '#94a3b8',
+            dagweek: '#06b6d4',
+            adv: '#ec4899',
+            vroege: '#3b82f6',
+            late: '#f59e0b',
+            nacht: '#8b5cf6',
+            rust: '#64748b',
+            vrij: '#e0e4e8',
+            afspraak: '#d4ff00'
+        };
+        
+        // Init default schema volgens exacte cyclus
+        function initDefaultSchema() {
+            weekSchema = [];
+            
+            for (let day = 0; day < 49; day++) {
+                let config = { type: 'vrij', label: 'Vrij' };
+                
+                // Week 1 (dag 0-6): 7 dagen WACHT
+                if (day >= 0 && day <= 6) {
+                    config = { type: 'wacht', label: 'Wacht (7:45-16:15)' };
+                }
+                // Week 2 (dag 7-13): Ma-Vr DAGWEEK, Za-Zo VRIJ
+                else if (day >= 7 && day <= 11) {
+                    config = { type: 'dagweek', label: 'Dagweek' };
+                }
+                // dag 12-13 blijven VRIJ
+                
+                // Week 3 (dag 14-20): Ma-Do DAGWEEK, Vr ADV, Za-Zo VRIJ
+                else if (day >= 14 && day <= 17) {
+                    config = { type: 'dagweek', label: 'Dagweek' };
+                }
+                else if (day === 18) {
+                    config = { type: 'adv', label: 'ADV' };
+                }
+                // dag 19-20 blijven VRIJ
+                
+                // Week 4-7 (dag 21-48): Ploegweek
+                else if (day === 21) {
+                    config = { type: 'rust', label: 'Rust' }; // Ma week 4
+                }
+                else if (day >= 22 && day <= 28) {
+                    config = { type: 'vroege', label: 'Vroege (6-14)' }; // Di week 4 - Ma week 5 (7 dagen)
+                }
+                else if (day >= 29 && day <= 30) {
+                    config = { type: 'rust', label: 'Rust' }; // Di-Wo week 5 (2 dagen)
+                }
+                else if (day >= 31 && day <= 37) {
+                    config = { type: 'late', label: 'Late (14-22)' }; // Do week 5 - Wo week 6 (7 dagen)
+                }
+                else if (day === 38) {
+                    config = { type: 'rust', label: 'Rust' }; // Do week 6 (1 dag)
+                }
+                else if (day >= 39 && day <= 45) {
+                    config = { type: 'nacht', label: 'Nacht (22-06)' }; // Vr week 6 - Do week 7 (7 dagen)
+                }
+                // dag 46-48 blijven VRIJ (Vr-Za-Zo week 7)
+                
+                weekSchema.push(config);
+            }
+            
+            console.log('✅ Default schema geïnitialiseerd (26-01-2026 cyclus)');
+        }
+
+        // Render week configs
+        function renderWeekConfigs() {
+            console.log('📊 Rendering week configs...');
+            console.log('WeekSchema length:', weekSchema ? weekSchema.length : 'undefined');
+            
+            const container = document.getElementById('weekConfigs');
+            if (!container) {
+                console.error('❌ Container "weekConfigs" niet gevonden');
+                return;
+            }
+            
+            if (!weekSchema || weekSchema.length === 0) {
+                console.warn('⚠️ Geen schema, initialiseren...');
+                initDefaultSchema();
+            }
+            
+            container.innerHTML = '';
+            
+            const dayNames = ['Ma', 'Di', 'Wo', 'Do', 'Vr', 'Za', 'Zo'];
+            const shiftTypes = [
+                { type: 'wacht', label: 'Wacht' },
+                { type: 'dagweek', label: 'Dagweek' },
+                { type: 'vroege', label: 'Vroege' },
+                { type: 'late', label: 'Late' },
+                { type: 'nacht', label: 'Nacht' },
+                { type: 'adv', label: 'ADV' },
+                { type: 'rust-oproepbaar', label: 'Rust (opro.)' },
+                { type: 'rust', label: 'Rust' },
+                { type: 'vrij', label: 'Vrij' }
+            ];
+            
+            for (let week = 0; week < 7; week++) {
+                const weekCard = document.createElement('div');
+                weekCard.className = 'week-config';
+                
+                const weekHeader = document.createElement('div');
+                weekHeader.className = 'week-header';
+                weekHeader.textContent = `Week ${week + 1}`;
+                weekCard.appendChild(weekHeader);
+                
+                // Shift type selector
+                const typeSelector = document.createElement('div');
+                typeSelector.className = 'shift-type-selector';
+                
+                const instruction = document.createElement('p');
+                instruction.style.cssText = 'grid-column: span 3; font-weight: 600; margin-bottom: 5px;';
+                instruction.textContent = 'Klik eerst op een type, dan op de dagen:';
+                typeSelector.appendChild(instruction);
+                
+                let selectedType = 'vroege';
+                
+                shiftTypes.forEach(st => {
+                    const btn = document.createElement('div');
+                    btn.className = 'shift-type-btn shift-' + st.type;
+                    btn.textContent = st.label;
+                    if (st.type === 'vroege') btn.classList.add('selected');
+                    
+                    btn.onclick = function() {
+                        selectedType = st.type;
+                        typeSelector.querySelectorAll('.shift-type-btn').forEach(b => b.classList.remove('selected'));
+                        btn.classList.add('selected');
+                    };
+                    typeSelector.appendChild(btn);
+                });
+                
+                weekCard.appendChild(typeSelector);
+                
+                // Day grid
+                const grid = document.createElement('div');
+                grid.className = 'week-grid';
+                
+                for (let day = 0; day < 7; day++) {
+                    const dayIndex = week * 7 + day;
+                    const dayConfig = weekSchema[dayIndex] || { type: 'vrij', label: 'Vrij' };
+                    
+                    const dayEl = document.createElement('div');
+                    dayEl.className = 'day-config shift-' + dayConfig.type;
+                    dayEl.innerHTML = `
+                        <span class="day-name">${dayNames[day]}</span>
+                        <span class="day-type">${dayConfig.label}</span>
+                    `;
+                    
+                    dayEl.onclick = function() {
+                        const st = shiftTypes.find(s => s.type === selectedType);
+                        if (st) {
+                            weekSchema[dayIndex] = { type: selectedType, label: st.label };
+                            
+                            // Visuele feedback
+                            dayEl.style.transform = 'scale(1.1)';
+                            setTimeout(() => {
+                                dayEl.style.transform = 'scale(1)';
+                            }, 150);
+                            
+                            console.log(`✏️ Dag ${dayIndex + 1} gewijzigd naar: ${st.label}`);
+                            renderWeekConfigs();
+                        }
+                    };
+                    
+                    grid.appendChild(dayEl);
+                }
+                
+                weekCard.appendChild(grid);
+                container.appendChild(weekCard);
+            }
+            
+            console.log('✅ Week configs rendered');
+        }
+
+        // Get shift for date
+        function getShift(date) {
+            const dateStr = localDateStr(date);
+            if (shiftOverrides[dateStr]) {
+                return shiftOverrides[dateStr];
+            }
+            
+            const diffDays = Math.floor((date - cycleStart) / (1000 * 60 * 60 * 24));
+            const dayInCycle = ((diffDays % 49) + 49) % 49;
+            
+            return weekSchema[dayInCycle] || { type: 'vrij', label: 'Vrij' };
+        }
+
+        // Render calendar
+        function renderCalendar() {
+            const year = currentMonth.getFullYear();
+            const month = currentMonth.getMonth();
+            
+            const monthNames = ['Januari', 'Februari', 'Maart', 'April', 'Mei', 'Juni',
+                               'Juli', 'Augustus', 'September', 'Oktober', 'November', 'December'];
+            document.getElementById('monthTitle').textContent = `${monthNames[month]} ${year}`;
+
+            const firstDay = new Date(year, month, 1);
+            const startDay = new Date(firstDay);
+            startDay.setDate(startDay.getDate() - (startDay.getDay() === 0 ? 6 : startDay.getDay() - 1));
+
+            const calendar = document.getElementById('calendar');
+            calendar.innerHTML = '';
+
+            ['Ma', 'Di', 'Wo', 'Do', 'Vr', 'Za', 'Zo'].forEach(d => {
+                const h = document.createElement('div');
+                h.className = 'calendar-header';
+                h.textContent = d;
+                calendar.appendChild(h);
+            });
+
+            let d = new Date(startDay);
+            const today = new Date();
+            const todayStr = localDateStr(today);
+            
+            for (let i = 0; i < 42; i++) {
+                const day = document.createElement('div');
+                day.className = 'calendar-day';
+                
+                const dateStr = localDateStr(d);
+                
+                // Check of deze dag in de huidige maand valt
+                if (d.getMonth() !== month) {
+                    day.classList.add('other-month');
+                }
+                
+                // Markeer vandaag
+                if (dateStr === todayStr) {
+                    day.classList.add('today');
+                }
+                
+                const num = document.createElement('div');
+                num.className = 'day-number';
+                num.textContent = d.getDate();
+                day.appendChild(num);
+
+                const shiftData = getShift(new Date(d));
+                const isOverride = !!shiftOverrides[dateStr];
+                
+                const shift = document.createElement('div');
+                shift.className = `day-shift shift-${shiftData.type}`;
+                shift.textContent = shiftData.label + (isOverride ? ' ⚠️' : '');
+                if (isOverride) {
+                    shift.style.fontWeight = '700';
+                    shift.style.border = '2px solid #f59e0b';
+                }
+                day.appendChild(shift);
+
+                const apts = appointments.filter(a => a.date === dateStr);
+                const sbApts = sbAppointments.filter(a => a.date === dateStr);
+                [...sbApts, ...apts].forEach(a => {
+                    const apt = document.createElement('div');
+                    apt.className = 'day-appointment';
+                    if (a._source === 'billr') apt.classList.add('billr-' + (a._status||'voorstel'));
+                    apt.textContent = a.time + ' ' + a.client;
+                    apt.title = (a._status ? '●' : '') + ' ' + (a.type||'') + (a.location ? ' · ' + a.location : '');
+                    day.appendChild(apt);
+                });
+
+                const dateForClick = new Date(d);
+                day.onclick = () => openDayModal(dateForClick);
+
+                const dateForHover = new Date(d);
+                const sbAptsForHover = sbAppointments.filter(a => a.date === localDateStr(d));
+                day.onmouseenter = (e) => showTooltip(e, dateForHover, [...sbAptsForHover, ...apts]);
+                day.onmouseleave = hideTooltip;
+                day.onmousemove = (e) => moveTooltip(e);
+
+                calendar.appendChild(day);
+                d.setDate(d.getDate() + 1);
+            }
+        }
+
+        // Modal functions
+        function openDayModal(date) {
+            console.log('🔵 Opening modal voor datum:', date.toLocaleDateString('nl-NL'));
+            
+            selectedDate = date;
+            selectedShiftLabel = null;
+            selectedShiftClass = null;
+            
+            const dayNames = ['Zondag', 'Maandag', 'Dinsdag', 'Woensdag', 'Donderdag', 'Vrijdag', 'Zaterdag'];
+            const monthNames = ['januari', 'februari', 'maart', 'april', 'mei', 'juni',
+                               'juli', 'augustus', 'september', 'oktober', 'november', 'december'];
+            
+            document.getElementById('modalDate').textContent = 
+                `${dayNames[date.getDay()]} ${date.getDate()} ${monthNames[date.getMonth()]} ${date.getFullYear()}`;
+
+            const shiftData = getShift(date);
+            const dateStr = localDateStr(date);
+            const isOverride = !!shiftOverrides[dateStr];
+            
+            let shiftHtml = `<div class="day-shift shift-${shiftData.type}">${shiftData.label}</div>`;
+            if (isOverride) {
+                shiftHtml += '<p style="color: #f59e0b; margin-top: 10px; font-weight: 600;">⚠️ Handmatig aangepast</p>';
+                shiftHtml += '<button class="btn btn-secondary" onclick="resetShiftOverride()" style="margin-top: 10px; width: 100%;">🔄 Herstel naar Standaard</button>';
+            }
+            
+            document.getElementById('currentShift').innerHTML = shiftHtml;
+            document.querySelectorAll('.shift-option').forEach(o => o.classList.remove('selected'));
+
+            const apts = appointments.filter(a => a.date === dateStr);
+            const sbApts = sbAppointments.filter(a => a.date === dateStr);
+            const allApts = [...sbApts, ...apts].sort((a,b) => (a.time||'').localeCompare(b.time||''));
+            const aptList = document.getElementById('modalAppointments');
+            if (allApts.length === 0) {
+                aptList.innerHTML = '<p style="color: #64748b;">Geen afspraken</p>';
+            } else {
+                aptList.innerHTML = '';
+                const statusLabels = {ingepland:'✅ Bevestigd',akkoord:'🟡 Klant akkoord',voorstel:'⏳ Voorstel'};
+                const statusColors = {ingepland:'#059669',akkoord:'#d97706',voorstel:'#3b82f6'};
+                allApts.forEach(a => {
+                    const item = document.createElement('div');
+                    item.className = 'appointment-item';
+                    const isBillr = a._source === 'billr';
+                    const sc = isBillr ? (statusColors[a._status]||'#64748b') : '#d4ff00';
+                    item.style.borderLeftColor = sc;
+                    if (isBillr) item.style.background = sc + '11';
+                    const sl = isBillr ? (statusLabels[a._status]||'BILLR') : '';
+                    item.innerHTML = (isBillr ? `<div style="font-size:0.8rem;font-weight:700;color:${sc};margin-bottom:4px">BILLR · ${sl}</div>` : '') +
+                        `<strong>${a.time} — ${a.client}</strong><br>
+                        ${a.type}${a.location ? ' · ' + a.location : ''}
+                        ${a.phone ? '<br>📞 <a href="tel:'+a.phone+'" style="color:#1a2e4c">'+a.phone+'</a>' : ''}
+                        ${a.offerteNummer ? '<br>📄 ' + a.offerteNummer : ''}
+                        ${a.notes ? '<br><span style="font-size:0.85rem;color:#64748b">' + a.notes + '</span>' : ''}`;
+                    if (!isBillr && !isReadOnly) {
+                        const deleteBtn = document.createElement('button');
+                        deleteBtn.className = 'btn btn-danger';
+                        deleteBtn.style.cssText = 'margin-top: 10px; width: 100%;';
+                        deleteBtn.textContent = '🗑️ Verwijderen';
+                        const appointmentId = a.id;
+                        deleteBtn.addEventListener('click', function(e) {
+                            e.preventDefault(); e.stopPropagation();
+                            deleteApt(appointmentId);
+                        });
+                        item.appendChild(deleteBtn);
+                    }
+                    aptList.appendChild(item);
+                });
+            }
+
+            // Verberg edit secties in read-only mode
+            if (isReadOnly) {
+                // Verberg "Wijzig Ploeg" sectie
+                const modalSections = document.querySelectorAll('.modal-section');
+                if (modalSections[0]) modalSections[0].style.display = 'none';
+                // Verberg "Afspraak Toevoegen" sectie
+                if (modalSections[1]) modalSections[1].style.display = 'none';
+            } else {
+                // Toon secties in normale mode
+                const modalSections = document.querySelectorAll('.modal-section');
+                if (modalSections[0]) modalSections[0].style.display = 'block';
+                if (modalSections[1]) modalSections[1].style.display = 'block';
+            }
+
+            document.getElementById('dayModal').classList.add('active');
+        }
+
+        function closeModal() {
+            document.getElementById('dayModal').classList.remove('active');
+            selectedShiftLabel = null;
+            selectedShiftClass = null;
+        }
+
+        function closeModalOnOutsideClick(event) {
+            if (event.target.id === 'dayModal') {
+                closeModal();
+            }
+        }
+
+        function selectShift(label, type) {
+            selectedShiftLabel = label;
+            selectedShiftClass = type;
+            console.log('Ploeg geselecteerd:', label, type);
+            document.querySelectorAll('.shift-option').forEach(o => o.classList.remove('selected'));
+            event.target.classList.add('selected');
+        }
+
+        function saveShiftOverride() {
+            if (!selectedShiftLabel || !selectedShiftClass) {
+                alert('Selecteer eerst een ploeg!');
+                return;
+            }
+            
+            const dateStr = localDateStr(selectedDate);
+            shiftOverrides[dateStr] = { label: selectedShiftLabel, type: selectedShiftClass };
+            localStorage.setItem('wcharge_overrides', JSON.stringify(shiftOverrides));
+            
+            alert('✅ Ploeg aangepast naar: ' + selectedShiftLabel);
+            renderCalendar();
+            openDayModal(selectedDate);
+        }
+
+        function resetShiftOverride() {
+            const dateStr = localDateStr(selectedDate);
+            delete shiftOverrides[dateStr];
+            localStorage.setItem('wcharge_overrides', JSON.stringify(shiftOverrides));
+            alert('✅ Ploeg hersteld!');
+            renderCalendar();
+            openDayModal(selectedDate);
+        }
+
+        // Appointments
+        function addAppointmentFromModal() {
+            console.log('➕ Afspraak toevoegen vanaf modal...');
+            
+            const time = document.getElementById('modalTime').value;
+            const client = document.getElementById('modalClient').value;
+            
+            console.log('Tijd:', time, 'Klant:', client);
+            
+            if (!time || !client) {
+                alert('❌ Vul tijd en klant in!');
+                return;
+            }
+
+            const apt = {
+                id: Date.now(),
+                date: localDateStr(selectedDate),
+                time: time,
+                client: client,
+                type: document.getElementById('modalType').value,
+                location: document.getElementById('modalLocation').value,
+                notes: document.getElementById('modalNotes').value
+            };
+
+            console.log('📝 Nieuwe afspraak aangemaakt:', apt);
+            console.log('ID type:', typeof apt.id, 'ID waarde:', apt.id);
+            
+            appointments.push(apt);
+            
+            console.log('Array na push:', appointments.length, 'afspraken');
+            
+            try {
+                localStorage.setItem('wcharge_apts', JSON.stringify(appointments));
+                console.log('✅ Opgeslagen in localStorage');
+            } catch (e) {
+                console.error('❌ Fout bij opslaan:', e);
+                alert('❌ Fout bij opslaan: ' + e.message);
+                return;
+            }
+            
+            alert('✅ Afspraak toegevoegd!\n\n' + time + ' - ' + client);
+            
+            document.getElementById('modalTime').value = '';
+            document.getElementById('modalClient').value = '';
+            document.getElementById('modalLocation').value = '';
+            document.getElementById('modalNotes').value = '';
+            
+            renderCalendar();
+            openDayModal(selectedDate);
+        }
+
+        function deleteApt(id) {
+            console.log('═══════════════════════════════════════');
+            console.log('🗑️ DELETE FUNCTIE AANGEROEPEN');
+            console.log('ID ontvangen:', id, 'Type:', typeof id);
+            console.log('Huidige afspraken array:', appointments);
+            console.log('Aantal afspraken:', appointments.length);
+            
+            // Vind de afspraak
+            const foundApt = appointments.find(a => a.id === id);
+            console.log('Gevonden afspraak:', foundApt);
+            
+            if (!foundApt) {
+                console.error('❌ AFSPRAAK NIET GEVONDEN met ID:', id);
+                alert('Fout: Afspraak niet gevonden (ID: ' + id + ')');
+                return;
+            }
+            
+            const beforeCount = appointments.length;
+            appointments = appointments.filter(a => a.id !== id);
+            const afterCount = appointments.length;
+            
+            console.log('Aantal VOOR filteren:', beforeCount);
+            console.log('Aantal NA filteren:', afterCount);
+            console.log('Verschil:', beforeCount - afterCount);
+            
+            if (beforeCount === afterCount) {
+                console.error('⚠️ FILTER HEEFT NIETS VERWIJDERD!');
+                alert('Fout: Filter heeft niets verwijderd');
+                return;
+            }
+            
+            try {
+                localStorage.setItem('wcharge_apts', JSON.stringify(appointments));
+                console.log('✅ Opgeslagen in localStorage');
+                console.log('Nieuwe array:', appointments);
+            } catch (e) {
+                console.error('❌ FOUT bij opslaan in localStorage:', e);
+                alert('Fout bij opslaan: ' + e.message);
+                return;
+            }
+            
+            console.log('🔄 Re-rendering UI...');
+            renderCalendar();
+            renderAppointments();
+            
+            if (selectedDate) {
+                console.log('🔄 Re-opening modal voor datum:', selectedDate);
+                openDayModal(selectedDate);
+            }
+            
+            console.log('✅ AFSPRAAK SUCCESVOL VERWIJDERD');
+            console.log('═══════════════════════════════════════');
+            
+            // Kleine notificatie zonder storende alert
+            console.log('✅ Verwijderd:', foundApt.time, '-', foundApt.client);
+        }
+
+        function renderAppointments() {
+            const list = document.getElementById('appointmentList');
+            if (appointments.length === 0) {
+                list.innerHTML = '<p style="color: #64748b;">Nog geen afspraken</p>';
+                return;
+            }
+
+            list.innerHTML = '';
+            const sorted = [...appointments].sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time));
+            
+            console.log('📋 Rendering', sorted.length, 'afspraken in lijst');
+
+            sorted.forEach(a => {
+                console.log('Afspraak in lijst:', a.id, a.date, a.time, a.client);
+                
+                const item = document.createElement('div');
+                item.className = 'appointment-item';
+                
+                const info = document.createElement('div');
+                info.innerHTML = `
+                    <h4>${a.date} ${a.time} - ${a.client}</h4>
+                    <p><strong>${a.type}</strong>${a.location ? ' • ' + a.location : ''}</p>
+                    ${a.notes ? `<p>${a.notes}</p>` : ''}
+                `;
+                item.appendChild(info);
+                
+                const deleteBtn = document.createElement('button');
+                deleteBtn.className = 'btn btn-danger';
+                deleteBtn.style.cssText = 'margin-top: 10px; width: 100%;';
+                deleteBtn.textContent = '🗑️ Verwijderen';
+                
+                // Verberg in read-only mode
+                if (isReadOnly) {
+                    deleteBtn.style.display = 'none';
+                }
+                
+                // Gebruik closure om ID vast te leggen
+                const appointmentId = a.id;
+                deleteBtn.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    console.log('🔴 DELETE BUTTON CLICKED! ID:', appointmentId);
+                    deleteApt(appointmentId);
+                });
+                
+                item.appendChild(deleteBtn);
+                list.appendChild(item);
+            });
+        }
+
+        // Tooltip
+        function showTooltip(e, date, apts) {
+            const tooltip = document.getElementById('tooltip');
+            const dayNames = ['Zo', 'Ma', 'Di', 'Wo', 'Do', 'Vr', 'Za'];
+            
+            let html = `<h4>${dayNames[date.getDay()]} ${date.getDate()}/${date.getMonth()+1}</h4>`;
+            html += `<p><strong>Ploeg:</strong> ${getShift(date).label}</p>`;
+            
+            if (apts.length > 0) {
+                html += `<p style="margin-top: 10px;"><strong>Afspraken:</strong></p>`;
+                apts.forEach(a => {
+                    html += `<div style="margin: 8px 0; padding: 8px; background: rgba(212, 255, 0, 0.1); border-left: 3px solid #d4ff00; border-radius: 3px;">`;
+                    html += `<p style="margin: 0; font-weight: 700;">${a.time} - ${a.client}</p>`;
+                    if (a.type) html += `<p style="margin: 2px 0 0 0; font-size: 0.85rem;"><strong>Type:</strong> ${a.type}</p>`;
+                    if (a.location) html += `<p style="margin: 2px 0 0 0; font-size: 0.85rem;"><strong>Locatie:</strong> ${a.location}</p>`;
+                    if (a.notes) html += `<p style="margin: 2px 0 0 0; font-size: 0.85rem;"><strong>Notities:</strong> ${a.notes}</p>`;
+                    html += `</div>`;
+                });
+            }
+            
+            tooltip.innerHTML = html;
+            tooltip.classList.add('active');
+            moveTooltip(e);
+        }
+
+        function hideTooltip() {
+            document.getElementById('tooltip').classList.remove('active');
+        }
+
+        function moveTooltip(e) {
+            const tooltip = document.getElementById('tooltip');
+            tooltip.style.left = (e.clientX + 15) + 'px';
+            tooltip.style.top = (e.clientY + 15) + 'px';
+        }
+
+        // Settings
+        function saveFullSchema() {
+            console.log('💾 Schema opslaan...');
+            
+            cycleStart = new Date(document.getElementById('cycleStart').value + 'T00:00:00');
+            
+            try {
+                localStorage.setItem('wcharge_cycle_start', cycleStart.toISOString());
+                localStorage.setItem('wcharge_schema', JSON.stringify(weekSchema));
+                console.log('✅ Schema opgeslagen in localStorage');
+                console.log('Cyclus start:', cycleStart.toISOString());
+                console.log('Schema dagen:', weekSchema.length);
+            } catch (e) {
+                console.error('❌ Fout bij opslaan:', e);
+                alert('❌ Fout bij opslaan: ' + e.message);
+                return;
+            }
+            
+            alert('✅ Schema succesvol opgeslagen!\n\nCyclus start: ' + cycleStart.toLocaleDateString('nl-NL') + '\n' + weekSchema.length + ' dagen geconfigureerd');
+            
+            renderCalendar();
+            switchTab('calendar');
+        }
+
+        // Kleuren functies
+        function applyColors() {
+            console.log('🎨 Kleuren toepassen...');
+            let styleEl = document.getElementById('customColors');
+            if (!styleEl) {
+                styleEl = document.createElement('style');
+                styleEl.id = 'customColors';
+                document.head.appendChild(styleEl);
+            }
+            
+            styleEl.textContent = `
+                .shift-wacht { background: ${colors.wacht} !important; color: white !important; }
+                .shift-rust-oproepbaar { background: ${colors.rustOproepbaar} !important; color: white !important; }
+                .shift-dagweek { background: ${colors.dagweek} !important; color: white !important; }
+                .shift-adv { background: ${colors.adv} !important; color: white !important; }
+                .shift-vroege { background: ${colors.vroege} !important; color: white !important; }
+                .shift-late { background: ${colors.late} !important; color: white !important; }
+                .shift-nacht { background: ${colors.nacht} !important; color: white !important; }
+                .shift-rust { background: ${colors.rust} !important; color: white !important; }
+                .shift-vrij { background: ${colors.vrij} !important; color: #1e293b !important; }
+                .day-appointment { background: ${colors.afspraak} !important; }
+            `;
+            console.log('✅ Kleuren toegepast');
+        }
+
+        function saveColors() {
+            console.log('💾 Kleuren opslaan...');
+            
+            colors.wacht = document.getElementById('colorWacht').value;
+            colors.rustOproepbaar = document.getElementById('colorRustOproepbaar').value;
+            colors.dagweek = document.getElementById('colorDagweek').value;
+            colors.adv = document.getElementById('colorAdv').value;
+            colors.vroege = document.getElementById('colorVroege').value;
+            colors.late = document.getElementById('colorLate').value;
+            colors.nacht = document.getElementById('colorNacht').value;
+            colors.rust = document.getElementById('colorRust').value;
+            colors.vrij = document.getElementById('colorVrij').value;
+            colors.afspraak = document.getElementById('colorAfspraak').value;
+            
+            try {
+                localStorage.setItem('wcharge_colors', JSON.stringify(colors));
+                console.log('✅ Kleuren opgeslagen');
+            } catch (e) {
+                console.error('❌ Fout bij opslaan:', e);
+                alert('Fout bij opslaan: ' + e.message);
+                return;
+            }
+            
+            applyColors();
+            alert('✅ Kleuren opgeslagen!');
+        }
+
+        function resetColors() {
+            if (!confirm('Weet je zeker dat je de kleuren wilt resetten naar standaard?')) {
+                return;
+            }
+            
+            colors = {
+                wacht: '#10b981',
+                rustOproepbaar: '#94a3b8',
+                dagweek: '#06b6d4',
+                adv: '#ec4899',
+                vroege: '#3b82f6',
+                late: '#f59e0b',
+                nacht: '#8b5cf6',
+                rust: '#64748b',
+                vrij: '#e0e4e8',
+                afspraak: '#d4ff00'
+            };
+            
+            updateColorInputs();
+            localStorage.setItem('wcharge_colors', JSON.stringify(colors));
+            applyColors();
+            alert('✅ Standaard kleuren hersteld!');
+        }
+
+        function updateColorInputs() {
+            document.getElementById('colorWacht').value = colors.wacht;
+            document.getElementById('colorRustOproepbaar').value = colors.rustOproepbaar;
+            document.getElementById('colorDagweek').value = colors.dagweek;
+            document.getElementById('colorAdv').value = colors.adv;
+            document.getElementById('colorVroege').value = colors.vroege;
+            document.getElementById('colorLate').value = colors.late;
+            document.getElementById('colorNacht').value = colors.nacht;
+            document.getElementById('colorRust').value = colors.rust;
+            document.getElementById('colorVrij').value = colors.vrij;
+            document.getElementById('colorAfspraak').value = colors.afspraak;
+        }
+
+        function loadData() {
+            console.log('📂 Data laden...');
+            try {
+                const apts = localStorage.getItem('wcharge_apts');
+                if (apts) {
+                    appointments = JSON.parse(apts);
+                    console.log('✅ Afspraken geladen:', appointments.length);
+                }
+
+                const ovr = localStorage.getItem('wcharge_overrides');
+                if (ovr) {
+                    shiftOverrides = JSON.parse(ovr);
+                    console.log('✅ Overrides geladen:', Object.keys(shiftOverrides).length);
+                }
+
+                const cs = localStorage.getItem('wcharge_cycle_start');
+                if (cs) {
+                    cycleStart = new Date(cs);
+                    console.log('✅ Cyclus start geladen:', cycleStart.toLocaleDateString('nl-NL'));
+                }
+
+                const sch = localStorage.getItem('wcharge_schema');
+                if (sch) {
+                    const loaded = JSON.parse(sch);
+                    // Valideer dat schema compleet is (49 dagen)
+                    if (loaded && loaded.length === 49) {
+                        weekSchema = loaded;
+                        console.log('✅ Schema geladen: 49 dagen');
+                    } else {
+                        console.warn('⚠️ Incompleet schema gevonden, resetten...');
+                        initDefaultSchema();
+                    }
+                } else {
+                    console.log('ℹ️ Geen schema gevonden, default initialiseren');
+                    initDefaultSchema();
+                }
+
+                const col = localStorage.getItem('wcharge_colors');
+                if (col) {
+                    colors = JSON.parse(col);
+                    console.log('✅ Kleuren geladen');
+                } else {
+                    console.log('ℹ️ Standaard kleuren gebruikt');
+                }
+            } catch (e) {
+                console.error('❌ Fout bij laden:', e);
+                initDefaultSchema();
+            }
+        }
+
+        // Tab switching
+        function switchTab(tab) {
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            
+            if (tab === 'calendar') {
+                document.querySelectorAll('.tab-btn')[0].classList.add('active');
+                document.getElementById('calendarTab').classList.add('active');
+            } else if (tab === 'appointments') {
+                document.querySelectorAll('.tab-btn')[1].classList.add('active');
+                document.getElementById('appointmentsTab').classList.add('active');
+                renderAppointments();
+            } else if (tab === 'settings') {
+                document.querySelectorAll('.tab-btn')[2].classList.add('active');
+                document.getElementById('settingsTab').classList.add('active');
+                document.getElementById('cycleStart').value = localDateStr(cycleStart);
+                
+                // Garantie dat schema bestaat voor rendering
+                if (!weekSchema || weekSchema.length !== 49) {
+                    console.warn('⚠️ Schema ontbreekt bij tab switch, initialiseren...');
+                    initDefaultSchema();
+                }
+                
+                updateColorInputs();
+                renderWeekConfigs();
+            }
+        }
+
+        // Navigation
+        function prevMonth() {
+            currentMonth.setMonth(currentMonth.getMonth() - 1);
+            renderCalendar();
+        }
+
+        function nextMonth() {
+            currentMonth.setMonth(currentMonth.getMonth() + 1);
+            renderCalendar();
+        }
+
+        function goToToday() {
+            const today = new Date();
+            currentMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+            renderCalendar();
+        }
+
+        // Init
+        window.onload = function() {
+            console.log('🚀 App laden...');
+            
+            // Check eerst of het een share link is
+            const isShareLink = loadFromURL();
+            
+            // Als het geen share link is, laad dan uit localStorage
+            if (!isShareLink) {
+                loadData();
+            }
+            
+            applyColors();
+            
+            console.log('Schema check:', weekSchema ? weekSchema.length + ' dagen' : 'UNDEFINED');
+            
+            // Garantie dat schema bestaat
+            if (!weekSchema || weekSchema.length !== 49) {
+                console.warn('⚠️ Schema probleem, opnieuw initialiseren...');
+                initDefaultSchema();
+                console.log('✅ Schema geïnitialiseerd:', weekSchema.length, 'dagen');
+            }
+            
+            renderCalendar();
+            renderAppointments();
+            
+            // Laad BILLR afspraken uit Supabase + auto-refresh elke 60s
+            loadSBAppointments();
+            setInterval(loadSBAppointments, 60000);
+            
+            // Activeer read-only mode als van toepassing
+            applyReadOnlyMode();
+            
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape') {
+                    closeModal();
+                    closeShareLinkModal();
+                }
+            });
+            
+            // Debug functie voor testen
+            window.testDeleteApt = function() {
+                console.log('🧪 TEST: Afspraak toevoegen');
+                const testApt = {
+                    id: Date.now(),
+                    date: '2026-03-27',
+                    time: '10:00',
+                    client: 'TEST CLIENT',
+                    type: 'EV Lader',
+                    location: 'Test locatie',
+                    notes: 'Dit is een test afspraak'
+                };
+                appointments.push(testApt);
+                localStorage.setItem('wcharge_apts', JSON.stringify(appointments));
+                console.log('✅ Test afspraak toegevoegd:', testApt);
+                console.log('Gebruik deleteApt(' + testApt.id + ') om te verwijderen');
+                renderCalendar();
+                renderAppointments();
+            };
+            
+            console.log('✅ App klaar!');
+            console.log('💡 TIP: Type "testDeleteApt()" in console om een test afspraak toe te voegen');
+            console.log('💡 TIP: Type "testShareLink()" in console om de deel link functie te testen');
+            console.log('💡 TIP: Type "WChargePlanner.addFromBILLR({...})" om afspraak vanuit BILLR toe te voegen');
+            
+            // Test functie voor deel link
+            window.testShareLink = function() {
+                console.log('🧪 TEST: Deel link functie aanroepen');
+                generateShareLink();
+            };
+        };
+
+        // ========================================
+        // BILLR INTEGRATIE API
+        // ========================================
+        // Deze functies kunnen door BILLR worden aangeroepen
+        // om afspraken toe te voegen vanuit geaccepteerde offertes
+        
+        window.WChargePlanner = {
+            /**
+             * Voeg afspraak toe vanuit BILLR offerte
+             * @param {Object} data - Afspraak data
+             * @param {string} data.date - Datum (YYYY-MM-DD)
+             * @param {string} data.time - Tijd (HH:MM)
+             * @param {string} data.client - Klant naam
+             * @param {string} data.type - Type werk (EV Lader, Zonnepanelen, etc.)
+             * @param {string} data.location - Locatie/adres
+             * @param {string} data.notes - Extra notities
+             * @param {string} data.offerteNummer - BILLR offerte nummer (optioneel)
+             * @returns {boolean} - Success status
+             */
+            addFromBILLR: function(data) {
+                console.log('📋 BILLR → Planner:', data);
+                try {
+                    if (!data.date || !data.time || !data.client) {
+                        console.error('❌ Verplichte velden ontbreken (date, time, client)');
+                        return false;
+                    }
+                    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+                    if (!dateRegex.test(data.date)) { console.error('❌ Datum formaat fout:', data.date); return false; }
+                    const timeRegex = /^\d{2}:\d{2}$/;
+                    if (!timeRegex.test(data.time)) { console.error('❌ Tijd formaat fout:', data.time); return false; }
+                    
+                    // Vermijd duplicaten op basis van offerteNummer
+                    if (data.offerteNummer && appointments.some(a => a.notes && a.notes.includes(data.offerteNummer))) {
+                        console.log('⏭ Al aanwezig:', data.offerteNummer);
+                        loadSBAppointments();
+                        return true;
+                    }
+                    
+                    const appointment = {
+                        id: Date.now(),
+                        date: data.date,
+                        time: data.time,
+                        client: data.client,
+                        type: data.type || 'EV Lader',
+                        location: data.location || '',
+                        notes: data.notes || ''
+                    };
+                    if (data.offerteNummer) {
+                        appointment.notes = (appointment.notes ? appointment.notes + '\n' : '') + '📄 Offerte: ' + data.offerteNummer;
+                    }
+                    appointments.push(appointment);
+                    localStorage.setItem('wcharge_apts', JSON.stringify(appointments));
+                    
+                    // Spring naar de juiste maand
+                    const aptDate = new Date(data.date + 'T12:00:00');
+                    currentMonth = new Date(aptDate.getFullYear(), aptDate.getMonth(), 1);
+                    
+                    loadSBAppointments(); // Sync Supabase ook
+                    console.log('✅ Afspraak toegevoegd:', appointment.time, appointment.client);
+                    return true;
+                } catch (e) {
+                    console.error('❌ Fout:', e);
+                    return false;
+                }
+            },
+            
+            /**
+             * Haal alle afspraken op (voor BILLR synchronisatie)
+             * @returns {Array} - Alle afspraken
+             */
+            getAppointments: function() {
+                return appointments;
+            },
+            
+            /**
+             * Haal afspraken op voor specifieke klant
+             * @param {string} clientName - Klant naam
+             * @returns {Array} - Afspraken voor deze klant
+             */
+            getAppointmentsByClient: function(clientName) {
+                return appointments.filter(a => 
+                    a.client.toLowerCase().includes(clientName.toLowerCase())
+                );
+            },
+            
+            /**
+             * Verwijder afspraak op basis van ID
+             * @param {number} appointmentId - ID van de afspraak
+             * @returns {boolean} - Success status
+             */
+            deleteAppointment: function(appointmentId) {
+                const beforeCount = appointments.length;
+                appointments = appointments.filter(a => a.id !== appointmentId);
+                
+                if (appointments.length < beforeCount) {
+                    localStorage.setItem('wcharge_apts', JSON.stringify(appointments));
+                    renderCalendar();
+                    renderAppointments();
+                    console.log('✅ Afspraak verwijderd:', appointmentId);
+                    return true;
+                }
+                
+                console.warn('⚠️ Afspraak niet gevonden:', appointmentId);
+                return false;
+            }
+        };
+        
+        // Test functie voor BILLR integratie
+        window.testBILLRIntegration = function() {
+            console.log('🧪 TEST: BILLR integratie');
+            
+            const testData = {
+                date: '2026-03-20',
+                time: '14:00',
+                client: 'Jan Janssens',
+                type: 'EV Lader',
+                location: 'Gentstraat 123, 9000 Gent',
+                notes: 'Tesla Model 3 - 11kW lader gewenst',
+                offerteNummer: 'OFF-2026-001'
+            };
+            
+            console.log('Test data:', testData);
+            const success = WChargePlanner.addFromBILLR(testData);
+            console.log('Result:', success ? '✅ SUCCESS' : '❌ FAILED');
+            
+            return success;
+        };
+
+        // Deel Link functionaliteit
+        function generateShareLink() {
+            console.log('🔗 Genereren deel link...');
+            console.log('Appointments:', appointments.length);
+            console.log('Overrides:', Object.keys(shiftOverrides).length);
+            console.log('Schema:', weekSchema.length);
+            
+            const data = {
+                appointments: appointments,
+                shiftOverrides: shiftOverrides,
+                cycleStart: cycleStart.toISOString(),
+                weekSchema: weekSchema,
+                colors: colors
+            };
+            
+            try {
+                const jsonString = JSON.stringify(data);
+                console.log('JSON string lengte:', jsonString.length);
+                
+                const base64 = btoa(encodeURIComponent(jsonString));
+                console.log('Base64 lengte:', base64.length);
+                
+                // Bepaal base URL (fallback voor lokale ontwikkeling)
+                let baseUrl;
+                if (window.location.origin.includes('null') || window.location.protocol === 'file:') {
+                    // Lokale ontwikkeling - gebruik toekomstige productie URL
+                    baseUrl = 'https://www.w-charge.be/planner.html';
+                    console.log('⚠️ Lokale ontwikkeling - gebruik productie URL');
+                } else {
+                    // Productie - gebruik huidige URL
+                    baseUrl = window.location.origin + window.location.pathname;
+                }
+                
+                const url = baseUrl + '?share=' + base64;
+                console.log('URL lengte:', url.length);
+                console.log('URL:', url.substring(0, 100) + '...');
+                
+                // Toon de URL in de custom modal
+                document.getElementById('shareLinkText').value = url;
+                document.getElementById('shareLinkModal').classList.add('active');
+                
+                console.log('✅ Deel link gegenereerd');
+            } catch (e) {
+                console.error('❌ Fout bij genereren link:', e);
+                console.error('Stack:', e.stack);
+                alert('Fout bij genereren link: ' + e.message + '\n\nCheck de console voor details (F12)');
+            }
+        }
+
+        function copyShareLink() {
+            const textarea = document.getElementById('shareLinkText');
+            textarea.select();
+            textarea.setSelectionRange(0, 99999); // Voor mobiel
+            
+            try {
+                // Probeer oude execCommand methode (werkt altijd)
+                const success = document.execCommand('copy');
+                if (success) {
+                    alert('✅ Link gekopieerd naar clipboard!');
+                    console.log('✅ Link gekopieerd via execCommand');
+                } else {
+                    alert('⚠️ Kon niet automatisch kopiëren.\n\nSelecteer de tekst en druk Ctrl+C');
+                }
+            } catch (err) {
+                console.error('❌ Copy gefaald:', err);
+                alert('⚠️ Kon niet automatisch kopiëren.\n\nSelecteer de tekst en druk Ctrl+C');
+            }
+        }
+
+        function closeShareLinkModal(event) {
+            if (!event || event.target.id === 'shareLinkModal') {
+                document.getElementById('shareLinkModal').classList.remove('active');
+            }
+        }
+
+        function loadFromURL() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const shareData = urlParams.get('share');
+            
+            if (shareData) {
+                console.log('🔗 Share link gedetecteerd');
+                isReadOnly = true;
+                
+                try {
+                    const jsonString = decodeURIComponent(atob(shareData));
+                    const data = JSON.parse(jsonString);
+                    
+                    appointments = data.appointments || [];
+                    shiftOverrides = data.shiftOverrides || {};
+                    cycleStart = new Date(data.cycleStart);
+                    weekSchema = data.weekSchema || [];
+                    colors = data.colors || colors;
+                    
+                    console.log('✅ Data geladen uit share link');
+                    console.log('Afspraken:', appointments.length);
+                    console.log('Overrides:', Object.keys(shiftOverrides).length);
+                    
+                    return true;
+                } catch (e) {
+                    console.error('❌ Fout bij laden share link:', e);
+                    alert('Ongeldige share link');
+                    return false;
+                }
+            }
+            
+            return false;
+        }
+
+        function applyReadOnlyMode() {
+            if (!isReadOnly) return;
+            
+            console.log('🔒 Read-only modus activeren...');
+            
+            // Verberg edit knoppen
+            const editButtons = [
+                document.getElementById('shareLinkBtn'),
+                ...document.querySelectorAll('.tab-btn:not(:first-child)')
+            ];
+            
+            editButtons.forEach(btn => {
+                if (btn) btn.style.display = 'none';
+            });
+            
+            // Update header
+            const header = document.querySelector('header p');
+            if (header) {
+                header.textContent = '🔒 Read-only modus - Bekijk afspraken en ploegen (geen wijzigingen mogelijk)';
+                header.style.color = '#f59e0b';
+                header.style.fontWeight = '600';
+            }
+            
+            // Verberg alle tabs behalve kalender
+            document.getElementById('appointmentsTab').style.display = 'none';
+            document.getElementById('settingsTab').style.display = 'none';
+            
+            console.log('✅ Read-only modus actief');
+        }
+    </script>
 </body>
 </html>
