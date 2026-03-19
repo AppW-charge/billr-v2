@@ -1552,6 +1552,9 @@ export default function App() {
   // dataReady: true ALLEEN nadat data volledig geladen is
   // Voorkomt dat lege initiële state de opgeslagen data overschrijft
   const dataReady = useRef(false);
+  // sbHadData: true als Supabase ooit data had voor deze user
+  // Voorkomt dat lege localStorage Supabase overschrijft
+  const sbHadData = useRef(false);
 
   useEffect(()=>{
     let dataLoaded = false;
@@ -1564,16 +1567,14 @@ export default function App() {
         const v = localStorage.getItem(k);
         totalSize += (v||"").length;
       }
-      if(totalSize > 4000000) { // >4MB = bijna vol
-        console.warn(`⚠️ localStorage ${(totalSize/1024/1024).toFixed(1)}MB — opschonen...`);
+      if(totalSize > 4000000) {
         ["b4_prd","b4_off","b4_fct"].forEach(k => {
           try {
             const raw = localStorage.getItem(k);
-            if(raw && raw.length > 500000) { // >500KB → strip
+            if(raw && raw.length > 500000) {
               const arr = JSON.parse(raw);
               const stripped = stripBase64(k, arr);
               localStorage.setItem(k, JSON.stringify(stripped));
-              console.log(`🧹 ${k} opgeschoond: ${(raw.length/1024).toFixed(0)}KB → ${(JSON.stringify(stripped).length/1024).toFixed(0)}KB`);
             }
           } catch(_){}
         });
@@ -1585,119 +1586,104 @@ export default function App() {
       dataLoaded = true;
       const appUser = { id: u.id, email: u.email, naam: u.user_metadata?.naam || u.email.split("@")[0], rol: "admin" };
       setUser(appUser);
-
-      // UI direct zichtbaar VOOR data laden
       setLoaded(true);
 
-      // ═══ BULK LOAD: één query voor alle data ═══
+      // ═══ BULK LOAD: probeer Supabase met 15s timeout ═══
+      let sbData = null;
       try {
-        const allData = await Promise.race([
+        sbData = await Promise.race([
           sbGetAll(u.id),
-          new Promise(r => setTimeout(()=>{ console.warn("⏱️ Supabase timeout (5s) — fallback naar localStorage"); r(null); }, 5000))
+          new Promise(r => setTimeout(()=>r(null), 15000))
         ]);
+      } catch(e) { console.error("Supabase load error:", e); }
 
+      const sbKeys = sbData ? Object.keys(sbData).length : 0;
+      const sbHasRealData = sbData && sbKeys > 0 &&
+        // Minstens één key met echte inhoud (niet alleen lege arrays)
+        Object.values(sbData).some(v => v && v.length > 10);
+
+      if(sbHasRealData) {
+        // ✅ Supabase heeft data — gebruik dat als master
+        sbHadData.current = true;
+        console.log(`☁️ Supabase: ${sbKeys} keys geladen`);
         const parse = (key, fallback) => {
-          try { return allData[key] ? JSON.parse(allData[key]) : fallback; }
+          try { return sbData[key] ? JSON.parse(sbData[key]) : fallback; }
           catch(_) { return fallback; }
         };
-
-        const keyCount = allData ? Object.keys(allData).length : 0;
-
-        if(allData && keyCount > 0) {
-          // Supabase had data
-          console.log(`☁️ Supabase: ${keyCount} keys geladen voor user ${u.id.slice(0,8)}...`);
-          if(allData["b4_set"]) setSettings(parse("b4_set", INIT_SETTINGS));
-          if(allData["b4_kln"]) setKlanten(parse("b4_kln", INIT_KLANTEN));
-          if(allData["b4_prd"]) setProducten(parse("b4_prd", INIT_PRODUCTS));
-          if(allData["b4_off"]) setOffertes(parse("b4_off", []));
-          if(allData["b4_fct"]) setFacturen(parse("b4_fct", []));
-          if(allData["b4_cn"])  setCreditnotas(parse("b4_cn", []));
-          if(allData["b4_am"])  setAanmaningen(parse("b4_am", []));
-          if(allData["b4_bt"])  setBetalingen(parse("b4_bt", []));
-          if(allData["b4_ti"])  setTijdslots(parse("b4_ti", []));
-          if(allData["b4_do"])  setDossiers(parse("b4_do", []));
-          if(allData["b4_ga"])  setGaranties(parse("b4_ga", []));
-          if(allData["b4_at"])  setAcceptTokens(parse("b4_at", {}));
-          if(allData["b4_wo"])  setWidgetOrder(parse("b4_wo", null));
+        if(sbData["b4_set"]) setSettings(parse("b4_set", INIT_SETTINGS));
+        if(sbData["b4_kln"]) setKlanten(parse("b4_kln", INIT_KLANTEN));
+        if(sbData["b4_prd"]) setProducten(parse("b4_prd", INIT_PRODUCTS));
+        if(sbData["b4_off"]) setOffertes(parse("b4_off", []));
+        if(sbData["b4_fct"]) setFacturen(parse("b4_fct", []));
+        if(sbData["b4_cn"])  setCreditnotas(parse("b4_cn", []));
+        if(sbData["b4_am"])  setAanmaningen(parse("b4_am", []));
+        if(sbData["b4_bt"])  setBetalingen(parse("b4_bt", []));
+        if(sbData["b4_ti"])  setTijdslots(parse("b4_ti", []));
+        if(sbData["b4_do"])  setDossiers(parse("b4_do", []));
+        if(sbData["b4_ga"])  setGaranties(parse("b4_ga", []));
+        if(sbData["b4_at"])  setAcceptTokens(parse("b4_at", {}));
+        if(sbData["b4_wo"])  setWidgetOrder(parse("b4_wo", null));
+        // Update localStorage cache
+        Object.entries(sbData).forEach(([k,v])=>{ try{localStorage.setItem(k,v);}catch(_){} });
+      } else {
+        // Supabase leeg of timeout — probeer localStorage
+        console.warn("⚠️ Supabase leeg/timeout — localStorage fallback");
+        const get = (k, fb) => { try { const v=localStorage.getItem(k); return v?JSON.parse(v):fb; } catch(_){return fb;} };
+        const lsSettings = get('b4_set', null);
+        const lsKlanten  = get('b4_kln', null);
+        const lsProducten = get('b4_prd', null);
+        const lsOffertes  = get('b4_off', null);
+        const lsHasData = lsSettings?.bedrijf?.naam || lsKlanten?.length > 0 || lsOffertes?.length > 0;
+        if(lsHasData) {
+          console.log("✅ localStorage heeft data — laden");
+          setSettings(lsSettings || INIT_SETTINGS);
+          setKlanten(lsKlanten || INIT_KLANTEN);
+          setProducten(lsProducten || INIT_PRODUCTS);
+          setOffertes(lsOffertes || []);
+          setFacturen(get('b4_fct',[]));
+          setCreditnotas(get('b4_cn',[]));
+          setAanmaningen(get('b4_am',[]));
+          setBetalingen(get('b4_bt',[]));
+          setTijdslots(get('b4_ti',[]));
+          setDossiers(get('b4_do',[]));
+          setGaranties(get('b4_ga',[]));
+          setAcceptTokens(get('b4_at',{}));
+          setWidgetOrder(get('b4_wo',null));
+          // sbHadData blijft false → saveKey zal niet naar Supabase schrijven totdat user iets aanpast
         } else {
-          // Supabase leeg of gefaald — probeer localStorage als fallback
-          console.warn("⚠️ Supabase leeg of timeout — probeer localStorage fallback...");
-          loadFromLS();
+          // Alles leeg — nieuwe gebruiker of leeg systeem
+          console.warn("⚠️ Geen data gevonden — leeg systeem");
+          // sbHadData.current = false → saves zijn veilig (echte nieuwe data)
         }
-      } catch(e) {
-        console.error("❌ Supabase load exception:", e);
-        loadFromLS();
       }
 
       // Nu pas mogen saves plaatsvinden
       dataReady.current = true;
     };
 
-    // localStorage load helper
-    const loadFromLS = () => {
-      try {
-        const get = (k, fb) => {
-          const v = localStorage.getItem(k);
-          return v ? JSON.parse(v) : fb;
-        };
-        setSettings(get('b4_set', INIT_SETTINGS));
-        setKlanten(get('b4_kln', INIT_KLANTEN));
-        setProducten(get('b4_prd', INIT_PRODUCTS));
-        setOffertes(get('b4_off', []));
-        setFacturen(get('b4_fct', []));
-        setCreditnotas(get('b4_cn', []));
-        setAanmaningen(get('b4_am', []));
-        setBetalingen(get('b4_bt', []));
-        setTijdslots(get('b4_ti', []));
-        setDossiers(get('b4_do', []));
-        setGaranties(get('b4_ga', []));
-        setAcceptTokens(get('b4_at', {}));
-        setWidgetOrder(get('b4_wo', null));
-        dataReady.current = true;
-        console.log('✅ localStorage loaded');
-      } catch(e) {
-        console.warn('localStorage load failed:', e);
-        dataReady.current = true;
-      }
-    };
-
-    // Sessie check — gebruik Supabase cached sessie
+    // Sessie check
     sb.auth.getSession().then(({ data: { session: s } }) => {
       if(s?.user) {
         loadUserData(s.user);
       } else {
-        loadFromLS();
+        // Niet ingelogd — laad localStorage voor preview
+        try {
+          const get = (k,fb)=>{ try{const v=localStorage.getItem(k);return v?JSON.parse(v):fb;}catch(_){return fb;} };
+          setSettings(get('b4_set',INIT_SETTINGS));
+          setKlanten(get('b4_kln',INIT_KLANTEN));
+          setProducten(get('b4_prd',INIT_PRODUCTS));
+          setOffertes(get('b4_off',[]));
+          setFacturen(get('b4_fct',[]));
+        } catch(_){}
         setLoaded(true);
-      }
-    }).catch(() => {
-      loadFromLS();
-      setLoaded(true);
-    });
-
-    // Auth state listener
-    const { data: { subscription } } = sb.auth.onAuthStateChange(async (event, session) => {
-      if(event === "SIGNED_IN" && session?.user && !dataLoaded) {
-        await loadUserData(session.user);
-      } else if(event === "SIGNED_OUT") {
-        dataLoaded = false;
-        setUser(null);
-        loadFromLS();
-        setLoaded(true);
-      } else if(event === "TOKEN_REFRESHED" && session?.user && !dataLoaded) {
-        await loadUserData(session.user);
+        dataReady.current = false; // Niet ingelogd → geen saves
       }
     });
 
-    // Noodstop: toon login na 3s als Supabase niet reageert
-    const hardTimeout = setTimeout(() => {
-      if(!dataLoaded) loadFromLS();
-      setLoaded(true);
-    }, 3000);
-
-    return () => {
-      subscription.unsubscribe();
-      clearTimeout(hardTimeout);
-    };
+    sb.auth.onAuthStateChange((event, session) => {
+      if(event==="SIGNED_IN" && session?.user && !dataLoaded) loadUserData(session.user);
+      if(event==="SIGNED_OUT") { setUser(null); setLoaded(true); dataReady.current=false; sbHadData.current=false; }
+    });
   },[]);
 
   // ═══ EMAILJS INITIALISATIE ═══
@@ -1827,7 +1813,22 @@ export default function App() {
   const saveKey = useCallback(async (key, val) => { 
     if(!dataReady.current) return;
     
-    // localStorage: strip base64 fiches (QuotaExceeded prevention)
+    const json = JSON.stringify(val);
+    
+    // ── HARDE BESCHERMING: nooit lege data naar Supabase schrijven ──
+    if(key === "b4_set") {
+      const s = typeof val === "object" ? val : {};
+      if(!s?.bedrijf?.naam && !s?.email?.eigen && !s?.bedrijf?.btwnr) {
+        console.warn(`⛔ "${key}" geblokkeerd: lege settings`); return;
+      }
+    }
+    if(["b4_off","b4_fct","b4_kln","b4_prd"].includes(key) && Array.isArray(val) && val.length === 0) {
+      if(sbHadData.current) {
+        console.warn(`⛔ "${key}" geblokkeerd: [] zou bestaande Supabase data wissen`); return;
+      }
+    }
+    
+    // localStorage: strip base64 fiches
     try {
       const stripped = stripBase64(key, val);
       localStorage.setItem(key, JSON.stringify(stripped));
@@ -1836,13 +1837,11 @@ export default function App() {
       try { localStorage.removeItem(key); } catch(_){}
     }
     
-    // Supabase: ALTIJD volledige data (geen stripping!)
+    // Supabase opslaan
     if(user) {
-      const json = JSON.stringify(val);
+      sbHadData.current = true;
       const success = await sbSet(key, json, user.id);
-      if(!success) {
-        console.warn(`⚠️ Supabase save "${key}" failed (${(json.length/1024).toFixed(0)}KB)`);
-      }
+      if(!success) console.warn(`⚠️ Supabase save "${key}" failed`);
     }
   }, [user]);
   useEffect(()=>{ saveKey("b4_off", offertes);  },[offertes,   saveKey]);
