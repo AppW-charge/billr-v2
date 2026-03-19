@@ -52,6 +52,47 @@ const pid=new URLSearchParams(window.location.search).get('id');
 const fmtDate=function(d){return d?new Date(d).toLocaleDateString("nl-BE",{weekday:"long",day:"numeric",month:"long",year:"numeric"}):"—"};
 const fmtTime=function(t){return t||"—"};
 
+// ── AGENDA HELPERS ──────────────────────────────────────────────
+function buildICS(title,date,time,location,description){
+  var p=date.split('-');var t=(time||'09:00').split(':');
+  var h=parseInt(t[0]);var m=t[1]||'00';
+  var y=p[0];var mo=p[1];var d=p[2];
+  var startDt=y+mo+d+'T'+String(h).padStart(2,'0')+m+'00';
+  var endDt=y+mo+d+'T'+String(h+2<24?h+2:h+1).padStart(2,'0')+m+'00';
+  return['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//W-Charge//BILLR//NL','CALSCALE:GREGORIAN',
+    'BEGIN:VEVENT','DTSTART:'+startDt,'DTEND:'+endDt,'SUMMARY:'+title,
+    'LOCATION:'+(location||''),'DESCRIPTION:'+(description||''),
+    'UID:'+date+'-'+time.replace(':','')+'@w-charge.be',
+    'END:VEVENT','END:VCALENDAR'].join('\r\n');
+}
+function buildGoogleUrl(title,date,time,location,description){
+  var p=date.split('-');var t=(time||'09:00').split(':');
+  var h=parseInt(t[0]);var m=t[1]||'00';
+  var startDt=p[0]+p[1]+p[2]+'T'+String(h).padStart(2,'0')+m+'00';
+  var endDt=p[0]+p[1]+p[2]+'T'+String(h+2<24?h+2:h+1).padStart(2,'0')+m+'00';
+  return'https://calendar.google.com/calendar/render?action=TEMPLATE'+
+    '&text='+encodeURIComponent(title)+'&dates='+startDt+'/'+endDt+
+    '&location='+encodeURIComponent(location||'')+'&details='+encodeURIComponent(description||'');
+}
+function buildCalendarButtons(pd,klant,bed){
+  if(!pd||!pd.planDatum)return'';
+  var title='Installatie '+(bed.naam||'W-Charge')+' — '+(klant.naam||'');
+  var date=pd.planDatum;
+  var time=pd.planTijd||'09:00';
+  var location=(klant.adres||'')+', '+(klant.gemeente||'');
+  var desc='Installatie door '+(bed.naam||'W-Charge')+'. Offerte: '+(pd.offerteNummer||'')+'. Tel: '+(bed.tel||'');
+  var ics=buildICS(title,date,time,location,desc);
+  var icsUrl='data:text/calendar;charset=utf-8,'+encodeURIComponent(ics);
+  var googleUrl=buildGoogleUrl(title,date,time,location,desc);
+  var isApple=/iPhone|iPad|iPod/i.test(navigator.userAgent)||(/Mac/i.test(navigator.userAgent)&&!(/Windows/i.test(navigator.userAgent)));
+  var isAndroid=/Android/i.test(navigator.userAgent);
+  var appleBtn='<a href="'+icsUrl+'" download="w-charge-installatie.ics" style="display:inline-flex;align-items:center;gap:8px;background:#000;color:#fff;padding:13px 22px;border-radius:10px;text-decoration:none;font-weight:700;font-size:14px;margin:4px">🍎 Apple Agenda</a>';
+  var googleBtn='<a href="'+googleUrl+'" target="_blank" style="display:inline-flex;align-items:center;gap:8px;background:#4285f4;color:#fff;padding:13px 22px;border-radius:10px;text-decoration:none;font-weight:700;font-size:14px;margin:4px">📅 Google Agenda</a>';
+  var icsBtn='<a href="'+icsUrl+'" download="w-charge-installatie.ics" style="display:inline-flex;align-items:center;gap:8px;background:#374151;color:#fff;padding:13px 22px;border-radius:10px;text-decoration:none;font-weight:700;font-size:14px;margin:4px">📂 Andere agenda (.ics)</a>';
+  var buttons=isApple?(appleBtn+googleBtn):isAndroid?(googleBtn+appleBtn):(googleBtn+icsBtn);
+  return'<div style="margin-top:20px;padding:18px 20px;background:#f0f9ff;border:1.5px solid #bae6fd;border-radius:12px;text-align:center"><div style="font-weight:700;font-size:13px;color:#0369a1;margin-bottom:12px">📅 Afspraak toevoegen aan uw agenda</div><div style="display:flex;flex-wrap:wrap;justify-content:center;gap:6px">'+buttons+'</div></div>';
+}
+
 async function respond(id,status,data){
   var pd=window._planData||{};var bed=window._bed||{};var klant=window._klant||{};
   try{
@@ -60,8 +101,9 @@ async function respond(id,status,data){
   }catch(e){console.error(e)}
   var ok=status==='akkoord';
   var datumStr=pd.planDatum?new Date(pd.planDatum+'T12:00:00').toLocaleDateString('nl-BE',{weekday:'long',day:'numeric',month:'long',year:'numeric'}):'—';
+  var calBtns=ok?buildCalendarButtons(pd,klant,bed):'';
   document.getElementById('app').innerHTML=ok?
-    '<div class="status-msg"><div class="icon">✅</div><h2 style="color:#059669;font-size:22px;margin-bottom:10px">Afspraak bevestigd!</h2><p style="font-size:14px;color:#475569;max-width:400px;margin:0 auto 20px">U ontvangt binnenkort een bevestigingsmail met alle details.</p><div style="background:linear-gradient(135deg,#f0fdf4,#dcfce7);border:2px solid #86efac;border-radius:14px;padding:20px 24px;display:inline-block;text-align:left;min-width:280px;margin-bottom:20px"><div style="font-weight:800;color:#065f46;font-size:14px;margin-bottom:12px">📅 Bevestigde afspraak</div><div style="font-size:14px;color:#047857;font-weight:700;margin-bottom:6px">'+datumStr+'</div><div style="font-size:13px;color:#059669">⏰ '+(pd.planTijd||'Tijdstip volgt')+'</div><div style="font-size:12px;color:#64748b;margin-top:10px">📍 '+(klant.adres||'')+', '+(klant.gemeente||'')+'</div></div>'+(bed.naam?'<div style="font-size:13px;color:#94a3b8;margin-top:8px"><strong>'+bed.naam+'</strong>'+(bed.tel?' · '+bed.tel:'')+'</div>':'')+'</div>'
+    '<div class="status-msg"><div class="icon">✅</div><h2 style="color:#059669;font-size:22px;margin-bottom:10px">Afspraak bevestigd!</h2><p style="font-size:14px;color:#475569;max-width:400px;margin:0 auto 20px">U ontvangt binnenkort een bevestigingsmail met alle details.</p><div style="background:linear-gradient(135deg,#f0fdf4,#dcfce7);border:2px solid #86efac;border-radius:14px;padding:20px 24px;display:inline-block;text-align:left;min-width:280px;margin-bottom:16px"><div style="font-weight:800;color:#065f46;font-size:14px;margin-bottom:12px">📅 Bevestigde afspraak</div><div style="font-size:14px;color:#047857;font-weight:700;margin-bottom:6px">'+datumStr+'</div><div style="font-size:15px;color:#059669;font-weight:800">⏰ '+(pd.planTijd||'Tijdstip volgt')+'</div><div style="font-size:12px;color:#64748b;margin-top:10px">📍 '+(klant.adres||'')+', '+(klant.gemeente||'')+'</div></div>'+calBtns+(bed.naam?'<div style="font-size:13px;color:#94a3b8;margin-top:16px"><strong>'+bed.naam+'</strong>'+(bed.tel?' · <a href="tel:'+bed.tel+'" style="color:#2563eb;text-decoration:none">'+bed.tel+'</a>':'')+'</div>':'')+'</div>'
     :'<div class="status-msg"><div class="icon">📅</div><h2 style="color:#f59e0b;font-size:22px;margin-bottom:10px">Alternatief voorstel verstuurd</h2><p style="font-size:14px;color:#475569;max-width:400px;margin:0 auto 20px">Uw voorkeur is doorgegeven.'+(data.datum?' (<strong>'+new Date(data.datum+'T12:00:00').toLocaleDateString('nl-BE',{weekday:'long',day:'numeric',month:'long'})+'</strong>)':'')+'</p><div style="background:#fffbeb;border:2px solid #fde68a;border-radius:14px;padding:20px;display:inline-block;text-align:left;max-width:340px;margin-bottom:20px"><div style="font-weight:700;color:#92400e;font-size:13px;margin-bottom:6px">Wat gebeurt er nu?</div><div style="font-size:12px;color:#a16207;line-height:1.8">✓ Uw voorkeur is doorgegeven aan '+(bed.naam||'ons')+'<br>✓ We nemen zo snel mogelijk contact op<br>✓ Een nieuw voorstel volgt per email</div></div>'+(bed.tel||bed.email?'<div style="font-size:13px;color:#64748b">Vragen? '+(bed.tel?'<a href="tel:'+bed.tel+'" style="color:#2563eb;font-weight:600">'+bed.tel+'</a>':'')+(bed.email?' · <a href="mailto:'+bed.email+'" style="color:#2563eb;font-weight:600">'+bed.email+'</a>':'')+'</div>':'')+'</div>';
 }
 
