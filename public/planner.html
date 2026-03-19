@@ -559,10 +559,20 @@
                     </div>
                 </div>
 
-                <h3 style="margin: 20px 0 10px 0;">Afspraak Kleur</h3>
-                <div class="form-group">
-                    <label>Afspraak achtergrond</label>
-                    <input type="color" id="colorAfspraak" value="#d4ff00">
+                <h3 style="margin: 20px 0 10px 0;">Afspraak Kleuren</h3>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
+                    <div class="form-group">
+                        <label>Handmatige afspraak</label>
+                        <input type="color" id="colorAfspraak" value="#ef4444">
+                    </div>
+                    <div class="form-group">
+                        <label>✅ Bevestigd (ingepland)</label>
+                        <input type="color" id="colorAfspraakIngepland" value="#10b981">
+                    </div>
+                    <div class="form-group">
+                        <label>⏳ Voorstel / akkoord klant</label>
+                        <input type="color" id="colorAfspraakVoorstel" value="#f59e0b">
+                    </div>
                 </div>
 
                 <button class="btn" onclick="saveColors()" style="margin-top: 20px;">💾 Kleuren Opslaan</button>
@@ -856,7 +866,9 @@
             nacht: '#8b5cf6',
             rust: '#64748b',
             vrij: '#e0e4e8',
-            afspraak: '#d4ff00'
+            afspraak: '#ef4444',
+            afspraakIngepland: '#10b981',
+            afspraakVoorstel: '#f59e0b'
         };
         
         // Init default schema volgens exacte cyclus
@@ -1621,14 +1633,12 @@
 
         // Kleuren functies
         function applyColors() {
-            console.log('🎨 Kleuren toepassen...');
             let styleEl = document.getElementById('customColors');
             if (!styleEl) {
                 styleEl = document.createElement('style');
                 styleEl.id = 'customColors';
                 document.head.appendChild(styleEl);
             }
-            
             styleEl.textContent = `
                 .shift-wacht { background: ${colors.wacht} !important; color: white !important; }
                 .shift-rust-oproepbaar { background: ${colors.rustOproepbaar} !important; color: white !important; }
@@ -1639,14 +1649,14 @@
                 .shift-nacht { background: ${colors.nacht} !important; color: white !important; }
                 .shift-rust { background: ${colors.rust} !important; color: white !important; }
                 .shift-vrij { background: ${colors.vrij} !important; color: #1e293b !important; }
-                .day-appointment { background: ${colors.afspraak} !important; }
+                .day-appointment { background: ${colors.afspraak} !important; color: #fff !important; }
+                .day-appointment.billr-ingepland { background: ${colors.afspraakIngepland} !important; color: #fff !important; border-left: 3px solid rgba(0,0,0,.2); }
+                .day-appointment.billr-akkoord   { background: ${colors.afspraakVoorstel} !important; color: #fff !important; }
+                .day-appointment.billr-voorstel  { background: ${colors.afspraakVoorstel} !important; color: #fff !important; opacity: 0.85; }
             `;
-            console.log('✅ Kleuren toegepast');
         }
 
         function saveColors() {
-            console.log('💾 Kleuren opslaan...');
-            
             colors.wacht = document.getElementById('colorWacht').value;
             colors.rustOproepbaar = document.getElementById('colorRustOproepbaar').value;
             colors.dagweek = document.getElementById('colorDagweek').value;
@@ -1657,38 +1667,21 @@
             colors.rust = document.getElementById('colorRust').value;
             colors.vrij = document.getElementById('colorVrij').value;
             colors.afspraak = document.getElementById('colorAfspraak').value;
-            
-            try {
-                localStorage.setItem('wcharge_colors', JSON.stringify(colors));
-                console.log('✅ Kleuren opgeslagen');
-            } catch (e) {
-                console.error('❌ Fout bij opslaan:', e);
-                alert('Fout bij opslaan: ' + e.message);
-                return;
-            }
-            
+            colors.afspraakIngepland = document.getElementById('colorAfspraakIngepland').value;
+            colors.afspraakVoorstel = document.getElementById('colorAfspraakVoorstel').value;
+            try { localStorage.setItem('wcharge_colors', JSON.stringify(colors)); } catch(e) {}
             applyColors();
             alert('✅ Kleuren opgeslagen!');
         }
 
         function resetColors() {
-            if (!confirm('Weet je zeker dat je de kleuren wilt resetten naar standaard?')) {
-                return;
-            }
-            
+            if (!confirm('Kleuren resetten naar standaard?')) return;
             colors = {
-                wacht: '#10b981',
-                rustOproepbaar: '#94a3b8',
-                dagweek: '#06b6d4',
-                adv: '#ec4899',
-                vroege: '#3b82f6',
-                late: '#f59e0b',
-                nacht: '#8b5cf6',
-                rust: '#64748b',
-                vrij: '#e0e4e8',
-                afspraak: '#d4ff00'
+                wacht: '#10b981', rustOproepbaar: '#94a3b8', dagweek: '#06b6d4',
+                adv: '#ec4899', vroege: '#3b82f6', late: '#f59e0b',
+                nacht: '#8b5cf6', rust: '#64748b', vrij: '#e0e4e8',
+                afspraak: '#ef4444', afspraakIngepland: '#10b981', afspraakVoorstel: '#f59e0b'
             };
-            
             updateColorInputs();
             localStorage.setItem('wcharge_colors', JSON.stringify(colors));
             applyColors();
@@ -1705,7 +1698,9 @@
             document.getElementById('colorNacht').value = colors.nacht;
             document.getElementById('colorRust').value = colors.rust;
             document.getElementById('colorVrij').value = colors.vrij;
-            document.getElementById('colorAfspraak').value = colors.afspraak;
+            document.getElementById('colorAfspraak').value = colors.afspraak || '#ef4444';
+            document.getElementById('colorAfspraakIngepland').value = colors.afspraakIngepland || '#10b981';
+            document.getElementById('colorAfspraakVoorstel').value = colors.afspraakVoorstel || '#f59e0b';
         }
 
         function loadData() {
@@ -1755,10 +1750,8 @@
 
                 const col = localStorage.getItem('wcharge_colors');
                 if (col) {
-                    colors = JSON.parse(col);
-                    console.log('✅ Kleuren geladen');
-                } else {
-                    console.log('ℹ️ Standaard kleuren gebruikt');
+                    const loaded = JSON.parse(col);
+                    colors = { ...colors, ...loaded }; // merge: nieuwe velden krijgen standaard als fallback
                 }
             } catch (e) {
                 console.error('❌ Fout bij laden:', e);
