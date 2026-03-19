@@ -574,8 +574,8 @@ const getCatIcon = (cat, settings) => {
 
 // ─── DEFAULT DATA ─────────────────────────────────────────────────
 const INIT_PRODUCTS = [
-  {id:"p1", cat:"Laadstation", merk:"Smappee", naam:"Smappee EV Wall 22kW (socket)", omschr:"1 of 3-fase, tot 22kW, type 2 socket, zwart of wit", prijs:895, btw:6, eenheid:"stuk", actief:true, imageUrl:"https://www.smappee.com/app/uploads/2022/10/EV-Wall-Home.png", specs:["22kW 3-fase","Type 2 socket","WiFi + RFID","IP54","OCPP 2.0"]},
-  {id:"p2", cat:"Laadstation", merk:"Smappee", naam:"Smappee EV Wall 22kW (kabel 8m)", omschr:"1 of 3-fase, tot 22kW, type 2 kabel 8m + kabelhouder", prijs:1105, btw:6, eenheid:"stuk", actief:true, imageUrl:"https://www.smappee.com/app/uploads/2022/10/EV-Wall-Home.png", specs:["22kW 3-fase","Kabel 8m type 2","WiFi + RFID","IP54"]},
+  {id:"p1", cat:"Laadstation", merk:"Smappee", naam:"Smappee EV Wall 22kW (socket)", omschr:"1 of 3-fase, tot 22kW, type 2 socket, zwart of wit", prijs:895, btw:6, eenheid:"stuk", actief:true, imageUrl:"", specs:["22kW 3-fase","Type 2 socket","WiFi + RFID","IP54","OCPP 2.0"]},
+  {id:"p2", cat:"Laadstation", merk:"Smappee", naam:"Smappee EV Wall 22kW (kabel 8m)", omschr:"1 of 3-fase, tot 22kW, type 2 kabel 8m + kabelhouder", prijs:1105, btw:6, eenheid:"stuk", actief:true, imageUrl:"", specs:["22kW 3-fase","Kabel 8m type 2","WiFi + RFID","IP54"]},
   {id:"p3", cat:"Laadstation", merk:"Smappee", naam:"Smappee EV One (staande paal)", omschr:"Vrijstaande laadpaal 22kW, LED-verlichting, RFID/QR", prijs:2062, btw:6, eenheid:"stuk", actief:true, imageUrl:"", specs:["22kW 3-fase","Staande paal","LED","RFID + QR","IP54"]},
   {id:"p4", cat:"Laadstation", merk:"Wallbox", naam:"Wallbox Pulsar Plus 22kW", omschr:"3-fase smart lader, dynamisch load balancing", prijs:699, btw:6, eenheid:"stuk", actief:true, imageUrl:"", specs:["22kW 3-fase","WiFi + BT","Dynamic LB","IP54"]},
   {id:"p5", cat:"Laadstation", merk:"ABB", naam:"ABB Terra AC W11 RFID", omschr:"Professionele wallbox 11kW, RFID, IP54", prijs:749, btw:21, eenheid:"stuk", actief:true, imageUrl:"", specs:["11kW","RFID","IP54","OCPP 1.6J"]},
@@ -2434,6 +2434,102 @@ export default function App() {
     });
   }, [planningProposals]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ═══ AUTO-HERINNERING: stuur 1 dag voor installatie een herinneringsmail ═══
+  useEffect(() => {
+    if(!user || !settings?.email?.emailjsServiceId) return;
+
+    const checkReminders = async () => {
+      const morgen = addDays(today(), 1); // YYYY-MM-DD van morgen
+      const emailCfg = settings?.email || {};
+      const bed = settings?.bedrijf || {};
+      const dc = settings?.sjabloon?.accentKleur || settings?.thema?.kleur || bed.kleur || "#1a2e4a";
+
+      // Zoek alle offertes die morgen ingepland staan en nog geen herinnering kregen
+      const teHerinnerenOffertes = offertes.filter(o =>
+        o.planDatum === morgen &&
+        o.planStatus === "ingepland" &&
+        !o.herinneringVerstuurd
+      );
+
+      if(teHerinnerenOffertes.length === 0) return;
+
+      // Laad EmailJS
+      try { await loadEmailJS(); } catch(_) { return; }
+      const pubKey = emailCfg.emailjsPublicKey || "04zsVAk5imDpo-8GJ";
+      const serviceId = emailCfg.emailjsServiceId || "service_qrkvr0d";
+      const templateId = emailCfg.emailjsTemplatePlanning || "template_5nckw9f";
+      window.emailjs.init(pubKey);
+
+      for(const offerte of teHerinnerenOffertes) {
+        const klantData = klanten.find(k => k.id === offerte.klantId) || offerte.klant || {};
+        if(!klantData.email) continue;
+
+        const datumStr = new Date(offerte.planDatum + "T12:00:00").toLocaleDateString("nl-BE", {
+          weekday:"long", day:"numeric", month:"long", year:"numeric"
+        });
+        const totals = calcTotals(offerte.lijnen || []);
+
+        const html = `<div style="font-family:Inter,Arial,sans-serif;max-width:600px;margin:0 auto;background:#f8fafc">
+<div style="background:linear-gradient(135deg,${dc},${dc}cc);padding:28px 32px;text-align:center;border-radius:8px 8px 0 0">
+  <div style="font-size:22px;font-weight:900;color:#fff">🔔 Herinnering: installatie morgen!</div>
+  <div style="color:rgba(255,255,255,.8);font-size:13px;margin-top:4px">${bed.naam||""}</div>
+</div>
+<div style="background:#fff;padding:28px 32px;border:1px solid #e2e8f0;border-top:0">
+  <p style="font-size:15px;color:#1e293b">Beste <strong>${klantData.naam||"Klant"}</strong>,</p>
+  <p style="font-size:14px;color:#475569;line-height:1.6;margin-top:8px">
+    Dit is een vriendelijke herinnering: <strong>morgen komen wij uw installatie uitvoeren</strong>.
+  </p>
+  <div style="background:linear-gradient(135deg,#eff6ff,#dbeafe);border:2px solid #93c5fd;border-radius:12px;padding:24px;margin:20px 0;text-align:center">
+    <div style="font-size:11px;font-weight:700;color:#3b82f6;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">📅 Uw afspraak</div>
+    <div style="font-size:22px;font-weight:900;color:#1e40af">${datumStr}</div>
+    <div style="font-size:18px;font-weight:700;color:#3b82f6;margin-top:4px">⏰ ${offerte.planTijd||"Tijdstip volgt"}</div>
+  </div>
+  <table style="width:100%;border-collapse:collapse;margin:16px 0;font-size:13px">
+    <tr style="background:#f1f5f9"><td style="padding:8px 12px;border:1px solid #e2e8f0;font-weight:600">📍 Adres</td><td style="padding:8px 12px;border:1px solid #e2e8f0">${klantData.adres||""}, ${klantData.gemeente||""}</td></tr>
+    <tr><td style="padding:8px 12px;border:1px solid #e2e8f0;font-weight:600">📋 Offerte</td><td style="padding:8px 12px;border:1px solid #e2e8f0">${offerte.nummer||""}</td></tr>
+    <tr style="background:#f1f5f9"><td style="padding:8px 12px;border:1px solid #e2e8f0;font-weight:600">💰 Totaal</td><td style="padding:8px 12px;border:1px solid #e2e8f0;font-weight:700;color:${dc}">${fmtEuro(totals.totaal)}</td></tr>
+  </table>
+  <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:14px;font-size:12px;color:#92400e">
+    <strong>Praktisch:</strong><br>
+    • Zorg voor vrije toegang tot de meterkast en installatielocatie<br>
+    • Onze monteur arriveert op het afgesproken tijdstip<br>
+    • Vragen? Bel ons op <a href="tel:${bed.tel||""}" style="color:#92400e">${bed.tel||""}</a>
+  </div>
+</div>
+<div style="text-align:center;padding:16px;font-size:11px;color:#94a3b8">${bed.naam||""} · ${bed.tel||""} · ${bed.email||""}</div>
+</div>`;
+
+        try {
+          await window.emailjs.send(serviceId, templateId, {
+            to_email: klantData.email,
+            to_name:  klantData.naam || "Klant",
+            from_name: bed.naam || "W-Charge",
+            reply_to:  emailCfg.eigen || bed.email || "",
+            subject:   `🔔 Herinnering installatie morgen — ${offerte.nummer}`,
+            html_body: html,
+          });
+          // Markeer als verstuurd zodat er geen dubbele mail gaat
+          updOff(offerte.id, {
+            herinneringVerstuurd: true,
+            logActie: `🔔 Herinneringsmail verstuurd naar ${klantData.email}`
+          });
+          console.log("🔔 Herinnering verstuurd:", offerte.nummer, klantData.email);
+          notify(`🔔 Herinneringsmail verstuurd naar ${klantData.naam||"klant"} (morgen: ${offerte.nummer})`, "ok");
+        } catch(e) {
+          console.warn("Herinnering mislukt:", e?.text || e?.message);
+        }
+      }
+    };
+
+    // Voer check uit na 30s (na volledig laden) — én elke dag om 09:00 als app open is
+    const initialTimer = setTimeout(checkReminders, 30000);
+    
+    // Check ook elke 6 uur als app open blijft
+    const intervalTimer = setInterval(checkReminders, 6 * 60 * 60 * 1000);
+
+    return () => { clearTimeout(initialTimer); clearInterval(intervalTimer); };
+  }, [user, offertes, settings]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const doLogin = (u) => { setUser(u); };
   const doLogout = async () => {
     await sb.auth.signOut();
@@ -3569,7 +3665,7 @@ async function fetchAIImageUrl(naam, merk) {
     // Probeer Google Images als fallback via een vrij beschikbare image search
     // Gebruik Wikipedia/manufacturer direct URL constructie voor bekende merken
     const merkLc = (merk||"").toLowerCase();
-    if(merkLc.includes("smappee")) return `https://www.smappee.com/app/uploads/2022/10/EV-Wall-Home.png`;
+    // Geen hardcoded externe URLs — die kunnen geblokkeerd worden
     
     const resp = await fetch("https://api.anthropic.com/v1/messages", {
       method:"POST",
