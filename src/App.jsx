@@ -169,29 +169,33 @@ async function kboLookup(vatNumber, cbeApiKey = null) {
     const formattedBTW = `BE ${cleaned.slice(0,4)}.${cleaned.slice(4,7)}.${cleaned.slice(7)}`;
     const baseResult = { naam:"", bedrijf:"", adres:"", gemeente:"", btwnr:formattedBTW, tel:"", email:"", peppolId:`0208:${cleaned}` };
 
-    // ── BRON 1: kbo.party via lokale proxy (geen CORS probleem) ──
+    // ── BRON 1: EU VIES API (officieel, geen CORS, geen key nodig) ──
     try {
-      const r = await fetch(`/api/kbo/enterprise/${cleaned}`, {
+      const r = await fetch(`https://ec.europa.eu/taxation_customs/vies/rest-api/ms/BE/vat/${cleaned}`, {
         headers: { 'Accept': 'application/json' }
       });
       if(r.ok) {
         const d = await r.json();
-        // kbo.party response: { enterpriseNumber, names:[{language,name}], addresses:[{streetNl,municipalityNl,zipCode}] }
-        const nameNl = d.names?.find(n=>n.language==="NL")?.name || d.names?.[0]?.name || "";
-        const addr = d.addresses?.find(a=>a.typeCode==="1") || d.addresses?.[0];
-        if(nameNl) {
-          baseResult.naam = nameNl;
-          baseResult.bedrijf = nameNl;
-          if(addr) {
-            const straat = [addr.streetNl||addr.street||"", addr.houseNumber||"", addr.box?"bus "+addr.box:""].filter(Boolean).join(" ").trim();
-            baseResult.adres = straat;
-            baseResult.gemeente = `${addr.zipCode||""} ${addr.municipalityNl||addr.municipality||""}`.trim();
+        // VIES response: { name, address, valid, ... }
+        if(d?.name && d.name !== "---") {
+          baseResult.naam = d.name || "";
+          baseResult.bedrijf = d.name || "";
+          // VIES geeft adres als één string — splits op komma of newline
+          if(d.address) {
+            const parts = d.address.replace(/\n/g,", ").split(",").map(s=>s.trim()).filter(Boolean);
+            // Belgisch formaat: "STRAAT NR", "POSTCODE STAD"
+            if(parts.length >= 2) {
+              baseResult.adres = parts.slice(0, parts.length-1).join(", ");
+              baseResult.gemeente = parts[parts.length-1];
+            } else {
+              baseResult.adres = d.address;
+            }
           }
-          console.log("[KBO] ✓ kbo.party SUCCESS:", baseResult.naam);
+          console.log("[KBO] ✓ VIES SUCCESS:", baseResult.naam);
           return baseResult;
         }
       }
-    } catch(e) { console.warn("[KBO] kbo.party failed:", e.message); }
+    } catch(e) { console.warn("[KBO] VIES failed:", e.message); }
 
     // ── BRON 2: cbeapi.be (met API key) ──
     if(cbeApiKey) {
