@@ -3687,7 +3687,8 @@ async function fetchAIImageUrl(naam, merk) {
 
 function ProductenPage({producten,settings,onEdit,onDelete,onToggle,onEnrich,onDuplicate}) {
   const [q,setQ]=useState("");const [cat,setCat]=useState("alle");const [enriching,setEnriching]=useState(null);
-  const [prodView,setProdView]=useState(settings?.prodView||"tile");
+  const [prodView,setProdView]=useState(()=>{ try{return localStorage.getItem("billr_prodView")||"tile";}catch(_){return "tile";} });
+  const changeProdView = v => { setProdView(v); try{localStorage.setItem("billr_prodView",v);}catch(_){} };
   const [sel,setSel]=useState(new Set());
   const [bulkPrijsPct,setBulkPrijsPct]=useState("");
   const [showBulkPrijs,setShowBulkPrijs]=useState(false);
@@ -3699,16 +3700,16 @@ function ProductenPage({producten,settings,onEdit,onDelete,onToggle,onEnrich,onD
   const doBulkPrijs=()=>{ const pct=parseFloat(bulkPrijsPct); if(isNaN(pct)||pct===0)return; [...sel].forEach(id=>{const p=producten.find(x=>x.id===id);if(p)onEnrich({...p,prijs:Math.max(0,p.prijs*(1+pct/100))});}); setSel(new Set()); setShowBulkPrijs(false); setBulkPrijsPct(""); };
   const dynCats = getProdCats(settings);
   const catOrder2 = dynCats.map(c=>c.naam);
-  const allCatNames = [...new Set(producten.map(p=>p.cat))];
+  const allCatNames = [...new Set(producten.map(p=>p.cat).filter(Boolean))];
+  // Alle categorieën: settings volgorde + producten die niet in settings staan + Vrije lijnen onderaan
   const catNamen = [
-    ...catOrder2.filter(c=>allCatNames.includes(c)),
-    ...allCatNames.filter(c=>!catOrder2.includes(c)&&c!=="Vrije lijnen"),
-    ...allCatNames.filter(c=>c==="Vrije lijnen")
+    ...catOrder2.filter(c=>c!=="Vrije lijnen"), // alle settings cats (ook lege)
+    ...allCatNames.filter(c=>!catOrder2.includes(c)&&c!=="Vrije lijnen"), // extra uit producten
+    ...allCatNames.filter(c=>c==="Vrije lijnen") // Vrije lijnen altijd onderaan
   ];
-  const cats2 = ["alle",...catNamen];
-  // Meestgebruikte bovenaan
-  const prodUsagePg = {};
-  // (geen offertes hier, sorteer op aangemaakt datum als fallback)
+  // Deduplicate
+  const catNamenUniq = [...new Set(catNamen)];
+  const cats2 = ["alle",...catNamenUniq];
   const list = [...producten.filter(p=>(cat==="alle"||p.cat===cat)&&(!q||(p.naam||"").toLowerCase().includes(q.toLowerCase())))]
     .sort((a,b)=>new Date(b.aangemaakt||0)-new Date(a.aangemaakt||0));
 
@@ -3750,7 +3751,7 @@ function ProductenPage({producten,settings,onEdit,onDelete,onToggle,onEnrich,onD
             <div style={{display:"flex",gap:6,alignItems:"center",width:"100%",marginTop:4}}>
               <select value={bulkCat} onChange={e=>setBulkCat(e.target.value)} style={{padding:"5px 9px",border:"1.5px solid rgba(255,255,255,.4)",borderRadius:6,background:"rgba(255,255,255,.15)",color:"#fff",fontSize:12}}>
                 <option value="">— Kies categorie —</option>
-                {catNamen.map(c=><option key={c} value={c}>{c}</option>)}
+                {catNamenUniq.map(c=><option key={c} value={c}>{c}</option>)}
               </select>
               <button className="bulk-act-btn" onClick={()=>{if(!bulkCat)return;[...sel].forEach(id=>{const p=producten.find(x=>x.id===id);if(p)onEnrich({...p,cat:bulkCat});});setSel(new Set());setShowBulkCat(false);setBulkCat("");}}>✓ Verplaats</button>
             </div>
@@ -3767,8 +3768,8 @@ function ProductenPage({producten,settings,onEdit,onDelete,onToggle,onEnrich,onD
           })}
         </div>
         <div style={{display:"flex",gap:4,marginLeft:"auto",alignItems:"center"}}>
-          <button className={`btn btn-sm ${prodView==="list"?"bp":"bs"}`} onClick={()=>setProdView("list")} title="Lijstweergave">📋</button>
-          <button className={`btn btn-sm ${prodView==="tile"?"bp":"bs"}`} onClick={()=>setProdView("tile")} title="Tegelweergave">🔲</button>
+          <button className={`btn btn-sm ${prodView==="list"?"bp":"bs"}`} onClick={()=>changeProdView("list")} title="Lijstweergave">📋</button>
+          <button className={`btn btn-sm ${prodView==="tile"?"bp":"bs"}`} onClick={()=>changeProdView("tile")} title="Tegelweergave">🔲</button>
           <span style={{color:"#94a3b8",fontSize:12,marginLeft:4}}>{list.length}</span>
         </div>
       </div>
