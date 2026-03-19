@@ -2051,7 +2051,7 @@ export default function App() {
           prijs: l.prijs || 0,
           btw: l.btw || 21,
           eenheid: l.eenheid || "stuk",
-          cat: l.groepId ? (data.groepen||[]).find(g=>g.id===l.groepId)?.naam || "Overige" : "Overige",
+          cat: l.groepId ? (data.groepen||[]).find(g=>g.id===l.groepId)?.naam || "Vrije lijnen" : "Vrije lijnen",
           merk: "",
           actief: true,
           imageUrl: l.imageUrl || "",
@@ -3697,12 +3697,20 @@ function ProductenPage({producten,settings,onEdit,onDelete,onToggle,onEnrich,onD
   const selAll=()=>setSel(q2=>{if(q2.size===list.length&&q2.size>0)return new Set();return new Set(list.map(p=>p.id));});
   const doBulkDelete=()=>{ if(window.confirm(`${sel.size} producten verwijderen?`)){[...sel].forEach(id=>onDelete(id));setSel(new Set());}};
   const doBulkPrijs=()=>{ const pct=parseFloat(bulkPrijsPct); if(isNaN(pct)||pct===0)return; [...sel].forEach(id=>{const p=producten.find(x=>x.id===id);if(p)onEnrich({...p,prijs:Math.max(0,p.prijs*(1+pct/100))});}); setSel(new Set()); setShowBulkPrijs(false); setBulkPrijsPct(""); };
-  // Group by brand
-  const merken = [...new Set(producten.map(p=>p.merk||"").filter(Boolean))];
   const dynCats = getProdCats(settings);
-  const catNamen = [...new Set([...dynCats.map(c=>c.naam),...producten.map(p=>p.cat)])];
-  const cats = ["alle",...catNamen];
-  const list = producten.filter(p=>(cat==="alle"||p.cat===cat)&&(!q||(p.naam||"").toLowerCase().includes(q.toLowerCase())));
+  const catOrder2 = dynCats.map(c=>c.naam);
+  const allCatNames = [...new Set(producten.map(p=>p.cat))];
+  const catNamen = [
+    ...catOrder2.filter(c=>allCatNames.includes(c)),
+    ...allCatNames.filter(c=>!catOrder2.includes(c)&&c!=="Vrije lijnen"),
+    ...allCatNames.filter(c=>c==="Vrije lijnen")
+  ];
+  const cats2 = ["alle",...catNamen];
+  // Meestgebruikte bovenaan
+  const prodUsagePg = {};
+  // (geen offertes hier, sorteer op aangemaakt datum als fallback)
+  const list = [...producten.filter(p=>(cat==="alle"||p.cat===cat)&&(!q||(p.naam||"").toLowerCase().includes(q.toLowerCase())))]
+    .sort((a,b)=>new Date(b.aangemaakt||0)-new Date(a.aangemaakt||0));
 
   const doEnrich = async(prod) => {
     setEnriching(prod.id);
@@ -3753,7 +3761,7 @@ function ProductenPage({producten,settings,onEdit,onDelete,onToggle,onEnrich,onD
       <div className="flex fca gap2 mb4" style={{flexWrap:"wrap"}}>
         <div className="srch"><span className="srch-ic">🔍</span><input className="srch-i" placeholder="Zoek product…" value={q} onChange={e=>setQ(e.target.value)}/></div>
         <div className="flex gap2" style={{flexWrap:"wrap"}}>
-          {cats.map(c=>{
+          {cats2.map(c=>{
             const dynC=dynCats.find(x=>x.naam===c);
             return <button key={c} className={`btn btn-sm ${cat===c?"bp":"bs"}`} onClick={()=>setCat(c)}>{c==="alle"?"Alle":<>{dynC?.icoon||"📦"} {c}</>}</button>;
           })}
@@ -4681,7 +4689,21 @@ function OfferteWizard({klanten,producten,offertes,editData,settings,onSave,onCl
   },[btwRegime]);
 
   const actProds=producten.filter(p=>p.actief);
-  const cats=[...new Set(actProds.map(p=>p.cat))];
+  // Sorteer categorieën: volgorde van settings.productCats, daarna onbekende, "Vrije lijnen" altijd onderaan
+  const catSettings = getProdCats(settings);
+  const catOrder = catSettings.map(c=>c.naam);
+  const allCats = [...new Set(actProds.map(p=>p.cat))];
+  const cats = [
+    ...catOrder.filter(c=>allCats.includes(c)),
+    ...allCats.filter(c=>!catOrder.includes(c)&&c!=="Vrije lijnen"),
+    ...allCats.filter(c=>c==="Vrije lijnen")
+  ];
+  
+  // Meestgebruikte producten per categorie (op basis van offertes)
+  const prodUsage = {};
+  (offertes||[]).forEach(o=>(o.lijnen||[]).forEach(l=>{ if(l.productId) prodUsage[l.productId]=(prodUsage[l.productId]||0)+1; }));
+  const sortByUsage = (prods) => [...prods].sort((a,b)=>(prodUsage[b.id]||0)-(prodUsage[a.id]||0));
+  
   const getQty=pid=>lijnen.find(l=>l.productId===pid)?.aantal||0;
 
   const setQty=(prod,gid,aantal)=>{
@@ -4843,7 +4865,7 @@ function OfferteWizard({klanten,producten,offertes,editData,settings,onSave,onCl
             })}
             </div>
             <div className="ptile-grid">
-              {actProds.filter(p=>!activeCat||p.cat===activeCat).map(p=>{
+              {sortByUsage(actProds.filter(p=>!activeCat||p.cat===activeCat)).map(p=>{
                 const qty=getQty(p.id);
                 const catIc=getCatIcon(p.cat);
                 // Vind het overeenkomstige product in de vorige offerte (zelfde naam of categorie)
@@ -7178,22 +7200,33 @@ function InstellingenPage({settings,setSettings,notify,onExportBackup,onImportBa
       {tab==="categorieen"&&<div style={{maxWidth:720}}>
         {/* ── PRODUCT CATEGORIEËN ── */}
         <div className="card" style={{marginBottom:14}}>
-          <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:14}}>
+          <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:6}}>
             <div style={{fontWeight:700,fontSize:14,flex:1}}>📦 Product categorieën</div>
             <button className="btn b2 btn-sm" onClick={()=>{const n={id:uid(),naam:"Nieuw",icoon:"📦",kleur:"#475569"};setForm(p=>({...p,productCats:[...(p.productCats||[]),n]}));}}>＋ Toevoegen</button>
           </div>
-          <div style={{display:"flex",flexDirection:"column",gap:8}}>
-            {(form.productCats||[]).map((cat,i)=>(
-              <div key={cat.id} style={{display:"flex",gap:8,alignItems:"center",background:"#f8fafc",borderRadius:8,padding:"8px 10px",border:"1px solid var(--bdr)"}}>
-                <input type="text" value={cat.icoon} onChange={e=>setForm(p=>({...p,productCats:p.productCats.map((c,j)=>j===i?{...c,icoon:e.target.value}:c)}))} style={{width:44,textAlign:"center",fontSize:18,border:"1.5px solid #e2e8f0",borderRadius:6,padding:"4px 6px"}} placeholder="⚡"/>
-                <input className="fc" style={{flex:1}} value={cat.naam} onChange={e=>setForm(p=>({...p,productCats:p.productCats.map((c,j)=>j===i?{...c,naam:e.target.value}:c)}))} placeholder="Categorienaam"/>
-                <input type="color" value={cat.kleur||"#475569"} onChange={e=>setForm(p=>({...p,productCats:p.productCats.map((c,j)=>j===i?{...c,kleur:e.target.value}:c)}))} style={{width:36,height:36,border:"1.5px solid #e2e8f0",borderRadius:6,cursor:"pointer",padding:2}}/>
-                <div style={{background:cat.kleur||"#475569",color:"#fff",borderRadius:6,padding:"4px 10px",fontSize:12,fontWeight:700,minWidth:80,textAlign:"center"}}>{cat.icoon} {cat.naam}</div>
-                <button className="btn bgh btn-sm" onClick={()=>setForm(p=>({...p,productCats:p.productCats.filter((_,j)=>j!==i)}))}>🗑</button>
-              </div>
-            ))}
+          <div style={{fontSize:12,color:"#64748b",marginBottom:12}}>Versleep met ↑↓ om de volgorde te bepalen — deze volgorde zie je terug bij producten en offertes.</div>
+          <div style={{display:"flex",flexDirection:"column",gap:6}}>
+            {(form.productCats||[]).map((cat,i)=>{
+              const moveUp   = ()=>setForm(p=>{ const a=[...(p.productCats||[])]; if(i===0)return p; [a[i-1],a[i]]=[a[i],a[i-1]]; return {...p,productCats:a}; });
+              const moveDown = ()=>setForm(p=>{ const a=[...(p.productCats||[])]; if(i===a.length-1)return p; [a[i],a[i+1]]=[a[i+1],a[i]]; return {...p,productCats:a}; });
+              return(
+                <div key={cat.id} style={{display:"flex",gap:6,alignItems:"center",background:"#f8fafc",borderRadius:8,padding:"8px 10px",border:"1px solid var(--bdr)"}}>
+                  {/* Volgorde knoppen */}
+                  <div style={{display:"flex",flexDirection:"column",gap:2}}>
+                    <button onClick={moveUp}   disabled={i===0} style={{border:"1.5px solid #e2e8f0",borderRadius:4,background:i===0?"#f1f5f9":"#fff",cursor:i===0?"default":"pointer",padding:"1px 5px",fontSize:10,lineHeight:1.4,color:i===0?"#cbd5e1":"#374151"}}>▲</button>
+                    <button onClick={moveDown} disabled={i===(form.productCats||[]).length-1} style={{border:"1.5px solid #e2e8f0",borderRadius:4,background:i===(form.productCats||[]).length-1?"#f1f5f9":"#fff",cursor:i===(form.productCats||[]).length-1?"default":"pointer",padding:"1px 5px",fontSize:10,lineHeight:1.4,color:i===(form.productCats||[]).length-1?"#cbd5e1":"#374151"}}>▼</button>
+                  </div>
+                  <span style={{color:"#94a3b8",fontSize:11,fontWeight:700,minWidth:16,textAlign:"center"}}>{i+1}</span>
+                  <input type="text" value={cat.icoon} onChange={e=>setForm(p=>({...p,productCats:p.productCats.map((c,j)=>j===i?{...c,icoon:e.target.value}:c)}))} style={{width:40,textAlign:"center",fontSize:18,border:"1.5px solid #e2e8f0",borderRadius:6,padding:"4px 6px"}} placeholder="⚡"/>
+                  <input className="fc" style={{flex:1}} value={cat.naam} onChange={e=>setForm(p=>({...p,productCats:p.productCats.map((c,j)=>j===i?{...c,naam:e.target.value}:c)}))} placeholder="Categorienaam"/>
+                  <input type="color" value={cat.kleur||"#475569"} onChange={e=>setForm(p=>({...p,productCats:p.productCats.map((c,j)=>j===i?{...c,kleur:e.target.value}:c)}))} style={{width:36,height:36,border:"1.5px solid #e2e8f0",borderRadius:6,cursor:"pointer",padding:2}}/>
+                  <div style={{background:cat.kleur||"#475569",color:"#fff",borderRadius:6,padding:"4px 10px",fontSize:12,fontWeight:700,minWidth:80,textAlign:"center"}}>{cat.icoon} {cat.naam}</div>
+                  <button className="btn bgh btn-sm" onClick={()=>setForm(p=>({...p,productCats:p.productCats.filter((_,j)=>j!==i)}))}>🗑</button>
+                </div>
+              );
+            })}
           </div>
-          <div style={{fontSize:12,color:"#94a3b8",marginTop:8}}>Deze categorieën worden gebruikt als tegels in de productcatalogus en bij het aanmaken van offertes.</div>
+          <div style={{fontSize:12,color:"#94a3b8",marginTop:8}}>Vrije lijnen (handmatig ingevoerd in offerte) worden automatisch onderaan toegevoegd als nieuwe categorie.</div>
         </div>
 
         {/* ── INSTALLATIETYPES ── */}
