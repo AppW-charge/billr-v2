@@ -76,7 +76,10 @@ async function submitResponse(id,status,data={}){
     console.log('📝 Response saved:',status,r.error?'ERROR: '+JSON.stringify(r.error):'OK');
   }catch(e){console.error('Submit error:',e)}
   var ok=status==='goedgekeurd';
-  document.getElementById('app').innerHTML='<div class="status-msg"><div class="icon">'+(ok?'✅':'❌')+'</div><h2 style="color:'+(ok?'#059669':'#dc2626')+'">'+(ok?'Offerte goedgekeurd!':'Offerte afgewezen')+'</h2><p style="margin-top:12px">'+(ok?'Bedankt voor uw vertrouwen! We gaan aan de slag en houden u op de hoogte.':'Uw reactie is geregistreerd. Bedankt voor uw feedback.')+'</p><div style="margin-top:20px;padding:14px;background:#f8fafc;border-radius:10px;border:1px solid #e2e8f0;display:inline-block;font-size:13px;color:#64748b">'+(ok?'📧 U ontvangt binnenkort een bevestigingsmail met de planning.':'📧 We hebben uw reactie ontvangen.')+'</div></div>';
+  var bedNaam=window._bedNaam||'';
+  var bedTel=window._bedTel||'';
+  var bedEmail=window._bedEmail||'';
+  document.getElementById('app').innerHTML='<div class="status-msg"><div class="icon">'+(ok?'✅':'❌')+'</div><h2 style="color:'+(ok?'#059669':'#dc2626')+';font-size:22px;margin-bottom:10px">'+(ok?'Offerte goedgekeurd!':'Offerte afgewezen')+'</h2>'+(ok?'<p style="font-size:14px;color:#475569;line-height:1.6;max-width:420px;margin:0 auto 20px">Bedankt voor uw vertrouwen! Uw akkoord is geregistreerd.<br>U ontvangt binnenkort een email met de voorgestelde installatiedatum.</p><div style="background:linear-gradient(135deg,#f0fdf4,#dcfce7);border:2px solid #86efac;border-radius:14px;padding:20px 24px;display:inline-block;text-align:left;min-width:280px;margin-bottom:20px"><div style="font-weight:800;color:#065f46;font-size:14px;margin-bottom:10px">📋 Wat gebeurt er nu?</div><div style="font-size:13px;color:#047857;line-height:2"><div>1️⃣ &nbsp;Uw akkoord is ontvangen</div><div>2️⃣ &nbsp;Wij stellen een installatiedatum voor</div><div>3️⃣ &nbsp;U bevestigt de datum via email</div><div>4️⃣ &nbsp;Installatie gaat door op afgesproken datum</div></div></div>'+(bedTel||bedEmail?'<div style="margin-top:8px;font-size:13px;color:#64748b">Vragen? <a href="tel:'+bedTel+'" style="color:#2563eb;text-decoration:none;font-weight:600">'+bedTel+'</a>'+(bedEmail?' · <a href="mailto:'+bedEmail+'" style="color:#2563eb;text-decoration:none;font-weight:600">'+bedEmail+'</a>':'')+'</div>':''):'<p style="margin-top:12px;color:#475569">Uw reactie is geregistreerd. Bedankt voor uw feedback.</p><p style="margin-top:8px;font-size:13px;color:#94a3b8">We nemen eventueel contact op om te bekijken hoe we beter kunnen aansluiten bij uw verwachtingen.</p>')+'</div>';
 }
 
 function renderOfferte(doc){
@@ -88,7 +91,7 @@ function renderOfferte(doc){
   const rest=lijnen.filter(l=>!l.groepId||!groepen.find(g=>g.id===l.groepId));
   if(rest.length)gl.push({id:'rest',naam:'Producten',items:rest});
   const up=lijnen.filter(function(l){return l.naam&&(l.imageUrl||l.omschr||(l.specs||[]).length||(l.technischeFiches||[]).length||l.technischeFiche);});
-  trackView(doc.id);window._offId=doc.id;
+  trackView(doc.id);window._offId=doc.id;window._bedNaam=bed.naam||'';window._bedTel=bed.tel||'';window._bedEmail=bed.email||'';
 
   document.getElementById('app').innerHTML=
   '<div class="fab"><button class="fab-btn fab-accept" onclick="showAcceptModal()">✅ Offerte goedkeuren</button><button class="fab-btn fab-reject" onclick="showRejectModal()">❌ Afwijzen</button></div>'+
