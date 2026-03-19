@@ -992,7 +992,12 @@
                 return shiftOverrides[dateStr];
             }
             
-            const diffDays = Math.floor((date - cycleStart) / (1000 * 60 * 60 * 24));
+            // DST-veilige berekening: gebruik LOKALE datumcomponenten (jaar/maand/dag)
+            // Date-subtractie in ms is niet betrouwbaar door zomertijd (+/-1 uur op wisseldag)
+            // Math.round ipv Math.floor compenseert de 1-uur afwijking op DST-wisseldag
+            const d  = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+            const cs = new Date(cycleStart.getFullYear(), cycleStart.getMonth(), cycleStart.getDate());
+            const diffDays = Math.round((d - cs) / (1000 * 60 * 60 * 24));
             const dayInCycle = ((diffDays % 49) + 49) % 49;
             
             return weekSchema[dayInCycle] || { type: 'vrij', label: 'Vrij' };
@@ -1442,14 +1447,14 @@
         function saveFullSchema() {
             console.log('💾 Schema opslaan...');
             
-            cycleStart = new Date(document.getElementById('cycleStart').value + 'T00:00:00');
+            // T12:00:00 (middag) ipv T00:00:00 (middernacht) om UTC-verschuiving te vermijden
+            cycleStart = new Date(document.getElementById('cycleStart').value + 'T12:00:00');
             
             try {
-                localStorage.setItem('wcharge_cycle_start', cycleStart.toISOString());
+                // Sla als lokale YYYY-MM-DD string op (geen UTC conversie nodig)
+                localStorage.setItem('wcharge_cycle_start', localDateStr(cycleStart));
                 localStorage.setItem('wcharge_schema', JSON.stringify(weekSchema));
-                console.log('✅ Schema opgeslagen in localStorage');
-                console.log('Cyclus start:', cycleStart.toISOString());
-                console.log('Schema dagen:', weekSchema.length);
+                console.log('✅ Schema opgeslagen:', localDateStr(cycleStart));
             } catch (e) {
                 console.error('❌ Fout bij opslaan:', e);
                 alert('❌ Fout bij opslaan: ' + e.message);
@@ -1568,8 +1573,16 @@
 
                 const cs = localStorage.getItem('wcharge_cycle_start');
                 if (cs) {
-                    cycleStart = new Date(cs);
-                    console.log('✅ Cyclus start geladen:', cycleStart.toLocaleDateString('nl-NL'));
+                    // Ondersteun zowel nieuw formaat (YYYY-MM-DD) als oud ISO-formaat
+                    if (/^\d{4}-\d{2}-\d{2}$/.test(cs)) {
+                        // Nieuw formaat: lokale datum → gebruik T12:00:00 om UTC-verschuiving te vermijden
+                        cycleStart = new Date(cs + 'T12:00:00');
+                    } else {
+                        // Oud ISO-formaat: extraheer lokale datum en hermaak als T12:00:00
+                        const tmp = new Date(cs);
+                        cycleStart = new Date(tmp.getFullYear(), tmp.getMonth(), tmp.getDate(), 12, 0, 0);
+                    }
+                    console.log('✅ Cyclus start geladen:', localDateStr(cycleStart));
                 }
 
                 const sch = localStorage.getItem('wcharge_schema');
@@ -1861,7 +1874,7 @@
             const data = {
                 appointments: appointments,
                 shiftOverrides: shiftOverrides,
-                cycleStart: cycleStart.toISOString(),
+                cycleStart: localDateStr(cycleStart),
                 weekSchema: weekSchema,
                 colors: colors
             };
@@ -1940,7 +1953,13 @@
                     
                     appointments = data.appointments || [];
                     shiftOverrides = data.shiftOverrides || {};
-                    cycleStart = new Date(data.cycleStart);
+                    // DST-veilig laden: YYYY-MM-DD of ISO string beide correct afhandelen
+                    if (/^\d{4}-\d{2}-\d{2}$/.test(data.cycleStart)) {
+                        cycleStart = new Date(data.cycleStart + 'T12:00:00');
+                    } else {
+                        const tmp = new Date(data.cycleStart);
+                        cycleStart = new Date(tmp.getFullYear(), tmp.getMonth(), tmp.getDate(), 12, 0, 0);
+                    }
                     weekSchema = data.weekSchema || [];
                     colors = data.colors || colors;
                     
