@@ -53,17 +53,21 @@ const fmtDate=function(d){return d?new Date(d).toLocaleDateString("nl-BE",{weekd
 const fmtTime=function(t){return t||"—"};
 
 async function respond(id,status,data){
+  var pd=window._planData||{};var bed=window._bed||{};var klant=window._klant||{};
   try{
     var s=window.supabase.createClient(SB_URL,SB_KEY);
     await s.from('planning_proposals').update({status:status,client_response:{...data,responded_at:new Date().toISOString()}}).eq('id',id);
   }catch(e){console.error(e)}
   var ok=status==='akkoord';
-  document.getElementById('app').innerHTML='<div class="status-msg"><div class="icon">'+(ok?'✅':'📅')+'</div><h2 style="color:'+(ok?'#059669':'#f59e0b')+'">'+(ok?'Afspraak bevestigd!':'Alternatief voorstel verstuurd')+'</h2><p style="margin-top:12px;max-width:400px;margin-left:auto;margin-right:auto">'+(ok?'Uw installatie-afspraak is bevestigd. U ontvangt een bevestigingsmail met alle details.':'Uw voorkeur is doorgegeven. We nemen zo snel mogelijk contact op met een aangepast voorstel.')+'</p></div>';
+  var datumStr=pd.planDatum?new Date(pd.planDatum+'T12:00:00').toLocaleDateString('nl-BE',{weekday:'long',day:'numeric',month:'long',year:'numeric'}):'—';
+  document.getElementById('app').innerHTML=ok?
+    '<div class="status-msg"><div class="icon">✅</div><h2 style="color:#059669;font-size:22px;margin-bottom:10px">Afspraak bevestigd!</h2><p style="font-size:14px;color:#475569;max-width:400px;margin:0 auto 20px">U ontvangt binnenkort een bevestigingsmail met alle details.</p><div style="background:linear-gradient(135deg,#f0fdf4,#dcfce7);border:2px solid #86efac;border-radius:14px;padding:20px 24px;display:inline-block;text-align:left;min-width:280px;margin-bottom:20px"><div style="font-weight:800;color:#065f46;font-size:14px;margin-bottom:12px">📅 Bevestigde afspraak</div><div style="font-size:14px;color:#047857;font-weight:700;margin-bottom:6px">'+datumStr+'</div><div style="font-size:13px;color:#059669">⏰ '+(pd.planTijd||'Tijdstip volgt')+'</div><div style="font-size:12px;color:#64748b;margin-top:10px">📍 '+(klant.adres||'')+', '+(klant.gemeente||'')+'</div></div>'+(bed.naam?'<div style="font-size:13px;color:#94a3b8;margin-top:8px"><strong>'+bed.naam+'</strong>'+(bed.tel?' · '+bed.tel:'')+'</div>':'')+'</div>'
+    :'<div class="status-msg"><div class="icon">📅</div><h2 style="color:#f59e0b;font-size:22px;margin-bottom:10px">Alternatief voorstel verstuurd</h2><p style="font-size:14px;color:#475569;max-width:400px;margin:0 auto 20px">Uw voorkeur is doorgegeven.'+(data.datum?' (<strong>'+new Date(data.datum+'T12:00:00').toLocaleDateString('nl-BE',{weekday:'long',day:'numeric',month:'long'})+'</strong>)':'')+'</p><div style="background:#fffbeb;border:2px solid #fde68a;border-radius:14px;padding:20px;display:inline-block;text-align:left;max-width:340px;margin-bottom:20px"><div style="font-weight:700;color:#92400e;font-size:13px;margin-bottom:6px">Wat gebeurt er nu?</div><div style="font-size:12px;color:#a16207;line-height:1.8">✓ Uw voorkeur is doorgegeven aan '+(bed.naam||'ons')+'<br>✓ We nemen zo snel mogelijk contact op<br>✓ Een nieuw voorstel volgt per email</div></div>'+(bed.tel||bed.email?'<div style="font-size:13px;color:#64748b">Vragen? '+(bed.tel?'<a href="tel:'+bed.tel+'" style="color:#2563eb;font-weight:600">'+bed.tel+'</a>':'')+(bed.email?' · <a href="mailto:'+bed.email+'" style="color:#2563eb;font-weight:600">'+bed.email+'</a>':'')+'</div>':'')+'</div>';
 }
 
 function render(p){
   var d=p.plan_data;var bed=d._bed||{};var klant=d.klant||{};var dc=d._dc||'#1a2e4a';
-  window._pid=p.id;
+  window._pid=p.id;window._planData=d;window._bed=bed;window._klant=klant;
   document.getElementById('app').innerHTML=
   '<div class="fab"><div class="fab-inner"><button class="fab-btn fab-accept" onclick="doAccept()">✅ Akkoord</button><button class="fab-btn fab-alt" onclick="showAltModal()">📅 Ander moment</button></div></div>'+
   '<div class="wrap">'+
