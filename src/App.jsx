@@ -69,14 +69,17 @@ const sbDel = async (key, userId) => {
 const sbGetAll = async (userId) => {
   if(!userId) return {};
   try {
-    const { data, error } = await sb.from("user_data").select("key,value").eq("user_id", userId);
+    const { data, error } = await sb.from("user_data").select("key,value,updated_at").eq("user_id", userId);
     if(error) {
       console.error("[Supabase] GET ALL failed:", error.message, error.details, error.hint);
       return {};
     }
     if(!data) return {};
     console.log(`☁️ Supabase LOAD: ${data.length} keys geladen`);
-    return Object.fromEntries(data.map(r=>[r.key, r.value]));
+    // Geef zowel value als updated_at terug
+    const result = {};
+    data.forEach(r => { result[r.key] = r.value; result[r.key+"__ts"] = r.updated_at; });
+    return result;
   } catch(e) {
     console.error("[Supabase] GET ALL exception:", e);
     return {};
@@ -1806,6 +1809,7 @@ export default function App() {
   // Zo gaan fiches nooit verloren bij localStorage strips of Supabase timeouts
   const pendingSaves = useRef({});
   const saveTimer = useRef(null);
+  const localTimestamps = useRef({}); // bijhouden wanneer wij lokaal iets gewijzigd hebben
 
   const stripBase64 = (key, val) => {
     if(!Array.isArray(val)) return val;
@@ -1847,6 +1851,9 @@ export default function App() {
     
     // localStorage: meteen (snel, lokaal)
     try { localStorage.setItem(key, json); } catch(e) { try { localStorage.removeItem(key); } catch(_){} }
+    
+    // Timestamp bijhouden — voor sync conflict detectie
+    localTimestamps.current[key] = Date.now();
     
     // Supabase: batchen + debounce 2s — max 1 call per 2s ipv per keypress
     pendingSaves.current[key] = json;
@@ -2028,23 +2035,30 @@ export default function App() {
           Object.values(allData).some(v => v && v.length > 10);
         if(!hasReal) return;
         const p = (k,fb) => { try { return allData[k]?JSON.parse(allData[k]):fb; } catch(_){return fb;} };
-        if(allData["b4_set"]) { const s=p("b4_set",null); if(s?.bedrijf?.naam||s?.email?.eigen) setSettings(s); }
-        if(allData["b4_kln"]) setKlanten(p("b4_kln",[]));
-        if(allData["b4_prd"]) {
+        // Alleen laden als Supabase NIEUWER is dan onze laatste lokale wijziging
+        // Zo overschrijft een passieve browser (gsm open laten) nooit actieve wijzigingen
+        const sbNewer = (key) => {
+          const sbTs = allData[key+"__ts"] ? new Date(allData[key+"__ts"]).getTime() : 0;
+          const localTs = localTimestamps.current[key] || 0;
+          return sbTs > localTs; // Supabase is nieuwer → laden
+        };
+        if(allData["b4_set"] && sbNewer("b4_set")) { const s=p("b4_set",null); if(s?.bedrijf?.naam||s?.email?.eigen) setSettings(s); }
+        if(allData["b4_kln"] && sbNewer("b4_kln")) setKlanten(p("b4_kln",[]));
+        if(allData["b4_prd"] && sbNewer("b4_prd")) {
           const sbFicheCache = allData["b4_fic"] ? p("b4_fic",null) : null;
           setProducten(restoreFicheCache(p("b4_prd",[]), sbFicheCache));
         }
-        if(allData["b4_off"]) { const v=p("b4_off",null); if(v!==null) setOffertes(v); }
-        if(allData["b4_fct"]) { const v=p("b4_fct",null); if(v!==null) setFacturen(v); }
-        if(allData["b4_cn"])  setCreditnotas(p("b4_cn",[]));
-        if(allData["b4_am"])  setAanmaningen(p("b4_am",[]));
-        if(allData["b4_bt"])  setBetalingen(p("b4_bt",[]));
-        if(allData["b4_ti"])  setTijdslots(p("b4_ti",[]));
-        if(allData["b4_do"])  setDossiers(p("b4_do",[]));
-        if(allData["b4_ga"])  setGaranties(p("b4_ga",[]));
-        if(allData["b4_at"])  setAcceptTokens(p("b4_at",{}));
-        if(allData["b4_wo"])  setWidgetOrder(p("b4_wo",null));
-        console.log("✅ Mobile sync");
+        if(allData["b4_off"] && sbNewer("b4_off")) { const v=p("b4_off",null); if(v!==null) setOffertes(v); }
+        if(allData["b4_fct"] && sbNewer("b4_fct")) { const v=p("b4_fct",null); if(v!==null) setFacturen(v); }
+        if(allData["b4_cn"]  && sbNewer("b4_cn"))  setCreditnotas(p("b4_cn",[]));
+        if(allData["b4_am"]  && sbNewer("b4_am"))  setAanmaningen(p("b4_am",[]));
+        if(allData["b4_bt"]  && sbNewer("b4_bt"))  setBetalingen(p("b4_bt",[]));
+        if(allData["b4_ti"]  && sbNewer("b4_ti"))  setTijdslots(p("b4_ti",[]));
+        if(allData["b4_do"]  && sbNewer("b4_do"))  setDossiers(p("b4_do",[]));
+        if(allData["b4_ga"]  && sbNewer("b4_ga"))  setGaranties(p("b4_ga",[]));
+        if(allData["b4_at"]  && sbNewer("b4_at"))  setAcceptTokens(p("b4_at",{}));
+        if(allData["b4_wo"]  && sbNewer("b4_wo"))  setWidgetOrder(p("b4_wo",null));
+        console.log("✅ Mobile sync — last-write-wins");
       } catch(e) { console.warn("Mobile sync mislukt:",e); }
     };
     document.addEventListener("visibilitychange", handleVisibility);
