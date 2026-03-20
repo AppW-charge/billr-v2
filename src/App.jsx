@@ -1624,9 +1624,11 @@ export default function App() {
 
       if(sbData && Object.keys(sbData).length > 0) {
         console.log(`☁️ Supabase: ${Object.keys(sbData).length} keys`);
+        // Laad fiche cache eerst zodat producten meteen fiches hebben
+        const sbFicheCache = sbData["b4_fic"] ? parse(sbData["b4_fic"], null) : null;
         if(sbData["b4_set"]) setSettings(parse(sbData["b4_set"], INIT_SETTINGS));
         if(sbData["b4_kln"]) setKlanten(parse(sbData["b4_kln"], INIT_KLANTEN));
-        if(sbData["b4_prd"]) setProducten(restoreFicheCache(parse(sbData["b4_prd"], INIT_PRODUCTS)));
+        if(sbData["b4_prd"]) setProducten(restoreFicheCache(parse(sbData["b4_prd"], INIT_PRODUCTS), sbFicheCache));
         if(sbData["b4_off"]) setOffertes(parse(sbData["b4_off"], []));
         if(sbData["b4_fct"]) setFacturen(parse(sbData["b4_fct"], []));
         if(sbData["b4_cn"])  setCreditnotas(parse(sbData["b4_cn"], []));
@@ -1804,33 +1806,41 @@ export default function App() {
   // Zo gaan fiches nooit verloren bij localStorage strips of Supabase timeouts
   const saveFicheCache = useCallback((productenArr) => {
     try {
-      // Laad bestaande cache eerst - we MERGEN, overschrijven nooit met lege data
       let existing = {};
       try { const r = localStorage.getItem("billr_fiche_cache"); if(r) existing = JSON.parse(r); } catch(_){}
       const cache = {...existing};
       let changed = false;
       productenArr.forEach(p => {
         if(p.technischeFiches?.some(f => f.data)) {
-          // Alleen overschrijven als we echte data hebben
           cache[p.id] = p.technischeFiches.filter(f => f.data);
           changed = true;
         } else if(p.technischeFiche && p.technischeFiche !== "[PDF]" && p.technischeFiche.length > 100) {
           cache[p.id] = [{data: p.technischeFiche, naam: p.fichNaam||"fiche.pdf"}];
           changed = true;
         }
-        // Als geen data → bestaande cache behouden (niet wissen)
       });
-      if(changed || Object.keys(existing).length === 0) {
+      if(changed) {
         localStorage.setItem("billr_fiche_cache", JSON.stringify(cache));
+        // Ook naar Supabase — zodat andere browsers/gsm de fiches hebben
+        pendingSaves.current["b4_fic"] = JSON.stringify(cache);
+        if(saveTimer.current) clearTimeout(saveTimer.current);
+        saveTimer.current = setTimeout(flushSaves, 2000);
       }
     } catch(_) {}
-  }, []);
+  }, [flushSaves]);
 
-  const restoreFicheCache = useCallback((productenArr) => {
+  const restoreFicheCache = useCallback((productenArr, sbFicheCache=null) => {
     try {
-      const raw = localStorage.getItem("billr_fiche_cache");
-      if(!raw) return productenArr;
-      const cache = JSON.parse(raw);
+      // Probeer cache: eerst Supabase (cross-browser), dan localStorage
+      let cache = sbFicheCache || null;
+      if(!cache) {
+        const raw = localStorage.getItem("billr_fiche_cache");
+        if(raw) cache = JSON.parse(raw);
+      } else {
+        // Sla Supabase cache ook op in localStorage voor snelle toegang
+        try { localStorage.setItem("billr_fiche_cache", JSON.stringify(cache)); } catch(_){}
+      }
+      if(!cache) return productenArr;
       return productenArr.map(p => {
         if(cache[p.id] && !(p.technischeFiches?.some(f => f.data))) {
           return { ...p, technischeFiches: cache[p.id] };
@@ -1861,20 +1871,42 @@ export default function App() {
     return val;
   };
 
-  const saveKey = useCallback(async (key, val) => { 
+  // ═══ DEBOUNCED BATCH SAVE — max 1 Supabase call per 2 seconden ═══
+  const pendingSaves = useRef({});
+  const saveTimer = useRef(null);
+
+  const flushSaves = useCallback(async () => {
+    if(!user || !dataReady.current) return;
+    const batch = {...pendingSaves.current};
+    pendingSaves.current = {};
+    for(const [key, json] of Object.entries(batch)) {
+      try { await sbSet(key, json, user.id); } catch(_){}
+    }
+  }, [user]);
+
+  const saveKey = useCallback((key, val) => { 
     if(!dataReady.current) return;
     if(!user) return;
     
-    // Strip base64 voor ZOWEL localStorage als Supabase — fiches enkel in fiche cache
+    // Strip base64 — nooit grote data naar Supabase
     const stripped = stripBase64(key, val);
     const json = JSON.stringify(stripped);
     
-    // localStorage
+    // localStorage: meteen (snel, lokaal)
     try { localStorage.setItem(key, json); } catch(e) { try { localStorage.removeItem(key); } catch(_){} }
     
-    // Supabase: gestripte versie (klein, geen 504)
-    await sbSet(key, json, user.id);
-  }, [user]);
+    // Supabase: batchen + debounce 2s — max 1 call per 2s ipv per keypress
+    pendingSaves.current[key] = json;
+    if(saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(flushSaves, 2000);
+  }, [user, flushSaves]);
+
+  // Bij afsluiten: meteen flushen
+  useEffect(()=>{
+    const flush = ()=>{ if(Object.keys(pendingSaves.current).length>0) flushSaves(); };
+    window.addEventListener('beforeunload', flush);
+    return ()=>window.removeEventListener('beforeunload', flush);
+  }, [flushSaves]);
   useEffect(()=>{ saveKey("b4_off", offertes);  },[offertes,   saveKey]);
   useEffect(()=>{ saveKey("b4_fct", facturen);  },[facturen,   saveKey]);
   useEffect(()=>{ saveKey("b4_kln", klanten);   },[klanten,    saveKey]);
