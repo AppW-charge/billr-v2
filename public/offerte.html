@@ -107,9 +107,13 @@ async function submitResponse(id,status,data={}){
 
 function renderOfferte(doc){
   const dc=doc._dc||'#1a2e4a';const bed=doc._bed||{};const sj=doc._sj||{};const groepen=doc.groepen||[];const lijnen=doc.lijnen||[];const vw=doc._voorwaarden||'';
-  const sub=lijnen.reduce((s,l)=>s+(l.prijs||0)*(l.aantal||1),0);
-  const bg={};lijnen.forEach(l=>{const b=l.btw||0;const a=(l.prijs||0)*(l.aantal||1)*(b/100);if(!bg[b])bg[b]=0;bg[b]+=a;});
-  const btw=Object.values(bg).reduce((s,v)=>s+v,0);const tot=sub+btw;
+  const BEBAT_TARIEF=2.89;
+  const isBebat=function(n,c){var nl=(n||'').toLowerCase();if(nl.includes('bms')||nl.includes('battery management'))return false;return nl.includes('batter')||(c||'').toLowerCase().includes('batter');};
+  const sub=lijnen.reduce(function(s,l){return s+(l.prijs||0)*(l.aantal||1)},0);
+  const bebatSub=lijnen.reduce(function(s,l){return (l.bebatKg&&l.bebatKg>0&&isBebat(l.naam,l.cat))?s+l.bebatKg*(l.aantal||1)*BEBAT_TARIEF:s},0);
+  const bg={};lijnen.forEach(function(l){var b=l.btw||0;var a=(l.prijs||0)*(l.aantal||1)*(b/100);if(!bg[b])bg[b]=0;bg[b]+=a;if(l.bebatKg&&l.bebatKg>0&&isBebat(l.naam,l.cat)){if(!bg[21])bg[21]=0;bg[21]+=l.bebatKg*(l.aantal||1)*BEBAT_TARIEF*(21/100);}});
+  const btw=Object.values(bg).reduce(function(s,v){return s+v},0);
+  const tot=sub+bebatSub+btw;
   const gl=[...groepen.map(g=>({...g,items:lijnen.filter(l=>l.groepId===g.id)})).filter(g=>g.items.length>0)];
   const rest=lijnen.filter(l=>!l.groepId||!groepen.find(g=>g.id===l.groepId));
   if(rest.length)gl.push({id:'rest',naam:'Producten',items:rest});
@@ -132,7 +136,7 @@ function renderOfferte(doc){
     return '<tr><td><div class="qt-item-main">'+(l.naam||'')+'</div>'+(l.omschr?'<div class="qt-item-sub">'+l.omschr+'</div>':'')+'</td><td>'+(l.eenheid||'stuk')+'</td><td class="c">'+(l.aantal||1)+'</td><td class="r">'+fmtEuro(l.prijs||0)+'</td><td class="r">'+(l.btw||0)+'%</td><td class="r"><strong>'+fmtEuro((l.prijs||0)*(l.aantal||1))+'</strong></td></tr>';
   }).join('')+'</tbody></table><div class="grp-sub"><span>Subtotaal '+g.naam+':</span><strong>'+fmtEuro(g.items.reduce(function(s,l){return s+(l.prijs||0)*(l.aantal||1)},0))+'</strong></div>';}).join('')+
   
-  '<div style="display:flex;justify-content:flex-end;margin-top:8px"><div class="qt-tot-box"><div class="qt-tot-row"><span>Subtotaal excl. BTW</span><span>'+fmtEuro(sub)+'</span></div>'+Object.entries(bg).map(function(e){return '<div class="qt-tot-row"><span>BTW '+e[0]+'%</span><span>'+fmtEuro(e[1])+'</span></div>';}).join('')+'<div class="qt-tot-row last" style="background:'+dc+';color:#fff"><span>TOTAAL incl. BTW</span><span>'+fmtEuro(tot)+'</span></div></div></div>'+
+  '<div style="display:flex;justify-content:flex-end;margin-top:8px"><div class="qt-tot-box"><div class="qt-tot-row"><span>Subtotaal excl. BTW</span><span>'+fmtEuro(sub)+'</span></div>'+(bebatSub>0?'<div class="qt-tot-row"><span>♻️ BEBAT bijdrage</span><span>'+fmtEuro(bebatSub)+'</span></div>':'')+Object.entries(bg).map(function(e){return '<div class="qt-tot-row"><span>BTW '+e[0]+'%</span><span>'+fmtEuro(e[1])+'</span></div>';}).join('')+'<div class="qt-tot-row last" style="background:'+dc+';color:#fff"><span>TOTAAL incl. BTW</span><span>'+fmtEuro(tot)+'</span></div></div></div>'+
   '<div style="margin-top:20px;font-size:12px;color:#64748b"><strong>Betaling:</strong> IBAN '+(bed.iban||'')+' · BIC '+(bed.bic||'')+' · Mededeling: '+(doc.nummer||'')+'</div>'+
   (doc.voorschot&&doc.voorschot!=='Geen voorschot'?'<div style="margin-top:8px;padding:10px 14px;background:#fffbeb;border:1px solid #fde68a;border-radius:6px;font-size:12px;color:#92400e">💡 <strong>Voorschot:</strong> '+doc.voorschot+' te betalen vóór aanvang van de werken.</div>':'')+
   (doc.notities?'<div style="margin-top:8px;padding:10px 14px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;color:#475569"><strong>Opmerking:</strong> '+doc.notities+'</div>':'')+
