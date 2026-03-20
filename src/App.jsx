@@ -2133,36 +2133,34 @@ export default function App() {
       const lyt = settings?.layout || {};
       const dc = sj.accentKleur || settings?.thema?.kleur || bed.kleur || "#1a2e4a";
 
-      // Bouw cleanLijnen: gebruik producten als bron voor technische fiches
-      // zodat de klant de fiches ook ziet op offerte.html
+      // Laad fiche cache voor producten die geen data in state hebben
+      let ficheCache = {};
+      try { const raw = localStorage.getItem("billr_fiche_cache"); if(raw) ficheCache = JSON.parse(raw); } catch(_){}
+
+      // Bouw cleanLijnen: gebruik producten + cache als bron voor technische fiches
       const cleanLijnen = (offerte.lijnen||[]).map(l => {
         const clean = {...l};
-        // Zoek het product op in de producten array voor de volledige fiche data
         const prod = producten.find(p => p.id === l.productId);
-        // Gebruik fiche data van product (heeft de base64), of van de lijn zelf
-        const fichesBron = prod?.technischeFiches || clean.technischeFiches || [];
+        // Fiche bronnen: product state → cache → lijn zelf
+        const fichesInState = prod?.technischeFiches?.filter(f=>f.data) || [];
+        const fichesInCache = ficheCache[l.productId] || ficheCache[prod?.id] || [];
+        const fichesBron = fichesInState.length > 0 ? fichesInState : fichesInCache.length > 0 ? fichesInCache : (clean.technischeFiches?.filter(f=>f.data) || []);
+        
         if(fichesBron.length > 0) {
           clean.technischeFiches = fichesBron.map(f => ({
             naam: f.naam || "fiche.pdf",
-            data: f.data || f.url || "",  // bewaar base64 data!
+            data: f.data || f.url || "",
             url:  f.url  || f.data || "",
             type: f.type || "application/pdf"
-          })).filter(f => f.data || f.url); // enkel fiches met echte data
-        }
-        // Oud formaat: single fiche
-        if(!clean.technischeFiches?.length) {
+          })).filter(f => f.data);
+        } else if(!clean.technischeFiches?.length) {
+          // Oud formaat: single fiche
           const ficheData = prod?.technischeFiche || clean.technischeFiche;
           if(ficheData && ficheData !== "[PDF]" && ficheData.length > 100) {
-            clean.technischeFiches = [{
-              naam: prod?.fichNaam || clean.fichNaam || "fiche.pdf",
-              data: ficheData,
-              url:  ficheData,
-              type: "application/pdf"
-            }];
+            clean.technischeFiches = [{naam: prod?.fichNaam||clean.fichNaam||"fiche.pdf", data: ficheData, url: ficheData, type:"application/pdf"}];
           }
         }
-        // Strip base64 van technischeFiche veld (vervangen door technischeFiches array)
-        clean.technischeFiche = null;
+        clean.technischeFiche = null; // altijd clearen, vervangen door technischeFiches array
         return clean;
       });
 
@@ -2464,20 +2462,24 @@ export default function App() {
   };
 
   // ═══ AUTO-BEVESTIGING: wanneer klant akkoord geeft op planning.html ═══
-  // Detecteert automatisch "akkoord" status in planning_proposals → stuurt bevestigingsmail
+  // Stuurt bevestigingsmail ENKEL als planBevestigingVerstuurd nog false is
+  // EN de planning_proposal nog niet op 'ingepland' staat (anders dubbele mail na reload)
   const autoConfirmedRef = useRef(new Set());
   useEffect(() => {
     if(!user || !planningProposals || Object.keys(planningProposals).length === 0) return;
     Object.entries(planningProposals).forEach(([offerteId, proposals]) => {
       const latest = [...proposals].sort((a,b) => new Date(b.created_at) - new Date(a.created_at))[0];
       if(!latest || latest.status !== "akkoord") return;
-      if(autoConfirmedRef.current.has(latest.id)) return; // Al verwerkt deze sessie
+      if(latest.status === "ingepland") return; // Al verwerkt in Supabase
+      if(autoConfirmedRef.current.has(latest.id)) return;
       const offerte = offertes.find(o => o.id === offerteId);
-      if(!offerte || offerte.planBevestigingVerstuurd) return; // Al bevestigd
+      if(!offerte) return;
+      if(offerte.planBevestigingVerstuurd) return; // Al bevestigd
+      if(!offerte.planDatum && !latest.plan_data?.planDatum) return; // Geen datum = geen bevestiging
       autoConfirmedRef.current.add(latest.id);
-      console.log("🤖 Auto-bevestiging: klant akkoord voor", offerte.nummer);
+      console.log("🤖 Auto-bevestiging:", offerte.nummer);
       sendPlanningConfirmation(offerte, latest.plan_data || {});
-      notify(`✅ Klant gaf akkoord! Bevestigingsmail verstuurd naar ${(klanten.find(k=>k.id===offerte.klantId)||offerte.klant||{}).naam||"klant"}.`, "ok");
+      notify(`✅ Klant akkoord! Bevestigingsmail verstuurd naar ${(klanten.find(k=>k.id===offerte.klantId)||offerte.klant||{}).naam||"klant"}.`, "ok");
     });
   }, [planningProposals]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -2735,7 +2737,7 @@ export default function App() {
             {pg==="dashboard"&&<Dashboard offertes={offertes} facturen={factMet} onGoto={gotoFiltered} onNew={()=>{setEditOff(null);setWizOpen(true)}} onFactuur={d=>setFactModal(d)} settings={settings} offerteViews={offerteViews} offerteResponses={offerteResponses} planningProposals={planningProposals} onLogboek={o=>setLogboekModal(o)} onPlan={o=>setPlanningModal(o)} widgetOrder={widgetOrder} setWidgetOrder={setWidgetOrder} onRefreshTracking={fetchOfferteTracking}/>}
             {pg==="offertes"&&<OffertesPage offertes={offertes} initFilter={pgFilter} onView={d=>setViewDoc({doc:d,type:"offerte"})} onEdit={d=>{setEditOff(d);setWizOpen(true)}} onStatus={updOff} onBulkStatus={bulkUpdOff} onFactuur={d=>setFactModal(d)} onDelete={id=>{setOffertes(p=>p.filter(o=>o.id!==id));notify("Verwijderd")}} onNew={()=>{setEditOff(null);setWizOpen(true)}} onEmail={d=>setEmailModal({doc:d,type:"offerte"})} onPlan={d=>setPlanningModal(d)} settings={settings}/>}
             {pg==="facturen"&&<FacturenPage facturen={factMet} settings={settings} initFilter={pgFilter} onView={d=>setViewDoc({doc:d,type:"factuur"})} onEdit={f=>{setEditFact(f);setFactuurWizOpen(true);}} onStatus={updFact} onBulkStatus={bulkUpdFact} onDelete={id=>{setFacturen(p=>p.filter(f=>f.id!==id));notify("Verwijderd")}} notify={notify} onEmail={d=>setEmailModal({doc:d,type:"factuur"})} onBetaling={f=>setBetalingModal(f)} onAanmaning={f=>setAanmaningModal(f)} onNew={()=>{setEditFact(null);setFactuurWizOpen(true)}}/>}
-            {pg==="klanten"&&<KlantenPage klanten={klanten} offertes={offertes} facturen={factMet} view={klantView} onEdit={k=>setKlantModal(k)} onDelete={id=>{setKlanten(p=>p.filter(k=>k.id!==id));notify("Klant verwijderd")}}/>}
+            {pg==="klanten"&&<KlantenPage klanten={klanten} offertes={offertes} facturen={factMet} view={klantView} onEdit={k=>setKlantModal(k)} onDelete={id=>{setKlanten(p=>p.map(k=>k.id===id?{...k,_verwijderd:true}:k));notify("Klant verwijderd")}}/>}
             {pg==="producten"&&<ProductenPage producten={producten} settings={settings} onEdit={p=>setProdModal(p)} onDelete={id=>{setProducten(p=>p.filter(x=>x.id!==id));notify("Verwijderd")}} onToggle={id=>setProducten(p=>p.map(x=>x.id===id?{...x,actief:!x.actief}:x))} onEnrich={upd=>setProducten(p=>p.map(x=>x.id===upd.id?upd:x))} onDuplicate={p=>{const dup={...p,id:uid(),naam:p.naam+" (kopie)",aangemaakt:new Date().toISOString()};setProducten(prev=>[dup,...prev]);notify("Product gedupliceerd ✓");setProdModal(dup);}}/>}
             {pg==="agenda"&&<div style={{height:"calc(100vh - 70px)",margin:"-22px",overflow:"hidden"}}><iframe src={`${window.location.origin}/planner.html`} style={{width:"100%",height:"100%",border:"none"}} title="Agenda"/></div>}
             {pg==="rapportage"&&<Rapportage offertes={offertes} facturen={factMet}/>}
@@ -3637,7 +3639,7 @@ function FacturenPage({facturen,settings,initFilter,onView,onEdit,onStatus,onBul
 // ─── KLANTEN PAGE — LIST + PASSPORT ──────────────────────────────
 function KlantenPage({klanten,offertes,facturen,view,onEdit,onDelete}) {
   const [q,setQ]=useState("");
-  const list=klanten.filter(k=>!q||(k.naam||"").toLowerCase().includes(q.toLowerCase())||(k.bedrijf||"").toLowerCase().includes(q.toLowerCase()))
+  const list=klanten.filter(k=>!k._verwijderd&&(!q||(k.naam||"").toLowerCase().includes(q.toLowerCase())||(k.bedrijf||"").toLowerCase().includes(q.toLowerCase())))
     .sort((a,b)=>new Date(b.aangemaakt)-new Date(a.aangemaakt));
 
   const getKlantStats = (k) => {
@@ -4485,7 +4487,7 @@ function FactuurWizard({klanten,producten,editData,onSave,onClose,notify}) {
   const [invoerModus,setInvoerModus] = useState("prod"); // "prod" | "vrij"
   const [factuurTitel,setFactuurTitel] = useState(editData?.titel||"");
 
-  const klantList = klanten.filter(k=>!klantQ||(k.naam||"").toLowerCase().includes(klantQ.toLowerCase())||(k.bedrijf||"").toLowerCase().includes(klantQ.toLowerCase())).slice(0,20);
+  const klantList = klanten.filter(k=>!k._verwijderd&&(!klantQ||(k.naam||"").toLowerCase().includes(klantQ.toLowerCase())||(k.bedrijf||"").toLowerCase().includes(klantQ.toLowerCase()))).slice(0,20);
   const actProds = producten.filter(p=>p.actief);
   const cats = [...new Set(actProds.map(p=>p.cat))];
   const tot = calcTotals(lijnen);
@@ -4774,7 +4776,7 @@ function OfferteWizard({klanten,producten,offertes,editData,settings,onSave,onCl
   };
 
   const tot=calcTotals(lijnen);
-  const klantList=[...klanten].sort((a,b)=>new Date(b.aangemaakt)-new Date(a.aangemaakt)).filter(k=>!klantQ||(k.naam||"").toLowerCase().includes(klantQ.toLowerCase())||(k.bedrijf||"").toLowerCase().includes(klantQ.toLowerCase()));
+  const klantList=[...klanten].filter(k=>!k._verwijderd).sort((a,b)=>new Date(b.aangemaakt)-new Date(a.aangemaakt)).filter(k=>!klantQ||(k.naam||"").toLowerCase().includes(klantQ.toLowerCase())||(k.bedrijf||"").toLowerCase().includes(klantQ.toLowerCase()));
   const stappen=[{n:1,l:"Klant"},{n:2,l:"Type"},{n:3,l:"Producten"},{n:4,l:"Details"},{n:5,l:"Voorbeeld"}];
 
   const doSave=()=>{
