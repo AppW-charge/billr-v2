@@ -1665,23 +1665,31 @@ export default function App() {
       if(s?.user) {
         loadUserData(s.user);
       } else {
-        // Niet ingelogd — laad localStorage voor preview
+        // Niet ingelogd
         try {
           const get = (k,fb)=>{ try{const v=localStorage.getItem(k);return v?JSON.parse(v):fb;}catch(_){return fb;} };
           setSettings(get('b4_set',INIT_SETTINGS));
           setKlanten(get('b4_kln',INIT_KLANTEN));
-          setProducten(get('b4_prd',INIT_PRODUCTS));
+          setProducten(restoreFicheCache(get('b4_prd',INIT_PRODUCTS)));
           setOffertes(get('b4_off',[]));
           setFacturen(get('b4_fct',[]));
         } catch(_){}
         setLoaded(true);
-        dataReady.current = false; // Niet ingelogd → geen saves
+        dataReady.current = false;
       }
+    }).catch(() => {
+      // Supabase niet bereikbaar → toon login
+      setLoaded(true);
     });
 
     sb.auth.onAuthStateChange((event, session) => {
       if(event==="SIGNED_IN" && session?.user && !dataLoaded) loadUserData(session.user);
+      if(event==="SIGNED_OUT") { setUser(null); setLoaded(true); dataReady.current=false; }
     });
+
+    // Noodstop: als na 20s nog niet geladen → toon toch de app
+    const hardTimeout = setTimeout(()=>{ if(!dataLoaded) setLoaded(true); }, 20000);
+    return ()=>clearTimeout(hardTimeout);
   },[]);
 
   // ═══ EMAILJS INITIALISATIE ═══
