@@ -1638,8 +1638,11 @@ export default function App() {
         if(sbData["b4_kln"]) setKlanten(parse("b4_kln", INIT_KLANTEN));
         if(sbData["b4_prd"]) {
           const prods = parse("b4_prd", INIT_PRODUCTS);
-          saveFicheCache(prods); // sla fiches op in aparte cache
-          setProducten(prods);
+          // Herstel fiches uit cache (Supabase heeft gestripte versie door QuotaExceeded)
+          const prodsMetFiches = restoreFicheCache(prods);
+          // Update cache enkel als er echte data in staat
+          saveFicheCache(prodsMetFiches);
+          setProducten(prodsMetFiches);
         }
         if(sbData["b4_off"]) setOffertes(parse("b4_off", []));
         if(sbData["b4_fct"]) setFacturen(parse("b4_fct", []));
@@ -1822,15 +1825,23 @@ export default function App() {
   // Zo gaan fiches nooit verloren bij localStorage strips of Supabase timeouts
   const saveFicheCache = useCallback((productenArr) => {
     try {
-      const cache = {};
+      // Laad bestaande cache eerst - we MERGEN, overschrijven nooit met lege data
+      let existing = {};
+      try { const r = localStorage.getItem("billr_fiche_cache"); if(r) existing = JSON.parse(r); } catch(_){}
+      const cache = {...existing};
+      let changed = false;
       productenArr.forEach(p => {
         if(p.technischeFiches?.some(f => f.data)) {
+          // Alleen overschrijven als we echte data hebben
           cache[p.id] = p.technischeFiches.filter(f => f.data);
+          changed = true;
         } else if(p.technischeFiche && p.technischeFiche !== "[PDF]" && p.technischeFiche.length > 100) {
           cache[p.id] = [{data: p.technischeFiche, naam: p.fichNaam||"fiche.pdf"}];
+          changed = true;
         }
+        // Als geen data → bestaande cache behouden (niet wissen)
       });
-      if(Object.keys(cache).length > 0) {
+      if(changed || Object.keys(existing).length === 0) {
         localStorage.setItem("billr_fiche_cache", JSON.stringify(cache));
       }
     } catch(_) {}
@@ -6205,7 +6216,19 @@ function KlantModal({klant,onSave,onClose}) {
 
 // ─── PRODUCT MODAL ────────────────────────────────────────────────
 function ProductModal({prod,onSave,onClose,settings}) {
-  const [form,setForm]=useState({naam:"",cat:"Laadstation",merk:"",omschr:"",prijs:0,btw:21,eenheid:"stuk",imageUrl:"",specs:[],technischeFiches:[],technischeFiche:null,fichNaam:"",...prod,technischeFiches:prod?.technischeFiches||((prod?.technischeFiche)?[{data:prod.technischeFiche,naam:prod.fichNaam||"fiche.pdf"}]:[])});
+  // Herstel fiches uit cache als het product gestripte fiches heeft
+  const prodMetFiches = React.useMemo(() => {
+    if(!prod?.id) return prod;
+    if(prod.technischeFiches?.some(f => f.data)) return prod; // al ok
+    try {
+      const raw = localStorage.getItem("billr_fiche_cache");
+      if(!raw) return prod;
+      const cache = JSON.parse(raw);
+      if(cache[prod.id]) return {...prod, technischeFiches: cache[prod.id]};
+    } catch(_){}
+    return prod;
+  }, [prod?.id]);
+  const [form,setForm]=useState({naam:"",cat:"Laadstation",merk:"",omschr:"",prijs:0,btw:21,eenheid:"stuk",imageUrl:"",specs:[],technischeFiches:[],technischeFiche:null,fichNaam:"",...prodMetFiches,technischeFiches:prodMetFiches?.technischeFiches||((prodMetFiches?.technischeFiche)?[{data:prodMetFiches.technischeFiche,naam:prodMetFiches.fichNaam||"fiche.pdf"}]:[])}); 
   const [specsStr,setSpecsStr]=useState((prod?.specs||[]).join("\n"));
   const [ficheLoad,setFicheLoad]=useState(false);
   const set=(k,v)=>setForm(p=>({...p,[k]:v}));
