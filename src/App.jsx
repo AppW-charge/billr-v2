@@ -1854,11 +1854,14 @@ export default function App() {
     saveTimer.current = setTimeout(flushSaves, 2000);
   }, [user, flushSaves]);
 
-  // Bij afsluiten: meteen flushen
+  // Bij afsluiten én tab wisselen: meteen flushen
   useEffect(()=>{
     const flush = ()=>{ if(Object.keys(pendingSaves.current).length>0) flushSaves(); };
     window.addEventListener('beforeunload', flush);
-    return ()=>window.removeEventListener('beforeunload', flush);
+    // Ook bij tab hide: meteen flushen zodat andere browser altijd actuele data laadt
+    const onHide = ()=>{ if(document.visibilityState==='hidden' && Object.keys(pendingSaves.current).length>0) flushSaves(); };
+    document.addEventListener('visibilitychange', onHide);
+    return ()=>{ window.removeEventListener('beforeunload', flush); document.removeEventListener('visibilitychange', onHide); };
   }, [flushSaves]);
   const saveFicheCache = useCallback((productenArr) => {
     try {
@@ -2015,6 +2018,8 @@ export default function App() {
       if(Date.now()-lastSync < 30000) return;
       lastSync = Date.now();
       try {
+        // EERST pending saves flushen — anders laadt andere browser oude data
+        await flushSaves();
         const allData = await Promise.race([
           sbGetAll(user.id),
           new Promise(r=>setTimeout(()=>r(null),10000))
@@ -2023,19 +2028,12 @@ export default function App() {
           Object.values(allData).some(v => v && v.length > 10);
         if(!hasReal) return;
         const p = (k,fb) => { try { return allData[k]?JSON.parse(allData[k]):fb; } catch(_){return fb;} };
-        // Settings: alleen als er echte bedrijfsdata in zit
-        if(allData["b4_set"]) {
-          const s=p("b4_set",null);
-          if(s?.bedrijf?.naam||s?.email?.eigen) setSettings(s);
-        }
-        // Klanten: laad inclusief _verwijderd flags
+        if(allData["b4_set"]) { const s=p("b4_set",null); if(s?.bedrijf?.naam||s?.email?.eigen) setSettings(s); }
         if(allData["b4_kln"]) setKlanten(p("b4_kln",[]));
-        // Producten: herstel fiches uit cache na laden
         if(allData["b4_prd"]) {
-          const prods = p("b4_prd",[]);
-          setProducten(restoreFicheCache(prods));
+          const sbFicheCache = allData["b4_fic"] ? p("b4_fic",null) : null;
+          setProducten(restoreFicheCache(p("b4_prd",[]), sbFicheCache));
         }
-        // Offertes/facturen: enkel laden als er data is
         if(allData["b4_off"]) { const v=p("b4_off",null); if(v!==null) setOffertes(v); }
         if(allData["b4_fct"]) { const v=p("b4_fct",null); if(v!==null) setFacturen(v); }
         if(allData["b4_cn"])  setCreditnotas(p("b4_cn",[]));
@@ -2046,12 +2044,12 @@ export default function App() {
         if(allData["b4_ga"])  setGaranties(p("b4_ga",[]));
         if(allData["b4_at"])  setAcceptTokens(p("b4_at",{}));
         if(allData["b4_wo"])  setWidgetOrder(p("b4_wo",null));
-        console.log("✅ Mobile sync vanuit Supabase");
+        console.log("✅ Mobile sync");
       } catch(e) { console.warn("Mobile sync mislukt:",e); }
     };
     document.addEventListener("visibilitychange", handleVisibility);
     return ()=>document.removeEventListener("visibilitychange", handleVisibility);
-  },[user, restoreFicheCache]);
+  },[user, restoreFicheCache, flushSaves]);
 
   const notify = (msg,type="ok") => { setNotif({msg,type}); setTimeout(()=>setNotif(null),3400); };
 
@@ -2785,7 +2783,7 @@ export default function App() {
 
           <div className="content">
             {pg==="dashboard"&&<Dashboard offertes={offertes} facturen={factMet} onGoto={gotoFiltered} onNew={()=>{setEditOff(null);setWizOpen(true)}} onFactuur={d=>setFactModal(d)} settings={settings} offerteViews={offerteViews} offerteResponses={offerteResponses} planningProposals={planningProposals} onLogboek={o=>setLogboekModal(o)} onPlan={o=>setPlanningModal(o)} widgetOrder={widgetOrder} setWidgetOrder={setWidgetOrder} onRefreshTracking={fetchOfferteTracking}/>}
-            {pg==="offertes"&&<OffertesPage offertes={offertes} initFilter={pgFilter} onView={d=>setViewDoc({doc:d,type:"offerte"})} onEdit={d=>{setEditOff(d);setWizOpen(true)}} onStatus={updOff} onBulkStatus={bulkUpdOff} onFactuur={d=>setFactModal(d)} onDelete={id=>{setOffertes(p=>p.filter(o=>o.id!==id));notify("Verwijderd")}} onNew={()=>{setEditOff(null);setWizOpen(true)}} onEmail={d=>{shareOfferte(d);setEmailModal({doc:d,type:"offerte"});}} onPlan={d=>setPlanningModal(d)} onShare={d=>{shareOfferte(d);notify("🔗 Publieke link vernieuwd ✓");}} settings={settings}/>}
+            {pg==="offertes"&&<OffertesPage offertes={offertes} initFilter={pgFilter} onView={d=>setViewDoc({doc:d,type:"offerte"})} onEdit={d=>{setEditOff(d);setWizOpen(true)}} onStatus={updOff} onBulkStatus={bulkUpdOff} onFactuur={d=>setFactModal(d)} onDelete={id=>{setOffertes(p=>p.filter(o=>o.id!==id));notify("Verwijderd");setTimeout(flushSaves,100);}} onNew={()=>{setEditOff(null);setWizOpen(true)}} onEmail={d=>{shareOfferte(d);setEmailModal({doc:d,type:"offerte"});}} onPlan={d=>setPlanningModal(d)} onShare={d=>{shareOfferte(d);notify("🔗 Publieke link vernieuwd ✓");}} settings={settings}/>}
             {pg==="facturen"&&<FacturenPage facturen={factMet} settings={settings} initFilter={pgFilter} onView={d=>setViewDoc({doc:d,type:"factuur"})} onEdit={f=>{setEditFact(f);setFactuurWizOpen(true);}} onStatus={updFact} onBulkStatus={bulkUpdFact} onDelete={id=>{setFacturen(p=>p.filter(f=>f.id!==id));notify("Verwijderd")}} notify={notify} onEmail={d=>setEmailModal({doc:d,type:"factuur"})} onBetaling={f=>setBetalingModal(f)} onAanmaning={f=>setAanmaningModal(f)} onNew={()=>{setEditFact(null);setFactuurWizOpen(true)}}/>}
             {pg==="klanten"&&<KlantenPage klanten={klanten} offertes={offertes} facturen={factMet} view={klantView} onEdit={k=>setKlantModal(k)} onDelete={id=>{setKlanten(p=>p.map(k=>k.id===id?{...k,_verwijderd:true}:k));notify("Klant verwijderd")}}/>}
             {pg==="producten"&&<ProductenPage producten={producten} settings={settings} onEdit={p=>setProdModal(p)} onDelete={id=>{setProducten(p=>p.filter(x=>x.id!==id));notify("Verwijderd")}} onToggle={id=>setProducten(p=>p.map(x=>x.id===id?{...x,actief:!x.actief}:x))} onEnrich={upd=>setProducten(p=>p.map(x=>x.id===upd.id?upd:x))} onDuplicate={p=>{const dup={...p,id:uid(),naam:p.naam+" (kopie)",aangemaakt:new Date().toISOString()};setProducten(prev=>[dup,...prev]);notify("Product gedupliceerd ✓");setProdModal(dup);}}/>}
