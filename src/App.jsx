@@ -1804,6 +1804,41 @@ export default function App() {
   // Supabase: full data
   // ── FICHE CACHE: sla base64 fiche data apart op per product ID ──
   // Zo gaan fiches nooit verloren bij localStorage strips of Supabase timeouts
+  const pendingSaves = useRef({});
+  const saveTimer = useRef(null);
+
+  const flushSaves = useCallback(async () => {
+    if(!user || !dataReady.current) return;
+    const batch = {...pendingSaves.current};
+    pendingSaves.current = {};
+    for(const [key, json] of Object.entries(batch)) {
+      try { await sbSet(key, json, user.id); } catch(_){}
+    }
+  }, [user]);
+
+  const saveKey = useCallback((key, val) => { 
+    if(!dataReady.current) return;
+    if(!user) return;
+    
+    // Strip base64 — nooit grote data naar Supabase
+    const stripped = stripBase64(key, val);
+    const json = JSON.stringify(stripped);
+    
+    // localStorage: meteen (snel, lokaal)
+    try { localStorage.setItem(key, json); } catch(e) { try { localStorage.removeItem(key); } catch(_){} }
+    
+    // Supabase: batchen + debounce 2s — max 1 call per 2s ipv per keypress
+    pendingSaves.current[key] = json;
+    if(saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(flushSaves, 2000);
+  }, [user, flushSaves]);
+
+  // Bij afsluiten: meteen flushen
+  useEffect(()=>{
+    const flush = ()=>{ if(Object.keys(pendingSaves.current).length>0) flushSaves(); };
+    window.addEventListener('beforeunload', flush);
+    return ()=>window.removeEventListener('beforeunload', flush);
+  }, [flushSaves]);
   const saveFicheCache = useCallback((productenArr) => {
     try {
       let existing = {};
@@ -1850,63 +1885,6 @@ export default function App() {
     } catch(_) { return productenArr; }
   }, []);
 
-  const stripBase64 = (key, val) => {
-    if(!Array.isArray(val)) return val;
-    if(key === "b4_prd") return val.map(p => {
-      const c = {...p};
-      if(c.technischeFiche && String(c.technischeFiche).length > 500) c.technischeFiche = "[PDF]";
-      if(c.technischeFiches) c.technischeFiches = c.technischeFiches.map(f => ({naam:f.naam||"",url:f.url||"",type:f.type||""}));
-      return c;
-    });
-    if(key === "b4_off" || key === "b4_fct") return val.map(d => {
-      const c = {...d};
-      if(c.lijnen) c.lijnen = c.lijnen.map(l => {
-        const cl = {...l};
-        if(cl.technischeFiche && String(cl.technischeFiche).length > 500) cl.technischeFiche = null;
-        if(cl.technischeFiches) cl.technischeFiches = cl.technischeFiches.map(f => ({naam:f.naam||"",url:f.url||"",type:f.type||""}));
-        return cl;
-      });
-      return c;
-    });
-    return val;
-  };
-
-  // ═══ DEBOUNCED BATCH SAVE — max 1 Supabase call per 2 seconden ═══
-  const pendingSaves = useRef({});
-  const saveTimer = useRef(null);
-
-  const flushSaves = useCallback(async () => {
-    if(!user || !dataReady.current) return;
-    const batch = {...pendingSaves.current};
-    pendingSaves.current = {};
-    for(const [key, json] of Object.entries(batch)) {
-      try { await sbSet(key, json, user.id); } catch(_){}
-    }
-  }, [user]);
-
-  const saveKey = useCallback((key, val) => { 
-    if(!dataReady.current) return;
-    if(!user) return;
-    
-    // Strip base64 — nooit grote data naar Supabase
-    const stripped = stripBase64(key, val);
-    const json = JSON.stringify(stripped);
-    
-    // localStorage: meteen (snel, lokaal)
-    try { localStorage.setItem(key, json); } catch(e) { try { localStorage.removeItem(key); } catch(_){} }
-    
-    // Supabase: batchen + debounce 2s — max 1 call per 2s ipv per keypress
-    pendingSaves.current[key] = json;
-    if(saveTimer.current) clearTimeout(saveTimer.current);
-    saveTimer.current = setTimeout(flushSaves, 2000);
-  }, [user, flushSaves]);
-
-  // Bij afsluiten: meteen flushen
-  useEffect(()=>{
-    const flush = ()=>{ if(Object.keys(pendingSaves.current).length>0) flushSaves(); };
-    window.addEventListener('beforeunload', flush);
-    return ()=>window.removeEventListener('beforeunload', flush);
-  }, [flushSaves]);
   useEffect(()=>{ saveKey("b4_off", offertes);  },[offertes,   saveKey]);
   useEffect(()=>{ saveKey("b4_fct", facturen);  },[facturen,   saveKey]);
   useEffect(()=>{ saveKey("b4_kln", klanten);   },[klanten,    saveKey]);
@@ -5596,13 +5574,18 @@ function OfferteDocument({doc, settings}) {
                     </div>
                   )}
                   {i<uniqueProds.length-1&&<div style={{height:1,background:"#e2e8f0",marginTop:20}}/>}
-                  {/* Technische fiches indicatie (label only, PDF's staan onderaan) */}
-                  {((l.technischeFiches||[]).length>0||l.technischeFiche)&&<div style={{marginTop:8,display:"flex",flexWrap:"wrap",gap:4}}>
-                    {(l.technischeFiches||[]).map((f,fi)=>(
-                      <span key={fi} style={{display:"inline-flex",alignItems:"center",gap:4,background:"#eff6ff",border:"1px solid #bfdbfe",borderRadius:5,padding:"3px 10px",fontSize:11,color:"#2563eb",fontWeight:600}}>📎 {f.naam||"Fiche "+(fi+1)}</span>
+                  {/* Technische fiches — download links */}
+                  {((l.technischeFiches||[]).some(f=>f.data||f.url)||l.technischeFiche)&&<div style={{marginTop:8,display:"flex",flexWrap:"wrap",gap:4}}>
+                    {(l.technischeFiches||[]).filter(f=>f.data||f.url).map((f,fi)=>(
+                      <a key={fi} href={f.data||f.url} download={f.naam||"fiche.pdf"} style={{display:"inline-flex",alignItems:"center",gap:5,background:"#eff6ff",border:"1px solid #bfdbfe",borderRadius:6,padding:"5px 12px",fontSize:11.5,color:"#2563eb",textDecoration:"none",fontWeight:600}}>📎 {f.naam||"Technische fiche"}</a>
                     ))}
-                    {l.technischeFiche&&!(l.technischeFiches||[]).length&&<span style={{display:"inline-flex",alignItems:"center",gap:4,background:"#eff6ff",border:"1px solid #bfdbfe",borderRadius:5,padding:"3px 10px",fontSize:11,color:"#2563eb",fontWeight:600}}>📎 {l.fichNaam||"Technische fiche"}</span>}
-                    <span style={{fontSize:10,color:"#94a3b8",alignSelf:"center"}}>→ zie onderaan</span>
+                    {l.technischeFiche&&l.technischeFiche!=="[PDF]"&&!(l.technischeFiches||[]).length&&(
+                      <a href={l.technischeFiche} download={l.fichNaam||"fiche.pdf"} style={{display:"inline-flex",alignItems:"center",gap:5,background:"#eff6ff",border:"1px solid #bfdbfe",borderRadius:6,padding:"5px 12px",fontSize:11.5,color:"#2563eb",textDecoration:"none",fontWeight:600}}>📎 {l.fichNaam||"Technische fiche"}</a>
+                    )}
+                    {/* Fiches zonder data — toon als label (cache nog niet geladen) */}
+                    {(l.technischeFiches||[]).filter(f=>!f.data&&!f.url).map((f,fi)=>(
+                      <span key={"lbl"+fi} style={{display:"inline-flex",alignItems:"center",gap:4,background:"#f1f5f9",border:"1px solid #e2e8f0",borderRadius:5,padding:"3px 10px",fontSize:11,color:"#64748b"}}>📎 {f.naam||"Fiche "+(fi+1)}</span>
+                    ))}
                   </div>}
                 </div>
               );
