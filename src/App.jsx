@@ -6274,7 +6274,7 @@ function ProductModal({prod,onSave,onClose,settings}) {
             <div style={{display:"flex",gap:8,alignItems:"center"}}>
               <input type="number" className="fc" value={form.bebatKg||""} step="0.1" min={0}
                 placeholder="bijv. 50"
-                onChange={e=>set("bebatKg",e.target.value====""?null:Number(e.target.value))}
+                onChange={e=>{const v=e.target.value;set("bebatKg",v?Number(v):null);}}
                 style={{maxWidth:140}}/>
               <div style={{fontSize:12,color:"#92400e",lineHeight:1.4}}>
                 {form.bebatKg>0 ? <>Toeslag: <strong>{(form.bebatKg*BEBAT_TARIEF).toFixed(2).replace(".",",")} €</strong> per stuk (€{BEBAT_TARIEF.toFixed(2).replace(".",",")} × {form.bebatKg} kg excl. BTW)</> : "Vul gewicht in → BEBAT toeslag wordt automatisch berekend"}
