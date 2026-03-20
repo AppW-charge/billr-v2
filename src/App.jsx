@@ -1852,17 +1852,14 @@ export default function App() {
     if(!dataReady.current) return;
     if(!user) return;
     
-    const json = JSON.stringify(val);
+    // Strip base64 voor ZOWEL localStorage als Supabase — fiches enkel in fiche cache
+    const stripped = stripBase64(key, val);
+    const json = JSON.stringify(stripped);
     
-    // localStorage cache (snel, geen base64 fiches)
-    try {
-      const stripped = stripBase64(key, val);
-      localStorage.setItem(key, JSON.stringify(stripped));
-    } catch(e) {
-      try { localStorage.removeItem(key); } catch(_){}
-    }
+    // localStorage
+    try { localStorage.setItem(key, json); } catch(e) { try { localStorage.removeItem(key); } catch(_){} }
     
-    // Supabase: ALTIJD opslaan — geen blokkering
+    // Supabase: gestripte versie (klein, geen 504)
     await sbSet(key, json, user.id);
   }, [user]);
   useEffect(()=>{ saveKey("b4_off", offertes);  },[offertes,   saveKey]);
