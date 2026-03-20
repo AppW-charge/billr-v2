@@ -11,7 +11,9 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGri
 // ─── SUPABASE CLIENT ──────────────────────────────────────────────
 const SB_URL  = "https://qxnxbqkdvvblfkihmjxy.supabase.co";
 const SB_KEY  = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF4bnhicWtkdnZibGZraWhtanh5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMzNTI3MTMsImV4cCI6MjA4ODkyODcxM30.1JDvrHgxLpU1GZqSjDVGtfnFJg8PHuD-aFpHOxAY1To";
-const sb = createClient(SB_URL, SB_KEY);
+const sb = createClient(SB_URL, SB_KEY, {
+  auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false }
+});
 
 // ─── SUPABASE DATA HELPERS ────────────────────────────────────────
 // Slaat alles op in één tabel: user_data (user_id, key, value)
@@ -1678,7 +1680,10 @@ export default function App() {
         dataReady.current = false;
       }
     }).catch(() => {
-      // Supabase niet bereikbaar → toon login
+      // Supabase niet bereikbaar of corrupte sessie → wis tokens en toon login
+      try {
+        Object.keys(localStorage).filter(k=>k.startsWith('sb-')||k.includes('supabase')).forEach(k=>localStorage.removeItem(k));
+      } catch(_){}
       setLoaded(true);
     });
 
