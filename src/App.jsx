@@ -2059,7 +2059,12 @@ export default function App() {
     return `${customPre}-${y}-${String((Math.max(0,...ns)+1)).padStart(3,"0")}`;
   };
   const logEntry = (actie) => ({ts: new Date().toISOString(), actie});
-  const updOff = (id,upd) => setOffertes(p=>p.map(o=>o.id===id?{...o,...upd,log:[...(o.log||[]),logEntry(upd.status?"Status → "+(OFF_STATUS[upd.status]?.l||upd.status):upd.logActie||"Gewijzigd")]}:o));
+  const updOff = (id,upd) => setOffertes(p=>p.map(o=>{
+    if(o.id!==id) return o;
+    const updated={...o,...upd,log:[...(o.log||[]),logEntry(upd.status?"Status → "+(OFF_STATUS[upd.status]?.l||upd.status):upd.logActie||"Gewijzigd")]};
+    setTimeout(()=>shareOfferte(updated),800); // automatisch share bijwerken
+    return updated;
+  }));
   const updFact = (id,upd) => setFacturen(p=>p.map(f=>f.id===id?{...f,...upd,log:[...(f.log||[]),logEntry(upd.status?"Status → "+(FACT_STATUS[upd.status]?.l||upd.status):upd.logActie||"Gewijzigd")]}:f));
   const bulkUpdOff = (ids,upd) => setOffertes(p=>p.map(o=>ids.includes(o.id)?{...o,...upd,log:[...(o.log||[]),logEntry(upd.status?"Bulk → "+(OFF_STATUS[upd.status]?.l||upd.status):"Bulk gewijzigd")]}:o));
   const bulkUpdFact = (ids,upd) => setFacturen(p=>p.map(f=>ids.includes(f.id)?{...f,...upd,log:[...(f.log||[]),logEntry(upd.status?"Bulk → "+(FACT_STATUS[upd.status]?.l||upd.status):"Bulk gewijzigd")]}:f));
@@ -2107,9 +2112,11 @@ export default function App() {
     
     if(finalData.id && offertes.find(o=>o.id===finalData.id)){
       setOffertes(p=>p.map(o=>o.id===finalData.id?finalData:o)); notify("Offerte opgeslagen ✓");
+      setTimeout(()=>shareOfferte(finalData), 500); // share na state update
     } else {
       const n={...finalData,id:uid(),nummer:nextNr("OFF",offertes,"nummer"),aangemaakt:new Date().toISOString(),status:"concept"};
       setOffertes(p=>[n,...p]); notify("Offerte aangemaakt ✓");
+      setTimeout(()=>shareOfferte(n), 500); // share na state update
     }
     setWizOpen(false); setEditOff(null);
   };
