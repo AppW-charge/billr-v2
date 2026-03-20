@@ -1807,6 +1807,27 @@ export default function App() {
   const pendingSaves = useRef({});
   const saveTimer = useRef(null);
 
+  const stripBase64 = (key, val) => {
+    if(!Array.isArray(val)) return val;
+    if(key === "b4_prd") return val.map(p => {
+      const c = {...p};
+      if(c.technischeFiche && String(c.technischeFiche).length > 500) c.technischeFiche = "[PDF]";
+      if(c.technischeFiches) c.technischeFiches = c.technischeFiches.map(f => ({naam:f.naam||"",url:f.url||"",type:f.type||""}));
+      return c;
+    });
+    if(key === "b4_off" || key === "b4_fct") return val.map(doc => {
+      const cl = {...doc};
+      if(cl.lijnen) cl.lijnen = cl.lijnen.map(l => {
+        const ll = {...l};
+        if(ll.technischeFiche && String(ll.technischeFiche).length > 500) ll.technischeFiche = null;
+        if(ll.technischeFiches) ll.technischeFiches = ll.technischeFiches.map(f => ({naam:f.naam||"",url:f.url||"",type:f.type||""}));
+        return ll;
+      });
+      return cl;
+    });
+    return val;
+  };
+
   const flushSaves = useCallback(async () => {
     if(!user || !dataReady.current) return;
     const batch = {...pendingSaves.current};
