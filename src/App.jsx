@@ -6187,9 +6187,9 @@ function KlantModal({klant,onSave,onClose}) {
 // ─── PRODUCT MODAL ────────────────────────────────────────────────
 function ProductModal({prod,onSave,onClose,settings}) {
   // Herstel fiches uit cache als het product gestripte fiches heeft
-  const prodMetFiches = React.useMemo(() => {
+  const prodMetFiches = (() => {
     if(!prod?.id) return prod;
-    if(prod.technischeFiches?.some(f => f.data)) return prod; // al ok
+    if(prod.technischeFiches?.some(f => f.data)) return prod;
     try {
       const raw = localStorage.getItem("billr_fiche_cache");
       if(!raw) return prod;
@@ -6197,7 +6197,7 @@ function ProductModal({prod,onSave,onClose,settings}) {
       if(cache[prod.id]) return {...prod, technischeFiches: cache[prod.id]};
     } catch(_){}
     return prod;
-  }, [prod?.id]);
+  })();
   const [form,setForm]=useState({naam:"",cat:"Laadstation",merk:"",omschr:"",prijs:0,btw:21,eenheid:"stuk",imageUrl:"",specs:[],technischeFiches:[],technischeFiche:null,fichNaam:"",...prodMetFiches,technischeFiches:prodMetFiches?.technischeFiches||((prodMetFiches?.technischeFiche)?[{data:prodMetFiches.technischeFiche,naam:prodMetFiches.fichNaam||"fiche.pdf"}]:[])}); 
   const [specsStr,setSpecsStr]=useState((prod?.specs||[]).join("\n"));
   const [ficheLoad,setFicheLoad]=useState(false);
