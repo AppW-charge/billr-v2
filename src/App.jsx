@@ -105,12 +105,39 @@ const today = () => new Date().toISOString().split("T")[0];
 const stripBe = s => (s||"").replace(/[^0-9]/g,"");
 const fmtBtwnr = n => { const c=stripBe(n); return c.length>=9?"BE "+c.slice(0,4)+"."+c.slice(4,7)+"."+c.slice(7):(n||""); };
 
+const BEBAT_TARIEF = 2.89; // €/kg excl BTW — per 1 jan 2026
+const BEBAT_BTW = 21;
+
+// Bepaal of een product BEBAT-plichtig is
+// Batterij-onderdelen zijn dat: naam bevat "batter" maar NIET "bms"
+const isBebatProduct = (naam="",cat="") => {
+  const n = naam.toLowerCase();
+  const c = cat.toLowerCase();
+  if(n.includes("bms") || n.includes("battery management")) return false;
+  return n.includes("batter") || c.includes("batter");
+};
+
 function calcTotals(lijnen=[]) {
   const sub = lijnen.reduce((s,l)=>s+(l.prijs*l.aantal),0);
   const gr={};
-  lijnen.forEach(l=>{const r=l.btw||21;if(!gr[r])gr[r]=0;gr[r]+=l.prijs*l.aantal*(r/100);});
+  lijnen.forEach(l=>{
+    const r=l.btw||21;
+    if(!gr[r])gr[r]=0;
+    gr[r]+=l.prijs*l.aantal*(r/100);
+    // BEBAT toeslag
+    if(l.bebatKg && l.bebatKg>0 && isBebatProduct(l.naam,l.cat||"")) {
+      const bebatEx = l.bebatKg * l.aantal * BEBAT_TARIEF;
+      if(!gr[BEBAT_BTW])gr[BEBAT_BTW]=0;
+      gr[BEBAT_BTW]+=bebatEx*(BEBAT_BTW/100);
+    }
+  });
   const btw=Object.values(gr).reduce((s,v)=>s+v,0);
-  return {subtotaal:sub,btw,totaal:sub+btw,btwGroepen:gr};
+  // BEBAT subtotaal appart
+  const bebatSub = lijnen.reduce((s,l)=>{
+    if(l.bebatKg&&l.bebatKg>0&&isBebatProduct(l.naam,l.cat||"")) return s+l.bebatKg*l.aantal*BEBAT_TARIEF;
+    return s;
+  },0);
+  return {subtotaal:sub,btw,totaal:sub+bebatSub+btw,btwGroepen:gr,bebatSub};
 }
 
 // ─── OGM / GESTRUCTUREERDE MEDEDELING ────────────────────────────
@@ -3799,7 +3826,6 @@ function ProductenPage({producten,settings,onEdit,onDelete,onToggle,onEnrich,onD
             <button className="bulk-act-btn" onClick={()=>setShowBulkPrijs(!showBulkPrijs)}>💰 Prijs %</button>
             <button className="bulk-act-btn" onClick={()=>setShowBulkCat(!showBulkCat)}>📁 Categorie</button>
             <button className="bulk-act-btn" onClick={()=>{[...sel].forEach(id=>{const p=producten.find(x=>x.id===id);if(p)onEnrich({...p,btw:p.btw===6?21:6});});setSel(new Set());}}>🔄 BTW wissel</button>
-            <button className="bulk-act-btn" onClick={async()=>{for(const id of [...sel]){const p=producten.find(x=>x.id===id);if(p){setEnriching(id);try{await doEnrich(p);}catch(_){}setEnriching(null);}}setSel(new Set());}}>✨ AI Bulk</button>
           </div>
           {showBulkPrijs&&(
             <div style={{display:"flex",gap:6,alignItems:"center",width:"100%",marginTop:4}}>
@@ -3809,12 +3835,24 @@ function ProductenPage({producten,settings,onEdit,onDelete,onToggle,onEnrich,onD
             </div>
           )}
           {showBulkCat&&(
-            <div style={{display:"flex",gap:6,alignItems:"center",width:"100%",marginTop:4}}>
-              <select value={bulkCat} onChange={e=>setBulkCat(e.target.value)} style={{padding:"5px 9px",border:"1.5px solid rgba(255,255,255,.4)",borderRadius:6,background:"rgba(255,255,255,.15)",color:"#fff",fontSize:12}}>
-                <option value="">— Kies categorie —</option>
-                {catNamenUniq.map(c=><option key={c} value={c}>{c}</option>)}
-              </select>
-              <button className="bulk-act-btn" onClick={()=>{if(!bulkCat)return;[...sel].forEach(id=>{const p=producten.find(x=>x.id===id);if(p)onEnrich({...p,cat:bulkCat});});setSel(new Set());setShowBulkCat(false);setBulkCat("");}}>✓ Verplaats</button>
+            <div style={{width:"100%",marginTop:6,display:"flex",gap:6,alignItems:"flex-start",flexWrap:"wrap"}}>
+              {/* Custom dropdown — native select is onleesbaar op donkere achtergrond */}
+              <div style={{position:"relative"}}>
+                <div style={{padding:"6px 10px",minWidth:200,border:"1.5px solid rgba(255,255,255,.7)",borderRadius:6,background:"#fff",color:"#1e293b",fontSize:12.5,cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,fontWeight:bulkCat?700:400}}
+                  onClick={()=>{const el=document.getElementById("billr-cat-dd");el.style.display=el.style.display==="block"?"none":"block";}}>
+                  <span>{bulkCat||"— Kies categorie —"}</span><span style={{color:"#94a3b8"}}>▾</span>
+                </div>
+                <div id="billr-cat-dd" style={{display:"none",position:"absolute",top:"calc(100% + 4px)",left:0,background:"#fff",border:"1.5px solid #e2e8f0",borderRadius:8,boxShadow:"0 8px 24px rgba(0,0,0,.15)",zIndex:9999,minWidth:200,maxHeight:240,overflowY:"auto"}}>
+                  {catNamenUniq.map(c=>(
+                    <div key={c}
+                      onMouseDown={()=>{setBulkCat(c);document.getElementById("billr-cat-dd").style.display="none";}}
+                      style={{padding:"9px 14px",fontSize:13,color:"#1e293b",cursor:"pointer",fontWeight:bulkCat===c?700:400,background:bulkCat===c?"#eff6ff":"#fff",borderBottom:"1px solid #f8fafc"}}>
+                      {c}
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <button className="bulk-act-btn" style={{background:"#10b981",border:"none"}} onClick={()=>{if(!bulkCat)return;[...sel].forEach(id=>{const p=producten.find(x=>x.id===id);if(p)onEnrich({...p,cat:bulkCat});});setSel(new Set());setShowBulkCat(false);setBulkCat("");const el=document.getElementById("billr-cat-dd");if(el)el.style.display="none";}}>✓ Verplaats</button>
             </div>
           )}
           <button className="bulk-act-btn" style={{marginLeft:"auto"}} onClick={()=>setSel(new Set())}>✕</button>
@@ -3851,7 +3889,6 @@ function ProductenPage({producten,settings,onEdit,onDelete,onToggle,onEnrich,onD
                 <span style={{fontSize:11,color:p.btw===6?"#059669":"#2563eb",fontWeight:600}}>{p.btw}%</span>
               </div>
               <div style={{display:"flex",gap:4,marginTop:8}} onClick={e=>e.stopPropagation()}>
-                <button className="btn bs btn-sm" style={{flex:1,fontSize:10}} onClick={()=>doEnrich(p)} disabled={enriching===p.id}>{enriching===p.id?"⟳":"✨ AI"}</button>
                 <button className="btn bs btn-sm" style={{fontSize:10}} title="Dupliceren" onClick={()=>onDuplicate(p)}>📋</button>
                 <button className="btn bs btn-sm" style={{fontSize:10}} onClick={()=>{if(window.confirm("Verwijderen?"))onDelete(p.id)}}>🗑</button>
               </div>
@@ -3887,14 +3924,6 @@ function ProductenPage({producten,settings,onEdit,onDelete,onToggle,onEnrich,onD
             <td className="mob-hide"><span className="status-badge" style={{background:p.btw===6?"#f0fdf4":"#f0f4ff",color:p.btw===6?"#059669":"#2563eb"}}>{p.btw}%</span></td>
             <td className="mob-hide" style={{color:"#64748b",fontSize:12}}>{p.eenheid}</td>
             <td><div className="flex gap2" style={{flexWrap:"wrap"}}>
-              <button className="btn bs btn-sm" title="AI info ophalen (specs+beschrijving)" onClick={()=>doEnrich(p)} disabled={enriching===p.id}>{enriching===p.id?<span className="spin">⟳</span>:"✨ AI"}</button>
-              <button className="btn bs btn-sm" title="AI afbeelding ophalen" style={{fontSize:11}} disabled={enriching===p.id} onClick={async()=>{
-                setEnriching(p.id);
-                const url=await fetchAIImageUrl(p.naam,p.merk||"");
-                setEnriching(null);
-                if(url)onEnrich({...p,imageUrl:url});
-                else alert("Geen afbeelding gevonden. Vul de URL manueel in via het bewerk-formulier.");
-              }}>🖼 Beeld</button>
               <button className="btn bs btn-sm" onClick={()=>onEdit(p)}>✏️</button>
               <button className="btn bs btn-sm" title="Dupliceren" onClick={()=>onDuplicate(p)}>📋</button>
               <button className="btn bgh btn-sm" onClick={()=>{if(window.confirm("Verwijderen?"))onDelete(p.id)}}>🗑</button>
@@ -4772,7 +4801,7 @@ function OfferteWizard({klanten,producten,offertes,editData,settings,onSave,onCl
     const nb=btwRegime==="verlegd"?0:btwRegime==="btw6"?6:21;
     const finalBtw=btwRegime==="verlegd"?0:btwRegime==="btw6"?6:(prod.btw!==undefined?prod.btw:nb);
     if(aantal<=0){setLijnen(p=>p.filter(l=>l.productId!==prod.id));return;}
-    setLijnen(p=>{const ex=p.find(l=>l.productId===prod.id);if(ex)return p.map(l=>l.productId===prod.id?{...l,aantal,groepId:gid||l.groepId}:l);return[...p,{id:uid(),productId:prod.id,naam:prod.naam,omschr:prod.omschr,prijs:prod.prijs,btw:finalBtw,aantal,eenheid:prod.eenheid||"stuk",groepId:gid,imageUrl:prod.imageUrl,specs:prod.specs,technischeFiches:prod.technischeFiches||[],technischeFiche:prod.technischeFiche||null,fichNaam:prod.fichNaam||""}];});
+    setLijnen(p=>{const ex=p.find(l=>l.productId===prod.id);if(ex)return p.map(l=>l.productId===prod.id?{...l,aantal,groepId:gid||l.groepId}:l);return[...p,{id:uid(),productId:prod.id,naam:prod.naam,omschr:prod.omschr,prijs:prod.prijs,btw:finalBtw,aantal,eenheid:prod.eenheid||"stuk",groepId:gid,imageUrl:prod.imageUrl,specs:prod.specs,technischeFiches:prod.technischeFiches||[],technischeFiche:prod.technischeFiche||null,fichNaam:prod.fichNaam||"",bebatKg:prod.bebatKg||null,cat:prod.cat||""}];});
   };
 
   const tot=calcTotals(lijnen);
@@ -5616,6 +5645,7 @@ function OfferteDocument({doc, settings}) {
           <div className="qt-totals">
             <div className="qt-tot-box">
               <div className="qt-tot-row"><span>Subtotaal excl. BTW</span><span>{fmtEuro(tot.subtotaal)}</span></div>
+              {tot.bebatSub>0&&<div className="qt-tot-row btwr"><span>♻️ BEBAT bijdrage</span><span>{fmtEuro(tot.bebatSub)}</span></div>}
               {Object.entries(tot.btwGroepen).map(([p,b])=><div key={p} className="qt-tot-row btwr"><span>BTW {p}%</span><span>{fmtEuro(b)}</span></div>)}
               {doc.korting>0&&<div className="qt-tot-row krt"><span>Korting {doc.kortingType==="pct"?`(${doc.korting}%)`:"(forfait)"}</span><span>−{fmtEuro(kortingBedrag*(1+0.21))}</span></div>}
               <div className="qt-tot-row last" style={{background:dc,color:"#fff"}}><span>TOTAAL incl. BTW</span><span>{fmtEuro(eindTot)}</span></div>
@@ -5799,6 +5829,7 @@ function FactuurDocument({doc, settings}) {
           <div className="qt-totals">
             <div className="qt-tot-box">
               <div className="qt-tot-row"><span>Subtotaal excl. BTW</span><span>{fmtEuro(tot.subtotaal)}</span></div>
+              {tot.bebatSub>0&&<div className="qt-tot-row btwr"><span>♻️ BEBAT bijdrage</span><span>{fmtEuro(tot.bebatSub)}</span></div>}
               {Object.entries(tot.btwGroepen).map(([p,b])=><div key={p} className="qt-tot-row btwr"><span>BTW {p}%</span><span>{fmtEuro(b)}</span></div>)}
               <div className="qt-tot-row last" style={{background:dc,color:"#fff"}}><span>TOTAAL incl. BTW</span><span>{fmtEuro(tot.totaal)}</span></div>
             </div>
@@ -6236,6 +6267,21 @@ function ProductModal({prod,onSave,onClose,settings}) {
           <div className="fg"><label className="fl">Prijs excl. BTW (€)</label><input type="number" className="fc" value={form.prijs} step="0.01" min={0} onChange={e=>set("prijs",Number(e.target.value))}/></div>
           <div className="fg"><label className="fl">BTW tarief</label><select className="fc" value={form.btw} onChange={e=>set("btw",Number(e.target.value))}><option value={6}>6% (renovatie)</option><option value={21}>21% (standaard)</option></select></div>
         </div>
+        {/* BEBAT — enkel voor batterijproducten, niet voor BMS */}
+        {isBebatProduct(form.naam, form.cat) && (
+          <div className="fg" style={{background:"#fef9c3",border:"1.5px solid #fde047",borderRadius:8,padding:"10px 14px"}}>
+            <label className="fl" style={{color:"#854d0e"}}>♻️ BEBAT gewicht (kg per stuk)</label>
+            <div style={{display:"flex",gap:8,alignItems:"center"}}>
+              <input type="number" className="fc" value={form.bebatKg||""} step="0.1" min={0}
+                placeholder="bijv. 50"
+                onChange={e=>set("bebatKg",e.target.value====""?null:Number(e.target.value))}
+                style={{maxWidth:140}}/>
+              <div style={{fontSize:12,color:"#92400e",lineHeight:1.4}}>
+                {form.bebatKg>0 ? <>Toeslag: <strong>{(form.bebatKg*BEBAT_TARIEF).toFixed(2).replace(".",",")} €</strong> per stuk (€{BEBAT_TARIEF.toFixed(2).replace(".",",")} × {form.bebatKg} kg excl. BTW)</> : "Vul gewicht in → BEBAT toeslag wordt automatisch berekend"}
+              </div>
+            </div>
+          </div>
+        )}
         <div className="fg"><label className="fl">Afbeelding URL</label>
           <div style={{display:"flex",gap:8,alignItems:"center"}}>
             <input className="fc" value={form.imageUrl} onChange={e=>set("imageUrl",e.target.value)} placeholder="https://…"/>
