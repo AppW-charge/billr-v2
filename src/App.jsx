@@ -105,7 +105,8 @@ const today = () => new Date().toISOString().split("T")[0];
 const stripBe = s => (s||"").replace(/[^0-9]/g,"");
 const fmtBtwnr = n => { const c=stripBe(n); return c.length>=9?"BE "+c.slice(0,4)+"."+c.slice(4,7)+"."+c.slice(7):(n||""); };
 
-const BEBAT_TARIEF = 2.89; // €/kg excl BTW — per 1 jan 2026
+const BEBAT_TARIEF = 2.89; // Standaard — overschrijfbaar via settings.voorwaarden.bebatTarief
+const getBebatTarief = (settings) => Number(settings?.voorwaarden?.bebatTarief) || BEBAT_TARIEF;
 const BEBAT_BTW = 21;
 
 // Bepaal of een product BEBAT-plichtig is
@@ -117,24 +118,24 @@ const isBebatProduct = (naam="",cat="") => {
   return n.includes("batter") || c.includes("batter");
 };
 
-function calcTotals(lijnen=[]) {
+function calcTotals(lijnen=[], bebatTarief=BEBAT_TARIEF) {
+  // BTW komt van de lijn (bepaald door klantregime bij aanmaken offerte)
+  // NOOIT van het product zelf
   const sub = lijnen.reduce((s,l)=>s+(l.prijs*l.aantal),0);
   const gr={};
   lijnen.forEach(l=>{
-    const r=l.btw||21;
-    if(!gr[r])gr[r]=0;
-    gr[r]+=l.prijs*l.aantal*(r/100);
-    // BEBAT toeslag
+    const r=l.btw||0; // 0 als verlegd, 6 of 21 anders
+    if(r>0){if(!gr[r])gr[r]=0;gr[r]+=l.prijs*l.aantal*(r/100);}
+    // BEBAT toeslag — altijd 21% BTW
     if(l.bebatKg && l.bebatKg>0 && isBebatProduct(l.naam,l.cat||"")) {
-      const bebatEx = l.bebatKg * l.aantal * BEBAT_TARIEF;
+      const bebatEx = l.bebatKg * l.aantal * bebatTarief;
       if(!gr[BEBAT_BTW])gr[BEBAT_BTW]=0;
       gr[BEBAT_BTW]+=bebatEx*(BEBAT_BTW/100);
     }
   });
   const btw=Object.values(gr).reduce((s,v)=>s+v,0);
-  // BEBAT subtotaal appart
   const bebatSub = lijnen.reduce((s,l)=>{
-    if(l.bebatKg&&l.bebatKg>0&&isBebatProduct(l.naam,l.cat||"")) return s+l.bebatKg*l.aantal*BEBAT_TARIEF;
+    if(l.bebatKg&&l.bebatKg>0&&isBebatProduct(l.naam,l.cat||"")) return s+l.bebatKg*l.aantal*bebatTarief;
     return s;
   },0);
   return {subtotaal:sub,btw,totaal:sub+bebatSub+btw,btwGroepen:gr,bebatSub};
@@ -634,7 +635,7 @@ const INIT_SETTINGS = {
   email:{eigen:"info@wcharge.be",boekhouder1:"",boekhouder2:"",cc:"",emailjsServiceId:"",emailjsTemplateOfferte:"",emailjsTemplateFactuur:"",emailjsPublicKey:"",templateOfferte:"Beste {naam},\n\nIn bijlage vindt u onze offerte {nummer} d.d. {datum}, geldig tot {vervaldatum}.\n\nWat mag u verwachten?\n{technische_info}\n\nBij akkoord kunt u de offerte bevestigen via onderstaande link.\nBij vragen staan we steeds voor u klaar.\n\nMet vriendelijke groeten,\n{bedrijf}\n{tel}",templateFactuur:"Beste {naam},\n\nIn bijlage vindt u factuur {nummer} d.d. {datum}.\nGelieve te betalen vóór {vervaldatum}.\n\nBedrag: {totaal}\nIBAN: {iban} · Mededeling: {nummer}\n\nMet vriendelijke groeten,\n{bedrijf}"},
   integraties:{kboEnabled:true,peppolEnabled:true,billitApiKey:"98050f8c-93aa-4f2e-a206-3f15e4905276",billitEnv:"production",cbeApiKey:"OqzgVJ8I5wqgA8QjB0Aotu446pn7xqVI"},
   dashboardWidgets:{omzetGrafiek:true,recenteOffertes:true,openFacturen:true,goedgekeurdeOffertes:true,snelleActies:true,statistieken:true,agenda:true,offerteLogboek:true,afspraken:true,widgetOrder:["statistieken","recenteOffertes","openFacturen","goedgekeurdeOffertes","offerteLogboek","afspraken","snelleActies","agenda"]},
-  voorwaarden:{betalingstermijn:14,voorschot:"50%",boekjaarStart:"01-01",nummerPrefix_off:"OFF",nummerPrefix_fct:"FACT",tegenNummer_off:null,tegenNummer_fct:null,tekst:`1. Al onze facturen zijn contant betaalbaar op de bankrekening vermeld op de factuur en zullen na verloop van 14 dagen van rechtswege een intrest van 1% per maand meebrengen, zonder aangetekende ingebrekestelling of dagvaarding te noodzaken.\n\n2. Op onze facturen dienen binnen de 8 dagen na ontvangst eventuele opmerkingen te geschieden.\n\n3. Het bedrag van de onbetaald gebleven facturen zal ten titel van schadevergoeding, van rechtswege verhoogd worden met 15% met een minimum van €65,00 vanaf de dag volgend op de vervaldag.\n\n4. Onze facturen zijn betaalbaar te Lochristi, zodat in geval van betwisting enkel de Rechtbanken van het arrondissement Gent bevoegd zijn.\n\nBTW 6% verklaring: Bij gebrek aan schriftelijke betwisting binnen een termijn van één maand vanaf de ontvangst van de factuur, wordt de klant geacht te erkennen dat (1) de werken worden verricht aan een woning waarvan de eerste ingebruikneming heeft plaatsgevonden in een kalenderjaar dat ten minste tien jaar voorafgaat aan de datum van de eerste factuur, (2) de woning na uitvoering uitsluitend of hoofdzakelijk als privéwoning wordt gebruikt en (3) de werken worden gefactureerd aan een eindverbruiker.\n\nBTW verlegd: Verlegging van heffing. Bij gebrek aan schriftelijke betwisting binnen één maand na ontvangst wordt de afnemer geacht te erkennen dat hij een belastingplichtige is gehouden tot periodieke BTW-aangiften.`},
+  voorwaarden:{betalingstermijn:14,voorschot:"50%",boekjaarStart:"01-01",nummerPrefix_off:"OFF",nummerPrefix_fct:"FACT",tegenNummer_off:null,tegenNummer_fct:null,bebatTarief:2.89,tekst:`1. Al onze facturen zijn contant betaalbaar op de bankrekening vermeld op de factuur en zullen na verloop van 14 dagen van rechtswege een intrest van 1% per maand meebrengen, zonder aangetekende ingebrekestelling of dagvaarding te noodzaken.\n\n2. Op onze facturen dienen binnen de 8 dagen na ontvangst eventuele opmerkingen te geschieden.\n\n3. Het bedrag van de onbetaald gebleven facturen zal ten titel van schadevergoeding, van rechtswege verhoogd worden met 15% met een minimum van €65,00 vanaf de dag volgend op de vervaldag.\n\n4. Onze facturen zijn betaalbaar te Lochristi, zodat in geval van betwisting enkel de Rechtbanken van het arrondissement Gent bevoegd zijn.\n\nBTW 6% verklaring: Bij gebrek aan schriftelijke betwisting binnen een termijn van één maand vanaf de ontvangst van de factuur, wordt de klant geacht te erkennen dat (1) de werken worden verricht aan een woning waarvan de eerste ingebruikneming heeft plaatsgevonden in een kalenderjaar dat ten minste tien jaar voorafgaat aan de datum van de eerste factuur, (2) de woning na uitvoering uitsluitend of hoofdzakelijk als privéwoning wordt gebruikt en (3) de werken worden gefactureerd aan een eindverbruiker.\n\nBTW verlegd: Verlegging van heffing. Bij gebrek aan schriftelijke betwisting binnen één maand na ontvangst wordt de afnemer geacht te erkennen dat hij een belastingplichtige is gehouden tot periodieke BTW-aangiften.`},
   thema:{kleur:"#1a2e4a",naam:"Elektrisch Blauw"},
   layout:{
     font:"Inter", fontSize:13, tekstKleur:"#1e293b",
@@ -2762,7 +2763,7 @@ export default function App() {
 
           <div className="content">
             {pg==="dashboard"&&<Dashboard offertes={offertes} facturen={factMet} onGoto={gotoFiltered} onNew={()=>{setEditOff(null);setWizOpen(true)}} onFactuur={d=>setFactModal(d)} settings={settings} offerteViews={offerteViews} offerteResponses={offerteResponses} planningProposals={planningProposals} onLogboek={o=>setLogboekModal(o)} onPlan={o=>setPlanningModal(o)} widgetOrder={widgetOrder} setWidgetOrder={setWidgetOrder} onRefreshTracking={fetchOfferteTracking}/>}
-            {pg==="offertes"&&<OffertesPage offertes={offertes} initFilter={pgFilter} onView={d=>setViewDoc({doc:d,type:"offerte"})} onEdit={d=>{setEditOff(d);setWizOpen(true)}} onStatus={updOff} onBulkStatus={bulkUpdOff} onFactuur={d=>setFactModal(d)} onDelete={id=>{setOffertes(p=>p.filter(o=>o.id!==id));notify("Verwijderd")}} onNew={()=>{setEditOff(null);setWizOpen(true)}} onEmail={d=>setEmailModal({doc:d,type:"offerte"})} onPlan={d=>setPlanningModal(d)} settings={settings}/>}
+            {pg==="offertes"&&<OffertesPage offertes={offertes} initFilter={pgFilter} onView={d=>setViewDoc({doc:d,type:"offerte"})} onEdit={d=>{setEditOff(d);setWizOpen(true)}} onStatus={updOff} onBulkStatus={bulkUpdOff} onFactuur={d=>setFactModal(d)} onDelete={id=>{setOffertes(p=>p.filter(o=>o.id!==id));notify("Verwijderd")}} onNew={()=>{setEditOff(null);setWizOpen(true)}} onEmail={d=>setEmailModal({doc:d,type:"offerte"})} onPlan={d=>setPlanningModal(d)} onShare={d=>{shareOfferte(d);notify("🔗 Publieke link vernieuwd ✓");}} settings={settings}/>}
             {pg==="facturen"&&<FacturenPage facturen={factMet} settings={settings} initFilter={pgFilter} onView={d=>setViewDoc({doc:d,type:"factuur"})} onEdit={f=>{setEditFact(f);setFactuurWizOpen(true);}} onStatus={updFact} onBulkStatus={bulkUpdFact} onDelete={id=>{setFacturen(p=>p.filter(f=>f.id!==id));notify("Verwijderd")}} notify={notify} onEmail={d=>setEmailModal({doc:d,type:"factuur"})} onBetaling={f=>setBetalingModal(f)} onAanmaning={f=>setAanmaningModal(f)} onNew={()=>{setEditFact(null);setFactuurWizOpen(true)}}/>}
             {pg==="klanten"&&<KlantenPage klanten={klanten} offertes={offertes} facturen={factMet} view={klantView} onEdit={k=>setKlantModal(k)} onDelete={id=>{setKlanten(p=>p.map(k=>k.id===id?{...k,_verwijderd:true}:k));notify("Klant verwijderd")}}/>}
             {pg==="producten"&&<ProductenPage producten={producten} settings={settings} onEdit={p=>setProdModal(p)} onDelete={id=>{setProducten(p=>p.filter(x=>x.id!==id));notify("Verwijderd")}} onToggle={id=>setProducten(p=>p.map(x=>x.id===id?{...x,actief:!x.actief}:x))} onEnrich={upd=>setProducten(p=>p.map(x=>x.id===upd.id?upd:x))} onDuplicate={p=>{const dup={...p,id:uid(),naam:p.naam+" (kopie)",aangemaakt:new Date().toISOString()};setProducten(prev=>[dup,...prev]);notify("Product gedupliceerd ✓");setProdModal(dup);}}/>}
@@ -3421,7 +3422,7 @@ function DocLog({log=[]}) {
 }
 
 
-function OffertesPage({offertes,initFilter,onView,onEdit,onStatus,onBulkStatus,onFactuur,onDelete,onNew,onEmail,onPlan,settings}) {
+function OffertesPage({offertes,initFilter,onView,onEdit,onStatus,onBulkStatus,onFactuur,onDelete,onNew,onEmail,onPlan,onShare,settings}) {
   const [q,setQ] = useState("");
   const [fs,setFs] = useState(initFilter||"alle");
   const [sel,setSel] = useState(new Set());
@@ -3522,6 +3523,7 @@ function OffertesPage({offertes,initFilter,onView,onEdit,onStatus,onBulkStatus,o
                         <button className="btn bs btn-sm" onClick={()=>onEdit(o)}>✏️ Bewerken</button>
                         <button className="btn bs btn-sm" onClick={()=>onEmail(o)}>📧 Verzenden</button>
                         <button className="btn bs btn-sm" onClick={()=>onView(o)} title="Opent document → Ctrl+P of klik 🖨">🖨 Afdrukken</button>
+                        {(o.status==="verstuurd"||o.status==="goedgekeurd")&&<button className="btn bs btn-sm" title="Publieke link voor klant vernieuwen (ook fiches)" onClick={()=>onShare(o)}>🔗 Link</button>}
                         <button className="btn bs btn-sm" onClick={()=>{onStatus(o.id,{status:"goedgekeurd",logActie:"✅ Goedgekeurd door klant"});}}>👍 Goedgekeurd</button>
                         <button className="btn bs btn-sm" onClick={()=>{onStatus(o.id,{status:"afgewezen",logActie:"❌ Afgewezen door klant"});}}>👎 Afgewezen</button>
                         {o.status==="goedgekeurd"&&!o.factuurId&&<button className="btn bg btn-sm" onClick={()=>onFactuur(o)}>🧾 → Factuur</button>}
@@ -4519,7 +4521,7 @@ function FactuurWizard({klanten,producten,editData,onSave,onClose,notify}) {
   const klantList = klanten.filter(k=>!k._verwijderd&&(!klantQ||(k.naam||"").toLowerCase().includes(klantQ.toLowerCase())||(k.bedrijf||"").toLowerCase().includes(klantQ.toLowerCase()))).slice(0,20);
   const actProds = producten.filter(p=>p.actief);
   const cats = [...new Set(actProds.map(p=>p.cat))];
-  const tot = calcTotals(lijnen);
+  const tot = calcTotals(lijnen, getBebatTarief(settings));
   const vervaldatum = addDays(datum, betalingstermijn);
 
   const btwPct = btwRegime==="verlegd"?0:btwRegime==="btw6"?6:21;
@@ -4798,13 +4800,12 @@ function OfferteWizard({klanten,producten,offertes,editData,settings,onSave,onCl
   const getQty=pid=>lijnen.find(l=>l.productId===pid)?.aantal||0;
 
   const setQty=(prod,gid,aantal)=>{
-    const nb=btwRegime==="verlegd"?0:btwRegime==="btw6"?6:21;
-    const finalBtw=btwRegime==="verlegd"?0:btwRegime==="btw6"?6:(prod.btw!==undefined?prod.btw:nb);
+    const finalBtw=btwRegime==="verlegd"?0:btwRegime==="btw6"?6:21; // altijd van klantregime
     if(aantal<=0){setLijnen(p=>p.filter(l=>l.productId!==prod.id));return;}
     setLijnen(p=>{const ex=p.find(l=>l.productId===prod.id);if(ex)return p.map(l=>l.productId===prod.id?{...l,aantal,groepId:gid||l.groepId}:l);return[...p,{id:uid(),productId:prod.id,naam:prod.naam,omschr:prod.omschr,prijs:prod.prijs,btw:finalBtw,aantal,eenheid:prod.eenheid||"stuk",groepId:gid,imageUrl:prod.imageUrl,specs:prod.specs,technischeFiches:prod.technischeFiches||[],technischeFiche:prod.technischeFiche||null,fichNaam:prod.fichNaam||"",bebatKg:prod.bebatKg||null,cat:prod.cat||""}];});
   };
 
-  const tot=calcTotals(lijnen);
+  const tot=calcTotals(lijnen, getBebatTarief(settings));
   const klantList=[...klanten].filter(k=>!k._verwijderd).sort((a,b)=>new Date(b.aangemaakt)-new Date(a.aangemaakt)).filter(k=>!klantQ||(k.naam||"").toLowerCase().includes(klantQ.toLowerCase())||(k.bedrijf||"").toLowerCase().includes(klantQ.toLowerCase()));
   const stappen=[{n:1,l:"Klant"},{n:2,l:"Type"},{n:3,l:"Producten"},{n:4,l:"Details"},{n:5,l:"Voorbeeld"}];
 
@@ -5052,7 +5053,7 @@ function OfferteWizard({klanten,producten,offertes,editData,settings,onSave,onCl
             <div key={l.id} style={{display:"grid",gridTemplateColumns:"3fr 60px 80px 55px 26px",gap:5,marginBottom:4,alignItems:"start"}}>
               <ProductAutocomplete producten={actProds} value={l.naam} compact
                 onChange={v=>setLijnen(p=>p.map((x,j)=>j===i?{...x,naam:v}:x))}
-                onSelect={p=>setLijnen(prev=>prev.map((x,j)=>j===i?{...x,productId:p.id,naam:p.naam,omschr:p.omschr||"",prijs:p.prijs,btw:btwRegime==="verlegd"?0:btwRegime==="btw6"?6:(p.btw||21),eenheid:p.eenheid||"stuk",imageUrl:p.imageUrl||"",specs:p.specs||[],technischeFiches:p.technischeFiches||[],technischeFiche:p.technischeFiche||null,fichNaam:p.fichNaam||""}:x))}
+                onSelect={p=>setLijnen(prev=>prev.map((x,j)=>j===i?{...x,productId:p.id,naam:p.naam,omschr:p.omschr||"",prijs:p.prijs,btw:btwRegime==="verlegd"?0:btwRegime==="btw6"?6:21,eenheid:p.eenheid||"stuk",imageUrl:p.imageUrl||"",specs:p.specs||[],technischeFiches:p.technischeFiches||[],technischeFiche:p.technischeFiche||null,fichNaam:p.fichNaam||"",bebatKg:p.bebatKg||null,cat:p.cat||""}:x))}
                 placeholder="Typ productnaam…"/>
               <input type="number" className="fc" style={{fontSize:12.5,textAlign:"center"}} value={l.aantal} min={1} onChange={e=>setLijnen(p=>p.map((x,j)=>j===i?{...x,aantal:Number(e.target.value)}:x))}/>
               <input type="number" className="fc" style={{fontSize:12.5,textAlign:"right"}} value={l.prijs} step="0.01" onChange={e=>setLijnen(p=>p.map((x,j)=>j===i?{...x,prijs:Number(e.target.value)}:x))}/>
@@ -5348,7 +5349,7 @@ function OfferteDocument({doc, settings}) {
   const klantVelden = lyt.klant?.velden || {};
   const metaBar = lyt.metaBar || {};
   const tabelOpts = lyt.tabel || {};
-  const tot = calcTotals(doc.lijnen||[]);
+  const tot = calcTotals(doc.lijnen||[], getBebatTarief(settings));
   const kortingBedrag = doc.kortingType==="pct" ? tot.subtotaal*(doc.korting/100) : Number(doc.korting||0);
   const eindTot = doc.korting>0 ? tot.totaal - kortingBedrag*(1+0.21) : tot.totaal;
   const inst = INST_TYPES.find(t=>t.id===doc.installatieType);
@@ -5723,7 +5724,7 @@ function FactuurDocument({doc, settings}) {
   const sj = settings?.sjabloon || INIT_SETTINGS.sjabloon || {};
   const dc = sj.accentKleur || settings?.thema?.kleur || bed.kleur || "#1a2e4a";
   const ontwerp = sj.ontwerpFactuur || "classic";
-  const tot = calcTotals(doc.lijnen||[]);
+  const tot = calcTotals(doc.lijnen||[], getBebatTarief(settings));
   const groepen = doc.groepen||[];
   const lijnenPerGroep = [...groepen.map(g=>({...g,items:(doc.lijnen||[]).filter(l=>l.groepId===g.id)})).filter(g=>g.items.length>0),{id:"rest",naam:"Producten",items:(doc.lijnen||[]).filter(l=>!groepen.find(g=>g.id===l.groepId))}].filter(g=>g.items.length>0);
   // Schat of inhoud past op 1 pagina (heuristiek: max ~22 productlijnen per pagina)
@@ -6265,7 +6266,10 @@ function ProductModal({prod,onSave,onClose,settings}) {
         <div className="fg"><label className="fl">Beschrijving</label><textarea className="fc" rows={2} value={form.omschr} onChange={e=>set("omschr",e.target.value)}/></div>
         <div className="fr2">
           <div className="fg"><label className="fl">Prijs excl. BTW (€)</label><input type="number" className="fc" value={form.prijs} step="0.01" min={0} onChange={e=>set("prijs",Number(e.target.value))}/></div>
-          <div className="fg"><label className="fl">BTW tarief</label><select className="fc" value={form.btw} onChange={e=>set("btw",Number(e.target.value))}><option value={6}>6% (renovatie)</option><option value={21}>21% (standaard)</option></select></div>
+          <div className="fg"><label className="fl">Eenheid</label><select className="fc" value={form.eenheid} onChange={e=>set("eenheid",e.target.value)}>{["stuk","m","uur","dag","jaar","forfait"].map(u=><option key={u} value={u}>{u}</option>)}</select></div>
+        </div>
+        <div style={{padding:"8px 12px",background:"#eff6ff",border:"1px solid #bfdbfe",borderRadius:6,fontSize:12,color:"#1e40af",marginBottom:8}}>
+          ℹ️ BTW wordt bepaald door het klantregime bij aanmaken van de offerte (verlegd / 6% / 21%)
         </div>
         {/* BEBAT — enkel voor batterijproducten, niet voor BMS */}
         {isBebatProduct(form.naam, form.cat) && (
@@ -7049,6 +7053,13 @@ function InstellingenPage({settings,setSettings,notify,onExportBackup,onImportBa
         <div className="fr2">
           <div className="fg"><label className="fl">Betalingstermijn (dagen)</label><input type="number" className="fc" value={form.voorwaarden.betalingstermijn} onChange={e=>set("voorwaarden","betalingstermijn",Number(e.target.value))}/></div>
           <div className="fg"><label className="fl">Standaard voorschot</label><input className="fc" value={form.voorwaarden.voorschot} onChange={e=>set("voorwaarden","voorschot",e.target.value)}/></div>
+          <div className="fg">
+            <label className="fl">♻️ BEBAT tarief (€/kg excl. BTW)</label>
+            <input type="number" className="fc" step="0.01" min={0}
+              value={form.voorwaarden?.bebatTarief??2.89}
+              onChange={e=>set("voorwaarden","bebatTarief",Number(e.target.value))}/>
+            <div style={{fontSize:11,color:"#64748b",marginTop:3}}>Huidig tarief: €{(form.voorwaarden?.bebatTarief??2.89).toFixed(2).replace(".",",")} per kg. Pas aan als het officiële BEBAT tarief wijzigt.</div>
+          </div>
         </div>
 
         {/* NUMMERING */}
@@ -7755,7 +7766,7 @@ function CreditnotaModal({facturen,creditnota,settings,onSave,onClose}) {
   const [lijnen,setLijnen]=useState([]);
   const gelinkteFact=facturen.find(f=>f.id===factuurId);
   useEffect(()=>{if(gelinkteFact)setLijnen(gelinkteFact.lijnen?.map(l=>({...l,id:uid()}))|| []);}, [factuurId]);
-  const tot=calcTotals(lijnen);
+  const tot=calcTotals(lijnen, getBebatTarief(settings));
   return(
     <div className="mo"><div className="mdl mlg">
       <div className="mh"><div className="mt-m">📑 Creditnota aanmaken</div><button className="xbtn" onClick={onClose}>×</button></div>
