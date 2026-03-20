@@ -1576,9 +1576,6 @@ export default function App() {
   // dataReady: true ALLEEN nadat data volledig geladen is
   // Voorkomt dat lege initiële state de opgeslagen data overschrijft
   const dataReady = useRef(false);
-  // sbHadData: true als Supabase ooit data had voor deze user
-  // Voorkomt dat lege localStorage Supabase overschrijft
-  const sbHadData = useRef(false);
 
   useEffect(()=>{
     let dataLoaded = false;
@@ -1612,7 +1609,9 @@ export default function App() {
       setUser(appUser);
       setLoaded(true);
 
-      // ═══ BULK LOAD: probeer Supabase met 15s timeout ═══
+      const parse = (raw, fb) => { try { return raw ? JSON.parse(raw) : fb; } catch(_) { return fb; } };
+
+      // Laad Supabase — master voor alle data
       let sbData = null;
       try {
         sbData = await Promise.race([
@@ -1621,75 +1620,43 @@ export default function App() {
         ]);
       } catch(e) { console.error("Supabase load error:", e); }
 
-      const sbKeys = sbData ? Object.keys(sbData).length : 0;
-      const sbHasRealData = sbData && sbKeys > 0 &&
-        // Minstens één key met echte inhoud (niet alleen lege arrays)
-        Object.values(sbData).some(v => v && v.length > 10);
-
-      if(sbHasRealData) {
-        // ✅ Supabase heeft data — gebruik dat als master
-        sbHadData.current = true;
-        console.log(`☁️ Supabase: ${sbKeys} keys geladen`);
-        const parse = (key, fallback) => {
-          try { return sbData[key] ? JSON.parse(sbData[key]) : fallback; }
-          catch(_) { return fallback; }
-        };
-        if(sbData["b4_set"]) setSettings(parse("b4_set", INIT_SETTINGS));
-        if(sbData["b4_kln"]) setKlanten(parse("b4_kln", INIT_KLANTEN));
-        if(sbData["b4_prd"]) {
-          const prods = parse("b4_prd", INIT_PRODUCTS);
-          // Herstel fiches uit cache (Supabase heeft gestripte versie door QuotaExceeded)
-          const prodsMetFiches = restoreFicheCache(prods);
-          // Update cache enkel als er echte data in staat
-          saveFicheCache(prodsMetFiches);
-          setProducten(prodsMetFiches);
-        }
-        if(sbData["b4_off"]) setOffertes(parse("b4_off", []));
-        if(sbData["b4_fct"]) setFacturen(parse("b4_fct", []));
-        if(sbData["b4_cn"])  setCreditnotas(parse("b4_cn", []));
-        if(sbData["b4_am"])  setAanmaningen(parse("b4_am", []));
-        if(sbData["b4_bt"])  setBetalingen(parse("b4_bt", []));
-        if(sbData["b4_ti"])  setTijdslots(parse("b4_ti", []));
-        if(sbData["b4_do"])  setDossiers(parse("b4_do", []));
-        if(sbData["b4_ga"])  setGaranties(parse("b4_ga", []));
-        if(sbData["b4_at"])  setAcceptTokens(parse("b4_at", {}));
-        if(sbData["b4_wo"])  setWidgetOrder(parse("b4_wo", null));
+      if(sbData && Object.keys(sbData).length > 0) {
+        console.log(`☁️ Supabase: ${Object.keys(sbData).length} keys`);
+        if(sbData["b4_set"]) setSettings(parse(sbData["b4_set"], INIT_SETTINGS));
+        if(sbData["b4_kln"]) setKlanten(parse(sbData["b4_kln"], INIT_KLANTEN));
+        if(sbData["b4_prd"]) setProducten(restoreFicheCache(parse(sbData["b4_prd"], INIT_PRODUCTS)));
+        if(sbData["b4_off"]) setOffertes(parse(sbData["b4_off"], []));
+        if(sbData["b4_fct"]) setFacturen(parse(sbData["b4_fct"], []));
+        if(sbData["b4_cn"])  setCreditnotas(parse(sbData["b4_cn"], []));
+        if(sbData["b4_am"])  setAanmaningen(parse(sbData["b4_am"], []));
+        if(sbData["b4_bt"])  setBetalingen(parse(sbData["b4_bt"], []));
+        if(sbData["b4_ti"])  setTijdslots(parse(sbData["b4_ti"], []));
+        if(sbData["b4_do"])  setDossiers(parse(sbData["b4_do"], []));
+        if(sbData["b4_ga"])  setGaranties(parse(sbData["b4_ga"], []));
+        if(sbData["b4_at"])  setAcceptTokens(parse(sbData["b4_at"], {}));
+        if(sbData["b4_wo"])  setWidgetOrder(parse(sbData["b4_wo"], null));
         // Update localStorage cache
         Object.entries(sbData).forEach(([k,v])=>{ try{localStorage.setItem(k,v);}catch(_){} });
       } else {
-        // Supabase leeg of timeout — probeer localStorage
-        console.warn("⚠️ Supabase leeg/timeout — localStorage fallback");
-        const get = (k, fb) => { try { const v=localStorage.getItem(k); return v?JSON.parse(v):fb; } catch(_){return fb;} };
-        const lsSettings = get('b4_set', null);
-        const lsKlanten  = get('b4_kln', null);
-        const lsProducten = get('b4_prd', null);
-        const lsOffertes  = get('b4_off', null);
-        const lsHasData = lsSettings?.bedrijf?.naam || lsKlanten?.length > 0 || lsOffertes?.length > 0;
-        if(lsHasData) {
-          console.log("✅ localStorage heeft data — laden");
-          setSettings(lsSettings || INIT_SETTINGS);
-          setKlanten(lsKlanten || INIT_KLANTEN);
-          const prodsWithFiches = restoreFicheCache(lsProducten || INIT_PRODUCTS);
-          setProducten(prodsWithFiches);
-          setOffertes(lsOffertes || []);
-          setFacturen(get('b4_fct',[]));
-          setCreditnotas(get('b4_cn',[]));
-          setAanmaningen(get('b4_am',[]));
-          setBetalingen(get('b4_bt',[]));
-          setTijdslots(get('b4_ti',[]));
-          setDossiers(get('b4_do',[]));
-          setGaranties(get('b4_ga',[]));
-          setAcceptTokens(get('b4_at',{}));
-          setWidgetOrder(get('b4_wo',null));
-          // sbHadData blijft false → saveKey zal niet naar Supabase schrijven totdat user iets aanpast
-        } else {
-          // Alles leeg — nieuwe gebruiker of leeg systeem
-          console.warn("⚠️ Geen data gevonden — leeg systeem");
-          // sbHadData.current = false → saves zijn veilig (echte nieuwe data)
-        }
+        // Supabase timeout/leeg — localStorage fallback
+        console.warn("⚠️ Supabase timeout — localStorage fallback");
+        const ls = (k,fb) => { try{const v=localStorage.getItem(k);return v?JSON.parse(v):fb;}catch(_){return fb;} };
+        setSettings(ls('b4_set', INIT_SETTINGS));
+        setKlanten(ls('b4_kln', INIT_KLANTEN));
+        setProducten(restoreFicheCache(ls('b4_prd', INIT_PRODUCTS)));
+        setOffertes(ls('b4_off', []));
+        setFacturen(ls('b4_fct', []));
+        setCreditnotas(ls('b4_cn', []));
+        setAanmaningen(ls('b4_am', []));
+        setBetalingen(ls('b4_bt', []));
+        setTijdslots(ls('b4_ti', []));
+        setDossiers(ls('b4_do', []));
+        setGaranties(ls('b4_ga', []));
+        setAcceptTokens(ls('b4_at', {}));
+        setWidgetOrder(ls('b4_wo', null));
       }
 
-      // Nu pas mogen saves plaatsvinden
+      // Nu mogen saves plaatsvinden
       dataReady.current = true;
     };
 
@@ -1714,7 +1681,6 @@ export default function App() {
 
     sb.auth.onAuthStateChange((event, session) => {
       if(event==="SIGNED_IN" && session?.user && !dataLoaded) loadUserData(session.user);
-      if(event==="SIGNED_OUT") { setUser(null); setLoaded(true); dataReady.current=false; sbHadData.current=false; }
     });
   },[]);
 
@@ -1884,39 +1850,20 @@ export default function App() {
 
   const saveKey = useCallback(async (key, val) => { 
     if(!dataReady.current) return;
+    if(!user) return;
     
     const json = JSON.stringify(val);
     
-    // ── HARDE BESCHERMING: nooit lege/default data naar Supabase schrijven ──
-    // Als sbHadData=true betekent het dat Supabase al echte data had.
-    // In dat geval blokkeren we elke schrijfoperatie met lege/default waarden.
-    if(sbHadData.current) {
-      if(key === "b4_set") {
-        const s = typeof val === "object" ? val : {};
-        if(!s?.bedrijf?.naam && !s?.email?.eigen && !s?.bedrijf?.btwnr) {
-          console.warn(`⛔ "${key}" geblokkeerd: lege settings`); return;
-        }
-      }
-      if(["b4_off","b4_fct","b4_kln","b4_prd"].includes(key) && Array.isArray(val) && val.length === 0) {
-        console.warn(`⛔ "${key}" geblokkeerd: [] zou bestaande Supabase data wissen`); return;
-      }
-    }
-    
-    // localStorage: strip base64 fiches
+    // localStorage cache (snel, geen base64 fiches)
     try {
       const stripped = stripBase64(key, val);
       localStorage.setItem(key, JSON.stringify(stripped));
     } catch(e) {
-      console.warn(`localStorage save "${key}" failed:`, e);
       try { localStorage.removeItem(key); } catch(_){}
     }
     
-    // Supabase opslaan
-    if(user) {
-      sbHadData.current = true;
-      const success = await sbSet(key, json, user.id);
-      if(!success) console.warn(`⚠️ Supabase save "${key}" failed`);
-    }
+    // Supabase: ALTIJD opslaan — geen blokkering
+    await sbSet(key, json, user.id);
   }, [user]);
   useEffect(()=>{ saveKey("b4_off", offertes);  },[offertes,   saveKey]);
   useEffect(()=>{ saveKey("b4_fct", facturen);  },[facturen,   saveKey]);
@@ -2180,34 +2127,24 @@ export default function App() {
       const lyt = settings?.layout || {};
       const dc = sj.accentKleur || settings?.thema?.kleur || bed.kleur || "#1a2e4a";
 
-      // Laad fiche cache voor producten die geen data in state hebben
+      // Laad fiche cache
       let ficheCache = {};
       try { const raw = localStorage.getItem("billr_fiche_cache"); if(raw) ficheCache = JSON.parse(raw); } catch(_){}
 
-      // Bouw cleanLijnen: gebruik producten + cache als bron voor technische fiches
+      // Bouw lijnen ZONDER base64 voor het hoofdrecord (klein → geen timeout)
       const cleanLijnen = (offerte.lijnen||[]).map(l => {
         const clean = {...l};
         const prod = producten.find(p => p.id === l.productId);
-        // Fiche bronnen: product state → cache → lijn zelf
         const fichesInState = prod?.technischeFiches?.filter(f=>f.data) || [];
         const fichesInCache = ficheCache[l.productId] || ficheCache[prod?.id] || [];
-        const fichesBron = fichesInState.length > 0 ? fichesInState : fichesInCache.length > 0 ? fichesInCache : (clean.technischeFiches?.filter(f=>f.data) || []);
-        
+        const fichesBron = fichesInState.length > 0 ? fichesInState : fichesInCache;
+        // Sla alleen metadata op — geen base64 in het hoofdrecord
         if(fichesBron.length > 0) {
-          clean.technischeFiches = fichesBron.map(f => ({
-            naam: f.naam || "fiche.pdf",
-            data: f.data || f.url || "",
-            url:  f.url  || f.data || "",
-            type: f.type || "application/pdf"
-          })).filter(f => f.data);
-        } else if(!clean.technischeFiches?.length) {
-          // Oud formaat: single fiche
-          const ficheData = prod?.technischeFiche || clean.technischeFiche;
-          if(ficheData && ficheData !== "[PDF]" && ficheData.length > 100) {
-            clean.technischeFiches = [{naam: prod?.fichNaam||clean.fichNaam||"fiche.pdf", data: ficheData, url: ficheData, type:"application/pdf"}];
-          }
+          clean.technischeFiches = fichesBron.map(f => ({naam:f.naam||"fiche.pdf",heeftData:true,type:f.type||"application/pdf"}));
+        } else if(clean.technischeFiches) {
+          clean.technischeFiches = clean.technischeFiches.map(f=>({naam:f.naam||"fiche.pdf",heeftData:!!(f.data||f.url),type:f.type||"application/pdf"}));
         }
-        clean.technischeFiche = null; // altijd clearen, vervangen door technischeFiches array
+        clean.technischeFiche = null;
         return clean;
       });
 
@@ -2221,10 +2158,35 @@ export default function App() {
         _voorwaarden: settings?.voorwaarden?.tekst || "",
         _voorschot: settings?.voorwaarden?.voorschot || "50%"
       };
+
+      // Stap 1: sla het kleine hoofdrecord op (geen fiches → geen timeout)
       await sb.from('offerte_shares').upsert({ id: offerte.id, offerte_data: shareData });
-      console.log("✅ Offerte gedeeld met fiches:", offerte.nummer,
-        cleanLijnen.filter(l=>l.technischeFiches?.length).length + " lijnen met fiches");
-    } catch(e) { console.warn("Offerte share failed:", e); }
+      console.log("✅ Offerte gedeeld:", offerte.nummer);
+
+      // Stap 2: sla fiches apart op (async, niet-blokkerend)
+      const ficheRijen = (offerte.lijnen||[])
+        .filter(l => {
+          const prod = producten.find(p => p.id === l.productId);
+          const inState = prod?.technischeFiches?.filter(f=>f.data) || [];
+          const inCache = ficheCache[l.productId] || ficheCache[prod?.id] || [];
+          return inState.length > 0 || inCache.length > 0;
+        })
+        .map(l => {
+          const prod = producten.find(p => p.id === l.productId);
+          const inState = prod?.technischeFiches?.filter(f=>f.data) || [];
+          const inCache = ficheCache[l.productId] || ficheCache[prod?.id] || [];
+          const fiches = inState.length > 0 ? inState : inCache;
+          return { offerte_id: offerte.id, product_id: l.productId||l.id, fiches };
+        });
+
+      if(ficheRijen.length > 0) {
+        sb.from('offerte_fiches').upsert(ficheRijen, {onConflict:'offerte_id,product_id'})
+          .then(()=>console.log("✅ Fiches opgeslagen:", ficheRijen.length))
+          .catch(e=>console.warn("Fiches opslaan mislukt (niet kritiek):", e.message));
+      }
+    } catch(e) {
+      console.warn("Offerte share failed:", e.message);
+    }
   };
 
   // ═══ EMAILJS VERZENDING ═══
