@@ -2023,39 +2023,47 @@ export default function App() {
   useEffect(()=>{
     let lastSync = Date.now();
     const handleVisibility = async () => {
-      if(document.visibilityState==="visible" && user && Date.now()-lastSync > 30000) {
-        lastSync = Date.now();
-        try {
-          const allData = await Promise.race([
-            sbGetAll(user.id),
-            new Promise(r=>setTimeout(()=>r(null),10000))
-          ]);
-          // Zelfde bescherming als hoofdload: alleen overnemen als er echte data is
-          const hasReal = allData && Object.keys(allData).length > 0 &&
-            Object.values(allData).some(v => v && v.length > 10);
-          if(!hasReal) return; // Geen data of timeout → niets aanpassen
-          const p = (k,fb) => { try { return allData[k]?JSON.parse(allData[k]):fb; } catch(_){return fb;} };
-          // Alleen overnemen als de Supabase waarde ook echt inhoud heeft
-          if(allData["b4_set"]) { const s=p("b4_set",null); if(s?.bedrijf?.naam||s?.email?.eigen) setSettings(s); }
-          if(allData["b4_kln"]) setKlanten(p("b4_kln",[]));
-          if(allData["b4_prd"]) setProducten(p("b4_prd",[]));
-          if(allData["b4_off"]) setOffertes(p("b4_off",[]));
-          if(allData["b4_fct"]) setFacturen(p("b4_fct",[]));
-          if(allData["b4_cn"])  setCreditnotas(p("b4_cn",[]));
-          if(allData["b4_am"])  setAanmaningen(p("b4_am",[]));
-          if(allData["b4_bt"])  setBetalingen(p("b4_bt",[]));
-          if(allData["b4_ti"])  setTijdslots(p("b4_ti",[]));
-          if(allData["b4_do"])  setDossiers(p("b4_do",[]));
-          if(allData["b4_ga"])  setGaranties(p("b4_ga",[]));
-          if(allData["b4_at"])  setAcceptTokens(p("b4_at",{}));
-          if(allData["b4_wo"])  setWidgetOrder(p("b4_wo",null));
-          console.log("✅ Mobile sync vanuit Supabase");
-        } catch(e) { console.warn("Mobile sync mislukt:",e); }
-      }
+      if(document.visibilityState!=="visible" || !user) return;
+      if(Date.now()-lastSync < 30000) return;
+      lastSync = Date.now();
+      try {
+        const allData = await Promise.race([
+          sbGetAll(user.id),
+          new Promise(r=>setTimeout(()=>r(null),10000))
+        ]);
+        const hasReal = allData && Object.keys(allData).length > 0 &&
+          Object.values(allData).some(v => v && v.length > 10);
+        if(!hasReal) return;
+        const p = (k,fb) => { try { return allData[k]?JSON.parse(allData[k]):fb; } catch(_){return fb;} };
+        // Settings: alleen als er echte bedrijfsdata in zit
+        if(allData["b4_set"]) {
+          const s=p("b4_set",null);
+          if(s?.bedrijf?.naam||s?.email?.eigen) setSettings(s);
+        }
+        // Klanten: laad inclusief _verwijderd flags
+        if(allData["b4_kln"]) setKlanten(p("b4_kln",[]));
+        // Producten: herstel fiches uit cache na laden
+        if(allData["b4_prd"]) {
+          const prods = p("b4_prd",[]);
+          setProducten(restoreFicheCache(prods));
+        }
+        // Offertes/facturen: enkel laden als er data is
+        if(allData["b4_off"]) { const v=p("b4_off",null); if(v!==null) setOffertes(v); }
+        if(allData["b4_fct"]) { const v=p("b4_fct",null); if(v!==null) setFacturen(v); }
+        if(allData["b4_cn"])  setCreditnotas(p("b4_cn",[]));
+        if(allData["b4_am"])  setAanmaningen(p("b4_am",[]));
+        if(allData["b4_bt"])  setBetalingen(p("b4_bt",[]));
+        if(allData["b4_ti"])  setTijdslots(p("b4_ti",[]));
+        if(allData["b4_do"])  setDossiers(p("b4_do",[]));
+        if(allData["b4_ga"])  setGaranties(p("b4_ga",[]));
+        if(allData["b4_at"])  setAcceptTokens(p("b4_at",{}));
+        if(allData["b4_wo"])  setWidgetOrder(p("b4_wo",null));
+        console.log("✅ Mobile sync vanuit Supabase");
+      } catch(e) { console.warn("Mobile sync mislukt:",e); }
     };
     document.addEventListener("visibilitychange", handleVisibility);
     return ()=>document.removeEventListener("visibilitychange", handleVisibility);
-  },[user]);
+  },[user, restoreFicheCache]);
 
   const notify = (msg,type="ok") => { setNotif({msg,type}); setTimeout(()=>setNotif(null),3400); };
 
@@ -7079,9 +7087,10 @@ function InstellingenPage({settings,setSettings,notify,onExportBackup,onImportBa
           <div className="fg">
             <label className="fl">♻️ BEBAT tarief (€/kg excl. BTW)</label>
             <input type="number" className="fc" step="0.01" min={0}
-              value={form.voorwaarden?.bebatTarief??2.89}
-              onChange={e=>set("voorwaarden","bebatTarief",Number(e.target.value))}/>
-            <div style={{fontSize:11,color:"#64748b",marginTop:3}}>Huidig tarief: €{(form.voorwaarden?.bebatTarief??2.89).toFixed(2).replace(".",",")} per kg. Pas aan als het officiële BEBAT tarief wijzigt.</div>
+              value={form.voorwaarden?.bebatTarief||2.89}
+              value={form.voorwaarden?.bebatTarief||2.89}
+              onChange={e=>{const v=e.target.value;set("voorwaarden","bebatTarief",v?Number(v):2.89);}}/>
+            <div style={{fontSize:11,color:"#64748b",marginTop:3}}>Huidig tarief: €{((form.voorwaarden?.bebatTarief)||2.89).toFixed(2).replace(".",",")} per kg. Pas aan als het officiële BEBAT tarief wijzigt.</div>
           </div>
         </div>
 
