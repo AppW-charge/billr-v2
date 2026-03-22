@@ -1677,6 +1677,26 @@ export default function App() {
 
       // Nu mogen saves plaatsvinden
       dataReady.current = true;
+
+      // ── MIGRATIE: zorg dat ALLE producten met fiches in product_fiches tabel staan ──
+      // (voor producten die voor de nieuwe tabel werden opgeslagen)
+      setTimeout(async () => {
+        try {
+          const cache = (() => { try { const r = localStorage.getItem("billr_fiche_cache"); return r ? JSON.parse(r) : {}; } catch(_) { return {}; } })();
+          if(Object.keys(cache).length === 0) return;
+          // Haal op welke producten al in de tabel staan
+          const existing = await sb.from('product_fiches').select('product_id').eq('user_id', u.id);
+          const existingIds = new Set((existing.data||[]).map(r => r.product_id));
+          // Sla ontbrekende op
+          const toMigrate = Object.entries(cache)
+            .filter(([pid, fiches]) => !existingIds.has(pid) && fiches?.length > 0 && fiches.some(f => f.data))
+            .map(([pid, fiches]) => ({ user_id: u.id, product_id: pid, fiches, updated_at: new Date().toISOString() }));
+          if(toMigrate.length > 0) {
+            await sb.from('product_fiches').upsert(toMigrate, { onConflict: 'user_id,product_id' });
+            console.log(`✅ Migratie: ${toMigrate.length} product fiches naar Supabase`);
+          }
+        } catch(e) { console.warn('Migratie fiche cache:', e.message); }
+      }, 3000); // 3s na startup zodat andere data al geladen is
     };
 
     // Sessie check
@@ -5180,7 +5200,7 @@ function OfferteWizard({klanten,producten,offertes,editData,settings,onSave,onCl
             👁 Voorontwerp — zo ziet uw offerte eruit (alle pagina's). Scroll om alles te bekijken.
           </div>
           <div style={{border:"1px solid #e2e8f0",borderRadius:10,overflow:"hidden",boxShadow:"0 2px 12px rgba(0,0,0,.08)"}}>
-            <OfferteDocument doc={{klant,installatieType:instType,groepen,lijnen,notities,btwRegime,voorschot,vervaldatum,betalingstermijn,korting:Number(korting),kortingType,nummer:"VOORBEELD",aangemaakt:new Date().toISOString()}} settings={settings}/>
+            <OfferteDocument doc={{klant,installatieType:instType,groepen,lijnen,notities,btwRegime,voorschot,vervaldatum,betalingstermijn,korting:Number(korting),kortingType,nummer:"VOORBEELD",aangemaakt:new Date().toISOString()}} settings={settings} ficheCache={(()=>{try{const r=localStorage.getItem("billr_fiche_cache");return r?JSON.parse(r):{};}catch(_){return{};}})()}/>
           </div>
         </div>}
       </div>
@@ -5412,7 +5432,7 @@ function FichePages({fiche, naam, fichNaam, omschr, dc, bed, docNummer}) {
   );
 }
 
-function OfferteDocument({doc, settings}) {
+function OfferteDocument({doc, settings, ficheCache={}}) {
   const bed = settings?.bedrijf || INIT_SETTINGS.bedrijf;
   const sj = settings?.sjabloon || INIT_SETTINGS.sjabloon || {};
   const lyt = settings?.layout || INIT_SETTINGS.layout || {};
@@ -5719,7 +5739,7 @@ function OfferteDocument({doc, settings}) {
             {metaBar.toonBtw!==false&&<div className="qt-meta-item"><div className="qt-meta-lbl">BTW-regime</div><div className="qt-meta-val">{BTW_REGIMES[doc.btwRegime]?.l?.split("—")[0]?.trim()||"—"}</div></div>}
             {metaBar.toonBetaling!==false&&<div className="qt-meta-item"><div className="qt-meta-lbl">Betaling</div><div className="qt-meta-val">{doc.betalingstermijn} dagen</div></div>}
           </div>
-          <div className="qt-parties" style={{direction: lyt.klant?.positie==="links" ? "rtl" : "ltr"}}>
+          <div className="qt-parties">
             <div style={{direction:"ltr"}}>{bedVelden.naam!==false&&<div className="qt-party-name">{bed.naam}</div>}{bedVelden.adres!==false&&<div className="qt-party-info">{bed.adres}</div>}{bedVelden.gemeente!==false&&<div className="qt-party-info">{bed.gemeente}</div>}<div style={{fontFamily:"JetBrains Mono,monospace",fontSize:10.5,color:"#64748b",marginTop:3}}>{bedVelden.btwnr!==false&&<>{fmtBtwnr(bed.btwnr)}<br/></>}{bedVelden.iban!==false&&<>IBAN: {bed.iban}<br/></>}{bedVelden.tel!==false&&<>{bed.tel}<br/></>}{bedVelden.email!==false&&<>{bed.email}</>}</div></div>
             <div style={{direction:"ltr"}}><div className="qt-party-lbl">Klant</div>{klantVelden.naam!==false&&<div className="qt-party-name">{doc.klant?.naam}</div>}{klantVelden.bedrijf!==false&&doc.klant?.bedrijf&&<div style={{fontWeight:600,color:"#475569",fontSize:12.5}}>{doc.klant.bedrijf}</div>}{klantVelden.adres!==false&&<div className="qt-party-info">{doc.klant?.adres}</div>}{klantVelden.gemeente!==false&&<div className="qt-party-info">{doc.klant?.gemeente}</div>}{klantVelden.btwnr!==false&&doc.klant?.btwnr&&<div style={{fontFamily:"JetBrains Mono,monospace",fontSize:10.5,color:"#64748b"}}>{fmtBtwnr(doc.klant.btwnr)}</div>}{klantVelden.tel!==false&&doc.klant?.tel&&<div style={{fontSize:11,color:"#64748b"}}>{doc.klant.tel}</div>}{klantVelden.email!==false&&doc.klant?.email&&<div style={{fontSize:11,color:"#64748b"}}>{doc.klant.email}</div>}</div>
           </div>
@@ -5801,7 +5821,10 @@ function OfferteDocument({doc, settings}) {
             <FichePages fiche={l.technischeFiche} naam={l.naam} fichNaam={l.fichNaam} omschr={l.omschr} dc={dc} bed={bed} docNummer={doc.nummer}/>}
           {/* Nieuw: array technischeFiches — render ALLE met data */}
           {(l.technischeFiches||[]).map((f,ffi)=>{
-            const ficheData = f.data || f.url || null;
+            // Haal data op: eerst van lijn zelf, dan uit ficheCache (voor gestripte fiches)
+            const cachedFiches = ficheCache[l.productId] || ficheCache[l.id] || [];
+            const cached = cachedFiches.find(cf => cf.naam === f.naam) || cachedFiches[0] || null;
+            const ficheData = f.data || f.url || cached?.data || null;
             if(!ficheData || ficheData.length < 100) {
               // Geen base64 data — toon placeholder
               return(
@@ -5910,7 +5933,7 @@ function FactuurDocument({doc, settings}) {
             <div className="qt-meta-item"><div className="qt-meta-lbl">Betalingstermijn</div><div className="qt-meta-val">{doc.betalingstermijn||14} dagen</div></div>
             {doc.offerteNr&&<div className="qt-meta-item"><div className="qt-meta-lbl">Ref. offerte</div><div className="qt-meta-val" style={{fontFamily:"JetBrains Mono,monospace",fontSize:12}}>{doc.offerteNr}</div></div>}
           </div>
-          <div className="qt-parties" style={{direction: lyt.klant?.positie==="links" ? "rtl" : "ltr"}}>
+          <div className="qt-parties">
             <div style={{direction:"ltr"}}>{bedVelden.naam!==false&&<div className="qt-party-name">{bed.naam}</div>}{bedVelden.adres!==false&&<div className="qt-party-info">{bed.adres}</div>}{bedVelden.gemeente!==false&&<div className="qt-party-info">{bed.gemeente}</div>}<div style={{fontFamily:"JetBrains Mono,monospace",fontSize:10.5,color:"#64748b",marginTop:3}}>{bedVelden.btwnr!==false&&<>{fmtBtwnr(bed.btwnr)}<br/></>}{bedVelden.iban!==false&&<>IBAN: {bed.iban}</>}</div></div>
             <div style={{direction:"ltr"}}><div className="qt-party-lbl">Gefactureerd aan</div>{klantVelden.naam!==false&&<div className="qt-party-name">{doc.klant?.naam}</div>}{klantVelden.bedrijf!==false&&doc.klant?.bedrijf&&<div style={{fontWeight:600,color:"#475569",fontSize:12.5}}>{doc.klant.bedrijf}</div>}{klantVelden.adres!==false&&<div className="qt-party-info">{doc.klant?.adres}</div>}{klantVelden.gemeente!==false&&<div className="qt-party-info">{doc.klant?.gemeente}</div>}{klantVelden.btwnr!==false&&doc.klant?.btwnr&&<div style={{fontFamily:"JetBrains Mono,monospace",fontSize:10.5,color:"#64748b"}}>{fmtBtwnr(doc.klant.btwnr)}</div>}</div>
           </div>
@@ -6159,7 +6182,7 @@ function DocModal({doc,type,settings,onClose,onFactuur,onStatusOff,onStatusFact,
         </div>
       </div>
       <div className="mb-body" style={{padding:0}}>
-        {type==="offerte"?<OfferteDocument doc={doc} settings={settings}/>:<FactuurDocument doc={doc} settings={settings}/>}
+        {type==="offerte"?<OfferteDocument doc={doc} settings={settings} ficheCache={(()=>{try{const r=localStorage.getItem("billr_fiche_cache");return r?JSON.parse(r):{};}catch(_){return{};}})()}/>:<FactuurDocument doc={doc} settings={settings}/>}
       </div>
     </div></div>
   );
