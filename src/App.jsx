@@ -1753,6 +1753,8 @@ export default function App() {
       const { data: responses, error: rErr } = await sb.from('offerte_responses').select('offerte_id, status, periode, opmerkingen, submitted_at');
       if(vErr) console.warn('views error:', vErr.message);
       if(rErr) console.warn('responses error:', rErr.message);
+      console.log('[TRACKING] responses uit DB:', responses?.length||0, responses?.map(r=>r.offerte_id+'='+r.status)||[]);
+      console.log('[TRACKING] offertes in state (functie arg):', offertes?.length||0, offertes?.map(o=>o.id+'='+o.nummer)||[]);
       let proposals = null;
       try { const r = await sb.from('planning_proposals').select('*'); proposals = r.data; } catch(_){}
       if(views) {
@@ -1777,18 +1779,36 @@ export default function App() {
             const { data: sharedData } = await sb.from('offerte_shares').select('id, offerte_data').in('id', responseIds);
             if(sharedData && sharedData.length > 0) {
               setOffertes(prev => {
-                const missing = sharedData.filter(s => !prev.find(o=>o.id===s.id) && s.offerte_data?.nummer && !s.offerte_data?._hersteld);
-                if(!missing.length) return prev;
+                // Herstel ontbrekende: check op ZOWEL id ALS nummer (ander apparaat = ander id, zelfde nummer)
+                const alleIds = new Set(prev.map(o=>o.id));
+                const alleNummers = new Set(prev.map(o=>o.nummer));
+                const missing = sharedData.filter(s => {
+                  if(!s.offerte_data?.nummer) return false;
+                  if(alleIds.has(s.id)) return false; // al aanwezig op id
+                  if(alleNummers.has(s.offerte_data.nummer)) {
+                    // Zelfde nummer, ander id: update het id in state
+                    return false; // skip herstel, fix id apart
+                  }
+                  return true;
+                });
+                // Fix: update offerte id als nummer matcht maar id verschilt
+                let updated = [...prev];
+                sharedData.forEach(s => {
+                  if(!s.offerte_data?.nummer) return;
+                  const byNummer = updated.find(o=>o.nummer===s.offerte_data.nummer && o.id!==s.id);
+                  if(byNummer) {
+                    // Vervang het lokale id met het share id zodat responses matchen
+                    updated = updated.map(o=>o.nummer===byNummer.nummer ? {...o, id:s.id} : o);
+                    console.log(`🔧 Offerte ${byNummer.nummer}: id bijgewerkt naar ${s.id}`);
+                  }
+                });
+                if(!missing.length && JSON.stringify(updated)===JSON.stringify(prev)) return prev;
                 const recovered = missing.map(s => {
                   const {_bed,_dc,_sj,_lyt,_voorwaarden,_voorschot,...d} = s.offerte_data||{};
                   return {...d, id: s.id, _hersteld: true, status: d.status||'verstuurd'};
                 });
-                // Verwijder ook eventuele dubbelen op nummer
-                const alleNummers = new Set(prev.map(o=>o.nummer));
-                const uniek = recovered.filter(r => !alleNummers.has(r.nummer));
-                if(!uniek.length) return prev;
-                console.log(`🔄 ${uniek.length} offerte(s) hersteld`);
-                return [...prev, ...uniek];
+                if(recovered.length) console.log(`🔄 ${recovered.length} offerte(s) hersteld`);
+                return [...updated, ...recovered];
               });
             }
           } catch(_){}
