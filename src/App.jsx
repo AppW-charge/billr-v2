@@ -2213,24 +2213,24 @@ export default function App() {
   const nextNr = (pre,list,fld) => {
     const customPre = pre==="OFF" ? (settings?.voorwaarden?.nummerPrefix_off||"OFF") : pre==="FACT" ? (settings?.voorwaarden?.nummerPrefix_fct||"FACT") : pre;
     const y = new Date().getFullYear();
-    // tegenNummer: eenmalige handmatige override
     const tegen = pre==="OFF" ? settings?.voorwaarden?.tegenNummer_off : pre==="FACT" ? settings?.voorwaarden?.tegenNummer_fct : null;
     if(tegen) return tegen;
-    // startNummer: minimum volgnummer
-    const start = pre==="OFF" ? (settings?.voorwaarden?.startNummer_off||1) : pre==="FACT" ? (settings?.voorwaarden?.startNummer_fct||1) : 1;
-    // Scan ALLE nummers — ook oud formaat YYYY-NNN en andere prefixen
-    const ns = list.map(x => {
-      const nr = x[fld] || "";
-      // Formaat: PREFIX-YYYY-NNN → pak laatste deel
-      const m3 = nr.match(/^.+-\d{4}-(\d+)$/);
-      if(m3) return parseInt(m3[1]) || 0;
-      // Formaat: YYYY-NNN (oud, geen prefix)
-      const m2 = nr.match(/^\d{4}-(\d+)$/);
-      if(m2) return parseInt(m2[1]) || 0;
-      return 0;
-    });
-    const next = Math.max(start - 1, Math.max(0, ...ns)) + 1;
-    return `${customPre}-${y}-${String(next).padStart(3, "0")}`;
+    const start = pre==="OFF" ? (Number(settings?.voorwaarden?.startNummer_off)||1) : pre==="FACT" ? (Number(settings?.voorwaarden?.startNummer_fct)||1) : 1;
+    function parseVolg(nr) {
+      if(!nr) return 0;
+      const m = nr.match(/-?(\d+)$/);
+      return m ? (parseInt(m[1])||0) : 0;
+    }
+    const ns = list.map(x => parseVolg(x[fld]||""));
+    // Ook localStorage backup checken als lijst leeg is
+    if(!ns.length || Math.max(...ns) < start - 1) {
+      try {
+        const saved = pre==="OFF" ? JSON.parse(localStorage.getItem("b4_off")||"[]") : JSON.parse(localStorage.getItem("b4_fct")||"[]");
+        if(Array.isArray(saved)) saved.forEach(x=>ns.push(parseVolg(x[fld]||"")));
+      } catch(_){}
+    }
+    const next = Math.max(start - 1, Math.max(0, ...ns.filter(n=>n>0))) + 1;
+    return `${customPre}-${y}-${String(next).padStart(3,"0")}`;
   };
   const logEntry = (actie) => ({ts: new Date().toISOString(), actie});
   const updOff = (id,upd) => setOffertes(p=>p.map(o=>o.id===id?{...o,...upd,log:[...(o.log||[]),logEntry(upd.status?"Status → "+(OFF_STATUS[upd.status]?.l||upd.status):upd.logActie||"Gewijzigd")]}:o));
@@ -7376,7 +7376,7 @@ function InstellingenPage({settings,setSettings,notify,onExportBackup,onImportBa
               <label className="fl">Startnummer offertes</label>
               <input type="number" className="fc" min={1} placeholder="1"
                 value={form.voorwaarden?.startNummer_off||""}
-                onChange={e=>set("voorwaarden","startNummer_off",e.target.value?Number(e.target.value):null)}/>
+                onChange={e=>{const v=parseInt(e.target.value)||null;set("voorwaarden","startNummer_off",v);}}/>
               <div style={{fontSize:11,color:"#94a3b8",marginTop:3}}>Volgende offerte wordt: {form.voorwaarden?.nummerPrefix_off||"OFF"}-{new Date().getFullYear()}-{String(form.voorwaarden?.startNummer_off||1).padStart(3,"0")}</div>
             </div>
           </div>
@@ -7385,7 +7385,7 @@ function InstellingenPage({settings,setSettings,notify,onExportBackup,onImportBa
               <label className="fl">Startnummer facturen</label>
               <input type="number" className="fc" min={1} placeholder="1"
                 value={form.voorwaarden?.startNummer_fct||""}
-                onChange={e=>set("voorwaarden","startNummer_fct",e.target.value?Number(e.target.value):null)}/>
+                onChange={e=>{const v=parseInt(e.target.value)||null;set("voorwaarden","startNummer_fct",v);}}/>
               <div style={{fontSize:11,color:"#94a3b8",marginTop:3}}>Volgende factuur wordt: {form.voorwaarden?.nummerPrefix_fct||"FACT"}-{new Date().getFullYear()}-{String(form.voorwaarden?.startNummer_fct||1).padStart(3,"0")}</div>
             </div>
             <div className="fg">
