@@ -168,8 +168,10 @@ const BILLIT_API = {
 };
 
 function getBillitUrl(settings) {
-  // Always use local proxy — avoids CORS
-  return "/api/billit";
+  const env = settings?.integraties?.billitEnv || "production";
+  return env === "sandbox" 
+    ? "https://sandbox.billit.be/api" 
+    : "https://app.billit.be/api";
 }
 
 function getBillitKey(settings) {
@@ -5451,17 +5453,16 @@ function FichePages({fiche, naam, fichNaam, omschr, dc, bed, docNummer}) {
 }
 
 function OfferteDocument({doc, settings, ficheCache={}, producten=[]}) {
-  // Bouw realtime fiche cache: producten state (meest actueel) + doorgegeven cache
-  const _fc = useMemo(() => {
+  // Bouw fiche cache: producten state + doorgegeven cache + localStorage
+  const _fc = (() => {
     const c = {...ficheCache};
+    try { const r=localStorage.getItem("billr_fiche_cache"); if(r) { const lc=JSON.parse(r); Object.entries(lc).forEach(([k,v])=>{ if(!c[k]) c[k]=v; }); } } catch(_){}
     producten.forEach(p => {
       if(p.technischeFiches?.some(f=>f.data)) c[p.id] = p.technischeFiches.filter(f=>f.data);
       else if(p.technischeFiche && p.technischeFiche.length>100) c[p.id] = [{data:p.technischeFiche,naam:p.fichNaam||"fiche.pdf"}];
     });
-    // ook localStorage
-    try { const r=localStorage.getItem("billr_fiche_cache"); if(r) { const lc=JSON.parse(r); Object.entries(lc).forEach(([k,v])=>{ if(!c[k]) c[k]=v; }); } } catch(_){}
     return c;
-  }, [ficheCache, producten]);
+  })();
   const bed = settings?.bedrijf || INIT_SETTINGS.bedrijf;
   const sj = settings?.sjabloon || INIT_SETTINGS.sjabloon || {};
   const lyt = settings?.layout || INIT_SETTINGS.layout || {};
