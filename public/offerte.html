@@ -3,75 +3,122 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Offerte bekijken</title>
+<title>Offerte</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-body{font-family:'Inter',Arial,sans-serif;background:#e8ecf1;color:#1e293b;font-size:13.5px;line-height:1.5}
+body{font-family:'Inter',Arial,sans-serif;background:#f0f4f8;color:#1e293b;font-size:13px;line-height:1.5}
+/* ── FAB ── */
 .fab{position:fixed;bottom:0;left:0;right:0;z-index:100;background:#fff;border-top:2px solid #e2e8f0;padding:10px 16px;display:flex;align-items:center;justify-content:center;gap:10px;box-shadow:0 -4px 20px rgba(0,0,0,.12);flex-wrap:wrap}
-.fab-btn{padding:13px 28px;border:none;border-radius:10px;font-weight:800;font-size:14px;cursor:pointer;transition:all .2s;display:inline-flex;align-items:center;gap:8px;white-space:nowrap}
-.fab-accept{background:#10b981;color:#fff}.fab-accept:hover{background:#059669}
-.fab-reject{background:#f1f5f9;color:#64748b;border:1px solid #e2e8f0}.fab-reject:hover{background:#fef2f2;color:#ef4444}
+.fab-btn{padding:13px 28px;border:none;border-radius:10px;font-weight:800;font-size:14px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;white-space:nowrap}
+.fab-accept{background:#10b981;color:#fff}.fab-reject{background:#f1f5f9;color:#64748b;border:1px solid #e2e8f0}
+/* ── DOC ── */
 .doc-wrap{max-width:860px;margin:0 auto;padding:16px 12px 110px}
-.doc-page{background:#fff;margin-bottom:14px;border-radius:6px;box-shadow:0 2px 12px rgba(0,0,0,.08);overflow:hidden}
-.doc-page-lbl{text-align:center;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#94a3b8;margin:10px 0 4px}
+.doc-page{background:#fff;max-width:820px;width:100%;margin:0 auto 20px;box-shadow:0 2px 12px rgba(0,0,0,.1);border-radius:4px;overflow:hidden;display:flex;flex-direction:column}
+.doc-page-lbl{text-align:center;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#94a3b8;margin-bottom:5px;margin-top:12px}
+/* ── VOORBLAD ── */
 .cov{display:grid;grid-template-columns:42% 58%;min-height:280px}
-.cov-l{display:flex;flex-direction:column;padding:36px 28px;position:relative;overflow:hidden;color:#fff;justify-content:center}
+.cov-l{display:flex;flex-direction:column;padding:44px 32px;position:relative;overflow:hidden}
 .cov-l::after{content:'';position:absolute;bottom:-80px;right:-80px;width:240px;height:240px;border-radius:50%;background:rgba(255,255,255,.06)}
-.cov-r{padding:36px 32px;display:flex;flex-direction:column;justify-content:center}
-.qt-wrap{padding:28px 32px}
-.qt-meta-item{background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:8px 12px;flex:1;min-width:100px}
-.qt-meta-lbl{font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.5px}
-.qt-meta-val{font-size:13px;font-weight:700;color:#1e293b;margin-top:2px}
-.qt-parties{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px}
-.qt-party-lbl{font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px}
-.qt-party-name{font-weight:800;font-size:14px}
-.qt-party-info{font-size:12px;color:#475569}
-.grp-hdr{color:#fff;padding:8px 12px;font-weight:700;font-size:13px;border-radius:6px 6px 0 0}
-.qt-tbl{width:100%;border-collapse:collapse;font-size:12px;margin-bottom:14px;table-layout:fixed}
-.qt-tbl th{text-align:left;padding:7px 8px;background:#f8fafc;border-bottom:2px solid #e2e8f0;font-weight:700;color:#64748b;font-size:10px;text-transform:uppercase;letter-spacing:.3px;word-break:keep-all}
-.qt-tbl td{padding:7px 8px;border-bottom:1px solid #f1f5f9;word-break:break-word}
-.qt-tbl .c{text-align:center}.qt-tbl .r{text-align:right}
-.qt-item-main{font-weight:600;word-break:break-word}.qt-item-sub{font-size:11px;color:#64748b;margin-top:1px}
-.grp-sub{display:flex;justify-content:space-between;padding:6px 12px;background:#f8fafc;border-radius:0 0 6px 6px;font-size:11.5px;color:#475569;margin-bottom:14px}
-.qt-tot-box{margin-left:auto;min-width:240px;max-width:100%;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden}
-.qt-tot-row{display:flex;justify-content:space-between;padding:7px 14px;font-size:13px;border-bottom:1px solid #f1f5f9}
-.qt-tot-row.last{font-size:15px;font-weight:800;border-bottom:none}
-.prod-page{padding:24px 28px}
-.prod-item{display:flex;gap:14px;margin-bottom:20px;padding-bottom:18px;border-bottom:1px solid #e2e8f0;align-items:flex-start}
-.prod-img{width:72px;height:72px;border-radius:8px;object-fit:contain;background:#f8fafc;border:1px solid #e2e8f0;flex-shrink:0}
-.prod-name{font-weight:800;font-size:14px;margin-bottom:3px}
-.prod-desc{font-size:12px;color:#475569;line-height:1.5}
-.spec-tag{display:inline-block;background:#f1f5f9;border-radius:4px;padding:2px 7px;font-size:10.5px;color:#475569;margin:2px 2px 0 0}
-.prod-price-box{flex-shrink:0;text-align:right;background:#f8fafc;border-radius:8px;padding:8px 12px;border:1px solid #e2e8f0;min-width:90px}
-.voorw-page{padding:24px 28px;font-size:11.5px;color:#475569;line-height:1.7;white-space:pre-line}
-.doc-footer{padding:10px 20px;text-align:center;color:#fff;font-size:11px}
+.cov-co-name{font-weight:900;font-size:21px;color:#fff;letter-spacing:-.5px;margin-bottom:3px}
+.cov-co-tag{font-size:11px;color:rgba(255,255,255,.55);margin-bottom:auto}
+.cov-contact{margin-top:auto;font-size:11px;color:rgba(255,255,255,.5);line-height:1.9}
+.cov-contact strong{color:rgba(255,255,255,.8)}
+.cov-r{padding:44px 40px;display:flex;flex-direction:column;justify-content:space-between}
+.cov-doctype{font-weight:900;font-size:52px;letter-spacing:-2.5px;line-height:1}
+.cov-docnum{font-family:'JetBrains Mono',monospace;font-size:12.5px;background:#f0f4f8;padding:3px 10px;border-radius:5px;display:inline-block;margin-top:5px;margin-bottom:28px;font-weight:700}
+.cov-for-lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#94a3b8;margin-bottom:7px}
+.cov-client-name{font-size:22px;font-weight:900;letter-spacing:-.5px;margin-bottom:3px}
+.cov-client-co{font-size:14px;color:#475569;font-weight:600;margin-bottom:3px}
+.cov-client-addr{font-size:12.5px;color:#64748b;line-height:1.7}
+.cov-meta{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:28px;padding-top:18px;border-top:2px solid #f0f4f8}
+.cov-meta-lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:#94a3b8;margin-bottom:2px}
+.cov-meta-val{font-size:13px;font-weight:700;color:#1e293b}
+.cov-total{font-size:22px;font-weight:900;letter-spacing:-.5px}
+/* ── PRODUCT PAGE ── */
+.prod-page{padding:30px 40px}
+.prod-item{display:grid;grid-template-columns:130px 1fr;gap:22px;margin-bottom:26px;padding-bottom:26px;border-bottom:1px solid #f1f5f9}
+.prod-item:last-child{border-bottom:none;margin-bottom:0;padding-bottom:0}
+.prod-img{width:130px;height:100px;object-fit:contain;border-radius:8px;background:#f8fafc;border:1px solid #e2e8f0}
+.prod-img-ph{width:130px;height:100px;border-radius:8px;background:#f0f4f8;display:flex;align-items:center;justify-content:center;font-size:38px;border:1px solid #e2e8f0}
+/* ── OFFERTE DETAIL PAGE ── */
+.qt-pg{padding:30px 40px}
+.qt-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:22px;padding-bottom:18px;border-bottom:2px solid #f0f4f8}
+.qt-from-logo{max-height:40px;max-width:120px;object-fit:contain;margin-bottom:6px}
+.qt-from-name{font-weight:900;font-size:18px;letter-spacing:-.4px;margin-bottom:2px}
+.qt-from-info{font-size:10.5px;color:#64748b;line-height:1.9}
+.qt-dtype{font-weight:900;font-size:28px;letter-spacing:-.8px;text-align:right}
+.qt-dnum{font-family:'JetBrains Mono',monospace;font-size:11.5px;background:#f0f4f8;padding:2px 8px;border-radius:4px;display:inline-block;margin-top:4px}
+.qt-meta-bar{display:flex;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;overflow:hidden;margin-bottom:18px}
+.qt-meta-item{padding:8px 12px;flex:1;min-width:0}
+.qt-meta-lbl{font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:#94a3b8;margin-bottom:2px}
+.qt-meta-val{font-size:12.5px;font-weight:700;color:#1e293b}
+.qt-parties{display:grid;grid-template-columns:1fr 1fr;gap:22px;margin-bottom:20px}
+.qt-party-lbl{font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#94a3b8;margin-bottom:6px}
+.qt-party-name{font-weight:700;font-size:13px;margin-bottom:2px}
+.qt-party-info{font-size:11.5px;color:#475569;line-height:1.8}
+.grp-hdr{padding:7px 12px;border-radius:4px 4px 0 0;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:#fff;margin-top:12px}
+.grp-hdr:first-child{margin-top:0}
+.qt-tbl{width:100%;border-collapse:collapse;border:1px solid #e2e8f0;border-top:none}
+.qt-tbl th{background:#f8fafc;padding:7px 10px;text-align:left;font-size:10px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid #e2e8f0}
+.qt-tbl th.r,.qt-tbl td.r{text-align:right}
+.qt-tbl th.c,.qt-tbl td.c{text-align:center}
+.qt-tbl tbody tr:nth-child(even){background:#fafbfc}
+.qt-tbl td{padding:8px 10px;border-bottom:1px solid #f1f5f9;font-size:11.5px}
+.qt-tbl tbody tr:last-child td{border-bottom:none}
+.qt-item-main{font-weight:600;color:#1e293b}
+.qt-item-sub{font-size:10px;color:#64748b;margin-top:1px;font-style:italic}
+.grp-sub{display:flex;justify-content:flex-end;gap:12px;padding:5px 12px;background:#f0f4f8;border:1px solid #e2e8f0;border-top:none;font-size:11.5px;font-weight:700;margin-bottom:2px}
+.qt-totals{display:flex;justify-content:flex-end;margin-top:18px}
+.qt-tot-box{min-width:260px;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden}
+.qt-tot-row{display:flex;justify-content:space-between;padding:7px 14px;font-size:12.5px;border-bottom:1px solid #f1f5f9}
+.qt-tot-row.last{border-bottom:none;font-weight:800;font-size:15px;padding:10px 14px}
+.qt-tot-row.btwr{color:#64748b;font-size:11.5px}
+.qt-tot-row.krt{color:#ef4444}
+.qt-betaal{margin-top:14px;padding:11px 13px;background:#f0fdf4;border:1px solid #86efac;border-radius:6px;font-size:12px;line-height:1.8}
+.qt-notes{margin-top:10px;padding:11px 13px;background:#fffbeb;border:1px solid #fde68a;border-radius:6px;font-size:12px;color:#78350f}
+.qt-voorschot{margin-top:8px;padding:9px 13px;background:#f0f4ff;border:1px solid #a5b4fc;border-radius:6px;font-size:12px;color:#3730a3}
+.qt-sign-box{border:1.5px dashed #cbd5e1;border-radius:7px;padding:16px;min-height:70px;margin-top:18px}
+.qt-sign-lbl{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:#94a3b8;margin-bottom:4px}
+.qt-confirm-link{margin-top:10px;padding:11px 13px;background:#f0f4ff;border:1px solid #818cf8;border-radius:6px;font-size:11.5px;color:#3730a3;display:flex;align-items:center;gap:8px}
+.qt-footer{padding:10px 40px;display:flex;justify-content:space-between;align-items:center;background:#1a2e4a;color:#fff}
+.qt-footer-txt{font-size:10px;color:rgba(255,255,255,.5)}
+.qt-footer-txt strong{color:rgba(255,255,255,.8)}
+.voorw-page{padding:30px 40px;font-size:11px;color:#475569;line-height:1.9;white-space:pre-wrap}
+/* ── MODALS ── */
 .modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:200;align-items:center;justify-content:center;padding:16px}
 .modal-bg.active{display:flex}
 .modal{background:#fff;border-radius:16px;max-width:500px;width:100%;padding:28px;max-height:90vh;overflow-y:auto}
-.fg{margin-bottom:14px}.fl{display:block;font-weight:600;font-size:13px;margin-bottom:6px}.fc{width:100%;padding:10px 12px;border:2px solid #e2e8f0;border-radius:8px;font-size:14px;font-family:inherit}.fc:focus{outline:none;border-color:#2563eb}
+.fg{margin-bottom:14px}.fl{display:block;font-weight:600;font-size:13px;margin-bottom:6px}
+.fc{width:100%;padding:10px 12px;border:2px solid #e2e8f0;border-radius:8px;font-size:14px;font-family:inherit}
+.fc:focus{outline:none;border-color:#2563eb}
 .status-msg{text-align:center;padding:60px 20px}.status-msg .icon{font-size:64px;margin-bottom:16px}
 /* ── RESPONSIVE MOBILE ── */
 @media(max-width:640px){
-  body{font-size:13px}
   .doc-wrap{padding:8px 6px 120px}
-  .cov{grid-template-columns:1fr!important;min-height:auto}
-  .cov-l{padding:24px 18px;min-height:160px}
-  .cov-r{padding:20px 18px}
-  .qt-wrap{padding:16px}
-  .qt-parties{grid-template-columns:1fr;gap:12px}
-  .qt-meta-item{min-width:80px}
-  .qt-tbl{font-size:11px}
-  .qt-tbl th,.qt-tbl td{padding:5px 5px}
-  .qt-tbl th:nth-child(3),.qt-tbl td:nth-child(3){display:none}  /* verberg eenheid op mobile */
-  .qt-tot-box{min-width:0;width:100%}
+  .cov{grid-template-columns:1fr!important}
+  .cov-l{padding:28px 20px;min-height:100px}
+  .cov-r{padding:24px 20px}
+  .cov-doctype{font-size:36px}
+  .cov-client-name{font-size:18px}
+  .cov-meta{grid-template-columns:1fr 1fr}
   .prod-page{padding:16px}
-  .prod-item{flex-wrap:wrap;gap:10px}
-  .prod-img{width:56px;height:56px}
-  .prod-price-box{width:100%;text-align:left;display:flex;justify-content:space-between;align-items:center}
-  .voorw-page{padding:16px}
-  .fab{padding:8px 12px;gap:8px}
+  .prod-item{grid-template-columns:80px 1fr!important;gap:12px}
+  .prod-img,.prod-img-ph{width:80px!important;height:70px!important}
+  .qt-pg{padding:16px}
+  .qt-header{flex-direction:column;gap:8px}
+  .qt-header>div:last-child{text-align:left}
+  .qt-header .qt-dtype{font-size:22px}
+  .qt-meta-bar{flex-wrap:wrap}
+  .qt-meta-item{min-width:45%}
+  .qt-parties{grid-template-columns:1fr!important}
+  .qt-tbl{font-size:11px}
+  .qt-tbl th,.qt-tbl td{padding:5px 6px}
+  .qt-tbl th:nth-child(2),.qt-tbl td:nth-child(2){display:none}
+  .qt-totals{justify-content:stretch}
+  .qt-tot-box{min-width:0;width:100%}
+  .qt-footer{padding:10px 16px;flex-wrap:wrap;gap:4px}
   .fab-btn{padding:12px 18px;font-size:13px;flex:1;justify-content:center}
   .modal{padding:20px}
   .grp-sub{flex-direction:column;gap:2px}
@@ -85,94 +132,349 @@ const SB_URL="https://qxnxbqkdvvblfkihmjxy.supabase.co";
 const SB_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF4bnhicWtkdnZibGZraWhtanh5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMzNTI3MTMsImV4cCI6MjA4ODkyODcxM30.1JDvrHgxLpU1GZqSjDVGtfnFJg8PHuD-aFpHOxAY1To";
 const params=new URLSearchParams(window.location.search);
 const offId=params.get('id');
-const offerteData=params.get('data');
-const fmtEuro=n=>"€\u00A0"+Number(n||0).toFixed(2).replace(".",",").replace(/\B(?=(\d{3})+(?!\d))/g,".");
-const fmtDate=d=>d?new Date(d).toLocaleDateString("nl-BE",{day:"2-digit",month:"2-digit",year:"numeric"}):"—";
-const fmtBtwnr=b=>(b||"").replace(/^BE\s*/,"BE ").replace(/(\d{4})(\d{3})(\d{3})/,"$1.$2.$3");
+const fmtEuro=function(n){return"€\u00A0"+Number(n||0).toFixed(2).replace(".",",").replace(/\B(?=(\d{3})+(?!\d))/g,".");};
+const fmtDate=function(d){return d?new Date(d).toLocaleDateString("nl-BE",{day:"2-digit",month:"2-digit",year:"numeric"}):"—";};
+const fmtBtwnr=function(b){return(b||"").replace(/^BE\s*/,"BE ").replace(/(\d{4})(\d{3})(\d{3})/,"$1.$2.$3");};
 
-async function trackView(id){try{const s=window.supabase.createClient(SB_URL,SB_KEY);await s.from('offerte_views').insert({offerte_id:id,viewed_at:new Date().toISOString(),user_agent:navigator.userAgent.slice(0,200)});}catch(e){}}
+function trackView(id){try{var s=window.supabase.createClient(SB_URL,SB_KEY,{auth:{persistSession:false,storageKey:'offerte-track'}});s.from('offerte_views').insert({offerte_id:id,viewed_at:new Date().toISOString(),user_agent:navigator.userAgent.slice(0,200)});}catch(e){}}
 
-async function submitResponse(id,status,data={}){
+function submitResponse(id,status,data){
+  data=data||{};
   try{
-    var s=window.supabase.createClient(SB_URL,SB_KEY);
-    var r=await s.from('offerte_responses').insert({offerte_id:id,status:status,periode:data.periode||'',opmerkingen:data.opmerkingen||'',submitted_at:new Date().toISOString()});
-    console.log('📝 Response saved:',status,r.error?'ERROR: '+JSON.stringify(r.error):'OK');
-  }catch(e){console.error('Submit error:',e)}
+    var s=window.supabase.createClient(SB_URL,SB_KEY,{auth:{persistSession:false,storageKey:'offerte-resp'}});
+    s.from('offerte_responses').insert({offerte_id:id,status:status,periode:data.periode||'',opmerkingen:data.opmerkingen||'',submitted_at:new Date().toISOString()});
+  }catch(e){}
   var ok=status==='goedgekeurd';
-  var bedNaam=window._bedNaam||'';
-  var bedTel=window._bedTel||'';
-  var bedEmail=window._bedEmail||'';
-  document.getElementById('app').innerHTML='<div class="status-msg"><div class="icon">'+(ok?'✅':'❌')+'</div><h2 style="color:'+(ok?'#059669':'#dc2626')+';font-size:22px;margin-bottom:10px">'+(ok?'Offerte goedgekeurd!':'Offerte afgewezen')+'</h2>'+(ok?'<p style="font-size:14px;color:#475569;line-height:1.6;max-width:420px;margin:0 auto 20px">Bedankt voor uw vertrouwen! Uw akkoord is geregistreerd.<br>U ontvangt binnenkort een email met de voorgestelde installatiedatum.</p><div style="background:linear-gradient(135deg,#f0fdf4,#dcfce7);border:2px solid #86efac;border-radius:14px;padding:20px 24px;display:inline-block;text-align:left;min-width:280px;margin-bottom:20px"><div style="font-weight:800;color:#065f46;font-size:14px;margin-bottom:10px">📋 Wat gebeurt er nu?</div><div style="font-size:13px;color:#047857;line-height:2"><div>1️⃣ &nbsp;Uw akkoord is ontvangen</div><div>2️⃣ &nbsp;Wij stellen een installatiedatum voor</div><div>3️⃣ &nbsp;U bevestigt de datum via email</div><div>4️⃣ &nbsp;Installatie gaat door op afgesproken datum</div></div></div>'+(bedTel||bedEmail?'<div style="margin-top:8px;font-size:13px;color:#64748b">Vragen? <a href="tel:'+bedTel+'" style="color:#2563eb;text-decoration:none;font-weight:600">'+bedTel+'</a>'+(bedEmail?' · <a href="mailto:'+bedEmail+'" style="color:#2563eb;text-decoration:none;font-weight:600">'+bedEmail+'</a>':'')+'</div>':''):'<p style="margin-top:12px;color:#475569">Uw reactie is geregistreerd. Bedankt voor uw feedback.</p><p style="margin-top:8px;font-size:13px;color:#94a3b8">We nemen eventueel contact op om te bekijken hoe we beter kunnen aansluiten bij uw verwachtingen.</p>')+'</div>';
+  var bedNaam=window._bedNaam||'';var bedTel=window._bedTel||'';var bedEmail=window._bedEmail||'';
+  document.getElementById('app').innerHTML='<div class="status-msg"><div class="icon">'+(ok?'✅':'❌')+'</div>'+
+    '<h2 style="color:'+(ok?'#059669':'#dc2626')+';font-size:22px;margin-bottom:10px">'+(ok?'Offerte goedgekeurd!':'Offerte afgewezen')+'</h2>'+
+    (ok?'<p style="font-size:14px;color:#475569;line-height:1.6;max-width:420px;margin:0 auto 20px">Bedankt voor uw vertrouwen!<br>U ontvangt binnenkort een email.</p>':
+         '<p style="color:#475569">Bedankt voor uw feedback.</p>')+
+    (bedTel||bedEmail?'<div style="margin-top:16px;font-size:13px;color:#64748b">Vragen? '+
+      (bedTel?'<a href="tel:'+bedTel+'" style="color:#2563eb;font-weight:600">'+bedTel+'</a>':'')+
+      (bedEmail?(bedTel?' · ':'')+'<a href="mailto:'+bedEmail+'" style="color:#2563eb;font-weight:600">'+bedEmail+'</a>':'')+'</div>':'')+
+  '</div>';
 }
 
 function renderOfferte(doc){
-  const dc=doc._dc||'#1a2e4a';const bed=doc._bed||{};const sj=doc._sj||{};const groepen=doc.groepen||[];const lijnen=doc.lijnen||[];const vw=doc._voorwaarden||'';
-  const BEBAT_TARIEF=2.89;
-  const isBebat=function(n,c){var nl=(n||'').toLowerCase();if(nl.includes('bms')||nl.includes('battery management'))return false;return nl.includes('batter')||(c||'').toLowerCase().includes('batter');};
-  const sub=lijnen.reduce(function(s,l){return s+(l.prijs||0)*(l.aantal||1)},0);
-  const bebatSub=lijnen.reduce(function(s,l){return (l.bebatKg&&l.bebatKg>0&&isBebat(l.naam,l.cat))?s+l.bebatKg*(l.aantal||1)*BEBAT_TARIEF:s},0);
-  const bg={};lijnen.forEach(function(l){var b=l.btw||0;var a=(l.prijs||0)*(l.aantal||1)*(b/100);if(!bg[b])bg[b]=0;bg[b]+=a;if(l.bebatKg&&l.bebatKg>0&&isBebat(l.naam,l.cat)){if(!bg[21])bg[21]=0;bg[21]+=l.bebatKg*(l.aantal||1)*BEBAT_TARIEF*(21/100);}});
-  const btw=Object.values(bg).reduce(function(s,v){return s+v},0);
-  const tot=sub+bebatSub+btw;
-  const gl=[...groepen.map(g=>({...g,items:lijnen.filter(l=>l.groepId===g.id)})).filter(g=>g.items.length>0)];
-  const rest=lijnen.filter(l=>!l.groepId||!groepen.find(g=>g.id===l.groepId));
+  var dc=doc._dc||'#1a2e4a';
+  var bed=doc._bed||{};
+  var sj=doc._sj||{};
+  var groepen=doc.groepen||[];
+  var lijnen=doc.lijnen||[];
+  var vw=doc._voorwaarden||'';
+  var BEBAT_TARIEF=2.89;
+  function isBebat(n,c){var nl=(n||'').toLowerCase();if(nl.includes('bms')||nl.includes('battery management'))return false;return nl.includes('batter')||(c||'').toLowerCase().includes('batter');}
+  var sub=lijnen.reduce(function(s,l){return s+(l.prijs||0)*(l.aantal||1);},0);
+  var bebatSub=lijnen.reduce(function(s,l){return(l.bebatKg&&l.bebatKg>0&&isBebat(l.naam,l.cat))?s+l.bebatKg*(l.aantal||1)*BEBAT_TARIEF:s;},0);
+  var bg={};
+  lijnen.forEach(function(l){var b=l.btw||0;var a=(l.prijs||0)*(l.aantal||1)*(b/100);if(!bg[b])bg[b]=0;bg[b]+=a;if(l.bebatKg&&l.bebatKg>0&&isBebat(l.naam,l.cat)){if(!bg[21])bg[21]=0;bg[21]+=l.bebatKg*(l.aantal||1)*BEBAT_TARIEF*0.21;}});
+  var btw=Object.values(bg).reduce(function(s,v){return s+v;},0);
+  var eindTot=sub+bebatSub+btw;
+  var korting=doc.korting||0;
+  var kortingBedrag=0;
+  if(korting>0){kortingBedrag=doc.kortingType==='pct'?sub*(korting/100):Number(korting||0);eindTot=eindTot-kortingBedrag*(1+0.21);}
+  var gl=groepen.map(function(g){return{id:g.id,naam:g.naam,items:lijnen.filter(function(l){return l.groepId===g.id;})};}).filter(function(g){return g.items.length>0;});
+  var rest=lijnen.filter(function(l){return!l.groepId||!groepen.find(function(g){return g.id===l.groepId;});});
   if(rest.length)gl.push({id:'rest',naam:'Producten',items:rest});
-  const up=lijnen.filter(function(l){return l.naam&&(l.imageUrl||l.omschr||(l.specs||[]).length||(l.technischeFiches||[]).length||l.technischeFiche);});
-  trackView(doc.id);window._offId=doc.id;window._bedNaam=bed.naam||'';window._bedTel=bed.tel||'';window._bedEmail=bed.email||'';
+  var up=lijnen.filter(function(l){return l.naam&&(l.imageUrl||l.omschr||(l.specs||[]).length||(l.technischeFiches||[]).some(function(f){return f.data||f.url;}))||l.technischeFiche;});
+  trackView(doc.id);
+  window._offId=doc.id;window._bedNaam=bed.naam||'';window._bedTel=bed.tel||'';window._bedEmail=bed.email||'';
 
-  document.getElementById('app').innerHTML=
-  '<div class="fab"><button class="fab-btn fab-accept" onclick="showAcceptModal()">✅ Offerte goedkeuren</button><button class="fab-btn fab-reject" onclick="showRejectModal()">❌ Afwijzen</button></div>'+
-  '<div class="doc-wrap">'+
-  '<div class="doc-page-lbl">Voorblad</div><div class="doc-page"><div class="cov"><div class="cov-l" style="background:linear-gradient(155deg,'+dc+' 0%,'+dc+'ee 70%,#0f172a 100%)">'+(bed.logo?'<img src="'+bed.logo+'" alt="" style="max-height:60px;max-width:180px;margin-bottom:16px;object-fit:contain"/>':'<div style="font-size:24px;font-weight:900;letter-spacing:-1px;margin-bottom:12px">'+(bed.naam||'')+'</div>')+'<div style="font-size:12px;opacity:.7;margin-top:auto">'+(bed.adres||'')+'<br>'+(bed.gemeente||'')+'<br>'+(bed.tel||'')+'<br>'+(bed.email||'')+'</div></div>'+
-  '<div class="cov-r"><div style="color:'+dc+';font-size:28px;font-weight:900;letter-spacing:-1px">'+(sj.voorbladTitel||'OFFERTE')+'</div><div style="font-family:JetBrains Mono,monospace;font-size:14px;color:#94a3b8;margin-top:4px">'+(doc.nummer||'')+'</div>'+
-  '<div style="margin-top:24px"><div class="qt-party-lbl">Klant</div><div class="qt-party-name">'+(doc.klant?.naam||'')+'</div>'+(doc.klant?.bedrijf?'<div style="font-weight:600;color:#475569;font-size:12.5px">'+doc.klant.bedrijf+'</div>':'')+'<div class="qt-party-info">'+(doc.klant?.adres||'')+'</div><div class="qt-party-info">'+(doc.klant?.gemeente||'')+'</div>'+(doc.klant?.btwnr?'<div style="font-family:JetBrains Mono,monospace;font-size:10.5px;color:#64748b;margin-top:3px">'+fmtBtwnr(doc.klant.btwnr)+'</div>':'')+'</div>'+
-  '<div style="margin-top:20px;display:grid;grid-template-columns:1fr 1fr;gap:8px"><div class="qt-meta-item"><div class="qt-meta-lbl">Datum</div><div class="qt-meta-val">'+fmtDate(doc.datum||doc.aangemaakt)+'</div></div><div class="qt-meta-item"><div class="qt-meta-lbl">Geldig tot</div><div class="qt-meta-val">'+fmtDate(doc.vervaldatum)+'</div></div><div class="qt-meta-item"><div class="qt-meta-lbl">Referentie</div><div class="qt-meta-val" style="font-family:JetBrains Mono,monospace;font-size:12px">'+(doc.nummer||'')+'</div></div><div class="qt-meta-item"><div class="qt-meta-lbl">Totaal incl. BTW</div><div class="qt-meta-val" style="color:'+dc+';font-size:16px">'+fmtEuro(tot)+'</div></div></div></div></div></div>'+
-  
-  '<div class="doc-page-lbl">Offertelijnen</div><div class="doc-page"><div style="height:5px;background:'+dc+'"></div><div class="qt-wrap">'+
-  '<div class="qt-parties"><div><div class="qt-party-name">'+(bed.naam||'')+'</div><div class="qt-party-info">'+(bed.adres||'')+'</div><div class="qt-party-info">'+(bed.gemeente||'')+'</div><div style="font-family:JetBrains Mono,monospace;font-size:10.5px;color:#64748b;margin-top:3px">'+fmtBtwnr(bed.btwnr||'')+'<br>IBAN: '+(bed.iban||'')+'</div></div><div><div class="qt-party-lbl">Klant</div><div class="qt-party-name">'+(doc.klant?.naam||'')+'</div><div class="qt-party-info">'+(doc.klant?.adres||'')+'</div><div class="qt-party-info">'+(doc.klant?.gemeente||'')+'</div>'+(doc.klant?.btwnr?'<div style="font-family:JetBrains Mono,monospace;font-size:10.5px;color:#64748b">'+fmtBtwnr(doc.klant.btwnr)+'</div>':'')+'</div></div>'+
-  
-  gl.map(function(g){return '<div class="grp-hdr" style="background:'+dc+'">'+g.naam+'</div><table class="qt-tbl"><thead><tr><th>Omschrijving</th><th>Eenh.</th><th class="c">Aantal</th><th class="r">Prijs excl.</th><th class="r">BTW</th><th class="r">Totaal</th></tr></thead><tbody>'+g.items.map(function(l){
-    if(!l.productId&&l.prijs===0&&l.naam)return '<tr style="background:#f8fafc"><td colspan="6" style="padding:6px 10px;font-size:12px;color:#475569;font-style:italic">ℹ️ '+l.naam+(l.omschr?' — '+l.omschr:'')+'</td></tr>';
-    return '<tr><td><div class="qt-item-main">'+(l.naam||'')+'</div>'+(l.omschr?'<div class="qt-item-sub">'+l.omschr+'</div>':'')+'</td><td>'+(l.eenheid||'stuk')+'</td><td class="c">'+(l.aantal||1)+'</td><td class="r">'+fmtEuro(l.prijs||0)+'</td><td class="r">'+(l.btw||0)+'%</td><td class="r"><strong>'+fmtEuro((l.prijs||0)*(l.aantal||1))+'</strong></td></tr>';
-  }).join('')+'</tbody></table><div class="grp-sub"><span>Subtotaal '+g.naam+':</span><strong>'+fmtEuro(g.items.reduce(function(s,l){return s+(l.prijs||0)*(l.aantal||1)},0))+'</strong></div>';}).join('')+
-  
-  '<div style="display:flex;justify-content:flex-end;margin-top:8px"><div class="qt-tot-box"><div class="qt-tot-row"><span>Subtotaal excl. BTW</span><span>'+fmtEuro(sub)+'</span></div>'+(bebatSub>0?'<div class="qt-tot-row"><span>♻️ BEBAT bijdrage</span><span>'+fmtEuro(bebatSub)+'</span></div>':'')+Object.entries(bg).map(function(e){return '<div class="qt-tot-row"><span>BTW '+e[0]+'%</span><span>'+fmtEuro(e[1])+'</span></div>';}).join('')+'<div class="qt-tot-row last" style="background:'+dc+';color:#fff"><span>TOTAAL incl. BTW</span><span>'+fmtEuro(tot)+'</span></div></div></div>'+
-  '<div style="margin-top:20px;font-size:12px;color:#64748b"><strong>Betaling:</strong> IBAN '+(bed.iban||'')+' · BIC '+(bed.bic||'')+' · Mededeling: '+(doc.nummer||'')+'</div>'+
-  (doc.voorschot&&doc.voorschot!=='Geen voorschot'?'<div style="margin-top:8px;padding:10px 14px;background:#fffbeb;border:1px solid #fde68a;border-radius:6px;font-size:12px;color:#92400e">💡 <strong>Voorschot:</strong> '+doc.voorschot+' te betalen vóór aanvang van de werken.</div>':'')+
-  (doc.notities?'<div style="margin-top:8px;padding:10px 14px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;color:#475569"><strong>Opmerking:</strong> '+doc.notities+'</div>':'')+
-  '<div style="margin-top:28px;border:2px dashed #e2e8f0;border-radius:8px;padding:20px;text-align:center"><div style="font-size:13px;color:#64748b">'+(sj.handtekeningTekst||'Akkoord klant — datum, handtekening & naam')+'</div><div style="height:60px"></div></div>'+
-  '</div><div class="doc-footer" style="background:'+dc+'"><strong>'+(bed.naam||'')+'</strong> · '+(bed.adres||'')+', '+(bed.gemeente||'')+' · BTW: '+fmtBtwnr(bed.btwnr||'')+' · IBAN: '+(bed.iban||'')+'</div></div>'+
-  
-  (up.length>0?'<div class="doc-page-lbl">Productinformatie</div><div class="doc-page"><div style="height:5px;background:'+dc+'"></div><div class="prod-page"><div style="font-weight:900;font-size:18px;color:'+dc+';margin-bottom:16px">Productinformatie & Technische Fiches</div>'+up.map(function(l){return '<div class="prod-item">'+(l.imageUrl?'<img class="prod-img" src="'+l.imageUrl+'" alt="" onerror="this.style.display=\'none\'"/>':'')+'<div style="flex:1"><div class="prod-name">'+(l.naam||'')+'</div>'+(l.omschr?'<div class="prod-desc">'+l.omschr+'</div>':'')+((l.specs||[]).length?'<div style="margin-top:6px">'+l.specs.map(function(s){return '<span class="spec-tag">✓ '+s+'</span>';}).join('')+'</div>':'')+((l.technischeFiches||[]).length?'<div style="margin-top:8px">'+l.technischeFiches.map(function(f){return '<a href="'+(f.data||f.url||'#')+'" download="'+(f.naam||'fiche.pdf')+'" style="display:inline-flex;align-items:center;gap:6px;padding:6px 14px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;color:#2563eb;text-decoration:none;font-weight:600;font-size:12px;margin:3px 3px 0 0">📎 '+(f.naam||'Technische fiche')+'</a>';}).join('')+'</div>':'')+(l.technischeFiche&&!(l.technischeFiches||[]).length?'<div style="margin-top:8px"><a href="'+l.technischeFiche+'" download="'+(l.fichNaam||'fiche.pdf')+'" style="display:inline-flex;align-items:center;gap:6px;padding:6px 14px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;color:#2563eb;text-decoration:none;font-weight:600;font-size:12px">📎 '+(l.fichNaam||'Technische fiche')+'</a></div>':'')+'</div><div class="prod-price-box"><div style="font-size:10px;color:#94a3b8;font-weight:600">EENHEIDSPRIJS</div><div style="font-weight:800;font-size:16px;color:'+dc+'">'+fmtEuro(l.prijs||0)+'</div><div style="font-size:10px;color:#94a3b8">BTW '+(l.btw||0)+'%</div></div></div>';}).join('')+'</div></div>':'')+
-  
-  (vw?'<div class="doc-page-lbl">Voorwaarden</div><div class="doc-page"><div style="height:5px;background:'+dc+'"></div><div class="voorw-page"><div style="font-weight:800;font-size:16px;color:'+dc+';margin-bottom:12px">Algemene Voorwaarden</div>'+vw+'</div><div class="doc-footer" style="background:'+dc+'"><strong>'+(bed.naam||'')+'</strong> · '+(bed.adres||'')+', '+(bed.gemeente||'')+'</div></div>':'')+
+  // HELPER: specs render
+  function renderSpecs(specs,clr){
+    var specRows=specs.filter(function(s){return s.indexOf(':')>=0||s.indexOf('=')>=0;}).map(function(s){var ci=s.indexOf(':'),eq=s.indexOf('='),si=ci>=0&&(eq<0||ci<=eq)?ci:eq;return si>=0?{key:s.slice(0,si).trim(),val:s.slice(si+1).trim()}:{key:s.trim(),val:''};});
+    var bullets=specs.filter(function(s){return s.indexOf(':')<0&&s.indexOf('=')<0;});
+    if(!specs.length)return'';
+    return'<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:12px 14px;margin-bottom:8px">'+
+      '<div style="font-weight:700;font-size:11px;letter-spacing:.8px;text-transform:uppercase;color:'+clr+';margin-bottom:8px">📋 Technische specificaties</div>'+
+      (specRows.length?
+        '<table style="width:100%;border-collapse:collapse;font-size:12px"><tbody>'+
+        specRows.map(function(r,j){return'<tr style="border-bottom:1px solid #e2e8f0"><td style="padding:4px 8px;font-weight:600;color:#475569;width:40%;background:'+(j%2===0?'#fff':'#f8fafc')+'">'+r.key+'</td><td style="padding:4px 8px;color:#1e293b;background:'+(j%2===0?'#fff':'#f8fafc')+'">'+r.val+'</td></tr>';}).join('')+
+        '</tbody></table>':
+        '<div style="display:flex;flex-wrap:wrap;gap:6px">'+bullets.map(function(s){return'<span style="background:#fff;border:1px solid #e2e8f0;border-radius:5px;padding:3px 9px;font-size:11.5px;color:#374151">✓ '+s+'</span>';}).join('')+'</div>'
+      )+'</div>';
+  }
+
+  // HELPER: fiche links
+  function renderFiches(fiches){
+    var links=fiches.filter(function(f){return f.data||f.url;});
+    if(!links.length)return'';
+    return'<div style="margin-top:6px">'+links.map(function(f){return'<a href="'+(f.data||f.url)+'" download="'+(f.naam||'fiche.pdf')+'" style="display:inline-flex;align-items:center;gap:5px;padding:5px 12px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;color:#2563eb;text-decoration:none;font-weight:600;font-size:11.5px;margin:2px 3px 0 0">📎 '+(f.naam||'Technische fiche')+'</a>';}).join('')+'</div>';
+  }
+
+  // HELPER: product item (identiek aan BILLR OfferteDocument productpagina)
+  function renderProdItem(l,i,total){
+    var specs=l.specs||[];
+    var fiches=l.technischeFiches||[];
+    return'<div class="prod-item">'+
+      (l.imageUrl?
+        '<img class="prod-img" src="'+l.imageUrl+'" alt="" onerror="this.style.display=\'none\'"/>':
+        '<div class="prod-img-ph">'+getCatIcon(l.cat||'')+'</div>')+
+      '<div>'+
+        '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">'+
+          '<span style="background:'+dc+';color:#fff;border-radius:5px;padding:2px 9px;font-size:10px;font-weight:700">'+(l.cat||'Product')+'</span>'+
+          '<span style="font-size:11px;color:#94a3b8">×'+(l.aantal||1)+' '+(l.eenheid||'stuk')+'</span>'+
+        '</div>'+
+        '<div style="font-weight:800;font-size:16px;color:#1e293b;line-height:1.3;margin-bottom:4px">'+(l.naam||'')+'</div>'+
+        (l.omschr?'<div style="font-size:12px;color:#475569;line-height:1.7;margin-bottom:8px">'+l.omschr+'</div>':'')+
+        renderSpecs(specs,dc)+
+        renderFiches(fiches)+
+        '<div style="margin-top:10px;display:flex;align-items:center;gap:10px">'+
+          '<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:8px 14px">'+
+            '<div style="font-size:10px;color:#94a3b8;font-weight:600">EENHEIDSPRIJS</div>'+
+            '<div style="font-weight:800;font-size:16px;color:'+dc+'">'+fmtEuro(l.prijs||0)+'</div>'+
+            '<div style="font-size:10px;color:#94a3b8">BTW '+(l.btw||0)+'%</div>'+
+          '</div>'+
+        '</div>'+
+      '</div>'+
+    '</div>';
+  }
+
+  function getCatIcon(cat){
+    var icons={'Laadstation':'⚡','Installatie':'🔧','Energie monitoring':'📊','Keuring':'🔍','Zonnepanelen':'☀️','Omvormer':'⚙️','Batterij':'🔋','Arbeid':'👷'};
+    return icons[cat]||'📦';
+  }
+
+  var html=
+  '<div class="fab">'+
+    '<button class="fab-btn fab-accept" onclick="showAcceptModal()">✅ Offerte goedkeuren</button>'+
+    '<button class="fab-btn fab-reject" onclick="showRejectModal()">❌ Afwijzen</button>'+
   '</div>'+
-  
-  '<div class="modal-bg" id="acceptModal"><div class="modal"><h2 style="margin-bottom:20px;color:#10b981">✅ Offerte goedkeuren</h2><p style="margin-bottom:20px;color:#64748b">Bevestig uw akkoord met offerte <strong>'+doc.nummer+'</strong> voor <strong>'+fmtEuro(tot)+'</strong>.</p><div class="fg"><label class="fl">Gewenste installatieperiode</label><select class="fc" id="acceptPeriode"><option value="">— Kies —</option><option>Zo snel mogelijk</option><option>Binnen 2 weken</option><option>Binnen 1 maand</option><option>Binnen 2 maanden</option><option>Na overleg</option></select></div><div class="fg"><label class="fl">Opmerkingen</label><textarea class="fc" id="acceptNotes" rows="3" placeholder="Bijv: voorkeur ochtend..."></textarea></div><div style="display:flex;gap:10px;margin-top:20px"><button class="fab-btn fab-reject" style="flex:1;font-size:14px;padding:12px" onclick="closeModals()">Annuleren</button><button class="fab-btn fab-accept" style="flex:1;font-size:14px;padding:12px" onclick="doAccept()">✅ Bevestig</button></div></div></div>'+
-  '<div class="modal-bg" id="rejectModal"><div class="modal"><h2 style="margin-bottom:20px;color:#ef4444">❌ Offerte afwijzen</h2><div class="fg"><label class="fl">Reden (optioneel)</label><textarea class="fc" id="rejectReason" rows="3" placeholder="Bijv: prijs te hoog..."></textarea></div><div style="display:flex;gap:10px;margin-top:20px"><button class="fab-btn" style="flex:1;background:#f1f5f9;color:#64748b;font-size:14px;padding:12px" onclick="closeModals()">Annuleren</button><button class="fab-btn" style="flex:1;background:#ef4444;color:#fff;font-size:14px;padding:12px" onclick="doReject()">❌ Afwijzen</button></div></div></div>';
+  '<div class="doc-wrap">'+
+
+  // ── PAGINA 1: VOORBLAD ──
+  '<div class="doc-page-lbl">Voorblad</div>'+
+  '<div class="doc-page">'+
+    '<div class="cov">'+
+      '<div class="cov-l" style="background:linear-gradient(155deg,'+dc+' 0%,'+dc+'ee 70%,#0f172a 100%)">'+
+        (bed.logo?
+          '<img src="'+bed.logo+'" alt="" style="max-height:60px;max-width:180px;object-fit:contain;margin-bottom:14px;filter:brightness(0) invert(1)"/>':
+          '<div class="cov-co-name">'+(bed.naam||'')+'</div>')+
+        '<div class="cov-co-tag">'+(bed.tagline||'')+'</div>'+
+        '<div class="cov-contact">'+
+          (bed.adres?'<div>'+bed.adres+'</div>':'')+
+          (bed.gemeente?'<div>'+bed.gemeente+'</div>':'')+
+          (bed.tel?'<div><strong>'+bed.tel+'</strong></div>':'')+
+          (bed.email?'<div>'+bed.email+'</div>':'')+
+        '</div>'+
+      '</div>'+
+      '<div class="cov-r">'+
+        '<div>'+
+          '<div class="cov-doctype" style="color:'+dc+'">'+(sj.voorbladTitel||'OFFERTE')+'</div>'+
+          '<div class="cov-docnum">'+(doc.nummer||'')+'</div>'+
+          '<div class="cov-for-lbl">Offerte voor</div>'+
+          '<div class="cov-client-name">'+(doc.klant&&doc.klant.naam?doc.klant.naam:'')+'</div>'+
+          (doc.klant&&doc.klant.bedrijf?'<div class="cov-client-co">'+doc.klant.bedrijf+'</div>':'')+
+          '<div class="cov-client-addr">'+
+            (doc.klant&&doc.klant.adres?doc.klant.adres+'<br>':'')+
+            (doc.klant&&doc.klant.gemeente?doc.klant.gemeente+'<br>':'')+
+            (doc.klant&&doc.klant.btwnr?'<span style="font-family:JetBrains Mono,monospace;font-size:10.5px;color:#64748b">'+fmtBtwnr(doc.klant.btwnr)+'</span>':'')+
+          '</div>'+
+        '</div>'+
+        '<div class="cov-meta">'+
+          '<div><div class="cov-meta-lbl">Datum</div><div class="cov-meta-val">'+fmtDate(doc.datum||doc.aangemaakt)+'</div></div>'+
+          '<div><div class="cov-meta-lbl">Geldig tot</div><div class="cov-meta-val">'+fmtDate(doc.vervaldatum)+'</div></div>'+
+          '<div><div class="cov-meta-lbl">Referentie</div><div class="cov-meta-val" style="font-family:JetBrains Mono,monospace;font-size:11px">'+(doc.nummer||'')+'</div></div>'+
+          '<div><div class="cov-meta-lbl">Totaal incl. BTW</div><div class="cov-meta-val cov-total" style="color:'+dc+'">'+fmtEuro(eindTot)+'</div></div>'+
+        '</div>'+
+      '</div>'+
+    '</div>'+
+  '</div>'+
+
+  // ── PAGINA 2: PRODUCTINFO (indien producten met info) ──
+  (up.length>0?
+    '<div class="doc-page-lbl">Pagina 2 — Productinformatie & Technische Fiches</div>'+
+    '<div class="doc-page">'+
+      '<div style="height:6px;background:'+dc+';flex-shrink:0;border-radius:4px 4px 0 0"></div>'+
+      '<div class="prod-page">'+
+        '<div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:6px">'+
+          '<div>'+
+            '<div style="font-weight:900;font-size:20px;color:'+dc+';letter-spacing:-.5px">Productinformatie & Technische Fiches</div>'+
+            '<div style="font-size:12px;color:#64748b;margin-top:2px">Geselecteerde producten voor '+(doc.klant&&doc.klant.naam?doc.klant.naam:'de klant')+'</div>'+
+          '</div>'+
+          '<div style="font-size:10px;color:#94a3b8">'+(bed.naam||'')+'</div>'+
+        '</div>'+
+        '<div style="height:1px;background:#e2e8f0;margin-bottom:20px"></div>'+
+        up.map(function(l,i){return renderProdItem(l,i,up.length);}).join('')+
+      '</div>'+
+      '<div class="qt-footer" style="background:'+dc+'">'+
+        '<span class="qt-footer-txt"><strong>'+(bed.naam||'')+'</strong></span>'+
+        '<span class="qt-footer-txt">'+(bed.tel||'')+' · '+(bed.email||'')+'</span>'+
+      '</div>'+
+    '</div>':'')+ 
+
+  // ── PAGINA 3: OFFERTEDETAIL ──
+  '<div class="doc-page-lbl">Pagina 3 — Offertedetail</div>'+
+  '<div class="doc-page">'+
+    '<div style="height:5px;background:'+dc+';flex-shrink:0"></div>'+
+    '<div class="qt-pg">'+
+      // Header
+      '<div class="qt-header">'+
+        '<div>'+
+          (bed.logo?'<img class="qt-from-logo" src="'+bed.logo+'" alt=""/>':'<div class="qt-from-name" style="color:'+dc+'">⚡ '+(bed.naam||'')+'</div>')+
+          '<div class="qt-from-info">'+(bed.adres||'')+' · '+(bed.gemeente||'')+'<br>'+(bed.tel||'')+' · '+(bed.email||'')+' · '+fmtBtwnr(bed.btwnr||'')+'</div>'+
+        '</div>'+
+        '<div>'+
+          '<div class="qt-dtype" style="color:'+dc+'">OFFERTE</div>'+
+          '<div class="qt-dnum">'+(doc.nummer||'')+'</div>'+
+        '</div>'+
+      '</div>'+
+      // Meta bar
+      '<div class="qt-meta-bar">'+
+        '<div class="qt-meta-item"><div class="qt-meta-lbl">Datum</div><div class="qt-meta-val">'+fmtDate(doc.datum||doc.aangemaakt)+'</div></div>'+
+        '<div class="qt-meta-item"><div class="qt-meta-lbl">Geldig tot</div><div class="qt-meta-val">'+fmtDate(doc.vervaldatum)+'</div></div>'+
+        '<div class="qt-meta-item"><div class="qt-meta-lbl">Referentie</div><div class="qt-meta-val" style="font-family:JetBrains Mono,monospace;font-size:11px">'+(doc.nummer||'')+'</div></div>'+
+        '<div class="qt-meta-item"><div class="qt-meta-lbl">Betaling</div><div class="qt-meta-val">'+(doc.betalingstermijn||14)+' dagen</div></div>'+
+      '</div>'+
+      // Parties: bedrijf links, klant rechts
+      '<div class="qt-parties">'+
+        '<div>'+
+          '<div class="qt-party-name">'+(bed.naam||'')+'</div>'+
+          '<div class="qt-party-info">'+(bed.adres||'')+'</div>'+
+          '<div class="qt-party-info">'+(bed.gemeente||'')+'</div>'+
+          '<div style="font-family:JetBrains Mono,monospace;font-size:10.5px;color:#64748b;margin-top:3px">'+fmtBtwnr(bed.btwnr||'')+'<br>IBAN: '+(bed.iban||'')+'</div>'+
+        '</div>'+
+        '<div>'+
+          '<div class="qt-party-lbl">Klant</div>'+
+          '<div class="qt-party-name">'+(doc.klant&&doc.klant.naam?doc.klant.naam:'')+'</div>'+
+          (doc.klant&&doc.klant.bedrijf?'<div style="font-weight:600;color:#475569;font-size:12.5px">'+doc.klant.bedrijf+'</div>':'')+
+          '<div class="qt-party-info">'+(doc.klant&&doc.klant.adres?doc.klant.adres:'')+'</div>'+
+          '<div class="qt-party-info">'+(doc.klant&&doc.klant.gemeente?doc.klant.gemeente:'')+'</div>'+
+          (doc.klant&&doc.klant.btwnr?'<div style="font-family:JetBrains Mono,monospace;font-size:10.5px;color:#64748b">'+fmtBtwnr(doc.klant.btwnr)+'</div>':'')+
+          (doc.klant&&doc.klant.tel?'<div style="font-size:11.5px;color:#475569">'+doc.klant.tel+'</div>':'')+
+        '</div>'+
+      '</div>'+
+      // Groepen + tabel
+      gl.map(function(g){
+        return'<div class="grp-hdr" style="background:'+dc+'">'+g.naam+'</div>'+
+          '<table class="qt-tbl">'+
+            '<thead><tr>'+
+              '<th>Omschrijving</th><th>Eenh.</th><th class="c">Aantal</th>'+
+              '<th class="r">Prijs excl.</th><th class="r">BTW</th><th class="r">Totaal</th>'+
+            '</tr></thead>'+
+            '<tbody>'+
+            g.items.map(function(l){
+              if(!l.productId&&l.prijs===0&&l.naam)return'<tr style="background:#f8fafc"><td colspan="6" style="padding:6px 10px;font-size:12px;color:#475569;font-style:italic"><span style="font-weight:600;color:#64748b">ℹ️ '+l.naam+'</span>'+(l.omschr?' — <span style="color:#94a3b8">'+l.omschr+'</span>':'')+'</td></tr>';
+              return'<tr'+(l.prijs<0?' style="color:#ef4444"':'')+'>'+
+                '<td><div class="qt-item-main">'+(l.naam||'')+'</div>'+(l.omschr?'<div class="qt-item-sub">'+l.omschr+'</div>':'')+'</td>'+
+                '<td>'+(l.eenheid||'stuk')+'</td><td class="c">'+(l.aantal||1)+'</td>'+
+                '<td class="r">'+fmtEuro(l.prijs||0)+'</td>'+
+                '<td class="r">'+(l.btw||0)+'%</td>'+
+                '<td class="r"><strong>'+fmtEuro((l.prijs||0)*(l.aantal||1))+'</strong></td>'+
+              '</tr>';
+            }).join('')+
+            '</tbody></table>'+
+          '<div class="grp-sub"><span>Subtotaal '+g.naam+':</span><strong>'+fmtEuro(g.items.reduce(function(s,l){return s+(l.prijs||0)*(l.aantal||1);},0))+'</strong></div>';
+      }).join('')+
+      // Totalen
+      '<div class="qt-totals">'+
+        '<div class="qt-tot-box">'+
+          '<div class="qt-tot-row"><span>Subtotaal excl. BTW</span><span>'+fmtEuro(sub)+'</span></div>'+
+          (bebatSub>0?'<div class="qt-tot-row btwr"><span>♻️ BEBAT bijdrage</span><span>'+fmtEuro(bebatSub)+'</span></div>':'')+
+          Object.entries(bg).map(function(e){return'<div class="qt-tot-row btwr"><span>BTW '+e[0]+'%</span><span>'+fmtEuro(e[1])+'</span></div>';}).join('')+
+          (korting>0?'<div class="qt-tot-row krt"><span>Korting '+(doc.kortingType==='pct'?'('+korting+'%)':'(forfait)')+'</span><span>−'+fmtEuro(kortingBedrag*(1+0.21))+'</span></div>':'')+
+          '<div class="qt-tot-row last" style="background:'+dc+';color:#fff"><span>TOTAAL incl. BTW</span><span>'+fmtEuro(eindTot)+'</span></div>'+
+        '</div>'+
+      '</div>'+
+      // Betaling
+      '<div class="qt-betaal"><strong>Betaling:</strong> IBAN '+(bed.iban||'')+' · BIC '+(bed.bic||'')+' · Mededeling: '+(doc.nummer||'')+'</div>'+
+      (doc.voorschot&&doc.voorschot!=='Geen voorschot'?'<div class="qt-voorschot">💡 <strong>Voorschot:</strong> '+doc.voorschot+' te betalen vóór aanvang van de werken.</div>':'')+
+      (doc.notities?'<div class="qt-notes"><strong>Opmerking:</strong> '+doc.notities+'</div>':'')+
+      // Handtekening
+      '<div class="qt-sign-box">'+
+        '<div class="qt-sign-lbl">Akkoord klant</div>'+
+        '<div style="font-size:13px;color:#64748b">'+(sj.handtekeningTekst||'Akkoord klant — datum, handtekening & naam')+'</div>'+
+        '<div style="font-size:12px;color:#94a3b8;margin-top:8px">Gelieve ondertekend terug te bezorgen of digitaal te bevestigen via onderstaande link.</div>'+
+        '<div style="height:40px"></div>'+
+      '</div>'+
+      // Digitaal akkoord
+      '<div class="qt-confirm-link">📧 <strong>Digitaal akkoord:</strong> <span style="cursor:pointer;color:#4338ca;text-decoration:underline" onclick="showAcceptModal()">Klik hier om uw offerte te bevestigen</span></div>'+
+    '</div>'+
+    '<div class="qt-footer" style="background:'+dc+'">'+
+      '<span class="qt-footer-txt"><strong>'+(bed.naam||'')+'</strong> · '+(bed.adres||'')+', '+(bed.gemeente||'')+'</span>'+
+      '<span class="qt-footer-txt">BTW: <strong>'+fmtBtwnr(bed.btwnr||'')+'</strong></span>'+
+      '<span class="qt-footer-txt">IBAN: <strong>'+(bed.iban||'')+'</strong></span>'+
+    '</div>'+
+  '</div>'+
+
+  // ── VOORWAARDEN ──
+  (vw?
+    '<div class="doc-page-lbl">Pagina 4 — Algemene Verkoopsvoorwaarden</div>'+
+    '<div class="doc-page">'+
+      '<div style="height:5px;background:'+dc+'"></div>'+
+      '<div class="voorw-page">'+
+        '<div style="font-weight:900;font-size:18px;color:'+dc+';margin-bottom:16px;letter-spacing:-.4px">Algemene Verkoopsvoorwaarden & Verklaringen</div>'+
+        vw+
+      '</div>'+
+      '<div class="qt-footer" style="background:'+dc+'">'+
+        '<span class="qt-footer-txt"><strong>'+(bed.naam||'')+'</strong> · BTW: '+fmtBtwnr(bed.btwnr||'')+'</span>'+
+      '</div>'+
+    '</div>':'')+ 
+
+  '</div>'+
+
+  // ── MODALS ──
+  '<div class="modal-bg" id="acceptModal">'+
+    '<div class="modal">'+
+      '<h2 style="margin-bottom:20px;color:#10b981">✅ Offerte goedkeuren</h2>'+
+      '<p style="margin-bottom:20px;color:#64748b">Bevestig uw akkoord met offerte <strong>'+(doc.nummer||'')+'</strong> voor <strong>'+fmtEuro(eindTot)+'</strong>.</p>'+
+      '<div class="fg"><label class="fl">Gewenste installatieperiode</label>'+
+        '<select class="fc" id="acceptPeriode">'+
+          '<option value="">— Kies —</option><option>Zo snel mogelijk</option><option>Binnen 2 weken</option><option>Binnen 1 maand</option><option>Binnen 2 maanden</option><option>Na overleg</option>'+
+        '</select></div>'+
+      '<div class="fg"><label class="fl">Opmerkingen</label><textarea class="fc" id="acceptNotes" rows="3" placeholder="Bijv: voorkeur ochtend..."></textarea></div>'+
+      '<div style="display:flex;gap:10px;margin-top:20px">'+
+        '<button class="fab-btn fab-reject" style="flex:1;font-size:14px;padding:12px" onclick="closeModals()">Annuleren</button>'+
+        '<button class="fab-btn fab-accept" style="flex:1;font-size:14px;padding:12px" onclick="doAccept()">✅ Bevestig</button>'+
+      '</div>'+
+    '</div>'+
+  '</div>'+
+  '<div class="modal-bg" id="rejectModal">'+
+    '<div class="modal">'+
+      '<h2 style="margin-bottom:20px;color:#ef4444">❌ Offerte afwijzen</h2>'+
+      '<div class="fg"><label class="fl">Reden (optioneel)</label><textarea class="fc" id="rejectReason" rows="3" placeholder="Bijv: prijs te hoog..."></textarea></div>'+
+      '<div style="display:flex;gap:10px;margin-top:20px">'+
+        '<button class="fab-btn fab-reject" style="flex:1;font-size:14px;padding:12px" onclick="closeModals()">Annuleren</button>'+
+        '<button class="fab-btn" style="flex:1;background:#ef4444;color:#fff;font-size:14px;padding:12px" onclick="doReject()">❌ Afwijzen</button>'+
+      '</div>'+
+    '</div>'+
+  '</div>';
+
+  document.getElementById('app').innerHTML=html;
 }
 
-window.showAcceptModal=function(){document.getElementById('acceptModal').classList.add('active')};
-window.showRejectModal=function(){document.getElementById('rejectModal').classList.add('active')};
-window.closeModals=function(){document.querySelectorAll('.modal-bg').forEach(function(m){m.classList.remove('active')})};
-window.doAccept=function(){submitResponse(window._offId,'goedgekeurd',{periode:document.getElementById('acceptPeriode')?.value||'',opmerkingen:document.getElementById('acceptNotes')?.value||''})};
-window.doReject=function(){submitResponse(window._offId,'afgewezen',{opmerkingen:document.getElementById('rejectReason')?.value||''})};
+window.showAcceptModal=function(){document.getElementById('acceptModal').classList.add('active');};
+window.showRejectModal=function(){document.getElementById('rejectModal').classList.add('active');};
+window.closeModals=function(){document.querySelectorAll('.modal-bg').forEach(function(m){m.classList.remove('active');});};
+window.doAccept=function(){var p=document.getElementById('acceptPeriode');var n=document.getElementById('acceptNotes');submitResponse(window._offId,'goedgekeurd',{periode:p?p.value:'',opmerkingen:n?n.value:''});};
+window.doReject=function(){var r=document.getElementById('rejectReason');submitResponse(window._offId,'afgewezen',{opmerkingen:r?r.value:''});};
 
 async function loadOfferte(){
-  if(offId){
-    try{
-      var s=window.supabase.createClient(SB_URL,SB_KEY);
-      var r=await s.from('offerte_shares').select('offerte_data').eq('id',offId).single();
-      console.log('📊 Supabase response:',r.error?r.error:'OK',r.data?'data found':'no data');
-      if(r.data&&r.data.offerte_data){
-        console.log('✅ Offerte loaded, lijnen:',r.data.offerte_data.lijnen?.length);
-        renderOfferte(r.data.offerte_data);return;
-      }
-    }catch(e){console.error('Load error:',e)}
-    document.getElementById('app').innerHTML='<div class="status-msg"><div class="icon">⏳</div><h2>Offerte niet gevonden</h2><p>De offerte moet opnieuw verstuurd worden.<br><small style="color:#94a3b8">ID: '+offId+'</small></p></div>';return;
+  if(!offId){
+    document.getElementById('app').innerHTML='<div class="status-msg"><div class="icon">📋</div><h2>Geen offerte</h2><p>Gebruik de link uit uw email.</p></div>';
+    return;
   }
-  if(offerteData){try{renderOfferte(JSON.parse(decodeURIComponent(atob(offerteData))));return;}catch(e){}}
-  document.getElementById('app').innerHTML='<div class="status-msg"><div class="icon">📋</div><h2>Geen offerte</h2><p>Gebruik de link uit uw email.</p></div>';
+  try{
+    var s=window.supabase.createClient(SB_URL,SB_KEY,{auth:{persistSession:false,autoRefreshToken:false,storageKey:'offerte-anon'}});
+    var r=await s.from('offerte_shares').select('offerte_data').eq('id',offId).single();
+    if(r.data&&r.data.offerte_data){
+      var doc=r.data.offerte_data;
+      // Laad fiches apart
+      try{
+        var fr=await s.from('offerte_fiches').select('product_id,fiches').eq('offerte_id',offId);
+        if(fr.data&&fr.data.length>0){
+          var fm={};fr.data.forEach(function(row){fm[row.product_id]=row.fiches;});
+          doc.lijnen=(doc.lijnen||[]).map(function(l){
+            var f=fm[l.productId||l.id];
+            return(f&&f.length)?Object.assign({},l,{technischeFiches:f}):l;
+          });
+        }
+      }catch(fe){}
+      renderOfferte(doc);return;
+    }
+  }catch(e){console.error('Load error:',e);}
+  document.getElementById('app').innerHTML='<div class="status-msg"><div class="icon">⚠️</div><h2>Offerte niet gevonden</h2><p>Klik in BILLR op de offerte → acties → 🔗 Link om te vernieuwen.<br><small style="color:#94a3b8">ID: '+offId+'</small></p></div>';
 }
 loadOfferte();
 </script>
