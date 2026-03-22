@@ -1749,8 +1749,10 @@ export default function App() {
   // ═══ OFFERTE TRACKING — fetch views + responses from Supabase ═══
   const fetchOfferteTracking = useCallback(async () => {
     try {
-      const { data: views } = await sb.from('offerte_views').select('offerte_id, viewed_at, user_agent');
-      const { data: responses } = await sb.from('offerte_responses').select('offerte_id, status, periode, opmerkingen, submitted_at');
+      const { data: views, error: vErr } = await sb.from('offerte_views').select('offerte_id, viewed_at, user_agent');
+      const { data: responses, error: rErr } = await sb.from('offerte_responses').select('offerte_id, status, periode, opmerkingen, submitted_at');
+      if(vErr) console.warn('views error:', vErr.message);
+      if(rErr) console.warn('responses error:', rErr.message);
       let proposals = null;
       try { const r = await sb.from('planning_proposals').select('*'); proposals = r.data; } catch(_){}
       if(views) {
@@ -1768,58 +1770,52 @@ export default function App() {
           grouped[r.offerte_id].push(r);
         });
         setOfferteResponses(grouped);
-        // Herstel offertes die in responses zitten maar niet in state (verloren door sync)
-        const missingIds = Object.keys(grouped).filter(id => !offertes.find(o=>o.id===id));
-        if(missingIds.length > 0) {
+        // Herstel ontbrekende offertes uit offerte_shares (verloren door sync/ander apparaat)
+        const responseIds = Object.keys(grouped);
+        if(responseIds.length > 0) {
           try {
-            const { data: sharedData } = await sb.from('offerte_shares').select('id, offerte_data').in('id', missingIds);
+            const { data: sharedData } = await sb.from('offerte_shares').select('id, offerte_data').in('id', responseIds);
             if(sharedData && sharedData.length > 0) {
-              const recovered = sharedData.map(s => {
-                const d = s.offerte_data || {};
-                // Strip interne velden, bewaar offerte data
-                const {_bed,_dc,_sj,_lyt,_voorwaarden,_voorschot,...offData} = d;
-                return {...offData, id: s.id, _hersteld: true};
-              }).filter(o => o.nummer); // alleen geldige offertes
-              if(recovered.length > 0) {
-                setOffertes(prev => {
-                  const nieuweIds = recovered.filter(r => !prev.find(o=>o.id===r.id));
-                  if(!nieuweIds.length) return prev;
-                  console.log(`🔄 ${nieuweIds.length} offerte(s) hersteld uit cloud`);
-                  return [...prev, ...nieuweIds];
+              setOffertes(prev => {
+                const missingShared = sharedData.filter(s => !prev.find(o=>o.id===s.id) && s.offerte_data?.nummer);
+                if(!missingShared.length) return prev;
+                const recovered = missingShared.map(s => {
+                  const {_bed,_dc,_sj,_lyt,_voorwaarden,_voorschot,...offData} = s.offerte_data||{};
+                  return {...offData, id: s.id, _hersteld: true};
                 });
-              }
+                console.log(`🔄 ${recovered.length} offerte(s) hersteld`);
+                return [...prev, ...recovered];
+              });
             }
           } catch(_){}
         }
-        // Auto-sync: update offerte status + log als klant heeft gereageerd
-        setOffertes(prev => {
-          let changed = false;
-          const next = prev.map(o => {
-            const oResp = grouped[o.id];
-            if(!oResp || !oResp.length) return o;
-            const latest = oResp.sort((a,b)=>new Date(b.submitted_at)-new Date(a.submitted_at))[0];
-            const respTs = latest.submitted_at;
-            // Check of deze response al gelogd is (op tijdstip)
-            const alreadyLogged = (o.log||[]).some(l => l.ts === respTs);
-            if(alreadyLogged) return o;
-            // Goedkeuring: ook updaten als status al goedgekeurd is maar klantAkkoord nog niet gezet
-            if(latest.status === "goedgekeurd" && (o.status === "verstuurd" || (o.status === "goedgekeurd" && !o.klantAkkoord))) {
-              changed = true;
-              const newLog = [...(o.log||[]), {ts: respTs, actie: `✅ Klant heeft offerte goedgekeurd${latest.periode ? " (periode: "+latest.periode+")" : ""}${latest.opmerkingen ? " — "+latest.opmerkingen : ""}`}];
-              return {...o, status: "goedgekeurd", klantAkkoord: true, klantAkkoordDatum: respTs, klantPeriode: latest.periode, klantOpmerkingen: latest.opmerkingen, log: newLog};
-            }
-            if(latest.status === "afgewezen" && (o.status === "verstuurd" || (o.status === "afgewezen" && !o.log?.some(l=>l.actie?.includes("afgewezen"))))) {
-              changed = true;
-              const newLog = [...(o.log||[]), {ts: respTs, actie: `❌ Klant heeft offerte afgewezen${latest.opmerkingen ? " — "+latest.opmerkingen : ""}`}];
-              return {...o, status: "afgewezen", log: newLog};
-            }
-            return o;
+        // Auto-sync: update offerte status + log
+        setTimeout(() => {
+          setOffertes(prev => {
+            let changed = false;
+            const next = prev.map(o => {
+              const oResp = grouped[o.id];
+              if(!oResp || !oResp.length) return o;
+              const latest = [...oResp].sort((a,b)=>new Date(b.submitted_at)-new Date(a.submitted_at))[0];
+              const respTs = latest.submitted_at;
+              const alreadyLogged = (o.log||[]).some(l => l.ts === respTs);
+              if(alreadyLogged) return o;
+              if(latest.status === "goedgekeurd") {
+                changed = true;
+                const newLog = [...(o.log||[]), {ts: respTs, actie: `✅ Klant heeft offerte goedgekeurd${latest.periode ? " (periode: "+latest.periode+")" : ""}${latest.opmerkingen ? " — "+latest.opmerkingen : ""}`}];
+                return {...o, status: "goedgekeurd", klantAkkoord: true, klantAkkoordDatum: respTs, klantPeriode: latest.periode, klantOpmerkingen: latest.opmerkingen, log: newLog};
+              }
+              if(latest.status === "afgewezen") {
+                changed = true;
+                const newLog = [...(o.log||[]), {ts: respTs, actie: `❌ Klant heeft offerte afgewezen${latest.opmerkingen ? " — "+latest.opmerkingen : ""}`}];
+                return {...o, status: "afgewezen", log: newLog};
+              }
+              return o;
+            });
+            if(changed) setTimeout(()=>notify('📬 Nieuwe reactie van klant ontvangen!','ok'),100);
+            return changed ? next : prev;
           });
-          if(changed) {
-            setTimeout(()=>notify('📬 Nieuwe reactie van klant ontvangen!','ok'),100);
-          }
-          return changed ? next : prev;
-        });
+        }, 500); // 500ms na herstel zodat state geüpdated is
       }
       if(proposals) {
         const grouped = {};
