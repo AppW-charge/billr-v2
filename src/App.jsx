@@ -1749,11 +1749,8 @@ export default function App() {
   // ═══ OFFERTE TRACKING — fetch views + responses from Supabase ═══
   const fetchOfferteTracking = useCallback(async () => {
     try {
-      // Filter op eigen offertes zodat RLS niet blokkeert
-      const ownIds = offertes.map(o=>o.id).filter(Boolean);
-      if(!ownIds.length) return;
-      const { data: views } = await sb.from('offerte_views').select('offerte_id, viewed_at, user_agent').in('offerte_id', ownIds);
-      const { data: responses } = await sb.from('offerte_responses').select('offerte_id, status, periode, opmerkingen, submitted_at').in('offerte_id', ownIds);
+      const { data: views } = await sb.from('offerte_views').select('offerte_id, viewed_at, user_agent');
+      const { data: responses } = await sb.from('offerte_responses').select('offerte_id, status, periode, opmerkingen, submitted_at');
       let proposals = null;
       try { const r = await sb.from('planning_proposals').select('*'); proposals = r.data; } catch(_){}
       if(views) {
@@ -1771,6 +1768,29 @@ export default function App() {
           grouped[r.offerte_id].push(r);
         });
         setOfferteResponses(grouped);
+        // Herstel offertes die in responses zitten maar niet in state (verloren door sync)
+        const missingIds = Object.keys(grouped).filter(id => !offertes.find(o=>o.id===id));
+        if(missingIds.length > 0) {
+          try {
+            const { data: sharedData } = await sb.from('offerte_shares').select('id, offerte_data').in('id', missingIds);
+            if(sharedData && sharedData.length > 0) {
+              const recovered = sharedData.map(s => {
+                const d = s.offerte_data || {};
+                // Strip interne velden, bewaar offerte data
+                const {_bed,_dc,_sj,_lyt,_voorwaarden,_voorschot,...offData} = d;
+                return {...offData, id: s.id, _hersteld: true};
+              }).filter(o => o.nummer); // alleen geldige offertes
+              if(recovered.length > 0) {
+                setOffertes(prev => {
+                  const nieuweIds = recovered.filter(r => !prev.find(o=>o.id===r.id));
+                  if(!nieuweIds.length) return prev;
+                  console.log(`🔄 ${nieuweIds.length} offerte(s) hersteld uit cloud`);
+                  return [...prev, ...nieuweIds];
+                });
+              }
+            }
+          } catch(_){}
+        }
         // Auto-sync: update offerte status + log als klant heeft gereageerd
         setOffertes(prev => {
           let changed = false;
@@ -1836,8 +1856,8 @@ export default function App() {
         });
       }
     } catch(e) { console.warn("Offerte tracking fetch failed:", e); }
-  }, []);
-  useEffect(() => { if(user) fetchOfferteTracking(); }, [user, fetchOfferteTracking]);
+  }, [offertes]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if(user) fetchOfferteTracking(); }, [user]); // eslint-disable-line
   // Auto-poll tracking elke 60s op dashboard
   useEffect(() => {
     if(!user || pg !== "dashboard") return;
