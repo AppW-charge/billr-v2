@@ -1677,25 +1677,29 @@ export default function App() {
         setWidgetOrder(ls('b4_wo', null));
       }
 
-      // Dedupliceer offertes op nummer — houd per nummer de meest recente
-      setOffertes(prev => {
-        const seen = new Map();
-        [...prev].sort((a,b)=>new Date(b.aangemaakt||0)-new Date(a.aangemaakt||0)).forEach(o => {
-          const key = o.nummer || o.id;
-          if(!seen.has(key)) seen.set(key, o);
-        });
-        const deduped = [...seen.values()];
-        if(deduped.length !== prev.length) {
-          console.log(`🧹 Deduplicatie: ${prev.length} → ${deduped.length} offertes`);
-          // Meteen opslaan zodat duplicaten ook uit Supabase verdwijnen
-          setTimeout(() => {
-            try { pendingSaves.current["b4_off"] = JSON.stringify(deduped); flushSaves(); } catch(_){}
-          }, 500);
-        }
-        return deduped;
-      });
       // Nu mogen saves plaatsvinden
       dataReady.current = true;
+      // Dedupliceer offertes + meteen opslaan
+      setTimeout(() => {
+        setOffertes(prev => {
+          const STATUS_PRIO = {verstuurd:5,goedgekeurd:6,gefactureerd:7,afgedrukt:4,afgewezen:3,concept:1};
+          const seen = new Map();
+          prev.forEach(o => {
+            const key = o.nummer || o.id;
+            if(!seen.has(key)) { seen.set(key, o); return; }
+            const cur = seen.get(key);
+            if((STATUS_PRIO[o.status]||0) > (STATUS_PRIO[cur.status]||0)) seen.set(key, o);
+          });
+          const deduped = [...seen.values()];
+          if(deduped.length !== prev.length) {
+            console.log(`🧹 Dedup: ${prev.length}→${deduped.length}`);
+            // Sla op — dataReady is nu true
+            pendingSaves.current["b4_off"] = JSON.stringify(deduped.map(o=>{const c={...o};if(c.technischeFiche&&c.technischeFiche.length>500)c.technischeFiche="[PDF]";if(c.technischeFiches)c.technischeFiches=c.technischeFiches.map(f=>({naam:f.naam||"",url:f.url||""}));return c;}));
+            flushSaves();
+          }
+          return deduped;
+        });
+      }, 200);
 
       // ── MIGRATIE: zorg dat ALLE producten met fiches in product_fiches tabel staan ──
       // (voor producten die voor de nieuwe tabel werden opgeslagen)
@@ -1786,27 +1790,22 @@ export default function App() {
         });
         setOfferteResponses(grouped);
 
-        // Haal ook offerte_shares op om nummer→id mapping te maken
-        let shareMap = {}; // offerte_shares.id → offerte nummer
+        // Bouw nummer→shareId mapping (offerte_shares heeft nu nummer kolom)
+        let nummerToShareId = {};
         try {
-          const respIds = Object.keys(grouped);
-          if(respIds.length > 0) {
-            const {data:sh} = await sb.from('offerte_shares').select('id,offerte_data').in('id',respIds);
-            if(sh) sh.forEach(s=>{ if(s.offerte_data?.nummer) shareMap[s.id]=s.offerte_data.nummer; });
+          const shareIds = Object.keys(grouped).slice(0,20);
+          if(shareIds.length > 0) {
+            const {data:shares} = await sb.from('offerte_shares').select('id,nummer').in('id', shareIds);
+            if(shares) shares.forEach(s=>{ if(s.nummer) nummerToShareId[s.nummer]=s.id; });
           }
         } catch(_){}
 
-        // Auto-sync: match op offerte id OF via nummer uit shareMap
+        // Auto-sync: match op id OF via nummer (cross-device)
         setOffertes(prev => {
           let changed = false;
           const next = prev.map(o => {
-            // Zoek responses: direct op id, of via shareMap (nummer match)
-            let oResp = grouped[o.id];
-            if(!oResp || !oResp.length) {
-              // Probeer via nummer: zoek share id waarvan nummer=o.nummer
-              const shareId = Object.keys(shareMap).find(sid=>shareMap[sid]===o.nummer);
-              if(shareId) oResp = grouped[shareId];
-            }
+            const shareId = nummerToShareId[o.nummer];
+            let oResp = grouped[o.id] || (shareId ? grouped[shareId] : null);
             if(!oResp || !oResp.length) return o;
             const latest = [...oResp].sort((a,b)=>new Date(b.submitted_at)-new Date(a.submitted_at))[0];
             const respTs = latest.submitted_at;
@@ -2343,7 +2342,7 @@ export default function App() {
       };
 
       // Stap 1: sla het kleine hoofdrecord op (geen fiches → geen timeout)
-      await sb.from('offerte_shares').upsert({ id: offerte.id, offerte_data: shareData });
+      await sb.from('offerte_shares').upsert({ id: offerte.id, nummer: offerte.nummer, offerte_data: shareData });
       console.log("✅ Offerte gedeeld:", offerte.nummer);
 
       // Stap 2: sla fiches apart op (async, niet-blokkerend)
