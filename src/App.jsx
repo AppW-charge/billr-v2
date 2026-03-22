@@ -648,7 +648,7 @@ const INIT_SETTINGS = {
     logo:{positie:"links", breedte:140, hoogte:52, ruimteBoven:2},
     titel:{formaat:"titel", aangepasteNaam:"", positie:"rechts", fontSize:28, hoofdletters:true, ruimteBoven:1, ruimteLinks:5},
     bedrijf:{positie:"rechts", fontSize:10, naamVet:true, naamFontSize:12, velden:{naam:true,adres:true,gemeente:true,btwnr:true,iban:false,tel:false,email:false}},
-    klant:{positie:"links", fontSize:12, velden:{naam:true,bedrijf:true,adres:true,gemeente:true,btwnr:true,tel:false,email:false}},
+    klant:{positie:"rechts", fontSize:12, velden:{naam:true,bedrijf:true,adres:true,gemeente:true,btwnr:true,tel:false,email:false}},
     metaBar:{toonDatum:true,toonGeldig:true,toonRef:true,toonBtw:true,toonBetaling:true},
     tabel:{toonOmschr:true,toonBtw:true,toonSubtotalen:true},
     footer:{toon:true,tekst:""},
@@ -2850,7 +2850,7 @@ export default function App() {
         }
         setFactuurWizOpen(false);setEditFact(null);
       }} onClose={()=>{setFactuurWizOpen(false);setEditFact(null);}} notify={notify}/>}
-      {viewDoc&&<DocModal doc={viewDoc.doc} type={viewDoc.type} settings={settings} producten={producten} onClose={()=>setViewDoc(null)} onFactuur={d=>{setFactModal(d);setViewDoc(null);}} onStatusOff={s=>{updOff(viewDoc.doc.id,{status:s});notify("Status: "+OFF_STATUS[s]?.l);}} onStatusFact={s=>{updFact(viewDoc.doc.id,{status:s});notify("Status: "+FACT_STATUS[s]?.l);}} onEmail={()=>setEmailModal({doc:viewDoc.doc,type:viewDoc.type})} onPeppol={viewDoc.type==="factuur"?()=>sendPeppol(viewDoc.doc):null}/>}
+      {viewDoc&&<DocModal doc={viewDoc.doc} type={viewDoc.type} settings={settings} producten={producten} onClose={()=>setViewDoc(null)} onFactuur={d=>{setFactModal(d);setViewDoc(null);}} onStatusOff={s=>{updOff(viewDoc.doc.id,{status:s});notify("Status: "+OFF_STATUS[s]?.l);}} onStatusFact={s=>{updFact(viewDoc.doc.id,{status:s});notify("Status: "+FACT_STATUS[s]?.l);}} onEmail={()=>setEmailModal({doc:viewDoc.doc,type:viewDoc.type})} onPeppol={viewDoc.type==="factuur"?()=>sendPeppol(viewDoc.doc):null} onNummer={nr=>{if(viewDoc.type==="offerte"){updOff(viewDoc.doc.id,{nummer:nr});setViewDoc(p=>({...p,doc:{...p.doc,nummer:nr}}));}else{updFact(viewDoc.doc.id,{nummer:nr});setViewDoc(p=>({...p,doc:{...p.doc,nummer:nr}}));}notify("Nummer bijgewerkt ✓");setTimeout(flushSaves,100);}}/>}
       {factModal&&<FactuurModal off={factModal} settings={settings} onMaak={maakFactuur} onClose={()=>setFactModal(null)}/>}
       {klantModal!==null&&<KlantModal klant={klantModal} onSave={k=>{if(k.id){setKlanten(p=>p.map(x=>x.id===k.id?k:x));notify("Klant opgeslagen");}else{setKlanten(p=>[{...k,id:uid(),aangemaakt:new Date().toISOString()},...p]);notify("Klant toegevoegd ✓");}setKlantModal(null);}} onClose={()=>setKlantModal(null)}/>}
       {prodModal!==null&&<ProductModal prod={prodModal} settings={settings} onSave={p=>{if(p.id){setProducten(pr=>pr.map(x=>x.id===p.id?p:x));notify("Product opgeslagen");}else{setProducten(pr=>[{...p,id:uid(),actief:true},...pr]);notify("Product toegevoegd ✓");}setProdModal(null);}} onClose={()=>setProdModal(null)}/>}
@@ -6017,8 +6017,10 @@ ${docWrapHtml}
 }
 
 // ─── DOC MODAL ───────────────────────────────────────────────────
-function DocModal({doc,type,settings,onClose,onFactuur,onStatusOff,onStatusFact,onEmail,onPeppol}) {
+function DocModal({doc,type,settings,onClose,onFactuur,onStatusOff,onStatusFact,onEmail,onPeppol,onNummer}) {
   const sc = type==="offerte" ? (OFF_STATUS[doc.status]||OFF_STATUS.concept) : (FACT_STATUS[doc.status]||FACT_STATUS.concept);
+  const [editNummer,setEditNummer] = useState(false);
+  const [nummerVal,setNummerVal] = useState(doc.nummer||"");
 
   const doPrint = () => {
     // Zoek doc-wrap in de modal
@@ -6069,7 +6071,17 @@ function DocModal({doc,type,settings,onClose,onFactuur,onStatusOff,onStatusFact,
     <div className="mo"><div className="mdl mfull" style={{maxWidth:1120}}>
       <div className="mh">
         <div className="flex fca gap3">
-          <div className="mt-m">{type==="offerte"?"Offerte":"Factuur"}: {doc.nummer}</div>
+          {editNummer
+            ? <div style={{display:"flex",gap:6,alignItems:"center"}}>
+                <input className="fc" style={{width:180,fontSize:13,fontFamily:"JetBrains Mono,monospace"}} value={nummerVal} onChange={e=>setNummerVal(e.target.value)} autoFocus/>
+                <button className="btn bg btn-sm" onClick={()=>{if(onNummer&&nummerVal.trim())onNummer(nummerVal.trim());setEditNummer(false);}}>✓</button>
+                <button className="btn bs btn-sm" onClick={()=>{setNummerVal(doc.nummer);setEditNummer(false);}}>✕</button>
+              </div>
+            : <div className="flex fca gap2">
+                <div className="mt-m">{type==="offerte"?"Offerte":"Factuur"}: {doc.nummer}</div>
+                <button className="btn bs btn-sm" title="Nummer aanpassen" onClick={()=>setEditNummer(true)} style={{fontSize:11,padding:"2px 7px"}}>✏️</button>
+              </div>
+          }
           <StatusBadge status={doc.status} type={type==="offerte"?"off":"fact"}/>
         </div>
         <div className="flex fca gap2" style={{flexWrap:"wrap"}}>
@@ -7213,10 +7225,11 @@ function InstellingenPage({settings,setSettings,notify,onExportBackup,onImportBa
           </div>
           <div className="fr2">
             <div className="fg">
-              <label className="fl">Boekjaar start</label>
-              <select className="fc" value={form.voorwaarden?.boekjaarStart||"01-01"} onChange={e=>set("voorwaarden","boekjaarStart",e.target.value)}>
-                {[["01-01","1 januari"],["04-01","1 april"],["07-01","1 juli"],["10-01","1 oktober"]].map(([v,l])=><option key={v} value={v}>{l}</option>)}
-              </select>
+              <label className="fl">Boekjaar start (dd-mm)</label>
+              <input className="fc" value={form.voorwaarden?.boekjaarStart||"01-01"}
+                onChange={e=>set("voorwaarden","boekjaarStart",e.target.value)}
+                placeholder="01-01" maxLength={5}/>
+              <div style={{fontSize:11,color:"#94a3b8",marginTop:2}}>Bijv: 01-01 (1 jan), 01-04 (1 apr), 01-07 (1 jul)</div>
             </div>
             <div className="fg">
               <label className="fl">Startnummer offertes</label>
@@ -7242,6 +7255,17 @@ function InstellingenPage({settings,setSettings,notify,onExportBackup,onImportBa
                   onChange={e=>set("voorwaarden","tegenNummer_fct",e.target.value)}
                   style={{flex:1}}/>
                 {form.voorwaarden?.tegenNummer_fct&&<button className="btn bgh btn-sm" onClick={()=>set("voorwaarden","tegenNummer_fct","")}>✕</button>}
+              </div>
+              <div style={{fontSize:11,color:"#f59e0b",marginTop:3}}>⚠ Eenmalig — wordt automatisch gewist na gebruik</div>
+            </div>
+            <div className="fg">
+              <label className="fl">Volgend nummer offerte (eenmalig)</label>
+              <div style={{display:"flex",gap:6}}>
+                <input className="fc" placeholder={`${form.voorwaarden?.nummerPrefix_off||"OFF"}-${new Date().getFullYear()}-042`}
+                  value={form.voorwaarden?.tegenNummer_off||""} 
+                  onChange={e=>set("voorwaarden","tegenNummer_off",e.target.value)}
+                  style={{flex:1}}/>
+                {form.voorwaarden?.tegenNummer_off&&<button className="btn bgh btn-sm" onClick={()=>set("voorwaarden","tegenNummer_off","")}>✕</button>}
               </div>
               <div style={{fontSize:11,color:"#f59e0b",marginTop:3}}>⚠ Eenmalig — wordt automatisch gewist na gebruik</div>
             </div>
@@ -7403,7 +7427,7 @@ function InstellingenPage({settings,setSettings,notify,onExportBackup,onImportBa
             </AccRow>
 
             <AccRow id="klant" title="Klantgegevens" icon="👤">
-              <FG label="Positie op pagina"><PosBtn val={lyt.klant?.positie||"links"} onChange={v=>sl("klant","positie",v)}/></FG>
+              <FG label="Positie op pagina"><PosBtn val={lyt.klant?.positie||"rechts"} onChange={v=>sl("klant","positie",v)}/></FG>
               <Sld label="Tekstgrootte" val={lyt.klant?.fontSize||12} min={8} max={16} unit="px" onChange={v=>sl("klant","fontSize",v)}/>
               <div style={{fontWeight:600,fontSize:12,marginTop:8,marginBottom:4,color:"#64748b"}}>Velden weergeven</div>
               {[["naam","Klantnaam"],["bedrijf","Bedrijfsnaam"],["adres","Adres"],["gemeente","Gemeente/Postcode"],["btwnr","BTW-nummer"],["tel","Telefoonnummer"],["email","E-mailadres"]].map(([k,l])=>(
