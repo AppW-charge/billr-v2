@@ -5452,7 +5452,7 @@ function FichePages({fiche, naam, fichNaam, omschr, dc, bed, docNummer}) {
 
 function OfferteDocument({doc, settings, ficheCache={}, producten=[]}) {
   // Bouw realtime fiche cache: producten state (meest actueel) + doorgegeven cache
-  const _fc = React.useMemo(() => {
+  const _fc = useMemo(() => {
     const c = {...ficheCache};
     producten.forEach(p => {
       if(p.technischeFiches?.some(f=>f.data)) c[p.id] = p.technischeFiches.filter(f=>f.data);
