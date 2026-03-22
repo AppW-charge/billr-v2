@@ -412,13 +412,20 @@ async function loadOfferte(){
       // Laad fiches uit offerte_fiches tabel en merge in lijnen
       try{
         var fr=await s.from('offerte_fiches').select('product_id,fiches').eq('offerte_id',offId);
+        console.log('[FICHES] offerte_fiches rows:', fr.data?fr.data.length:0, fr.error||'');
         if(fr.data&&fr.data.length>0){
-          var fm={};fr.data.forEach(function(row){fm[row.product_id]=row.fiches;});
+          var fm={};fr.data.forEach(function(row){
+            fm[row.product_id]=row.fiches;
+            console.log('[FICHES] product',row.product_id,'heeft',row.fiches?row.fiches.length:0,'fiches, eerste data lengte:',(row.fiches&&row.fiches[0]&&row.fiches[0].data)?row.fiches[0].data.length:0);
+          });
           doc.lijnen=(doc.lijnen||[]).map(function(l){
             var f=fm[l.productId||l.id];
+            console.log('[FICHES] lijn productId:',l.productId,'gevonden:',!!(f&&f.length));
             if(f&&f.length)return Object.assign({},l,{technischeFiches:f});
             return l;
           });
+        }else{
+          console.warn('[FICHES] LEEG of fout:', fr.error);
         }
       }catch(fe){console.warn('Fiches laden:',fe);}
       renderOfferte(doc);return;
