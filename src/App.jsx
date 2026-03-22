@@ -1952,7 +1952,7 @@ export default function App() {
   useEffect(()=>{ saveKey("b4_off", offertes);  },[offertes,   saveKey]);
   useEffect(()=>{ saveKey("b4_fct", facturen);  },[facturen,   saveKey]);
   useEffect(()=>{ saveKey("b4_kln", klanten);   },[klanten,    saveKey]);
-  useEffect(()=>{ saveKey("b4_prd", producten); saveFicheCache(producten); },[producten, saveKey, saveFicheCache]);
+  useEffect(()=>{ saveKey("b4_prd", producten); },[producten, saveKey]);
   useEffect(()=>{ saveKey("b4_set", settings);  },[settings,   saveKey]);
   useEffect(()=>{ saveKey("b4_cn",  creditnotas);},[creditnotas,saveKey]);
   useEffect(()=>{ saveKey("b4_am",  aanmaningen);},[aanmaningen,saveKey]);
@@ -2891,9 +2891,15 @@ export default function App() {
       {viewDoc&&<DocModal doc={viewDoc.doc} type={viewDoc.type} settings={settings} producten={producten} onClose={()=>setViewDoc(null)} onFactuur={d=>{setFactModal(d);setViewDoc(null);}} onStatusOff={s=>{updOff(viewDoc.doc.id,{status:s});notify("Status: "+OFF_STATUS[s]?.l);}} onStatusFact={s=>{updFact(viewDoc.doc.id,{status:s});notify("Status: "+FACT_STATUS[s]?.l);}} onEmail={()=>setEmailModal({doc:viewDoc.doc,type:viewDoc.type})} onPeppol={viewDoc.type==="factuur"?()=>sendPeppol(viewDoc.doc):null} onNummer={nr=>{if(viewDoc.type==="offerte"){updOff(viewDoc.doc.id,{nummer:nr});setViewDoc(p=>({...p,doc:{...p.doc,nummer:nr}}));}else{updFact(viewDoc.doc.id,{nummer:nr});setViewDoc(p=>({...p,doc:{...p.doc,nummer:nr}}));}notify("Nummer bijgewerkt ✓");setTimeout(flushSaves,100);}}/>}
       {factModal&&<FactuurModal off={factModal} settings={settings} onMaak={maakFactuur} onClose={()=>setFactModal(null)}/>}
       {klantModal!==null&&<KlantModal klant={klantModal} onSave={k=>{if(k.id){setKlanten(p=>p.map(x=>x.id===k.id?k:x));notify("Klant opgeslagen");}else{setKlanten(p=>[{...k,id:uid(),aangemaakt:new Date().toISOString()},...p]);notify("Klant toegevoegd ✓");}setKlantModal(null);}} onClose={()=>setKlantModal(null)}/>}
-      {prodModal!==null&&<ProductModal prod={prodModal} settings={settings} onSave={p=>{if(p.id){setProducten(pr=>pr.map(x=>x.id===p.id?p:x));notify("Product opgeslagen");}else{setProducten(pr=>[{...p,id:uid(),actief:true},...pr]);notify("Product toegevoegd ✓");}setProdModal(null);}} onClose={()=>setProdModal(null)}/>}
+      {prodModal!==null&&<ProductModal prod={prodModal} settings={settings} onSave={p=>{
+        // Sla fiches EERST op voor de state update (want saveKey strip ze)
+        saveFicheCache([p]);
+        if(p.id){setProducten(pr=>pr.map(x=>x.id===p.id?p:x));notify("Product opgeslagen");}
+        else{setProducten(pr=>[{...p,id:uid(),actief:true},...pr]);notify("Product toegevoegd ✓");}
+        setProdModal(null);
+      }} onClose={()=>setProdModal(null)}/>}
       {klantImportOpen&&<KlantImportModal onImport={nieuweKlanten=>{setKlanten(p=>[...nieuweKlanten.map(k=>({...k,id:uid(),aangemaakt:new Date().toISOString()})),...p]);notify(`${nieuweKlanten.length} klanten geïmporteerd ✓`);setKlantImportOpen(false);}} onClose={()=>setKlantImportOpen(false)} notify={notify}/>}
-      {importModal&&<ImportModal onImport={nieuweProds=>{setProducten(p=>[...nieuweProds.map(x=>({...x,id:uid(),actief:true})),...p]);notify(`${nieuweProds.length} producten geïmporteerd ✓`);setImportModal(false);}} onClose={()=>setImportModal(false)} notify={notify}/>}
+      {importModal&&<ImportModal onImport={nieuweProds=>{const prodsMetId=nieuweProds.map(x=>({...x,id:uid(),actief:true}));saveFicheCache(prodsMetId);setProducten(p=>[...prodsMetId,...p]);notify(`${nieuweProds.length} producten geïmporteerd ✓`);setImportModal(false);}} onClose={()=>setImportModal(false)} notify={notify}/>}
       {emailModal&&<EmailModal 
         doc={emailModal.doc} 
         type={emailModal.type} 
