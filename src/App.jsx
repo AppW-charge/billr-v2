@@ -1114,9 +1114,11 @@ tr.row-active td{border-top:2px solid #2563eb}
 
 /* ── TABS ── */
 .tabs{display:flex;flex-wrap:wrap;gap:4px;padding:4px;background:#f0f4f8;border-radius:10px;margin-bottom:16px}
-.tab{flex:1;min-width:0;padding:8px 6px;text-align:center;border-radius:7px;cursor:pointer;font-size:12px;font-weight:600;color:var(--mut);transition:all .12s;white-space:nowrap;min-height:36px;display:flex;align-items:center;justify-content:center}
+.tab{flex:1;min-width:0;padding:8px 4px;text-align:center;border-radius:7px;cursor:pointer;font-size:12px;font-weight:600;color:var(--mut);transition:all .12s;white-space:nowrap;min-height:36px;display:flex;align-items:center;justify-content:center}
 .tab.on{background:#fff;color:var(--p);box-shadow:0 1px 4px rgba(0,0,0,.1);font-weight:700}
 .tab:hover:not(.on){background:rgba(255,255,255,.6)}
+.tab-txt{display:inline}
+@media(max-width:600px){.tab-txt{display:none}.tab{font-size:16px;padding:6px 4px;min-width:32px;flex-basis:10%}}
 
 /* ── IMPORT ── */
 .import-zone{border:2px dashed #93c5fd;border-radius:10px;padding:32px;text-align:center;cursor:pointer;transition:all .15s;background:#f8fbff}
@@ -1774,8 +1776,8 @@ export default function App() {
             const cr = latest.client_response;
             if(!cr) return o; // Nog geen klantreactie
             const respTs = cr.responded_at || latest.created_at;
-            // Check of we deze response al gelogd hebben
-            const alreadyLogged = (o.log||[]).some(l => l.actie && l.actie.includes("Planning") && l.ts === respTs);
+            // Check of we deze response al gelogd hebben — zoek op tijdstip (niet op tekst)
+            const alreadyLogged = (o.log||[]).some(l => l.ts === respTs);
             if(alreadyLogged) return o;
             changed = true;
             const isAkkoord = latest.status === "akkoord";
@@ -2159,9 +2161,9 @@ export default function App() {
     const finalData = {...data, lijnen: updatedLijnen};
     
     if(finalData.id && offertes.find(o=>o.id===finalData.id)){
-      setOffertes(p=>p.map(o=>o.id===finalData.id?finalData:o)); notify("Offerte opgeslagen ✓");
+      setOffertes(p=>p.map(o=>o.id===finalData.id?{...o,...finalData,aangemaakt:o.aangemaakt||finalData.aangemaakt}:o)); notify("Offerte opgeslagen ✓");
     } else {
-      const n={...finalData,id:uid(),nummer:nextNr("OFF",offertes,"nummer"),aangemaakt:new Date().toISOString(),status:"concept"};
+      const n={...finalData,id:uid(),nummer:nextNr("OFF",offertes,"nummer"),datum:finalData.datum||today(),aangemaakt:new Date().toISOString(),status:"concept"};
       setOffertes(p=>[n,...p]); notify("Offerte aangemaakt ✓");
     }
     setWizOpen(false); setEditOff(null);
@@ -2796,7 +2798,7 @@ export default function App() {
           </div>
 
           <div className="content">
-            {pg==="dashboard"&&<Dashboard offertes={offertes} facturen={factMet} onGoto={gotoFiltered} onNew={()=>{setEditOff(null);setWizOpen(true)}} onFactuur={d=>setFactModal(d)} settings={settings} offerteViews={offerteViews} offerteResponses={offerteResponses} planningProposals={planningProposals} onLogboek={o=>setLogboekModal(o)} onPlan={o=>setPlanningModal(o)} widgetOrder={widgetOrder} setWidgetOrder={setWidgetOrder} onRefreshTracking={fetchOfferteTracking}/>}
+            {pg==="dashboard"&&<Dashboard offertes={offertes} facturen={factMet} onGoto={gotoFiltered} onNew={()=>{setEditOff(null);setWizOpen(true)}} onFactuur={d=>setFactModal(d)} settings={settings} offerteViews={offerteViews} offerteResponses={offerteResponses} planningProposals={planningProposals} onLogboek={o=>setLogboekModal(o)} onPlan={o=>setPlanningModal(o)} onPlanDelete={id=>{updOff(id,{planStatus:"geannuleerd",planDatum:null,planTijd:null,logActie:"🗑 Afspraak geannuleerd"});setTimeout(flushSaves,100);}} widgetOrder={widgetOrder} setWidgetOrder={setWidgetOrder} onRefreshTracking={fetchOfferteTracking}/>}
             {pg==="offertes"&&<OffertesPage offertes={offertes} initFilter={pgFilter} onView={d=>setViewDoc({doc:d,type:"offerte"})} onEdit={d=>{setEditOff(d);setWizOpen(true)}} onStatus={updOff} onBulkStatus={bulkUpdOff} onFactuur={d=>setFactModal(d)} onDelete={id=>{setOffertes(p=>p.filter(o=>o.id!==id));notify("Verwijderd");setTimeout(flushSaves,100);}} onNew={()=>{setEditOff(null);setWizOpen(true)}} onEmail={d=>{shareOfferte(d);setEmailModal({doc:d,type:"offerte"});}} onPlan={d=>setPlanningModal(d)} onShare={d=>{shareOfferte(d);notify("🔗 Publieke link vernieuwd ✓");}} settings={settings}/>}
             {pg==="facturen"&&<FacturenPage facturen={factMet} settings={settings} initFilter={pgFilter} onView={d=>setViewDoc({doc:d,type:"factuur"})} onEdit={f=>{setEditFact(f);setFactuurWizOpen(true);}} onStatus={updFact} onBulkStatus={bulkUpdFact} onDelete={id=>{setFacturen(p=>p.filter(f=>f.id!==id));notify("Verwijderd")}} notify={notify} onEmail={d=>setEmailModal({doc:d,type:"factuur"})} onBetaling={f=>setBetalingModal(f)} onAanmaning={f=>setAanmaningModal(f)} onNew={()=>{setEditFact(null);setFactuurWizOpen(true)}}/>}
             {pg==="klanten"&&<KlantenPage klanten={klanten} offertes={offertes} facturen={factMet} view={klantView} onEdit={k=>setKlantModal(k)} onDelete={id=>{setKlanten(p=>p.map(k=>k.id===id?{...k,_verwijderd:true}:k));notify("Klant verwijderd")}}/>}
@@ -2815,7 +2817,7 @@ export default function App() {
       </div>
 
       {wizOpen&&<OfferteWizard klanten={klanten} producten={producten} offertes={offertes} editData={editOff} settings={settings} onSave={saveOff} onClose={()=>{setWizOpen(false);setEditOff(null);}} notify={notify}/>}
-      {factuurWizOpen&&<FactuurWizard klanten={klanten} producten={producten} editData={editFact} onSave={f=>{
+      {factuurWizOpen&&<FactuurWizard klanten={klanten} producten={producten} settings={settings} editData={editFact} onSave={f=>{
         // Auto-create products from vrije lijnen
         const newProds = [];
         const updLijnen = (f.lijnen||[]).map(l => {
@@ -2880,7 +2882,7 @@ export default function App() {
 }
 
 // ─── DASHBOARD ────────────────────────────────────────────────────
-function Dashboard({offertes, facturen, onGoto, onNew, onFactuur, settings, offerteViews, offerteResponses, planningProposals, onLogboek, onPlan, widgetOrder, setWidgetOrder, onRefreshTracking}) {
+function Dashboard({offertes, facturen, onGoto, onNew, onFactuur, settings, offerteViews, offerteResponses, planningProposals, onLogboek, onPlan, onPlanDelete, widgetOrder, setWidgetOrder, onRefreshTracking}) {
   const instTypesSetting = settings;
   const openOff = offertes.filter(o=>o.status==="verstuurd");
   const openFact = facturen.filter(f=>f.status!=="betaald"&&f.status!=="concept");
@@ -3133,13 +3135,15 @@ function Dashboard({offertes, facturen, onGoto, onNew, onFactuur, settings, offe
         {geplande.length>0&&<div>
           <div style={{fontSize:10,fontWeight:700,color:"#059669",textTransform:"uppercase",letterSpacing:".5px",marginBottom:4}}>✅ Ingepland ({geplande.length})</div>
           {geplande.map(o=>(
-            <div key={o.id} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 0",borderBottom:"1px solid #f0fdf4",cursor:"pointer"}} onClick={()=>onPlan(o)}>
+            <div key={o.id} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 0",borderBottom:"1px solid #f0fdf4"}}>
               <div style={{width:8,height:8,borderRadius:"50%",background:"#10b981",flexShrink:0}}/>
-              <div style={{flex:1,minWidth:0}}>
+              <div style={{flex:1,minWidth:0,cursor:"pointer"}} onClick={()=>onPlan(o)}>
                 <div style={{fontWeight:600,fontSize:12}}>{o.klant?.naam||"—"} <span style={{color:"#94a3b8",fontWeight:400}}>— {o.nummer}</span></div>
                 <div style={{fontSize:10,color:"#059669"}}>📅 {fmtDate(o.planDatum)} ⏰ {o.planTijd||"—"}</div>
               </div>
-              <div style={{fontSize:11,color:"#10b981",fontWeight:700}}>{fmtDate(o.planDatum)}</div>
+              <div style={{fontSize:11,color:"#10b981",fontWeight:700,cursor:"pointer"}} onClick={()=>onPlan(o)}>{fmtDate(o.planDatum)}</div>
+              <button title="Afspraak annuleren" style={{border:"none",background:"none",cursor:"pointer",color:"#ef4444",fontSize:14,padding:"2px 5px"}}
+                onClick={e=>{e.stopPropagation();if(window.confirm("Afspraak annuleren voor "+o.nummer+"?"))onPlanDelete(o.id);}}>🗑</button>
             </div>
           ))}
         </div>}
@@ -4539,7 +4543,7 @@ function ProductAutocomplete({producten, value, onChange, onSelect, placeholder=
   );
 }
 
-function FactuurWizard({klanten,producten,editData,onSave,onClose,notify}) {
+function FactuurWizard({klanten,producten,settings,editData,onSave,onClose,notify}) {
   const [stap,setStap] = useState(1);
   const [klant,setKlant] = useState(editData?.klant||null);
   const [klantQ,setKlantQ] = useState("");
@@ -4847,7 +4851,7 @@ function OfferteWizard({klanten,producten,offertes,editData,settings,onSave,onCl
     if(!klant)return notify("Selecteer een klant","er");
     if(!instType)return notify("Kies een installatieType","er");
     if(lijnen.length===0)return notify("Voeg minstens één product toe","er");
-    onSave({id:editData?.id,klantId:klant.id,klant,installatieType:instType,groepen,lijnen,notities,btwRegime,voorschot,vervaldatum,betalingstermijn,korting:Number(korting),kortingType});
+    onSave({id:editData?.id,aangemaakt:editData?.aangemaakt,datum:editData?.datum||editData?.aangemaakt||today(),klantId:klant.id,klant,installatieType:instType,groepen,lijnen,notities,btwRegime,voorschot,vervaldatum,betalingstermijn,korting:Number(korting),kortingType});
   };
 
   // Co-occurrence recommendations: welke producten zijn vaak samen gebruikt
@@ -6909,7 +6913,11 @@ function InstellingenPage({settings,setSettings,notify,onExportBackup,onImportBa
           <div style={{fontSize:13,color:"#1e40af"}}>Vul hieronder uw bedrijfsgegevens in. Deze verschijnen op al uw offertes en facturen.</div>
         </div>
       </div>}
-      <div className="tabs">{[["bedrijf","🏢 Bedrijf"],["email","📧 Email"],["voorwaarden","📄 Voorwaarden"],["thema","🎨 Thema"],["sjabloon","📐 Ontwerpen"],["layout","📋 Layout"],["categorieen","📦 Categorieën"],["dashboard","📊 Dashboard"],["backup","💾 Backup"]].map(([v,l])=><div key={v} className={`tab ${tab===v?"on":""}`} onClick={()=>setTab(v)}>{l}</div>)}</div>
+      <div className="tabs" style={{flexWrap:"wrap"}}>{[["bedrijf","🏢","Bedrijf"],["email","📧","Email"],["voorwaarden","📄","Voorwaarden"],["thema","🎨","Thema"],["sjabloon","📐","Ontwerpen"],["layout","📋","Layout"],["categorieen","📦","Categorieën"],["dashboard","📊","Dashboard"],["backup","💾","Backup"]].map(([v,ic,l])=>(
+        <div key={v} className={`tab ${tab===v?"on":""}`} onClick={()=>setTab(v)} style={{flexGrow:1,flexBasis:"auto",minWidth:0}}>
+          <span className="tab-ic">{ic}</span><span className="tab-txt"> {l}</span>
+        </div>
+      ))}</div>
 
       {/* Split screen layout voor tabs met preview */}
       <div className="settings-grid" style={{display: showPreview ? "grid" : "block", gridTemplateColumns: showPreview ? "1fr 650px" : "1fr", gap: 20, alignItems: "start"}}>
@@ -6931,18 +6939,18 @@ function InstellingenPage({settings,setSettings,notify,onExportBackup,onImportBa
             {form.bedrijf.logo&&<>
               <div className="fr2" style={{gap:10}}>
                 <div className="fg"><label className="fl">Breedte (px)</label>
-                  <input type="range" min={40} max={300} value={form.sjabloon?.logoBreedte||140} onChange={e=>set("sjabloon","logoBreedte",+e.target.value)} style={{width:"100%"}}/>
+                  <input type="range" min={40} max={300} value={form.sjabloon?.logoBreedte||140} onChange={e=>{const v=+e.target.value;set("sjabloon","logoBreedte",v);setL("logo",{...form.layout?.logo,breedte:v});}} style={{width:"100%"}}/>
                   <div style={{fontSize:11,color:"#94a3b8",textAlign:"center"}}>{form.sjabloon?.logoBreedte||140}px</div>
                 </div>
                 <div className="fg"><label className="fl">Hoogte (px)</label>
-                  <input type="range" min={20} max={120} value={form.sjabloon?.logoHoogte||52} onChange={e=>set("sjabloon","logoHoogte",+e.target.value)} style={{width:"100%"}}/>
+                  <input type="range" min={20} max={120} value={form.sjabloon?.logoHoogte||52} onChange={e=>{const v=+e.target.value;set("sjabloon","logoHoogte",v);setL("logo",{...form.layout?.logo,hoogte:v});}} style={{width:"100%"}}/>
                   <div style={{fontSize:11,color:"#94a3b8",textAlign:"center"}}>{form.sjabloon?.logoHoogte||52}px</div>
                 </div>
               </div>
               <div className="fg"><label className="fl">Positie op document</label>
                 <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
                   {[["links-boven","Links boven"],["rechts-boven","Rechts boven"],["midden-boven","Midden boven"],["links-midden","Links midden"]].map(([v,l])=>(
-                    <button key={v} className={`btn btn-sm ${(form.sjabloon?.logoPositie||"links-boven")===v?"bp":"bs"}`} onClick={()=>set("sjabloon","logoPositie",v)}>{l}</button>
+                    <button key={v} className={`btn btn-sm ${(form.sjabloon?.logoPositie||"links-boven")===v?"bp":"bs"}`} onClick={()=>{set("sjabloon","logoPositie",v);setL("logo",{...form.layout?.logo,positie:v});}}>{l}</button>
                   ))}
                 </div>
               </div>
