@@ -1778,21 +1778,24 @@ export default function App() {
             const oResp = grouped[o.id];
             if(!oResp || !oResp.length) return o;
             const latest = oResp.sort((a,b)=>new Date(b.submitted_at)-new Date(a.submitted_at))[0];
-            // Alleen updaten als status nog niet gesynct is
-            if(latest.status === "goedgekeurd" && o.status === "verstuurd") {
+            const respTs = latest.submitted_at;
+            // Check of deze response al gelogd is (op tijdstip)
+            const alreadyLogged = (o.log||[]).some(l => l.ts === respTs);
+            if(alreadyLogged) return o;
+            // Goedkeuring: ook updaten als status al goedgekeurd is maar klantAkkoord nog niet gezet
+            if(latest.status === "goedgekeurd" && (o.status === "verstuurd" || (o.status === "goedgekeurd" && !o.klantAkkoord))) {
               changed = true;
-              const newLog = [...(o.log||[]), {ts: latest.submitted_at, actie: `✅ Klant heeft offerte goedgekeurd${latest.periode ? " (periode: "+latest.periode+")" : ""}${latest.opmerkingen ? " — "+latest.opmerkingen : ""}`}];
-              return {...o, status: "goedgekeurd", klantAkkoord: true, klantPeriode: latest.periode, klantOpmerkingen: latest.opmerkingen, log: newLog};
+              const newLog = [...(o.log||[]), {ts: respTs, actie: `✅ Klant heeft offerte goedgekeurd${latest.periode ? " (periode: "+latest.periode+")" : ""}${latest.opmerkingen ? " — "+latest.opmerkingen : ""}`}];
+              return {...o, status: "goedgekeurd", klantAkkoord: true, klantAkkoordDatum: respTs, klantPeriode: latest.periode, klantOpmerkingen: latest.opmerkingen, log: newLog};
             }
-            if(latest.status === "afgewezen" && o.status === "verstuurd") {
+            if(latest.status === "afgewezen" && (o.status === "verstuurd" || (o.status === "afgewezen" && !o.log?.some(l=>l.actie?.includes("afgewezen"))))) {
               changed = true;
-              const newLog = [...(o.log||[]), {ts: latest.submitted_at, actie: `❌ Klant heeft offerte afgewezen${latest.opmerkingen ? " — "+latest.opmerkingen : ""}`}];
+              const newLog = [...(o.log||[]), {ts: respTs, actie: `❌ Klant heeft offerte afgewezen${latest.opmerkingen ? " — "+latest.opmerkingen : ""}`}];
               return {...o, status: "afgewezen", log: newLog};
             }
             return o;
           });
           if(changed) {
-            // Notify bij nieuwe klantreactie
             setTimeout(()=>notify('📬 Nieuwe reactie van klant ontvangen!','ok'),100);
           }
           return changed ? next : prev;
