@@ -1811,7 +1811,10 @@ export default function App() {
   // Zo gaan fiches nooit verloren bij localStorage strips of Supabase timeouts
   const pendingSaves = useRef({});
   const saveTimer = useRef(null);
-  const localTimestamps = useRef({}); // bijhouden wanneer wij lokaal iets gewijzigd hebben
+  // localTimestamps: bewaard in localStorage zodat page reload de timestamps niet verliest
+  const localTimestamps = useRef((() => {
+    try { const r=localStorage.getItem("billr_ts"); return r?JSON.parse(r):{}; } catch(_){ return {}; }
+  })());
 
   const stripBase64 = (key, val) => {
     if(!Array.isArray(val)) return val;
@@ -1856,6 +1859,7 @@ export default function App() {
     
     // Timestamp bijhouden — voor sync conflict detectie
     localTimestamps.current[key] = Date.now();
+    try { localStorage.setItem("billr_ts", JSON.stringify(localTimestamps.current)); } catch(_){}
     
     // Supabase: batchen + debounce 2s — max 1 call per 2s ipv per keypress
     pendingSaves.current[key] = json;
@@ -2101,17 +2105,19 @@ export default function App() {
     }
   };
   const nextNr = (pre,list,fld) => {
-    // Use custom prefix from settings if available
     const customPre = pre==="OFF" ? (settings?.voorwaarden?.nummerPrefix_off||"OFF") : pre==="FACT" ? (settings?.voorwaarden?.nummerPrefix_fct||"FACT") : pre;
     const y=new Date().getFullYear();
-    // Check tegenNummer (manual override)
+    // tegenNummer: eenmalige handmatige override
     const tegen = pre==="OFF" ? settings?.voorwaarden?.tegenNummer_off : pre==="FACT" ? settings?.voorwaarden?.tegenNummer_fct : null;
     if(tegen) return tegen;
+    // startNummer: minimum volgnummer (voor migratie vanuit ander systeem)
+    const start = pre==="OFF" ? (settings?.voorwaarden?.startNummer_off||1) : pre==="FACT" ? (settings?.voorwaarden?.startNummer_fct||1) : 1;
     const ns=list.filter(x=>{
       const nr=x[fld]||"";
       return nr.startsWith(`${customPre}-${y}`) || nr.startsWith(`${pre}-${y}`);
     }).map(x=>parseInt((x[fld]||"").split("-").pop())||0);
-    return `${customPre}-${y}-${String((Math.max(0,...ns)+1)).padStart(3,"0")}`;
+    const next = Math.max(start-1, Math.max(0,...ns))+1;
+    return `${customPre}-${y}-${String(next).padStart(3,"0")}`;
   };
   const logEntry = (actie) => ({ts: new Date().toISOString(), actie});
   const updOff = (id,upd) => setOffertes(p=>p.map(o=>o.id===id?{...o,...upd,log:[...(o.log||[]),logEntry(upd.status?"Status → "+(OFF_STATUS[upd.status]?.l||upd.status):upd.logActie||"Gewijzigd")]}:o));
@@ -2163,7 +2169,7 @@ export default function App() {
     if(finalData.id && offertes.find(o=>o.id===finalData.id)){
       setOffertes(p=>p.map(o=>o.id===finalData.id?{...o,...finalData,aangemaakt:o.aangemaakt||finalData.aangemaakt}:o)); notify("Offerte opgeslagen ✓");
     } else {
-      const n={...finalData,id:uid(),nummer:nextNr("OFF",offertes,"nummer"),datum:finalData.datum||today(),aangemaakt:new Date().toISOString(),status:"concept"};
+      const n={...finalData,id:uid(),nummer:finalData.nummerOverride||nextNr("OFF",offertes,"nummer"),datum:finalData.datum||today(),aangemaakt:new Date().toISOString(),status:"concept"};
       setOffertes(p=>[n,...p]); notify("Offerte aangemaakt ✓");
     }
     setWizOpen(false); setEditOff(null);
@@ -2799,9 +2805,9 @@ export default function App() {
 
           <div className="content">
             {pg==="dashboard"&&<Dashboard offertes={offertes} facturen={factMet} onGoto={gotoFiltered} onNew={()=>{setEditOff(null);setWizOpen(true)}} onFactuur={d=>setFactModal(d)} settings={settings} offerteViews={offerteViews} offerteResponses={offerteResponses} planningProposals={planningProposals} onLogboek={o=>setLogboekModal(o)} onPlan={o=>setPlanningModal(o)} onPlanDelete={id=>{updOff(id,{planStatus:"geannuleerd",planDatum:null,planTijd:null,logActie:"🗑 Afspraak geannuleerd"});setTimeout(flushSaves,100);}} widgetOrder={widgetOrder} setWidgetOrder={setWidgetOrder} onRefreshTracking={fetchOfferteTracking}/>}
-            {pg==="offertes"&&<OffertesPage offertes={offertes} initFilter={pgFilter} onView={d=>setViewDoc({doc:d,type:"offerte"})} onEdit={d=>{setEditOff(d);setWizOpen(true)}} onStatus={updOff} onBulkStatus={bulkUpdOff} onFactuur={d=>setFactModal(d)} onDelete={id=>{setOffertes(p=>p.filter(o=>o.id!==id));localTimestamps.current["b4_off"]=Date.now();notify("Verwijderd");setTimeout(flushSaves,100);}} onNew={()=>{setEditOff(null);setWizOpen(true)}} onEmail={d=>{shareOfferte(d);setEmailModal({doc:d,type:"offerte"});}} onPlan={d=>setPlanningModal(d)} onShare={d=>{shareOfferte(d);notify("🔗 Publieke link vernieuwd ✓");}} settings={settings}/>}
-            {pg==="facturen"&&<FacturenPage facturen={factMet} settings={settings} initFilter={pgFilter} onView={d=>setViewDoc({doc:d,type:"factuur"})} onEdit={f=>{setEditFact(f);setFactuurWizOpen(true);}} onStatus={updFact} onBulkStatus={bulkUpdFact} onDelete={id=>{setFacturen(p=>p.filter(f=>f.id!==id));localTimestamps.current["b4_fct"]=Date.now();notify("Verwijderd");setTimeout(flushSaves,100);}} notify={notify} onEmail={d=>setEmailModal({doc:d,type:"factuur"})} onBetaling={f=>setBetalingModal(f)} onAanmaning={f=>setAanmaningModal(f)} onNew={()=>{setEditFact(null);setFactuurWizOpen(true)}}/>}
-            {pg==="klanten"&&<KlantenPage klanten={klanten} offertes={offertes} facturen={factMet} view={klantView} onEdit={k=>setKlantModal(k)} onDelete={id=>{setKlanten(p=>p.map(k=>k.id===id?{...k,_verwijderd:true}:k));localTimestamps.current["b4_kln"]=Date.now();notify("Klant verwijderd");setTimeout(flushSaves,100);}}/>}
+            {pg==="offertes"&&<OffertesPage offertes={offertes} initFilter={pgFilter} onView={d=>setViewDoc({doc:d,type:"offerte"})} onEdit={d=>{setEditOff(d);setWizOpen(true)}} onStatus={updOff} onBulkStatus={bulkUpdOff} onFactuur={d=>setFactModal(d)} onDelete={id=>{setOffertes(p=>p.filter(o=>o.id!==id));localTimestamps.current["b4_off"]=Date.now();try{localStorage.setItem("billr_ts",JSON.stringify(localTimestamps.current));}catch(_){}notify("Verwijderd");setTimeout(flushSaves,100);}} onNew={()=>{setEditOff(null);setWizOpen(true)}} onEmail={d=>{shareOfferte(d);setEmailModal({doc:d,type:"offerte"});}} onPlan={d=>setPlanningModal(d)} onShare={d=>{shareOfferte(d);notify("🔗 Publieke link vernieuwd ✓");}} settings={settings}/>}
+            {pg==="facturen"&&<FacturenPage facturen={factMet} settings={settings} initFilter={pgFilter} onView={d=>setViewDoc({doc:d,type:"factuur"})} onEdit={f=>{setEditFact(f);setFactuurWizOpen(true);}} onStatus={updFact} onBulkStatus={bulkUpdFact} onDelete={id=>{setFacturen(p=>p.filter(f=>f.id!==id));localTimestamps.current["b4_fct"]=Date.now();try{localStorage.setItem("billr_ts",JSON.stringify(localTimestamps.current));}catch(_){}notify("Verwijderd");setTimeout(flushSaves,100);}} notify={notify} onEmail={d=>setEmailModal({doc:d,type:"factuur"})} onBetaling={f=>setBetalingModal(f)} onAanmaning={f=>setAanmaningModal(f)} onNew={()=>{setEditFact(null);setFactuurWizOpen(true)}}/>}
+            {pg==="klanten"&&<KlantenPage klanten={klanten} offertes={offertes} facturen={factMet} view={klantView} onEdit={k=>setKlantModal(k)} onDelete={id=>{setKlanten(p=>p.map(k=>k.id===id?{...k,_verwijderd:true}:k));localTimestamps.current["b4_kln"]=Date.now();try{localStorage.setItem("billr_ts",JSON.stringify(localTimestamps.current));}catch(_){}notify("Klant verwijderd");setTimeout(flushSaves,100);}}/>}
             {pg==="producten"&&<ProductenPage producten={producten} settings={settings} onEdit={p=>setProdModal(p)} onDelete={id=>{setProducten(p=>p.filter(x=>x.id!==id));notify("Verwijderd")}} onToggle={id=>setProducten(p=>p.map(x=>x.id===id?{...x,actief:!x.actief}:x))} onEnrich={upd=>setProducten(p=>p.map(x=>x.id===upd.id?upd:x))} onDuplicate={p=>{const dup={...p,id:uid(),naam:p.naam+" (kopie)",aangemaakt:new Date().toISOString()};setProducten(prev=>[dup,...prev]);notify("Product gedupliceerd ✓");setProdModal(dup);}}/>}
             {pg==="agenda"&&<div style={{height:"calc(100vh - 70px)",margin:"-22px",overflow:"hidden"}}><iframe src={`${window.location.origin}/planner.html`} style={{width:"100%",height:"100%",border:"none"}} title="Agenda"/></div>}
             {pg==="rapportage"&&<Rapportage offertes={offertes} facturen={factMet}/>}
@@ -2836,7 +2842,7 @@ export default function App() {
           setFacturen(p=>p.map(x=>x.id===ff.id?{...x,...ff}:x));
           notify("Factuur bijgewerkt ✓");
         } else {
-          const nr = nextNr("FACT",facturen,"nummer");
+          const nr = ff.nummerOverride || nextNr("FACT",facturen,"nummer");
           const n={...ff,id:uid(),nummer:nr,datum:ff.datum||today(),vervaldatum:ff.vervaldatum||addDays(today(),ff.betalingstermijn||14),status:"concept",aangemaakt:new Date().toISOString()};
           setFacturen(p=>[n,...p]);
           if(settings?.voorwaarden?.tegenNummer_fct) setSettings(s=>({...s,voorwaarden:{...s.voorwaarden,tegenNummer_fct:""}}));
@@ -4555,6 +4561,7 @@ function FactuurWizard({klanten,producten,settings,editData,onSave,onClose,notif
   const [activeCat,setActiveCat] = useState(null);
   const [invoerModus,setInvoerModus] = useState("prod"); // "prod" | "vrij"
   const [factuurTitel,setFactuurTitel] = useState(editData?.titel||"");
+  const [factuurNummer,setFactuurNummer] = useState(editData?.nummer||"");
 
   const klantList = klanten.filter(k=>!k._verwijderd&&(!klantQ||(k.naam||"").toLowerCase().includes(klantQ.toLowerCase())||(k.bedrijf||"").toLowerCase().includes(klantQ.toLowerCase()))).slice(0,20);
   const actProds = producten.filter(p=>p.actief);
@@ -4596,7 +4603,7 @@ function FactuurWizard({klanten,producten,settings,editData,onSave,onClose,notif
   const doSave = () => {
     if(!klant) return notify("Selecteer een klant","er");
     if(lijnen.length===0) return notify("Voeg minstens één lijn toe","er");
-    onSave({...(editData?.id?{id:editData.id}:{}),klant,klantId:klant.id,lijnen,datum,betalingstermijn,vervaldatum,btwRegime,notities,titel:factuurTitel});
+    onSave({...(editData?.id?{id:editData.id}:{}),klant,klantId:klant.id,lijnen,datum,betalingstermijn,vervaldatum,btwRegime,notities,titel:factuurTitel,nummerOverride:factuurNummer||null});
   };
 
   const stappen = [{n:1,l:"Klant"},{n:2,l:"Producten"},{n:3,l:"Details"}];
@@ -4731,7 +4738,14 @@ function FactuurWizard({klanten,producten,settings,editData,onSave,onClose,notif
 
         {/* ── STAP 3: DETAILS ── */}
         {stap===3&&<div>
-          <div className="fg"><label className="fl">Factuurtitel / referentie (optioneel)</label><input className="fc" value={factuurTitel} onChange={e=>setFactuurTitel(e.target.value)} placeholder="Bijv. Installatie laadpaal — Projectnaam"/></div>
+          <div className="fr2">
+            <div className="fg">
+              <label className="fl">Factuurnummer</label>
+              <input className="fc" value={factuurNummer} onChange={e=>setFactuurNummer(e.target.value)} placeholder="Automatisch"/>
+              <div style={{fontSize:11,color:"#94a3b8",marginTop:2}}>Leeg = automatisch gegenereerd</div>
+            </div>
+            <div className="fg"><label className="fl">Factuurtitel / referentie (optioneel)</label><input className="fc" value={factuurTitel} onChange={e=>setFactuurTitel(e.target.value)} placeholder="Bijv. Installatie laadpaal"/></div>
+          </div>
           <div className="fr2">
             <div className="fg"><label className="fl">Factuurdatum</label><input type="date" className="fc" value={datum} onChange={e=>setDatum(e.target.value)}/></div>
             <div className="fg"><label className="fl">Betalingstermijn (dagen)</label>
@@ -4790,6 +4804,7 @@ function OfferteWizard({klanten,producten,offertes,editData,settings,onSave,onCl
   const [betalingstermijn,setBetalingstermijn]=useState(editData?.betalingstermijn||14);
   const [korting,setKorting]=useState(editData?.korting||0);
   const [kortingType,setKortingType]=useState(editData?.kortingType||"pct");
+  const [offerteNummer,setOfferteNummer]=useState(editData?.nummer||"");
   const [activeCat,setActiveCat]=useState(null);
   const [activeGroepId,setActiveGroepId]=useState(null);
   const [toonSuggestie,setToonSuggestie]=useState(true);
@@ -4851,7 +4866,7 @@ function OfferteWizard({klanten,producten,offertes,editData,settings,onSave,onCl
     if(!klant)return notify("Selecteer een klant","er");
     if(!instType)return notify("Kies een installatieType","er");
     if(lijnen.length===0)return notify("Voeg minstens één product toe","er");
-    onSave({id:editData?.id,aangemaakt:editData?.aangemaakt,datum:editData?.datum||editData?.aangemaakt||today(),klantId:klant.id,klant,installatieType:instType,groepen,lijnen,notities,btwRegime,voorschot,vervaldatum,betalingstermijn,korting:Number(korting),kortingType});
+    onSave({id:editData?.id,aangemaakt:editData?.aangemaakt,datum:editData?.datum||editData?.aangemaakt||today(),klantId:klant.id,klant,installatieType:instType,groepen,lijnen,notities,btwRegime,voorschot,vervaldatum,betalingstermijn,korting:Number(korting),kortingType,nummerOverride:offerteNummer||null});
   };
 
   // Co-occurrence recommendations: welke producten zijn vaak samen gebruikt
@@ -5068,9 +5083,15 @@ function OfferteWizard({klanten,producten,offertes,editData,settings,onSave,onCl
         {/* STAP 4 — DETAILS */}
         {stap===4&&<div>
           <div className="fr2">
+            <div className="fg">
+              <label className="fl">Offertenummer</label>
+              <input className="fc" value={offerteNummer} onChange={e=>setOfferteNummer(e.target.value)} placeholder="Automatisch"/>
+              <div style={{fontSize:11,color:"#94a3b8",marginTop:2}}>Leeg = automatisch gegenereerd</div>
+            </div>
             <div className="fg"><label className="fl">Vervaldatum offerte</label><input type="date" className="fc" value={vervaldatum} onChange={e=>setVervaldatum(e.target.value)}/></div>
-            <div className="fg"><label className="fl">Betalingstermijn factuur (dagen)</label><input type="number" className="fc" value={betalingstermijn} onChange={e=>setBetalingstermijn(Number(e.target.value))} min={1}/></div>
           </div>
+          <div className="fr2">
+            <div className="fg"><label className="fl">Betalingstermijn factuur (dagen)</label><input type="number" className="fc" value={betalingstermijn} onChange={e=>setBetalingstermijn(Number(e.target.value))} min={1}/></div>
           <div className="fr2">
             <div className="fg"><label className="fl">Korting</label><input type="number" className="fc" value={korting} onChange={e=>setKorting(e.target.value)} min={0}/></div>
             <div className="fg"><label className="fl">Korting type</label><select className="fc" value={kortingType} onChange={e=>setKortingType(e.target.value)}><option value="pct">Percentage (%)</option><option value="bedrag">Vast bedrag (€)</option></select></div>
@@ -5888,6 +5909,62 @@ function FactuurDocument({doc, settings}) {
       </div>
 
       {/* PAGINA VOORWAARDEN — pagina 2 of 3 afhankelijk van inhoud */}
+      {(()=>{
+        const fctProds = [...new Map((doc.lijnen||[]).filter(l=>l.naam&&(l.imageUrl||l.omschr||(l.specs||[]).length||(l.technischeFiches||[]).length)).map(l=>[l.productId||l.id,l])).values()];
+        return fctProds.length>0?(<>
+          <div className="doc-page-lbl">Pagina {overvloeit?"3":"2"} — Productinformatie & Technische Fiches</div>
+          <div className="doc-page">
+            <div style={{height:6,background:dc,borderRadius:"4px 4px 0 0",flexShrink:0}}/>
+            <div className="prod-page">
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end",marginBottom:6}}>
+                <div>
+                  <div style={{fontWeight:900,fontSize:20,color:dc,letterSpacing:"-.5px"}}>Productinformatie & Technische Fiches</div>
+                  <div style={{fontSize:12,color:"#64748b",marginTop:2}}>Gefactureerde producten voor {doc.klant?.naam||"de klant"}</div>
+                </div>
+                <div style={{fontSize:10,color:"#94a3b8",textAlign:"right"}}>{bed.naam} · {doc.nummer}</div>
+              </div>
+              <div style={{height:1,background:"#e2e8f0",marginBottom:20}}/>
+              {fctProds.map((l,i)=>{
+                const rawSpecs=l.specs||[];
+                const specRows=rawSpecs.filter(s=>s.includes(":")||s.includes("=")).map(s=>{const ci=s.indexOf(":");const eq=s.indexOf("=");const si=ci>=0&&(eq<0||ci<=eq)?ci:eq;return si>=0?{key:s.slice(0,si).trim(),val:s.slice(si+1).trim()}:{key:s.trim(),val:""};});
+                const bulletSpecs=rawSpecs.filter(s=>!s.includes(":")&&!s.includes("="));
+                return(
+                  <div key={i} style={{marginBottom:28,pageBreakInside:"avoid"}}>
+                    <div style={{display:"flex",gap:16,alignItems:"flex-start",marginBottom:10}}>
+                      {l.imageUrl&&<div style={{flexShrink:0,width:90,height:90,borderRadius:10,overflow:"hidden",border:"1px solid #e2e8f0",background:"#f8fafc",display:"flex",alignItems:"center",justifyContent:"center"}}>
+                        <img src={l.imageUrl} alt="" style={{width:"100%",height:"100%",objectFit:"contain"}} onError={e=>{e.target.parentElement.style.display="none"}}/>
+                      </div>}
+                      <div style={{flex:1}}>
+                        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
+                          <span style={{background:dc,color:"#fff",borderRadius:5,padding:"2px 9px",fontSize:10,fontWeight:700}}>{l.cat||"Product"}</span>
+                          <span style={{fontSize:11,color:"#94a3b8"}}>×{l.aantal} {l.eenheid||"stuk"}</span>
+                        </div>
+                        <div style={{fontWeight:800,fontSize:16,color:"#1e293b",lineHeight:1.3,marginBottom:4}}>{l.naam}</div>
+                        {l.omschr&&<div style={{fontSize:12.5,color:"#475569",lineHeight:1.6}}>{l.omschr}</div>}
+                      </div>
+                      <div style={{flexShrink:0,textAlign:"right",background:"#f8fafc",borderRadius:8,padding:"10px 14px",border:"1px solid #e2e8f0"}}>
+                        <div style={{fontSize:10,color:"#94a3b8",fontWeight:600}}>EENHEIDSPRIJS</div>
+                        <div style={{fontWeight:800,fontSize:16,color:dc}}>{fmtEuro(l.prijs)}</div>
+                        <div style={{fontSize:10,color:"#94a3b8"}}>BTW {l.btw}%</div>
+                      </div>
+                    </div>
+                    {rawSpecs.length>0&&<div style={{background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:8,padding:"12px 14px",marginBottom:8}}>
+                      <div style={{fontWeight:700,fontSize:11,letterSpacing:.8,textTransform:"uppercase",color:dc,marginBottom:8}}>📋 Technische specificaties</div>
+                      {specRows.length>0?<table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}><tbody>{specRows.map((r,j)=><tr key={j} style={{borderBottom:"1px solid #e2e8f0"}}><td style={{padding:"4px 8px",fontWeight:600,color:"#475569",width:"40%",background:j%2===0?"#fff":"#f8fafc"}}>{r.key}</td><td style={{padding:"4px 8px",color:"#1e293b",background:j%2===0?"#fff":"#f8fafc"}}>{r.val}</td></tr>)}</tbody></table>
+                      :<div style={{display:"flex",flexWrap:"wrap",gap:6}}>{bulletSpecs.map((s,j)=><span key={j} style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:5,padding:"3px 9px",fontSize:11.5,color:"#374151"}}>✓ {s}</span>)}</div>}
+                    </div>}
+                    {(l.technischeFiches||[]).filter(f=>f.data||f.url).map((f,fi)=>(
+                      <a key={fi} href={f.data||f.url} download={f.naam||"fiche.pdf"} style={{display:"inline-flex",alignItems:"center",gap:5,background:"#eff6ff",border:"1px solid #bfdbfe",borderRadius:6,padding:"5px 12px",fontSize:11.5,color:"#2563eb",textDecoration:"none",fontWeight:600,marginRight:6,marginTop:4}}>📎 {f.naam||"Technische fiche"}</a>
+                    ))}
+                    {i<fctProds.length-1&&<div style={{height:1,background:"#e2e8f0",marginTop:20}}/>}
+                  </div>
+                );
+              })}
+            </div>
+            <div className="qt-footer" style={{background:dc}}><div className="qt-footer-txt"><strong>{bed.naam}</strong></div><div className="qt-footer-txt">{bed.tel} · {bed.email}</div></div>
+          </div>
+        </>):null;
+      })()}
       <div className="doc-page-lbl">{overvloeit?"Pagina 3":"Pagina 2"} — Verkoopsvoorwaarden</div>
       <div className="doc-page">
         <div style={{height:5,background:dc,flexShrink:0}}/>
@@ -7114,7 +7191,6 @@ function InstellingenPage({settings,setSettings,notify,onExportBackup,onImportBa
             <label className="fl">♻️ BEBAT tarief (€/kg excl. BTW)</label>
             <input type="number" className="fc" step="0.01" min={0}
               value={form.voorwaarden?.bebatTarief||2.89}
-              value={form.voorwaarden?.bebatTarief||2.89}
               onChange={e=>{const v=e.target.value;set("voorwaarden","bebatTarief",v?Number(v):2.89);}}/>
             <div style={{fontSize:11,color:"#64748b",marginTop:3}}>Huidig tarief: €{((form.voorwaarden?.bebatTarief)||2.89).toFixed(2).replace(".",",")} per kg. Pas aan als het officiële BEBAT tarief wijzigt.</div>
           </div>
@@ -7143,7 +7219,23 @@ function InstellingenPage({settings,setSettings,notify,onExportBackup,onImportBa
               </select>
             </div>
             <div className="fg">
-              <label className="fl">Volgend nummer factuur handmatig</label>
+              <label className="fl">Startnummer offertes</label>
+              <input type="number" className="fc" min={1} placeholder="1"
+                value={form.voorwaarden?.startNummer_off||""}
+                onChange={e=>set("voorwaarden","startNummer_off",e.target.value?Number(e.target.value):null)}/>
+              <div style={{fontSize:11,color:"#94a3b8",marginTop:3}}>Volgende offerte wordt: {form.voorwaarden?.nummerPrefix_off||"OFF"}-{new Date().getFullYear()}-{String(form.voorwaarden?.startNummer_off||1).padStart(3,"0")}</div>
+            </div>
+          </div>
+          <div className="fr2">
+            <div className="fg">
+              <label className="fl">Startnummer facturen</label>
+              <input type="number" className="fc" min={1} placeholder="1"
+                value={form.voorwaarden?.startNummer_fct||""}
+                onChange={e=>set("voorwaarden","startNummer_fct",e.target.value?Number(e.target.value):null)}/>
+              <div style={{fontSize:11,color:"#94a3b8",marginTop:3}}>Volgende factuur wordt: {form.voorwaarden?.nummerPrefix_fct||"FACT"}-{new Date().getFullYear()}-{String(form.voorwaarden?.startNummer_fct||1).padStart(3,"0")}</div>
+            </div>
+            <div className="fg">
+              <label className="fl">Volgend nummer factuur (eenmalig)</label>
               <div style={{display:"flex",gap:6}}>
                 <input className="fc" placeholder={`${form.voorwaarden?.nummerPrefix_fct||"FACT"}-${new Date().getFullYear()}-042`}
                   value={form.voorwaarden?.tegenNummer_fct||""} 
@@ -7151,7 +7243,7 @@ function InstellingenPage({settings,setSettings,notify,onExportBackup,onImportBa
                   style={{flex:1}}/>
                 {form.voorwaarden?.tegenNummer_fct&&<button className="btn bgh btn-sm" onClick={()=>set("voorwaarden","tegenNummer_fct","")}>✕</button>}
               </div>
-              <div style={{fontSize:11,color:"#f59e0b",marginTop:3}}>⚠ Eenmalig gebruik — na aanmaken automatisch gewist</div>
+              <div style={{fontSize:11,color:"#f59e0b",marginTop:3}}>⚠ Eenmalig — wordt automatisch gewist na gebruik</div>
             </div>
           </div>
         </div>
