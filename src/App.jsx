@@ -2926,7 +2926,7 @@ export default function App() {
         }
         setFactuurWizOpen(false);setEditFact(null);
       }} onClose={()=>{setFactuurWizOpen(false);setEditFact(null);}} notify={notify}/>}
-      {viewDoc&&<DocModal doc={viewDoc.doc} type={viewDoc.type} settings={settings} producten={producten} onClose={()=>setViewDoc(null)} onFactuur={d=>{setFactModal(d);setViewDoc(null);}} onStatusOff={s=>{updOff(viewDoc.doc.id,{status:s});notify("Status: "+OFF_STATUS[s]?.l);}} onStatusFact={s=>{updFact(viewDoc.doc.id,{status:s});notify("Status: "+FACT_STATUS[s]?.l);}} onEmail={()=>setEmailModal({doc:viewDoc.doc,type:viewDoc.type})} onPeppol={viewDoc.type==="factuur"?()=>sendPeppol(viewDoc.doc):null} onNummer={nr=>{if(viewDoc.type==="offerte"){updOff(viewDoc.doc.id,{nummer:nr});setViewDoc(p=>({...p,doc:{...p.doc,nummer:nr}}));}else{updFact(viewDoc.doc.id,{nummer:nr});setViewDoc(p=>({...p,doc:{...p.doc,nummer:nr}}));}notify("Nummer bijgewerkt ✓");setTimeout(flushSaves,100);}}/>}
+      {viewDoc&&<DocModal doc={viewDoc.doc} type={viewDoc.type} settings={settings} producten={producten} producten={producten} onClose={()=>setViewDoc(null)} onFactuur={d=>{setFactModal(d);setViewDoc(null);}} onStatusOff={s=>{updOff(viewDoc.doc.id,{status:s});notify("Status: "+OFF_STATUS[s]?.l);}} onStatusFact={s=>{updFact(viewDoc.doc.id,{status:s});notify("Status: "+FACT_STATUS[s]?.l);}} onEmail={()=>setEmailModal({doc:viewDoc.doc,type:viewDoc.type})} onPeppol={viewDoc.type==="factuur"?()=>sendPeppol(viewDoc.doc):null} onNummer={nr=>{if(viewDoc.type==="offerte"){updOff(viewDoc.doc.id,{nummer:nr});setViewDoc(p=>({...p,doc:{...p.doc,nummer:nr}}));}else{updFact(viewDoc.doc.id,{nummer:nr});setViewDoc(p=>({...p,doc:{...p.doc,nummer:nr}}));}notify("Nummer bijgewerkt ✓");setTimeout(flushSaves,100);}}/>}
       {factModal&&<FactuurModal off={factModal} settings={settings} onMaak={maakFactuur} onClose={()=>setFactModal(null)}/>}
       {klantModal!==null&&<KlantModal klant={klantModal} onSave={k=>{if(k.id){setKlanten(p=>p.map(x=>x.id===k.id?k:x));notify("Klant opgeslagen");}else{setKlanten(p=>[{...k,id:uid(),aangemaakt:new Date().toISOString()},...p]);notify("Klant toegevoegd ✓");}setKlantModal(null);}} onClose={()=>setKlantModal(null)}/>}
       {prodModal!==null&&<ProductModal prod={prodModal} settings={settings} onSave={p=>{
@@ -5218,7 +5218,7 @@ function OfferteWizard({klanten,producten,offertes,editData,settings,onSave,onCl
             👁 Voorontwerp — zo ziet uw offerte eruit (alle pagina's). Scroll om alles te bekijken.
           </div>
           <div style={{border:"1px solid #e2e8f0",borderRadius:10,overflow:"hidden",boxShadow:"0 2px 12px rgba(0,0,0,.08)"}}>
-            <OfferteDocument doc={{klant,installatieType:instType,groepen,lijnen,notities,btwRegime,voorschot,vervaldatum,betalingstermijn,korting:Number(korting),kortingType,nummer:"VOORBEELD",aangemaakt:new Date().toISOString()}} settings={settings} ficheCache={(()=>{try{const r=localStorage.getItem("billr_fiche_cache");return r?JSON.parse(r):{};}catch(_){return{};}})()}/>
+            <OfferteDocument doc={{klant,installatieType:instType,groepen,lijnen,notities,btwRegime,voorschot,vervaldatum,betalingstermijn,korting:Number(korting),kortingType,nummer:"VOORBEELD",aangemaakt:new Date().toISOString()}} settings={settings} producten={producten}/>
           </div>
         </div>}
       </div>
@@ -5450,7 +5450,18 @@ function FichePages({fiche, naam, fichNaam, omschr, dc, bed, docNummer}) {
   );
 }
 
-function OfferteDocument({doc, settings, ficheCache={}}) {
+function OfferteDocument({doc, settings, ficheCache={}, producten=[]}) {
+  // Bouw realtime fiche cache: producten state (meest actueel) + doorgegeven cache
+  const _fc = React.useMemo(() => {
+    const c = {...ficheCache};
+    producten.forEach(p => {
+      if(p.technischeFiches?.some(f=>f.data)) c[p.id] = p.technischeFiches.filter(f=>f.data);
+      else if(p.technischeFiche && p.technischeFiche.length>100) c[p.id] = [{data:p.technischeFiche,naam:p.fichNaam||"fiche.pdf"}];
+    });
+    // ook localStorage
+    try { const r=localStorage.getItem("billr_fiche_cache"); if(r) { const lc=JSON.parse(r); Object.entries(lc).forEach(([k,v])=>{ if(!c[k]) c[k]=v; }); } } catch(_){}
+    return c;
+  }, [ficheCache, producten]);
   const bed = settings?.bedrijf || INIT_SETTINGS.bedrijf;
   const sj = settings?.sjabloon || INIT_SETTINGS.sjabloon || {};
   const lyt = settings?.layout || INIT_SETTINGS.layout || {};
@@ -5839,8 +5850,8 @@ function OfferteDocument({doc, settings, ficheCache={}}) {
             <FichePages fiche={l.technischeFiche} naam={l.naam} fichNaam={l.fichNaam} omschr={l.omschr} dc={dc} bed={bed} docNummer={doc.nummer}/>}
           {/* Nieuw: array technischeFiches — render ALLE met data */}
           {(l.technischeFiches||[]).map((f,ffi)=>{
-            // Haal data op: eerst van lijn zelf, dan uit ficheCache (voor gestripte fiches)
-            const cachedFiches = ficheCache[l.productId] || ficheCache[l.id] || [];
+            // Haal data op: eerst van lijn zelf, dan uit _fc (realtime cache met producten state)
+            const cachedFiches = _fc[l.productId] || _fc[l.id] || [];
             const cached = cachedFiches.find(cf => cf.naam === f.naam) || cachedFiches[0] || null;
             const ficheData = f.data || f.url || cached?.data || null;
             if(!ficheData || ficheData.length < 100) {
@@ -6103,7 +6114,7 @@ ${docWrapHtml}
 }
 
 // ─── DOC MODAL ───────────────────────────────────────────────────
-function DocModal({doc,type,settings,onClose,onFactuur,onStatusOff,onStatusFact,onEmail,onPeppol,onNummer}) {
+function DocModal({doc,type,settings,onClose,onFactuur,onStatusOff,onStatusFact,onEmail,onPeppol,onNummer,producten=[]}) {
   const sc = type==="offerte" ? (OFF_STATUS[doc.status]||OFF_STATUS.concept) : (FACT_STATUS[doc.status]||FACT_STATUS.concept);
   const [editNummer,setEditNummer] = useState(false);
   const [nummerVal,setNummerVal] = useState(doc.nummer||"");
@@ -6200,7 +6211,7 @@ function DocModal({doc,type,settings,onClose,onFactuur,onStatusOff,onStatusFact,
         </div>
       </div>
       <div className="mb-body" style={{padding:0}}>
-        {type==="offerte"?<OfferteDocument doc={doc} settings={settings} ficheCache={(()=>{try{const r=localStorage.getItem("billr_fiche_cache");return r?JSON.parse(r):{};}catch(_){return{};}})()}/>:<FactuurDocument doc={doc} settings={settings}/>}
+        {type==="offerte"?<OfferteDocument doc={doc} settings={settings} producten={producten}/>:<FactuurDocument doc={doc} settings={settings}/>}
       </div>
     </div></div>
   );
