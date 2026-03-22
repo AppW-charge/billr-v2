@@ -1770,18 +1770,18 @@ export default function App() {
           grouped[r.offerte_id].push(r);
         });
         setOfferteResponses(grouped);
-        // Herstel ontbrekende offertes uit offerte_shares (verloren door sync/ander apparaat)
-        const responseIds = Object.keys(grouped);
+        // Herstel ontbrekende offertes — eenmalig, max 10 IDs
+        const responseIds = Object.keys(grouped).slice(0,10);
         if(responseIds.length > 0) {
           try {
             const { data: sharedData } = await sb.from('offerte_shares').select('id, offerte_data').in('id', responseIds);
             if(sharedData && sharedData.length > 0) {
               setOffertes(prev => {
-                const missingShared = sharedData.filter(s => !prev.find(o=>o.id===s.id) && s.offerte_data?.nummer);
-                if(!missingShared.length) return prev;
-                const recovered = missingShared.map(s => {
-                  const {_bed,_dc,_sj,_lyt,_voorwaarden,_voorschot,...offData} = s.offerte_data||{};
-                  return {...offData, id: s.id, _hersteld: true};
+                const missing = sharedData.filter(s => !prev.find(o=>o.id===s.id) && s.offerte_data?.nummer && !s.offerte_data?._hersteld);
+                if(!missing.length) return prev;
+                const recovered = missing.map(s => {
+                  const {_bed,_dc,_sj,_lyt,_voorwaarden,_voorschot,...d} = s.offerte_data||{};
+                  return {...d, id: s.id, _hersteld: true, status: d.status||'verstuurd'};
                 });
                 console.log(`🔄 ${recovered.length} offerte(s) hersteld`);
                 return [...prev, ...recovered];
@@ -1852,8 +1852,8 @@ export default function App() {
         });
       }
     } catch(e) { console.warn("Offerte tracking fetch failed:", e); }
-  }, [offertes]); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => { if(user) fetchOfferteTracking(); }, [user]); // eslint-disable-line
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if(user) fetchOfferteTracking(); }, [user, fetchOfferteTracking]);
   // Auto-poll tracking elke 60s op dashboard
   useEffect(() => {
     if(!user || pg !== "dashboard") return;
