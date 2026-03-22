@@ -90,6 +90,8 @@ body{font-family:'Inter',Arial,sans-serif;background:#f0f4f8;color:#1e293b;font-
   .cov-client-name{font-size:18px}
   .prod-page{padding:16px}
   .qt-pg{padding:16px}
+  .prod-item-inner{flex-wrap:wrap}
+  .prod-price-box{min-width:100%;margin-top:8px}
   .qt-header{flex-direction:column;gap:8px}
   .qt-header>div:last-child{text-align:left}
   .qt-meta-bar{flex-wrap:wrap}
@@ -241,9 +243,15 @@ function renderOfferte(doc){
     return html;
   }
 
-  // Alias voor renderProd
+  // In productpagina: alleen download links
   function renderFicheLinks(fiches,techFiche,fichNaam){
-    return renderFicheEmbed(fiches,techFiche,fichNaam);
+    var items=[];
+    (fiches||[]).forEach(function(f){if(f.data||f.url)items.push({href:f.data||f.url,naam:f.naam||'fiche.pdf'});});
+    if(!items.length&&techFiche&&techFiche!=='[PDF]'&&techFiche.length>100)items.push({href:techFiche,naam:fichNaam||'Technische fiche'});
+    if(!items.length)return'';
+    return'<div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:4px">'+
+      items.map(function(f){return'<a href="'+f.href+'" download="'+f.naam+'" style="display:inline-flex;align-items:center;gap:5px;padding:5px 12px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;color:#2563eb;text-decoration:none;font-weight:600;font-size:11.5px">📎 '+f.naam+'</a>';}).join('')+
+    '</div>';
   }
 
   function renderProd(l){
@@ -262,7 +270,7 @@ function renderOfferte(doc){
           renderSpecs(l.specs||[])+
           renderFicheLinks(l.technischeFiches,l.technischeFiche,l.fichNaam)+
         '</div>'+
-        '<div style="flex-shrink:0;text-align:right;background:#f8fafc;border-radius:8px;padding:10px 14px;border:1px solid #e2e8f0">'+
+        '<div class="prod-price-box" style="flex-shrink:0;text-align:right;background:#f8fafc;border-radius:8px;padding:10px 14px;border:1px solid #e2e8f0">'+
           '<div style="font-size:10px;color:#94a3b8;font-weight:600">EENHEIDSPRIJS</div>'+
           '<div style="font-weight:800;font-size:16px;color:'+dc+'">'+fmtEuro(l.prijs||0)+'</div>'+
           '<div style="font-size:10px;color:#94a3b8">BTW '+(l.btw||0)+'%</div>'+
@@ -428,6 +436,61 @@ function renderOfferte(doc){
     '</div>':'')+ 
 
   '</div>'+
+
+  // TECHNISCHE FICHES — aparte pagina's achteraan (identiek aan BILLR)
+  (function(){
+    var ficheHtml='';
+    prods.forEach(function(l){
+      var items=[];
+      (l.technischeFiches||[]).forEach(function(f){if(f.data||f.url)items.push({data:f.data||f.url,naam:f.naam||'fiche.pdf',productNaam:l.naam});});
+      if(!items.length&&l.technischeFiche&&l.technischeFiche!=='[PDF]'&&l.technischeFiche.length>100)
+        items.push({data:l.technischeFiche,naam:l.fichNaam||'Technische fiche',productNaam:l.naam});
+      items.forEach(function(item,idx){
+        var cid='fp-'+(++_ficheCounter);
+        ficheHtml+=
+          '<div class="doc-page-lbl">Technische Fiche — '+item.naam+'</div>'+
+          '<div class="doc-page" style="page-break-before:always">'+
+            '<div style="height:5px;background:'+dc+';flex-shrink:0"></div>'+
+            '<div style="padding:8px 16px 6px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #e2e8f0;background:#f8fafc">'+
+              '<div>'+
+                '<div style="font-size:9px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.6px">Technische fiche</div>'+
+                '<div style="font-weight:800;font-size:14px;color:#1e293b">'+item.productNaam+'</div>'+
+              '</div>'+
+              '<div style="text-align:right">'+
+                '<a href="'+item.data+'" download="'+item.naam+'" style="font-size:11px;color:#2563eb;font-weight:600;text-decoration:none">⬇ Download PDF</a>'+
+                '<div style="font-size:9px;color:#94a3b8;margin-top:2px">'+(bed.naam||'')+' · '+doc.nummer+'</div>'+
+              '</div>'+
+            '</div>'+
+            '<div id="'+cid+'" style="background:#fff"></div>'+
+            '<div class="qt-footer" style="background:'+dc+'">'+
+              '<span class="qt-footer-txt"><strong>'+(bed.naam||'')+'</strong></span>'+
+              '<span class="qt-footer-txt">'+item.naam+'</span>'+
+            '</div>'+
+          '</div>';
+        setTimeout((function(wid,pdata){return function(){
+          var wrap=document.getElementById(wid);
+          if(!wrap||typeof pdfjsLib==='undefined')return;
+          var raw=pdata.includes(',')?pdata.split(',')[1]:pdata;
+          try{var bytes=atob(raw);}catch(e){wrap.innerHTML='<div style="padding:20px;text-align:center;color:#94a3b8">PDF kan niet worden geladen</div>';return;}
+          var arr=new Uint8Array(bytes.length);for(var i=0;i<bytes.length;i++)arr[i]=bytes.charCodeAt(i);
+          pdfjsLib.getDocument({data:arr}).promise.then(function(pdf){
+            for(var pg=1;pg<=pdf.numPages;pg++){
+              (function(pn){pdf.getPage(pn).then(function(page){
+                var vp=page.getViewport({scale:1.6});
+                var c=document.createElement('canvas');
+                c.width=vp.width;c.height=vp.height;
+                c.style.cssText='width:100%;display:block;'+(pn>1?'border-top:1px solid #e2e8f0':'');
+                wrap.appendChild(c);
+                page.render({canvasContext:c.getContext('2d'),viewport:vp});
+              });})(pg);
+            }
+          }).catch(function(){wrap.innerHTML='<div style="padding:20px;text-align:center;color:#94a3b8">PDF kan niet worden weergegeven. <a href="'+pdata+'" download style="color:#2563eb">Download hier</a></div>';});
+        };})(cid,item.data),300+(idx*100));
+      });
+    });
+    return ficheHtml;
+  })()+
+
   '<div class="modal-bg" id="acceptModal"><div class="modal">'+
     '<h2 style="margin-bottom:20px;color:#10b981">✅ Offerte goedkeuren</h2>'+
     '<p style="margin-bottom:20px;color:#64748b">Bevestig uw akkoord met offerte <strong>'+(doc.nummer||'')+'</strong> voor <strong>'+fmtEuro(eindTot)+'</strong>.</p>'+
