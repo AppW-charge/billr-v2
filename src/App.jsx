@@ -1629,11 +1629,22 @@ export default function App() {
 
       if(sbData && Object.keys(sbData).length > 0) {
         console.log(`☁️ Supabase: ${Object.keys(sbData).length} keys`);
-        // Laad fiche cache eerst zodat producten meteen fiches hebben
-        const sbFicheCache = sbData["b4_fic"] ? parse(sbData["b4_fic"], null) : null;
         if(sbData["b4_set"]) setSettings(parse(sbData["b4_set"], INIT_SETTINGS));
         if(sbData["b4_kln"]) setKlanten(parse(sbData["b4_kln"], INIT_KLANTEN));
-        if(sbData["b4_prd"]) setProducten(restoreFicheCache(parse(sbData["b4_prd"], INIT_PRODUCTS), sbFicheCache));
+        // Laad producten + fiches uit dedicated product_fiches tabel
+        if(sbData["b4_prd"]) {
+          const prods = parse(sbData["b4_prd"], INIT_PRODUCTS);
+          try {
+            const fr = await sb.from('product_fiches').select('product_id,fiches').eq('user_id', u.id);
+            if(fr.data && fr.data.length > 0) {
+              const sbFicheCache = {};
+              fr.data.forEach(r => { sbFicheCache[r.product_id] = r.fiches; });
+              setProducten(restoreFicheCache(prods, sbFicheCache));
+            } else {
+              setProducten(restoreFicheCache(prods));
+            }
+          } catch(_) { setProducten(restoreFicheCache(prods)); }
+        }
         if(sbData["b4_off"]) setOffertes(parse(sbData["b4_off"], []));
         if(sbData["b4_fct"]) setFacturen(parse(sbData["b4_fct"], []));
         if(sbData["b4_cn"])  setCreditnotas(parse(sbData["b4_cn"], []));
@@ -1644,7 +1655,6 @@ export default function App() {
         if(sbData["b4_ga"])  setGaranties(parse(sbData["b4_ga"], []));
         if(sbData["b4_at"])  setAcceptTokens(parse(sbData["b4_at"], {}));
         if(sbData["b4_wo"])  setWidgetOrder(parse(sbData["b4_wo"], null));
-        // Update localStorage cache
         Object.entries(sbData).forEach(([k,v])=>{ try{localStorage.setItem(k,v);}catch(_){} });
       } else {
         // Supabase timeout/leeg — localStorage fallback
@@ -1878,39 +1888,56 @@ export default function App() {
   }, [flushSaves]);
   const saveFicheCache = useCallback((productenArr) => {
     try {
+      // Stap 1: update localStorage cache (altijd, onmiddellijk)
       let existing = {};
       try { const r = localStorage.getItem("billr_fiche_cache"); if(r) existing = JSON.parse(r); } catch(_){}
       const cache = {...existing};
       let changed = false;
+      const toSave = []; // producten met fiches om naar Supabase te sturen
+
       productenArr.forEach(p => {
+        let fiches = null;
         if(p.technischeFiches?.some(f => f.data)) {
-          cache[p.id] = p.technischeFiches.filter(f => f.data);
-          changed = true;
+          fiches = p.technischeFiches.filter(f => f.data);
         } else if(p.technischeFiche && p.technischeFiche !== "[PDF]" && p.technischeFiche.length > 100) {
-          cache[p.id] = [{data: p.technischeFiche, naam: p.fichNaam||"fiche.pdf"}];
+          fiches = [{data: p.technischeFiche, naam: p.fichNaam||"fiche.pdf"}];
+        }
+        if(fiches) {
+          cache[p.id] = fiches;
           changed = true;
+          if(user) toSave.push({user_id: user.id, product_id: p.id, fiches, updated_at: new Date().toISOString()});
         }
       });
+
       if(changed) {
-        localStorage.setItem("billr_fiche_cache", JSON.stringify(cache));
-        // Ook naar Supabase — zodat andere browsers/gsm de fiches hebben
-        pendingSaves.current["b4_fic"] = JSON.stringify(cache);
-        if(saveTimer.current) clearTimeout(saveTimer.current);
-        saveTimer.current = setTimeout(flushSaves, 2000);
+        try { localStorage.setItem("billr_fiche_cache", JSON.stringify(cache)); } catch(_){}
+        // Stap 2: sla op in product_fiches tabel (apart van user_data — geen grootteproblemen)
+        if(user && toSave.length > 0) {
+          sb.from('product_fiches').upsert(toSave, {onConflict:'user_id,product_id'})
+            .then(r => { if(r.error) console.warn("product_fiches save:", r.error.message); })
+            .catch(e => console.warn("product_fiches save exception:", e.message));
+        }
       }
     } catch(_) {}
-  }, [flushSaves]);
+  }, [user]);
 
   const restoreFicheCache = useCallback((productenArr, sbFicheCache=null) => {
     try {
-      // Probeer cache: eerst Supabase (cross-browser), dan localStorage
+      // sbFicheCache: geladen vanuit product_fiches tabel {productId: [fiches...]}
+      // localStorage: fallback als Supabase niet beschikbaar
       let cache = sbFicheCache || null;
       if(!cache) {
         const raw = localStorage.getItem("billr_fiche_cache");
         if(raw) cache = JSON.parse(raw);
       } else {
-        // Sla Supabase cache ook op in localStorage voor snelle toegang
-        try { localStorage.setItem("billr_fiche_cache", JSON.stringify(cache)); } catch(_){}
+        // Merge met bestaande localStorage cache
+        try {
+          const raw = localStorage.getItem("billr_fiche_cache");
+          const existing = raw ? JSON.parse(raw) : {};
+          const merged = {...existing, ...cache};
+          localStorage.setItem("billr_fiche_cache", JSON.stringify(merged));
+          cache = merged;
+        } catch(_){}
       }
       if(!cache) return productenArr;
       return productenArr.map(p => {
@@ -2051,8 +2078,11 @@ export default function App() {
         if(allData["b4_set"] && sbNewer("b4_set")) { const s=p("b4_set",null); if(s?.bedrijf?.naam||s?.email?.eigen) setSettings(s); }
         if(allData["b4_kln"] && sbNewer("b4_kln")) setKlanten(p("b4_kln",[]));
         if(allData["b4_prd"] && sbNewer("b4_prd")) {
-          const sbFicheCache = allData["b4_fic"] ? p("b4_fic",null) : null;
-          setProducten(restoreFicheCache(p("b4_prd",[]), sbFicheCache));
+          try {
+            const fr2 = await sb.from('product_fiches').select('product_id,fiches').eq('user_id', user.id);
+            const sfc = fr2.data&&fr2.data.length>0 ? Object.fromEntries(fr2.data.map(r=>[r.product_id,r.fiches])) : null;
+            setProducten(restoreFicheCache(p("b4_prd",[]), sfc));
+          } catch(_) { setProducten(restoreFicheCache(p("b4_prd",[]))); }
         }
         if(allData["b4_off"] && sbNewer("b4_off")) { const v=p("b4_off",null); if(v!==null) setOffertes(v); }
         if(allData["b4_fct"] && sbNewer("b4_fct")) { const v=p("b4_fct",null); if(v!==null) setFacturen(v); }
@@ -2188,9 +2218,17 @@ export default function App() {
       const lyt = settings?.layout || {};
       const dc = sj.accentKleur || settings?.thema?.kleur || bed.kleur || "#1a2e4a";
 
-      // Laad fiche cache
+      // Laad fiche cache: eerst uit state (producten), dan localStorage, dan product_fiches tabel
       let ficheCache = {};
       try { const raw = localStorage.getItem("billr_fiche_cache"); if(raw) ficheCache = JSON.parse(raw); } catch(_){}
+      // Haal ook op uit product_fiches tabel voor zekerheid
+      try {
+        const productIds = (offerte.lijnen||[]).map(l=>l.productId).filter(Boolean);
+        if(productIds.length > 0 && user) {
+          const fr = await sb.from('product_fiches').select('product_id,fiches').eq('user_id',user.id).in('product_id',productIds);
+          if(fr.data) fr.data.forEach(r=>{ if(!ficheCache[r.product_id]) ficheCache[r.product_id]=r.fiches; });
+        }
+      } catch(_){}
 
       // Bouw lijnen ZONDER base64 voor het hoofdrecord (klein → geen timeout)
       const cleanLijnen = (offerte.lijnen||[]).map(l => {
