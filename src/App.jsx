@@ -1677,15 +1677,21 @@ export default function App() {
         setWidgetOrder(ls('b4_wo', null));
       }
 
-      // Dedupliceer offertes op nummer — houd de meest recente per nummer
+      // Dedupliceer offertes op nummer — houd per nummer de meest recente
       setOffertes(prev => {
         const seen = new Map();
         [...prev].sort((a,b)=>new Date(b.aangemaakt||0)-new Date(a.aangemaakt||0)).forEach(o => {
-          if(o.nummer && !seen.has(o.nummer)) seen.set(o.nummer, o);
-          else if(!o.nummer) seen.set(o.id, o); // zonder nummer altijd bewaren
+          const key = o.nummer || o.id;
+          if(!seen.has(key)) seen.set(key, o);
         });
         const deduped = [...seen.values()];
-        if(deduped.length !== prev.length) console.log(`🧹 Deduplicatie: ${prev.length} → ${deduped.length} offertes`);
+        if(deduped.length !== prev.length) {
+          console.log(`🧹 Deduplicatie: ${prev.length} → ${deduped.length} offertes`);
+          // Meteen opslaan zodat duplicaten ook uit Supabase verdwijnen
+          setTimeout(() => {
+            try { pendingSaves.current["b4_off"] = JSON.stringify(deduped); flushSaves(); } catch(_){}
+          }, 500);
+        }
         return deduped;
       });
       // Nu mogen saves plaatsvinden
