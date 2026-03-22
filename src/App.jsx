@@ -1749,8 +1749,11 @@ export default function App() {
   // ═══ OFFERTE TRACKING — fetch views + responses from Supabase ═══
   const fetchOfferteTracking = useCallback(async () => {
     try {
-      const { data: views } = await sb.from('offerte_views').select('offerte_id, viewed_at, user_agent');
-      const { data: responses } = await sb.from('offerte_responses').select('offerte_id, status, periode, opmerkingen, submitted_at');
+      // Filter op eigen offertes zodat RLS niet blokkeert
+      const ownIds = offertes.map(o=>o.id).filter(Boolean);
+      if(!ownIds.length) return;
+      const { data: views } = await sb.from('offerte_views').select('offerte_id, viewed_at, user_agent').in('offerte_id', ownIds);
+      const { data: responses } = await sb.from('offerte_responses').select('offerte_id, status, periode, opmerkingen, submitted_at').in('offerte_id', ownIds);
       let proposals = null;
       try { const r = await sb.from('planning_proposals').select('*'); proposals = r.data; } catch(_){}
       if(views) {
@@ -1788,6 +1791,10 @@ export default function App() {
             }
             return o;
           });
+          if(changed) {
+            // Notify bij nieuwe klantreactie
+            setTimeout(()=>notify('📬 Nieuwe reactie van klant ontvangen!','ok'),100);
+          }
           return changed ? next : prev;
         });
       }
@@ -3019,7 +3026,7 @@ function Dashboard({offertes, facturen, onGoto, onNew, onFactuur, settings, offe
   ];
 
   // ── Offerte Logboek data ──
-  const verstuurdOff = offertes.filter(o=>o.status!=="concept").sort((a,b)=>new Date(b.aangemaakt)-new Date(a.aangemaakt)).slice(0,8);
+  const verstuurdOff = offertes.filter(o=>!['concept','afgewezen'].includes(o.status)).sort((a,b)=>new Date(b.aangemaakt)-new Date(a.aangemaakt)).slice(0,10);
 
   // ── WIDGET RENDER MAP ──
   const widgetMap = {
@@ -3200,7 +3207,7 @@ function Dashboard({offertes, facturen, onGoto, onNew, onFactuur, settings, offe
       </div>
     ),
     afspraken: ()=> (()=>{
-      const geplande = offertes.filter(o=>o.planStatus==="ingepland"&&o.planDatum).sort((a,b)=>(a.planDatum||"").localeCompare(b.planDatum||""));
+      const geplande = offertes.filter(o=>o.planStatus==="ingepland"&&o.planDatum&&o.status!=="uitgevoerd").sort((a,b)=>(a.planDatum||"").localeCompare(b.planDatum||""));
       const wachtend = offertes.filter(o=>{const pp=planningProposals?.[o.id]||[];const lp=pp.sort((a,b)=>new Date(b.created_at)-new Date(a.created_at))[0];return lp&&(lp.status==="voorstel"||lp.status==="alternatief");});
       if(!geplande.length&&!wachtend.length) return null;
       return(
