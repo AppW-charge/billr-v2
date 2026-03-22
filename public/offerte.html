@@ -104,6 +104,8 @@ body{font-family:'Inter',Arial,sans-serif;background:#f0f4f8;color:#1e293b;font-
   .fab-btn{padding:12px 18px;font-size:13px;flex:1;justify-content:center}
 }
 </style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script>pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';</script>
 </head>
 <body>
 <div id="app"><div class="status-msg"><div class="icon">⏳</div><h2>Offerte laden...</h2></div></div>
@@ -194,14 +196,54 @@ function renderOfferte(doc){
       )+'</div>';
   }
 
+  // Teller voor unieke canvas IDs
+  var _ficheCounter=0;
+
+  function renderFicheEmbed(fiches,techFiche,fichNaam){
+    var items=[];
+    (fiches||[]).forEach(function(f){if(f.data||f.url)items.push({data:f.data||f.url,naam:f.naam||'fiche.pdf'});});
+    if(!items.length&&techFiche&&techFiche!=='[PDF]'&&techFiche.length>100)items.push({data:techFiche,naam:fichNaam||'Technische fiche'});
+    if(!items.length)return'';
+    var html='';
+    items.forEach(function(item){
+      var cid='fiche-wrap-'+(++_ficheCounter);
+      html+='<div style="margin-top:16px">'+
+        '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">'+
+          '<div style="font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.5px">📋 '+item.naam+'</div>'+
+          '<a href="'+item.data+'" download="'+item.naam+'" style="font-size:11px;color:#2563eb;text-decoration:none;font-weight:600">⬇ Download</a>'+
+        '</div>'+
+        '<div id="'+cid+'" style="border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;background:#f8fafc"></div>'+
+      '</div>';
+      // Render na DOM insert
+      setTimeout(function(wid,pdata){
+        return function(){
+          var wrap=document.getElementById(wid);
+          if(!wrap||!pdfjsLib)return;
+          pdfjsLib.getDocument({data:atob(pdata.split(',')[1]||pdata)}).promise.then(function(pdf){
+            for(var pg=1;pg<=pdf.numPages;pg++){
+              (function(pageNum){
+                pdf.getPage(pageNum).then(function(page){
+                  var vp=page.getViewport({scale:1.5});
+                  var canvas=document.createElement('canvas');
+                  canvas.width=vp.width;canvas.height=vp.height;
+                  canvas.style.cssText='width:100%;display:block;'+(pageNum>1?'border-top:1px solid #e2e8f0':'');
+                  wrap.appendChild(canvas);
+                  page.render({canvasContext:canvas.getContext('2d'),viewport:vp});
+                });
+              })(pg);
+            }
+          }).catch(function(e){
+            wrap.innerHTML='<div style="padding:16px;text-align:center;color:#94a3b8;font-size:12px">PDF kan niet worden weergegeven. <a href="'+pdata+'" download style="color:#2563eb">Download hier</a></div>';
+          });
+        };
+      }(cid,item.data),200);
+    });
+    return html;
+  }
+
+  // Alias voor renderProd
   function renderFicheLinks(fiches,techFiche,fichNaam){
-    var links=[];
-    (fiches||[]).forEach(function(f){if(f.data||f.url)links.push({href:f.data||f.url,naam:f.naam||'fiche.pdf'});});
-    if(!links.length&&techFiche&&techFiche!=='[PDF]'&&techFiche.length>100)links.push({href:techFiche,naam:fichNaam||'Technische fiche'});
-    if(!links.length)return'';
-    return'<div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:4px">'+
-      links.map(function(f){return'<a href="'+f.href+'" download="'+f.naam+'" style="display:inline-flex;align-items:center;gap:5px;padding:5px 12px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;color:#2563eb;text-decoration:none;font-weight:600;font-size:11.5px">📎 '+f.naam+'</a>';}).join('')+
-    '</div>';
+    return renderFicheEmbed(fiches,techFiche,fichNaam);
   }
 
   function renderProd(l){
@@ -412,20 +454,13 @@ async function loadOfferte(){
       // Laad fiches uit offerte_fiches tabel en merge in lijnen
       try{
         var fr=await s.from('offerte_fiches').select('product_id,fiches').eq('offerte_id',offId);
-        console.log('[FICHES] offerte_fiches rows:', fr.data?fr.data.length:0, fr.error||'');
         if(fr.data&&fr.data.length>0){
-          var fm={};fr.data.forEach(function(row){
-            fm[row.product_id]=row.fiches;
-            console.log('[FICHES] product',row.product_id,'heeft',row.fiches?row.fiches.length:0,'fiches, eerste data lengte:',(row.fiches&&row.fiches[0]&&row.fiches[0].data)?row.fiches[0].data.length:0);
-          });
+          var fm={};fr.data.forEach(function(row){fm[row.product_id]=row.fiches;});
           doc.lijnen=(doc.lijnen||[]).map(function(l){
             var f=fm[l.productId||l.id];
-            console.log('[FICHES] lijn productId:',l.productId,'gevonden:',!!(f&&f.length));
             if(f&&f.length)return Object.assign({},l,{technischeFiches:f});
             return l;
           });
-        }else{
-          console.warn('[FICHES] LEEG of fout:', fr.error);
         }
       }catch(fe){console.warn('Fiches laden:',fe);}
       renderOfferte(doc);return;
