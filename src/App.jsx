@@ -1677,6 +1677,17 @@ export default function App() {
         setWidgetOrder(ls('b4_wo', null));
       }
 
+      // Dedupliceer offertes op nummer — houd de meest recente per nummer
+      setOffertes(prev => {
+        const seen = new Map();
+        [...prev].sort((a,b)=>new Date(b.aangemaakt||0)-new Date(a.aangemaakt||0)).forEach(o => {
+          if(o.nummer && !seen.has(o.nummer)) seen.set(o.nummer, o);
+          else if(!o.nummer) seen.set(o.id, o); // zonder nummer altijd bewaren
+        });
+        const deduped = [...seen.values()];
+        if(deduped.length !== prev.length) console.log(`🧹 Deduplicatie: ${prev.length} → ${deduped.length} offertes`);
+        return deduped;
+      });
       // Nu mogen saves plaatsvinden
       dataReady.current = true;
 
@@ -1749,12 +1760,8 @@ export default function App() {
   // ═══ OFFERTE TRACKING — fetch views + responses from Supabase ═══
   const fetchOfferteTracking = useCallback(async () => {
     try {
-      const { data: views, error: vErr } = await sb.from('offerte_views').select('offerte_id, viewed_at, user_agent');
-      const { data: responses, error: rErr } = await sb.from('offerte_responses').select('offerte_id, status, periode, opmerkingen, submitted_at');
-      if(vErr) console.warn('views error:', vErr.message);
-      if(rErr) console.warn('responses error:', rErr.message);
-      console.log('[TRACKING] responses uit DB:', responses?.length||0, responses?.map(r=>r.offerte_id+'='+r.status)||[]);
-      console.log('[TRACKING] offertes in state (functie arg):', offertes?.length||0, offertes?.map(o=>o.id+'='+o.nummer)||[]);
+      const { data: views } = await sb.from('offerte_views').select('offerte_id, viewed_at, user_agent');
+      const { data: responses } = await sb.from('offerte_responses').select('offerte_id, status, periode, opmerkingen, submitted_at');
       let proposals = null;
       try { const r = await sb.from('planning_proposals').select('*'); proposals = r.data; } catch(_){}
       if(views) {
@@ -1772,74 +1779,48 @@ export default function App() {
           grouped[r.offerte_id].push(r);
         });
         setOfferteResponses(grouped);
-        // Herstel ontbrekende offertes — eenmalig, max 10 IDs
-        const responseIds = Object.keys(grouped).slice(0,10);
-        if(responseIds.length > 0) {
-          try {
-            const { data: sharedData } = await sb.from('offerte_shares').select('id, offerte_data').in('id', responseIds);
-            if(sharedData && sharedData.length > 0) {
-              setOffertes(prev => {
-                // Herstel ontbrekende: check op ZOWEL id ALS nummer (ander apparaat = ander id, zelfde nummer)
-                const alleIds = new Set(prev.map(o=>o.id));
-                const alleNummers = new Set(prev.map(o=>o.nummer));
-                const missing = sharedData.filter(s => {
-                  if(!s.offerte_data?.nummer) return false;
-                  if(alleIds.has(s.id)) return false; // al aanwezig op id
-                  if(alleNummers.has(s.offerte_data.nummer)) {
-                    // Zelfde nummer, ander id: update het id in state
-                    return false; // skip herstel, fix id apart
-                  }
-                  return true;
-                });
-                // Fix: update offerte id als nummer matcht maar id verschilt
-                let updated = [...prev];
-                sharedData.forEach(s => {
-                  if(!s.offerte_data?.nummer) return;
-                  const byNummer = updated.find(o=>o.nummer===s.offerte_data.nummer && o.id!==s.id);
-                  if(byNummer) {
-                    // Vervang het lokale id met het share id zodat responses matchen
-                    updated = updated.map(o=>o.nummer===byNummer.nummer ? {...o, id:s.id} : o);
-                    console.log(`🔧 Offerte ${byNummer.nummer}: id bijgewerkt naar ${s.id}`);
-                  }
-                });
-                if(!missing.length && JSON.stringify(updated)===JSON.stringify(prev)) return prev;
-                const recovered = missing.map(s => {
-                  const {_bed,_dc,_sj,_lyt,_voorwaarden,_voorschot,...d} = s.offerte_data||{};
-                  return {...d, id: s.id, _hersteld: true, status: d.status||'verstuurd'};
-                });
-                if(recovered.length) console.log(`🔄 ${recovered.length} offerte(s) hersteld`);
-                return [...updated, ...recovered];
-              });
+
+        // Haal ook offerte_shares op om nummer→id mapping te maken
+        let shareMap = {}; // offerte_shares.id → offerte nummer
+        try {
+          const respIds = Object.keys(grouped);
+          if(respIds.length > 0) {
+            const {data:sh} = await sb.from('offerte_shares').select('id,offerte_data').in('id',respIds);
+            if(sh) sh.forEach(s=>{ if(s.offerte_data?.nummer) shareMap[s.id]=s.offerte_data.nummer; });
+          }
+        } catch(_){}
+
+        // Auto-sync: match op offerte id OF via nummer uit shareMap
+        setOffertes(prev => {
+          let changed = false;
+          const next = prev.map(o => {
+            // Zoek responses: direct op id, of via shareMap (nummer match)
+            let oResp = grouped[o.id];
+            if(!oResp || !oResp.length) {
+              // Probeer via nummer: zoek share id waarvan nummer=o.nummer
+              const shareId = Object.keys(shareMap).find(sid=>shareMap[sid]===o.nummer);
+              if(shareId) oResp = grouped[shareId];
             }
-          } catch(_){}
-        }
-        // Auto-sync: update offerte status + log
-        setTimeout(() => {
-          setOffertes(prev => {
-            let changed = false;
-            const next = prev.map(o => {
-              const oResp = grouped[o.id];
-              if(!oResp || !oResp.length) return o;
-              const latest = [...oResp].sort((a,b)=>new Date(b.submitted_at)-new Date(a.submitted_at))[0];
-              const respTs = latest.submitted_at;
-              const alreadyLogged = (o.log||[]).some(l => l.ts === respTs);
-              if(alreadyLogged) return o;
-              if(latest.status === "goedgekeurd") {
-                changed = true;
-                const newLog = [...(o.log||[]), {ts: respTs, actie: `✅ Klant heeft offerte goedgekeurd${latest.periode ? " (periode: "+latest.periode+")" : ""}${latest.opmerkingen ? " — "+latest.opmerkingen : ""}`}];
-                return {...o, status: "goedgekeurd", klantAkkoord: true, klantAkkoordDatum: respTs, klantPeriode: latest.periode, klantOpmerkingen: latest.opmerkingen, log: newLog};
-              }
-              if(latest.status === "afgewezen") {
-                changed = true;
-                const newLog = [...(o.log||[]), {ts: respTs, actie: `❌ Klant heeft offerte afgewezen${latest.opmerkingen ? " — "+latest.opmerkingen : ""}`}];
-                return {...o, status: "afgewezen", log: newLog};
-              }
-              return o;
-            });
-            if(changed) setTimeout(()=>notify('📬 Nieuwe reactie van klant ontvangen!','ok'),100);
-            return changed ? next : prev;
+            if(!oResp || !oResp.length) return o;
+            const latest = [...oResp].sort((a,b)=>new Date(b.submitted_at)-new Date(a.submitted_at))[0];
+            const respTs = latest.submitted_at;
+            const alreadyLogged = (o.log||[]).some(l => l.ts === respTs);
+            if(alreadyLogged) return o;
+            if(latest.status === "goedgekeurd") {
+              changed = true;
+              const newLog = [...(o.log||[]), {ts: respTs, actie: `✅ Klant heeft offerte goedgekeurd${latest.periode ? " (periode: "+latest.periode+")" : ""}${latest.opmerkingen ? " — "+latest.opmerkingen : ""}`}];
+              return {...o, status: "goedgekeurd", klantAkkoord: true, klantAkkoordDatum: respTs, klantPeriode: latest.periode, klantOpmerkingen: latest.opmerkingen, log: newLog};
+            }
+            if(latest.status === "afgewezen") {
+              changed = true;
+              const newLog = [...(o.log||[]), {ts: respTs, actie: `❌ Klant heeft offerte afgewezen${latest.opmerkingen ? " — "+latest.opmerkingen : ""}`}];
+              return {...o, status: "afgewezen", log: newLog};
+            }
+            return o;
           });
-        }, 500); // 500ms na herstel zodat state geüpdated is
+          if(changed) setTimeout(()=>notify('📬 Nieuwe reactie van klant ontvangen!','ok'),100);
+          return changed ? next : prev;
+        });
       }
       if(proposals) {
         const grouped = {};
