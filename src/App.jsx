@@ -5136,6 +5136,7 @@ function OfferteWizard({klanten,producten,offertes,editData,settings,onSave,onCl
           </div>
           <div className="fr2">
             <div className="fg"><label className="fl">Betalingstermijn factuur (dagen)</label><input type="number" className="fc" value={betalingstermijn} onChange={e=>setBetalingstermijn(Number(e.target.value))} min={1}/></div>
+          </div>
           <div className="fr2">
             <div className="fg"><label className="fl">Korting</label><input type="number" className="fc" value={korting} onChange={e=>setKorting(e.target.value)} min={0}/></div>
             <div className="fg"><label className="fl">Korting type</label><select className="fc" value={kortingType} onChange={e=>setKortingType(e.target.value)}><option value="pct">Percentage (%)</option><option value="bedrag">Vast bedrag (€)</option></select></div>
