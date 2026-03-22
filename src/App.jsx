@@ -1848,12 +1848,30 @@ export default function App() {
 
   const stripBase64 = (key, val) => {
     if(!Array.isArray(val)) return val;
-    if(key === "b4_prd") return val.map(p => {
-      const c = {...p};
-      if(c.technischeFiche && String(c.technischeFiche).length > 500) c.technischeFiche = "[PDF]";
-      if(c.technischeFiches) c.technischeFiches = c.technischeFiches.map(f => ({naam:f.naam||"",url:f.url||"",type:f.type||""}));
-      return c;
-    });
+    if(key === "b4_prd") {
+      // Voor Supabase: strip base64 (te groot)
+      // Maar BEWAAR fiches in billr_fiche_cache zodat localStorage ze wel heeft
+      const ficheUpdate = {};
+      const stripped = val.map(p => {
+        const c = {...p};
+        // Sla fiches op in cache vóór strippen
+        if((c.technischeFiches||[]).some(f=>f.data) || (c.technischeFiche && c.technischeFiche.length > 500)) {
+          ficheUpdate[c.id] = c.technischeFiches?.filter(f=>f.data) || (c.technischeFiche ? [{data:c.technischeFiche, naam:c.fichNaam||"fiche.pdf"}] : []);
+        }
+        if(c.technischeFiche && String(c.technischeFiche).length > 500) c.technischeFiche = "[PDF]";
+        if(c.technischeFiches) c.technischeFiches = c.technischeFiches.map(f => ({naam:f.naam||"",url:f.url||"",type:f.type||""}));
+        return c;
+      });
+      // Update billr_fiche_cache met nieuwe fiches
+      if(Object.keys(ficheUpdate).length > 0) {
+        try {
+          const existing = JSON.parse(localStorage.getItem("billr_fiche_cache")||"{}");
+          const merged = {...existing, ...ficheUpdate};
+          localStorage.setItem("billr_fiche_cache", JSON.stringify(merged));
+        } catch(_){}
+      }
+      return stripped;
+    }
     if(key === "b4_off" || key === "b4_fct") return val.map(doc => {
       const cl = {...doc};
       if(cl.lijnen) cl.lijnen = cl.lijnen.map(l => {
@@ -2238,15 +2256,15 @@ export default function App() {
       const lyt = settings?.layout || {};
       const dc = sj.accentKleur || settings?.thema?.kleur || bed.kleur || "#1a2e4a";
 
-      // Laad fiche cache: eerst uit state (producten), dan localStorage, dan product_fiches tabel
+      // Laad fiche cache: ALTIJD uit product_fiches tabel (authoritative source)
       let ficheCache = {};
       try { const raw = localStorage.getItem("billr_fiche_cache"); if(raw) ficheCache = JSON.parse(raw); } catch(_){}
-      // Haal ook op uit product_fiches tabel voor zekerheid
       try {
         const productIds = (offerte.lijnen||[]).map(l=>l.productId).filter(Boolean);
         if(productIds.length > 0 && user) {
           const fr = await sb.from('product_fiches').select('product_id,fiches').eq('user_id',user.id).in('product_id',productIds);
-          if(fr.data) fr.data.forEach(r=>{ if(!ficheCache[r.product_id]) ficheCache[r.product_id]=r.fiches; });
+          // Tabel data OVERSCHRIJFT localStorage cache — tabel is altijd autoritatief
+          if(fr.data) fr.data.forEach(r=>{ ficheCache[r.product_id] = r.fiches; });
         }
       } catch(_){}
 
