@@ -1592,7 +1592,7 @@ export default function App() {
       try {
         sbData = await Promise.race([
           sbGetAll(u.id),
-          new Promise(r => setTimeout(()=>r(null), 15000))
+          new Promise(r => setTimeout(()=>r(null), 6000))
         ]);
       } catch(e) { console.error("Supabase load error:", e); }
 
@@ -1634,7 +1634,7 @@ export default function App() {
         if(sbData["b4_wo"])  setWidgetOrder(parse(sbData["b4_wo"], null));
         Object.entries(sbData).forEach(([k,v])=>{ try{localStorage.setItem(k,v);}catch(_){} });
       } else {
-        // Supabase timeout/leeg — localStorage fallback
+        // Supabase timeout/leeg — localStorage fallback (snel laden)
         console.warn("⚠️ Supabase timeout — localStorage fallback");
         const ls = (k,fb) => { try{const v=localStorage.getItem(k);return v?JSON.parse(v):fb;}catch(_){return fb;} };
         setSettings(ls('b4_set', INIT_SETTINGS));
@@ -1650,6 +1650,24 @@ export default function App() {
         setGaranties(ls('b4_ga', []));
         setAcceptTokens(ls('b4_at', {}));
         setWidgetOrder(ls('b4_wo', null));
+        // Retry Supabase na 4s (wacht op wake-up free tier)
+        setTimeout(async () => {
+          try {
+            const retry = await Promise.race([sbGetAll(u.id), new Promise(r=>setTimeout(()=>r(null),8000))]);
+            if(retry && Object.keys(retry).length > 0) {
+              console.log("✅ Supabase retry geslaagd:", Object.keys(retry).length, "keys");
+              const p2 = (k,fb) => { try{return retry[k]?JSON.parse(retry[k]):fb;}catch(_){return fb;} };
+              if(retry["b4_set"]) setSettings(p2("b4_set", INIT_SETTINGS));
+              if(retry["b4_kln"]) setKlanten(p2("b4_kln", []));
+              if(retry["b4_off"]) { const offs=p2("b4_off",[]); const seen=new Set(); setOffertes(offs.filter(o=>{ if(!o.id||seen.has(o.id)) return false; seen.add(o.id); return true; })); }
+              if(retry["b4_fct"]) setFacturen(p2("b4_fct",[]));
+              if(retry["b4_prd"]) setProducten(restoreFicheCache(p2("b4_prd",[])));
+              if(retry["b4_cn"])  setCreditnotas(p2("b4_cn",[]));
+              if(retry["b4_ga"])  setGaranties(p2("b4_ga",[]));
+              Object.entries(retry).forEach(([k,v])=>{ try{localStorage.setItem(k,v);}catch(_){} });
+            }
+          } catch(e) { console.warn("Supabase retry mislukt:", e); }
+        }, 4000);
       }
 
       // Nu mogen saves plaatsvinden
@@ -1708,7 +1726,7 @@ export default function App() {
     });
 
     // Noodstop: als na 20s nog niet geladen → toon toch de app
-    const hardTimeout = setTimeout(()=>{ if(!dataLoaded) setLoaded(true); }, 20000);
+    const hardTimeout = setTimeout(()=>{ if(!dataLoaded) setLoaded(true); }, 10000);
     return ()=>clearTimeout(hardTimeout);
   },[]);
 
@@ -2118,7 +2136,7 @@ export default function App() {
         await flushSaves();
         const allData = await Promise.race([
           sbGetAll(user.id),
-          new Promise(r=>setTimeout(()=>r(null),10000))
+          new Promise(r=>setTimeout(()=>r(null),6000))
         ]);
         const hasReal = allData && Object.keys(allData).length > 0 &&
           Object.values(allData).some(v => v && v.length > 10);
