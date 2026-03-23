@@ -2024,19 +2024,23 @@ export default function App() {
     // Strip base64 — nooit grote data naar Supabase
     const stripped = stripBase64(key, val);
     const json = JSON.stringify(stripped);
-    
-    // localStorage: meteen (snel, lokaal)
-    try { localStorage.setItem(key, json); } catch(e) { try { localStorage.removeItem(key); } catch(_){} }
-    
-    // Timestamp bijhouden — voor sync conflict detectie
-    localTimestamps.current[key] = Date.now();
-    try { localStorage.setItem("billr_ts", JSON.stringify(localTimestamps.current)); } catch(_){}
-    
-    // Batch saves: voeg toe aan pending, flush na debounce
-    // b4_prd: 10s debounce (zelden gewijzigd), rest: 1s
+
+    // Check of data echt veranderd is vs localStorage
+    // Dit voorkomt tientallen onnodige Supabase saves bij elke render
+    const prevJson = localStorage.getItem(key);
+    const changed = prevJson !== json;
+
+    // localStorage: altijd meteen updaten (snel, lokaal)
+    if(changed) {
+      try { localStorage.setItem(key, json); } catch(e) { try { localStorage.removeItem(key); } catch(_){} }
+      localTimestamps.current[key] = Date.now();
+      try { localStorage.setItem("billr_ts", JSON.stringify(localTimestamps.current)); } catch(_){}
+    }
+
+    // Supabase: alleen als data gewijzigd is
+    if(!changed) return;
     const debounceMs = key === "b4_prd" ? 10000 : 1000;
     pendingSaves.current[key] = json;
-    // Reset timer alleen als er nog geen flush gepland is voor deze batch
     if(saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(flushSaves, debounceMs);
   }, [user, flushSaves]);
