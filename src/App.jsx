@@ -235,8 +235,7 @@ async function kboLookup(vatNumber, cbeApiKey = null) {
           baseResult.naam = d.name;
           baseResult.bedrijf = d.name;
           if(d.address) {
-            const parts = d.address.replace(/
-/g, ", ").split(",").map(s=>s.trim()).filter(Boolean);
+            const parts = d.address.replace(/\n/g, ", ").split(",").map(s=>s.trim()).filter(Boolean);
             if(parts.length >= 2) { baseResult.gemeente = parts[parts.length-1]; baseResult.adres = parts.slice(0,-1).join(", "); }
             else { baseResult.adres = d.address; }
           }
