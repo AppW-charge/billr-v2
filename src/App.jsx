@@ -168,10 +168,12 @@ const BILLIT_API = {
 };
 
 function getBillitUrl(settings) {
-  const env = settings?.integraties?.billitEnv || "production";
-  return env === "sandbox" 
-    ? "https://sandbox.billit.be/api" 
-    : "https://app.billit.be/api";
+  // Gebruik altijd de lokale proxy — geen directe Billit API calls (CORS)
+  // /api/billit is een Cloudflare Pages Function die proxyt naar Billit
+  return "/api/billit-proxy";
+}
+function getBillitEnv(settings) {
+  return settings?.integraties?.billitEnv || "production";
 }
 
 function getBillitKey(settings) {
@@ -188,95 +190,46 @@ function billitHeaders(settings) {
   };
 }
 
-// ── KBO Lookup — meerdere bronnen voor maximale dekking ──
+// ── KBO Lookup — via /api/kbo Cloudflare Pages Function (geen CORS) ──
 async function kboLookup(vatNumber, cbeApiKey = null) {
   console.log("[KBO] ==> Start lookup:", vatNumber);
   try {
     const cleaned = String(vatNumber || "").toUpperCase().replace(/^BE\s*/i, '').replace(/[^0-9]/g, '');
     if(cleaned.length !== 10) { console.error("[KBO] Invalid length:", cleaned.length); return null; }
-    
-    // Modulo 97 validatie
+
+    // Modulo 97 validatie lokaal (snel, geen netwerk nodig)
     const num = parseInt(cleaned.slice(0, 8));
     const checkDigits = parseInt(cleaned.slice(8, 10));
     const calculated = 97 - (num % 97);
     if(calculated !== checkDigits) { console.error("[KBO] BTW failed modulo 97"); return null; }
-    
+
     const formattedBTW = `BE ${cleaned.slice(0,4)}.${cleaned.slice(4,7)}.${cleaned.slice(7)}`;
     const baseResult = { naam:"", bedrijf:"", adres:"", gemeente:"", btwnr:formattedBTW, tel:"", email:"", peppolId:`0208:${cleaned}` };
 
-    // ── BRON 1: EU VIES API (officieel, geen CORS, geen key nodig) ──
+    // Proxy via /api/kbo (Cloudflare Pages Function — geen CORS)
     try {
-      const r = await fetch(`https://ec.europa.eu/taxation_customs/vies/rest-api/ms/BE/vat/${cleaned}`, {
-        headers: { 'Accept': 'application/json' }
-      });
+      const params = new URLSearchParams({ nr: cleaned });
+      if(cbeApiKey) params.set("key", cbeApiKey);
+      const r = await fetch(`/api/kbo?${params.toString()}`);
       if(r.ok) {
         const d = await r.json();
-        // VIES response: { name, address, valid, ... }
-        if(d?.name && d.name !== "---") {
-          baseResult.naam = d.name || "";
-          baseResult.bedrijf = d.name || "";
-          // VIES geeft adres als één string — splits op komma of newline
-          if(d.address) {
-            const parts = d.address.replace(/\n/g,", ").split(",").map(s=>s.trim()).filter(Boolean);
-            // Belgisch formaat: "STRAAT NR", "POSTCODE STAD"
-            if(parts.length >= 2) {
-              baseResult.adres = parts.slice(0, parts.length-1).join(", ");
-              baseResult.gemeente = parts[parts.length-1];
-            } else {
-              baseResult.adres = d.address;
-            }
-          }
-          console.log("[KBO] ✓ VIES SUCCESS:", baseResult.naam);
-          return baseResult;
+        if(d?.error) { console.warn("[KBO] Proxy error:", d.error); }
+        else {
+          const merged = { ...baseResult, ...d };
+          console.log(`[KBO] ✓ SUCCESS via ${d.bron||"proxy"}:`, merged.naam||"(geen naam)");
+          return merged;
         }
+      } else {
+        console.warn("[KBO] Proxy HTTP:", r.status);
       }
-    } catch(e) { console.warn("[KBO] VIES failed:", e.message); }
+    } catch(e) { console.warn("[KBO] Proxy failed:", e.message); }
 
-    // ── BRON 2: cbeapi.be (met API key) ──
-    if(cbeApiKey) {
-      try {
-        const cbeResp = await fetch(`https://cbeapi.be/api/enterprise/${cleaned}`, {
-          headers: { 'Authorization': `Bearer ${cbeApiKey}`, 'Accept': 'application/json' }
-        });
-        if(cbeResp.ok) {
-          const d = await cbeResp.json();
-          if(d?.denomination || d?.name) {
-            baseResult.naam = d.denomination || d.name || "";
-            baseResult.bedrijf = d.name || d.denomination || "";
-            baseResult.adres = d.address?.street || "";
-            baseResult.gemeente = `${d.address?.zipcode||""} ${d.address?.city||""}`.trim();
-            baseResult.tel = d.contact?.phone || "";
-            baseResult.email = d.contact?.email || "";
-            console.log("[KBO] ✓ cbeapi.be SUCCESS:", baseResult.naam);
-            return baseResult;
-          }
-        }
-      } catch(e) { console.warn("[KBO] cbeapi.be failed:", e.message); }
-    }
-
-    // ── BRON 3: cbeapi.be zonder key (beperkte toegang) ──
-    try {
-      const r2 = await fetch(`https://cbeapi.be/api/enterprise/${cleaned}`, {
-        headers: { 'Accept': 'application/json' }
-      });
-      if(r2.ok) {
-        const d = await r2.json();
-        if(d?.denomination || d?.name) {
-          baseResult.naam = d.denomination || d.name || "";
-          baseResult.bedrijf = d.name || d.denomination || "";
-          baseResult.adres = d.address?.street || "";
-          baseResult.gemeente = `${d.address?.zipcode||""} ${d.address?.city||""}`.trim();
-          console.log("[KBO] ✓ cbeapi.be (no key) SUCCESS:", baseResult.naam);
-          return baseResult;
-        }
-      }
-    } catch(e) { console.warn("[KBO] cbeapi.be (no key) failed:", e.message); }
-
-    // Alle bronnen gefaald — BTW is geldig maar geen gegevens gevonden
-    console.warn("[KBO] Alle bronnen gefaald voor:", cleaned);
-    return baseResult; // Geeft geldig BTW-nummer terug, naam leeg
+    // Fallback: geef toch geldig BTW-nummer terug
+    console.warn("[KBO] Fallback — BTW geldig maar geen bedrijfsdata");
+    return baseResult;
   } catch(err) { console.error("[KBO] Fatal error:", err); return null; }
 }
+
 
 // ── Billit: Check PEPPOL status van een klant ──
 async function checkPeppolBillit(vatNumber, settings) {
@@ -284,11 +237,13 @@ async function checkPeppolBillit(vatNumber, settings) {
   if(!apiKey) return { registered: false, reason: "Geen Billit API key" };
   
   const cleaned = String(vatNumber||"").replace(/\s/g,"").replace(/\./g,"");
-  // Billit accepteert zowel BE0437... als 0437...
   const query = cleaned.startsWith("BE") ? cleaned : `BE${cleaned}`;
+  const env = getBillitEnv(settings);
   
   try {
-    const resp = await fetch(`${getBillitUrl(settings)}/v1/peppol/participantInformation/${query}`, {
+    // Via /api/billit Cloudflare proxy — geen CORS issues
+    const path = `/v1/peppol/participantInformation/${query}`;
+    const resp = await fetch(`/api/billit?path=${encodeURIComponent(path)}&env=${env}`, {
       headers: billitHeaders(settings)
     });
     if(resp.ok) {
@@ -361,14 +316,14 @@ async function sendViaBillit(factuur, settings) {
   const apiKey = getBillitKey(settings);
   if(!apiKey) throw new Error("Geen Billit API key ingesteld");
   
-  const baseUrl = getBillitUrl(settings);
   const headers = billitHeaders(settings);
   
   // Stap 1: Factuur aanmaken in Billit
   console.log("[BILLIT] Stap 1: Factuur aanmaken...");
   const order = billrToBillitOrder(factuur, settings);
   
-  const createResp = await fetch(`${baseUrl}/v1/order`, {
+  const env = getBillitEnv(settings);
+  const createResp = await fetch(`/api/billit?path=${encodeURIComponent("/v1/order")}&env=${env}`, {
     method: "POST",
     headers,
     body: JSON.stringify(order)
@@ -386,7 +341,7 @@ async function sendViaBillit(factuur, settings) {
   
   // Stap 2: Versturen via Peppol
   console.log("[BILLIT] Stap 2: Versturen via Peppol...");
-  const sendResp = await fetch(`${baseUrl}/v1/order/commands/send`, {
+  const sendResp = await fetch(`/api/billit?path=${encodeURIComponent("/v1/order/commands/send")}&env=${env}`, {
     method: "POST",
     headers,
     body: JSON.stringify({
@@ -409,15 +364,18 @@ async function sendViaBillit(factuur, settings) {
 async function testBillitConnection(settings) {
   const apiKey = getBillitKey(settings);
   if(!apiKey) return { ok: false, error: "Geen API key" };
+  const env = getBillitEnv(settings);
   try {
-    const resp = await fetch(`${getBillitUrl(settings)}/v1`, {
-      method: "POST",
+    const resp = await fetch(`/api/billit?path=${encodeURIComponent("/v1/account")}&env=${env}`, {
       headers: billitHeaders(settings)
     });
-    if(resp.ok) return { ok: true };
+    if(resp.ok) {
+      const data = await resp.json();
+      return { ok: true, data };
+    }
     return { ok: false, error: `HTTP ${resp.status}` };
-  } catch(err) {
-    return { ok: false, error: err.message };
+  } catch(e) {
+    return { ok: false, error: e.message };
   }
 }
 
