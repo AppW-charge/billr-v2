@@ -190,14 +190,13 @@ function billitHeaders(settings) {
   };
 }
 
-// ── KBO Lookup — via /api/kbo Cloudflare Pages Function (geen CORS) ──
+// ── KBO Lookup — meerdere bronnen, publieke CORS proxy als fallback ──
 async function kboLookup(vatNumber, cbeApiKey = null) {
   console.log("[KBO] ==> Start lookup:", vatNumber);
   try {
     const cleaned = String(vatNumber || "").toUpperCase().replace(/^BE\s*/i, '').replace(/[^0-9]/g, '');
     if(cleaned.length !== 10) { console.error("[KBO] Invalid length:", cleaned.length); return null; }
 
-    // Modulo 97 validatie lokaal (snel, geen netwerk nodig)
     const num = parseInt(cleaned.slice(0, 8));
     const checkDigits = parseInt(cleaned.slice(8, 10));
     const calculated = 97 - (num % 97);
@@ -206,47 +205,67 @@ async function kboLookup(vatNumber, cbeApiKey = null) {
     const formattedBTW = `BE ${cleaned.slice(0,4)}.${cleaned.slice(4,7)}.${cleaned.slice(7)}`;
     const baseResult = { naam:"", bedrijf:"", adres:"", gemeente:"", btwnr:formattedBTW, tel:"", email:"", peppolId:`0208:${cleaned}` };
 
-    // Proxy via /api/kbo (Cloudflare Pages Function — geen CORS)
+    // BRON 1: eigen CF proxy
     try {
       const params = new URLSearchParams({ nr: cleaned });
       if(cbeApiKey) params.set("key", cbeApiKey);
       const r = await fetch(`/api/kbo?${params.toString()}`);
       if(r.ok) {
         const d = await r.json();
-        if(d?.error) { console.warn("[KBO] Proxy error:", d.error); }
-        else {
-          const merged = { ...baseResult, ...d };
-          console.log(`[KBO] ✓ SUCCESS via ${d.bron||"proxy"}:`, merged.naam||"(geen naam)");
-          return merged;
+        if(!d.error) {
+          console.log(`[KBO] \u2713 SUCCESS via proxy (${d.bron||"?"}):`, d.naam||"(geen naam)");
+          return { ...baseResult, ...d };
         }
       } else {
-        console.warn("[KBO] Proxy HTTP:", r.status, "- probeer directe VIES call");
+        console.warn("[KBO] Proxy HTTP:", r.status, "- probeer CORS proxy");
       }
     } catch(e) { console.warn("[KBO] Proxy failed:", e.message); }
 
-    // Directe fallback: VIES via cors-anywhere of alternatieven
-    // (werkt mogelijk niet in alle browsers door CORS, maar probeer toch)
+    // BRON 2: VIES via corsproxy.io (publieke CORS proxy)
     try {
-      const viesUrl = `https://ec.europa.eu/taxation_customs/vies/rest-api/ms/BE/vat/${cleaned}`;
-      const vr = await fetch(viesUrl, { headers: { Accept: "application/json" } });
-      if(vr.ok) {
-        const d = await vr.json();
-        if(d?.valid && d?.name && d.name !== "---") {
-          baseResult.naam = d.name;
-          baseResult.bedrijf = d.name;
-          if(d.address) {
-            const parts = d.address.replace(/\n/g, ", ").split(",").map(s=>s.trim()).filter(Boolean);
+      const viesUrl = encodeURIComponent(`https://ec.europa.eu/taxation_customs/vies/rest-api/ms/BE/vat/${cleaned}`);
+      const r2 = await fetch(`https://corsproxy.io/?${viesUrl}`, {
+        headers: { "Accept": "application/json", "x-requested-with": "XMLHttpRequest" }
+      });
+      if(r2.ok) {
+        const d2 = await r2.json();
+        if(d2 && d2.valid && d2.name && d2.name !== "---") {
+          baseResult.naam = d2.name;
+          baseResult.bedrijf = d2.name;
+          if(d2.address) {
+            const parts = d2.address.replace(/\n/g, ", ").split(",").map(s=>s.trim()).filter(Boolean);
             if(parts.length >= 2) { baseResult.gemeente = parts[parts.length-1]; baseResult.adres = parts.slice(0,-1).join(", "); }
-            else { baseResult.adres = d.address; }
+            else { baseResult.adres = d2.address; }
           }
-          console.log("[KBO] ✓ VIES direct:", baseResult.naam);
+          console.log("[KBO] \u2713 SUCCESS via corsproxy+VIES:", baseResult.naam);
           return baseResult;
         }
       }
-    } catch(e2) { console.warn("[KBO] VIES direct ook gefaald:", e2.message); }
+    } catch(e2) { console.warn("[KBO] corsproxy VIES failed:", e2.message); }
 
-    // Alle bronnen gefaald — geef toch geldig BTW-nummer terug
-    console.warn("[KBO] Alle bronnen gefaald — BTW geldig maar geen bedrijfsdata");
+    // BRON 3: cbeapi.be via corsproxy.io
+    try {
+      const cbeUrl = encodeURIComponent(`https://cbeapi.be/api/enterprise/${cleaned}`);
+      const hdrs = cbeApiKey
+        ? { "Accept": "application/json", "Authorization": `Bearer ${cbeApiKey}`, "x-requested-with": "XMLHttpRequest" }
+        : { "Accept": "application/json", "x-requested-with": "XMLHttpRequest" };
+      const r3 = await fetch(`https://corsproxy.io/?${cbeUrl}`, { headers: hdrs });
+      if(r3.ok) {
+        const d3 = await r3.json();
+        if(d3 && (d3.denomination || d3.name)) {
+          baseResult.naam = d3.denomination || d3.name || "";
+          baseResult.bedrijf = d3.name || d3.denomination || "";
+          baseResult.adres = [d3.address?.street, d3.address?.houseNumber].filter(Boolean).join(" ");
+          baseResult.gemeente = `${d3.address?.zipcode||""} ${d3.address?.city||""}`.trim();
+          baseResult.tel = d3.contact?.phone || "";
+          baseResult.email = d3.contact?.email || "";
+          console.log("[KBO] \u2713 SUCCESS via corsproxy+cbeapi:", baseResult.naam);
+          return baseResult;
+        }
+      }
+    } catch(e3) { console.warn("[KBO] corsproxy cbeapi failed:", e3.message); }
+
+    console.warn("[KBO] Alle bronnen gefaald \u2014 BTW geldig maar geen bedrijfsdata");
     return baseResult;
   } catch(err) { console.error("[KBO] Fatal error:", err); return null; }
 }
