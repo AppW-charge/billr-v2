@@ -1549,14 +1549,9 @@ export default function App() {
     _setOffertes(prev => {
       const next = typeof valOrFn === 'function' ? valOrFn(prev) : valOrFn;
       if(!Array.isArray(next)) return next;
-      const PRIO = {verstuurd:5,goedgekeurd:6,gefactureerd:7,afgedrukt:4,afgewezen:3,concept:1};
-      const seen = new Map();
-      next.forEach(o => {
-        const key = o.nummer || o.id;
-        if(!seen.has(key)) { seen.set(key, o); return; }
-        if((PRIO[o.status]||0) > (PRIO[seen.get(key).status]||0)) seen.set(key, o);
-      });
-      return [...seen.values()];
+      // Dedup alleen op ID — zelfde id 2x geladen via sync
+      const seen = new Set();
+      return next.filter(o => { if(seen.has(o.id)) return false; seen.add(o.id); return true; });
     });
   }, []);
   const [facturen, setFacturen] = useState([]);
