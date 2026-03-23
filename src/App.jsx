@@ -1916,8 +1916,8 @@ export default function App() {
         });
       }
     } catch(e) { console.warn("Offerte tracking fetch failed:", e); }
-  }, [offertes]); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => { if(user) fetchOfferteTracking(); }, [user, fetchOfferteTracking]);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if(user) fetchOfferteTracking(); }, [user]);
   // Auto-plan prompt: als offerte net op goedgekeurd gezet (door klant via tracking) en nog niet ingepland
   const autoPromptedRef = useRef(new Set());
   useEffect(() => {
@@ -1935,14 +1935,12 @@ export default function App() {
       setTimeout(() => setPlanningModal(nieuwGoedgekeurd[0]), 600);
     }
   }, [offertes, user]);
-  // Auto-poll tracking elke 60s op dashboard EN offertes pagina
+  // Auto-poll tracking elke 60s enkel op dashboard
   useEffect(() => {
-    if(!user) return;
-    if(pg !== "dashboard" && pg !== "offertes") return;
-    fetchOfferteTracking(); // Direct bij navigatie
-    const iv = setInterval(fetchOfferteTracking, 30000); // elke 30s ipv 60s
+    if(!user || pg !== "dashboard") return;
+    const iv = setInterval(fetchOfferteTracking, 60000);
     return () => clearInterval(iv);
-  }, [user, pg, fetchOfferteTracking]);
+  }, [user, pg]);
 
 
   // saveKey: dual-write to Supabase + localStorage
@@ -1952,6 +1950,7 @@ export default function App() {
   // Zo gaan fiches nooit verloren bij localStorage strips of Supabase timeouts
   const pendingSaves = useRef({});
   const saveTimer = useRef(null);
+  const lastSavedJson = useRef({}); // dedup: sla hash op van laatste gesaved waarde per key
   // localTimestamps: bewaard in localStorage zodat page reload de timestamps niet verliest
   const localTimestamps = useRef((() => {
     try { const r=localStorage.getItem("billr_ts"); return r?JSON.parse(r):{}; } catch(_){ return {}; }
@@ -2001,7 +2000,11 @@ export default function App() {
     const batch = {...pendingSaves.current};
     pendingSaves.current = {};
     for(const [key, json] of Object.entries(batch)) {
-      try { await sbSet(key, json, user.id); } catch(_){}
+      try {
+        const ok = await sbSet(key, json, user.id);
+        // Als save mislukt: reset dedup zodat volgende poging wel doorgaat
+        if(!ok) delete lastSavedJson.current[key];
+      } catch(_){ delete lastSavedJson.current[key]; }
     }
   }, [user]);
 
@@ -2013,6 +2016,10 @@ export default function App() {
     const stripped = stripBase64(key, val);
     const json = JSON.stringify(stripped);
     
+    // Dedup: sla niet op als data niet gewijzigd is
+    if(lastSavedJson.current[key] === json) return;
+    lastSavedJson.current[key] = json;
+
     // localStorage: meteen (snel, lokaal)
     try { localStorage.setItem(key, json); } catch(e) { try { localStorage.removeItem(key); } catch(_){} }
     
