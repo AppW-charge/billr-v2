@@ -1656,8 +1656,8 @@ export default function App() {
             }
           } catch(_) { setProducten(restoreFicheCache(prods)); }
         }
-        if(sbData["b4_off"]) setOffertes(parse(sbData["b4_off"], []));
-        if(sbData["b4_fct"]) setFacturen(parse(sbData["b4_fct"], []));
+        if(sbData["b4_off"]) { const offs=parse(sbData["b4_off"],[]); setOffertes(offs); console.log(`✅ Offertes geladen: ${offs.length}`); }
+        if(sbData["b4_fct"]) { const fcts=parse(sbData["b4_fct"],[]); setFacturen(fcts); console.log(`✅ Facturen geladen: ${fcts.length}`); }
         if(sbData["b4_cn"])  setCreditnotas(parse(sbData["b4_cn"], []));
         if(sbData["b4_am"])  setAanmaningen(parse(sbData["b4_am"], []));
         if(sbData["b4_bt"])  setBetalingen(parse(sbData["b4_bt"], []));
@@ -2286,13 +2286,16 @@ export default function App() {
     if(finalData.id && offertes.find(o=>o.id===finalData.id)){
       localTimestamps.current["b4_off"]=Date.now();
       try{localStorage.setItem("billr_ts",JSON.stringify(localTimestamps.current));}catch(_){}
-      setOffertes(p=>p.map(o=>o.id===finalData.id?{...o,...finalData,aangemaakt:o.aangemaakt||finalData.aangemaakt}:o)); notify("Offerte opgeslagen ✓");
+      // Bewaar bestaande log + voeg "Gewijzigd" toe; overschrijf log NIET via spread
+      setOffertes(p=>p.map(o=>o.id===finalData.id?{...o,...finalData,log:[...(o.log||[]),logEntry("📝 Gewijzigd")],aangemaakt:o.aangemaakt||finalData.aangemaakt}:o)); notify("Offerte opgeslagen ✓");
     } else {
-      const n={...finalData,id:uid(),nummer:finalData.nummerOverride||nextNr("OFF",offertes,"nummer"),datum:finalData.datum||today(),aangemaakt:new Date().toISOString(),status:"concept"};
+      const n={...finalData,id:uid(),nummer:finalData.nummerOverride||nextNr("OFF",offertes,"nummer"),datum:finalData.datum||today(),aangemaakt:new Date().toISOString(),status:"concept",log:[{ts:new Date().toISOString(),actie:"✨ Offerte aangemaakt"}]};
       // Update timestamp VOOR setOffertes zodat mobile sync niet overschrijft
       localTimestamps.current["b4_off"]=Date.now();
       try{localStorage.setItem("billr_ts",JSON.stringify(localTimestamps.current));}catch(_){}
       setOffertes(p=>[n,...p]); notify("Offerte aangemaakt ✓");
+      // Wis tegenNummer_off na gebruik (éénmalige override)
+      if(settings?.voorwaarden?.tegenNummer_off) setSettings(s=>({...s,voorwaarden:{...s.voorwaarden,tegenNummer_off:""}}));
     }
     setWizOpen(false); setEditOff(null);
   };
