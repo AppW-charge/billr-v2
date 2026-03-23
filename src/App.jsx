@@ -1895,10 +1895,10 @@ export default function App() {
   useEffect(() => {
     if(!user) return;
     const nieuwGoedgekeurd = offertes.filter(o =>
-      o.status === "goedgekeurd" &&
+      (o.status === "goedgekeurd" || o.klantAkkoord) &&
       !o.planDatum &&
-      !autoPromptedRef.current.has(o.id) &&
-      o.log?.some(l => l.actie?.includes("goedgekeurd"))
+      !o.planBevestigingVerstuurd &&
+      !autoPromptedRef.current.has(o.id)
     );
     if(nieuwGoedgekeurd.length > 0) {
       // Open planningModal voor eerste goedgekeurde zonder datum
@@ -2329,20 +2329,19 @@ export default function App() {
     return `${customPre}-${y}-${String(next).padStart(3,"0")}`;
   };
   const logEntry = (actie) => ({ts: new Date().toISOString(), actie});
-  const updOff = (id,upd) => setOffertes(p=>p.map(o=>o.id===id?{...o,...upd,log:[...(o.log||[]),logEntry(upd.status?"Status → "+(OFF_STATUS[upd.status]?.l||upd.status):upd.logActie||"Gewijzigd")]}:o));
-  const updFact = (id,upd) => setFacturen(p=>p.map(f=>f.id===id?{...f,...upd,log:[...(f.log||[]),logEntry(upd.status?"Status → "+(FACT_STATUS[upd.status]?.l||upd.status):upd.logActie||"Gewijzigd")]}:f));
+  const updOff = (id,upd) => { setOffertes(p=>p.map(o=>o.id===id?{...o,...upd,log:[...(o.log||[]),logEntry(upd.status?"Status → "+(OFF_STATUS[upd.status]?.l||upd.status):upd.logActie||"Gewijzigd")]}:o)); setTimeout(flushSaves, 500); };
+  const updFact = (id,upd) => { setFacturen(p=>p.map(f=>f.id===id?{...f,...upd,log:[...(f.log||[]),logEntry(upd.status?"Status → "+(FACT_STATUS[upd.status]?.l||upd.status):upd.logActie||"Gewijzigd")]}:f)); setTimeout(flushSaves, 500); };
   // Wrapper: bij goedkeuring automatisch PlanningModal openen
   const handleOffStatus = (id, upd) => {
     updOff(id, upd);
     if(upd.status === "goedgekeurd") {
-      // Kleine delay zodat state update eerst verwerkt is
       setTimeout(() => {
         setOffertes(prev => {
           const off = prev.find(o => o.id === id);
-          if(off && !off.planDatum) setPlanningModal({...off, status:"goedgekeurd"});
+          if(off && !off.planDatum) setPlanningModal(off);
           return prev;
         });
-      }, 300);
+      }, 400);
     }
   };
   const bulkUpdOff = (ids,upd) => setOffertes(p=>p.map(o=>ids.includes(o.id)?{...o,...upd,log:[...(o.log||[]),logEntry(upd.status?"Bulk → "+(OFF_STATUS[upd.status]?.l||upd.status):"Bulk gewijzigd")]}:o));
@@ -3115,7 +3114,7 @@ export default function App() {
         onSend={(success)=>{
           if(success) {
             if(emailModal.type==="offerte") {
-              updOff(emailModal.doc.id, {status:"verstuurd", logActie:`📧 Verzonden`});
+              updOff(emailModal.doc.id, {status:"verstuurd", logActie:`📧 Verzonden naar ${emailModal.doc.klant?.email||"klant"}`});
               shareOfferte(emailModal.doc); // Sla snapshot op voor publieke offerte.html
             } else {
               updFact(emailModal.doc.id, {status:"verstuurd", logActie:`📧 Verzonden`});
