@@ -1644,8 +1644,16 @@ export default function App() {
         // Producten: laden uit Supabase, fiches via localStorage cache (geen extra query = minder egress)
         if(sbData["b4_prd"]) {
           const prods = parse(sbData["b4_prd"], INIT_PRODUCTS);
-          setProducten(restoreFicheCache(prods)); // gebruikt billr_fiche_cache uit localStorage
-          console.log("Producten geladen: " + prods.length);
+          try {
+            const fr = await sb.from("product_fiches").select("product_id,fiches").eq("user_id", u.id);
+            if(fr.data && fr.data.length > 0) {
+              const sfc = {};
+              fr.data.forEach(r => { if(r.fiches && r.fiches.some(f=>f.data)) sfc[r.product_id] = r.fiches; });
+              setProducten(restoreFicheCache(prods, sfc));
+              console.log("\u2705 Fiches geladen: " + Object.keys(sfc).length + " producten");
+            } else { setProducten(restoreFicheCache(prods)); }
+          } catch(_) { setProducten(restoreFicheCache(prods)); }
+          console.log("\u2705 Producten geladen: " + prods.length);
         }
         if(sbData["b4_off"]) {
           const raw=parse(sbData["b4_off"],[]);
@@ -1707,6 +1715,9 @@ export default function App() {
 
       // Nu mogen saves plaatsvinden
       dataReady.current = true;
+      // Reset dedup cache zodat eerste save na load altijd doorgaat
+      // (voorkomt dat gewijzigde data niet gesaved wordt na herlaad)
+      if(window.__billrLastSaved) window.__billrLastSaved = {};
 
 
       // Migratie fiches: eenmalig, enkel als nog niet gedaan deze week
@@ -1947,6 +1958,8 @@ export default function App() {
   const pendingSaves = useRef({});
   const saveTimer = useRef(null);
   const lastSavedJson = useRef({}); // dedup: sla hash op van laatste gesaved waarde per key
+  // Sync ref with window object for reset capability
+  if(!window.__billrLastSaved) window.__billrLastSaved = {};
   // localTimestamps: bewaard in localStorage zodat page reload de timestamps niet verliest
   const localTimestamps = useRef((() => {
     try { const r=localStorage.getItem("billr_ts"); return r?JSON.parse(r):{}; } catch(_){ return {}; }
@@ -2432,9 +2445,24 @@ export default function App() {
       const dc = sj.accentKleur || settings?.thema?.kleur || bed.kleur || "#1a2e4a";
 
       // Laad fiche cache: ALTIJD uit product_fiches tabel (authoritative source)
-      // Fiches uit localStorage cache (al gesynchroniseerd bij product opslaan)
+      // Fiches: combineer localStorage cache + Supabase product_fiches tabel
       let ficheCache = {};
       try { const lsRaw = localStorage.getItem("billr_fiche_cache"); if(lsRaw) ficheCache = JSON.parse(lsRaw); } catch(_){}
+      // Haal ook fiches op uit state (producten geladen bij startup)
+      producten.forEach(p => {
+        if(p.technischeFiches && p.technischeFiches.some(f=>f.data) && !ficheCache[p.id]) {
+          ficheCache[p.id] = p.technischeFiches.filter(f=>f.data);
+        }
+      });
+      // Fetch rechtstreeks uit product_fiches als cache leeg is voor producten in offerte
+      try {
+        const productIds = (offerte.lijnen||[]).map(l=>l.productId).filter(Boolean);
+        const missing = productIds.filter(pid => !ficheCache[pid] || ficheCache[pid].length === 0);
+        if(missing.length > 0 && user) {
+          const fr = await sb.from("product_fiches").select("product_id,fiches").eq("user_id",user.id).in("product_id",missing);
+          if(fr.data) fr.data.forEach(r=>{ if(r.fiches && r.fiches.some(f=>f.data)) ficheCache[r.product_id] = r.fiches; });
+        }
+      } catch(_){}
 
       // Bouw lijnen ZONDER base64 voor het hoofdrecord (klein → geen timeout)
       const cleanLijnen = (offerte.lijnen||[]).map(l => {
@@ -3115,7 +3143,7 @@ export default function App() {
           if(success) {
             if(emailModal.type==="offerte") {
               updOff(emailModal.doc.id, {status:"verstuurd", logActie:`📧 Verzonden naar ${emailModal.doc.klant?.email||"klant"}`});
-              shareOfferte(emailModal.doc); // Sla snapshot op voor publieke offerte.html
+              await shareOfferte(emailModal.doc); // Sla snapshot op voor publieke offerte.html (await zodat fiches mee zijn)
             } else {
               updFact(emailModal.doc.id, {status:"verstuurd", logActie:`📧 Verzonden`});
             }
