@@ -6460,16 +6460,18 @@ function KlantModal({klant,onSave,onClose}) {
         return;
       }
       
-      // Scenario 2: BTW geldig maar geen data gevonden
+      // Scenario 2: BTW geldig maar proxy tijdelijk down
       if(!kboData.naam && kboData.btwnr){
-        setKboError("BTW-nummer is geldig, maar bedrijfsgegevens konden niet worden opgehaald. Vul handmatig in.");
-        // Zet wel het geformatteerde BTW-nummer
+        let peppolFallback = false;
+        try { const pr = await checkPeppolBillit("BE"+nr, settings); peppolFallback = pr.registered; } catch(_){}
         setForm(p=>({
           ...p,
           btwnr: kboData.btwnr,
           type: "bedrijf",
-          peppolId: kboData.peppolId
+          peppolId: kboData.peppolId,
+          peppolActief: peppolFallback
         }));
+        setKboError("BTW geldig — bedrijfsgegevens tijdelijk niet beschikbaar. Vul naam/adres handmatig in.");
         setKboLoading(false);
         return;
       }
