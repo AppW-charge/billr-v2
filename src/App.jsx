@@ -3139,7 +3139,7 @@ export default function App() {
         type={emailModal.type} 
         settings={settings} 
         onClose={()=>setEmailModal(null)} 
-        onSend={(success)=>{
+        onSend={async (success)=>{
           if(success) {
             if(emailModal.type==="offerte") {
               updOff(emailModal.doc.id, {status:"verstuurd", logActie:`📧 Verzonden naar ${emailModal.doc.klant?.email||"klant"}`});
