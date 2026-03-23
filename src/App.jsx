@@ -1696,7 +1696,7 @@ export default function App() {
               if(retry["b4_fct"]) setFacturen(p2("b4_fct",[]));
               if(retry["b4_prd"]) {
                 setProducten(restoreFicheCache(p2("b4_prd",[])));
-              }}
+              }
               if(retry["b4_cn"])  setCreditnotas(p2("b4_cn",[]));
               if(retry["b4_ga"])  setGaranties(p2("b4_ga",[]));
               Object.entries(retry).forEach(([k,v])=>{ try{localStorage.setItem(k,v);}catch(_){} });
