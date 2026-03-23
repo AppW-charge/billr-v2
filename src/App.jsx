@@ -1779,15 +1779,21 @@ export default function App() {
         });
         setOfferteResponses(grouped);
 
-        // Bouw nummer→shareId mapping (offerte_shares heeft nu nummer kolom)
+        // Bouw nummer→shareId mapping
         let nummerToShareId = {};
         try {
           const shareIds = Object.keys(grouped).slice(0,20);
           if(shareIds.length > 0) {
-            const {data:shares} = await sb.from('offerte_shares').select('id,nummer').in('id', shareIds);
-            if(shares) shares.forEach(s=>{ if(s.nummer) nummerToShareId[s.nummer]=s.id; });
+            // Probeer eerst nummer kolom, dan fallback naar offerte_data
+            const {data:shares} = await sb.from('offerte_shares')
+              .select('id,nummer,offerte_data')
+              .in('id', shareIds);
+            if(shares) shares.forEach(s=>{ 
+              const nr = s.nummer || s.offerte_data?.nummer;
+              if(nr) nummerToShareId[nr]=s.id; 
+            });
           }
-        } catch(_){}
+        } catch(e){ console.warn('shareMap:', e.message); }
 
         // Auto-sync: match op id OF via nummer (cross-device)
         setOffertes(prev => {
@@ -2149,7 +2155,16 @@ export default function App() {
             setProducten(restoreFicheCache(p("b4_prd",[]), sfc));
           } catch(_) { setProducten(restoreFicheCache(p("b4_prd",[]))); }
         }
-        if(allData["b4_off"] && sbNewer("b4_off")) { const v=p("b4_off",null); if(v!==null) setOffertes(v); }
+        if(allData["b4_off"] && sbNewer("b4_off")) { 
+          const v=p("b4_off",null); 
+          if(v!==null) {
+            // Dedup op nummer bij mobile sync
+            const PRIO={verstuurd:5,goedgekeurd:6,gefactureerd:7,afgedrukt:4,afgewezen:3,concept:1};
+            const seen=new Map();
+            v.forEach(o=>{const k=o.nummer||o.id;if(!seen.has(k)||(PRIO[o.status]||0)>(PRIO[seen.get(k).status]||0))seen.set(k,o);});
+            setOffertes([...seen.values()]); 
+          }
+        }
         if(allData["b4_fct"] && sbNewer("b4_fct")) { const v=p("b4_fct",null); if(v!==null) setFacturen(v); }
         if(allData["b4_cn"]  && sbNewer("b4_cn"))  setCreditnotas(p("b4_cn",[]));
         if(allData["b4_am"]  && sbNewer("b4_am"))  setAanmaningen(p("b4_am",[]));
@@ -2269,9 +2284,14 @@ export default function App() {
     const finalData = {...data, lijnen: updatedLijnen};
     
     if(finalData.id && offertes.find(o=>o.id===finalData.id)){
+      localTimestamps.current["b4_off"]=Date.now();
+      try{localStorage.setItem("billr_ts",JSON.stringify(localTimestamps.current));}catch(_){}
       setOffertes(p=>p.map(o=>o.id===finalData.id?{...o,...finalData,aangemaakt:o.aangemaakt||finalData.aangemaakt}:o)); notify("Offerte opgeslagen ✓");
     } else {
       const n={...finalData,id:uid(),nummer:finalData.nummerOverride||nextNr("OFF",offertes,"nummer"),datum:finalData.datum||today(),aangemaakt:new Date().toISOString(),status:"concept"};
+      // Update timestamp VOOR setOffertes zodat mobile sync niet overschrijft
+      localTimestamps.current["b4_off"]=Date.now();
+      try{localStorage.setItem("billr_ts",JSON.stringify(localTimestamps.current));}catch(_){}
       setOffertes(p=>[n,...p]); notify("Offerte aangemaakt ✓");
     }
     setWizOpen(false); setEditOff(null);
