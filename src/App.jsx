@@ -220,12 +220,34 @@ async function kboLookup(vatNumber, cbeApiKey = null) {
           return merged;
         }
       } else {
-        console.warn("[KBO] Proxy HTTP:", r.status);
+        console.warn("[KBO] Proxy HTTP:", r.status, "- probeer directe VIES call");
       }
     } catch(e) { console.warn("[KBO] Proxy failed:", e.message); }
 
-    // Fallback: geef toch geldig BTW-nummer terug
-    console.warn("[KBO] Fallback — BTW geldig maar geen bedrijfsdata");
+    // Directe fallback: VIES via cors-anywhere of alternatieven
+    // (werkt mogelijk niet in alle browsers door CORS, maar probeer toch)
+    try {
+      const viesUrl = `https://ec.europa.eu/taxation_customs/vies/rest-api/ms/BE/vat/${cleaned}`;
+      const vr = await fetch(viesUrl, { headers: { Accept: "application/json" } });
+      if(vr.ok) {
+        const d = await vr.json();
+        if(d?.valid && d?.name && d.name !== "---") {
+          baseResult.naam = d.name;
+          baseResult.bedrijf = d.name;
+          if(d.address) {
+            const parts = d.address.replace(/
+/g, ", ").split(",").map(s=>s.trim()).filter(Boolean);
+            if(parts.length >= 2) { baseResult.gemeente = parts[parts.length-1]; baseResult.adres = parts.slice(0,-1).join(", "); }
+            else { baseResult.adres = d.address; }
+          }
+          console.log("[KBO] ✓ VIES direct:", baseResult.naam);
+          return baseResult;
+        }
+      }
+    } catch(e2) { console.warn("[KBO] VIES direct ook gefaald:", e2.message); }
+
+    // Alle bronnen gefaald — geef toch geldig BTW-nummer terug
+    console.warn("[KBO] Alle bronnen gefaald — BTW geldig maar geen bedrijfsdata");
     return baseResult;
   } catch(err) { console.error("[KBO] Fatal error:", err); return null; }
 }
@@ -1695,30 +1717,52 @@ export default function App() {
       }, 3000); // 3s na startup zodat andere data al geladen is
     };
 
-    // Sessie check
-    sb.auth.getSession().then(({ data: { session: s } }) => {
-      if(s?.user) {
-        loadUserData(s.user);
-      } else {
-        // Niet ingelogd
-        try {
-          const get = (k,fb)=>{ try{const v=localStorage.getItem(k);return v?JSON.parse(v):fb;}catch(_){return fb;} };
-          setSettings(get('b4_set',INIT_SETTINGS));
-          setKlanten(get('b4_kln',INIT_KLANTEN));
-          setProducten(restoreFicheCache(get('b4_prd',INIT_PRODUCTS)));
-          setOffertes(get('b4_off',[]));
-          setFacturen(get('b4_fct',[]));
-        } catch(_){}
-        setLoaded(true);
-        dataReady.current = false;
-      }
-    }).catch(() => {
-      // Supabase niet bereikbaar of corrupte sessie → wis tokens en toon login
-      try {
-        Object.keys(localStorage).filter(k=>k.startsWith('sb-')||k.includes('supabase')).forEach(k=>localStorage.removeItem(k));
-      } catch(_){}
-      setLoaded(true);
-    });
+    // Sessie check — met timeout zodat Supabase free tier wake-up ons niet uitlogt
+    const sessionTimeout = new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 7000));
+    Promise.race([sb.auth.getSession(), sessionTimeout])
+      .then(({ data: { session: s } }) => {
+        if(s?.user) {
+          loadUserData(s.user);
+        } else {
+          // Echt niet ingelogd (geen sessie in Supabase)
+          try {
+            const get = (k,fb)=>{ try{const v=localStorage.getItem(k);return v?JSON.parse(v):fb;}catch(_){return fb;} };
+            setSettings(get('b4_set',INIT_SETTINGS));
+            setKlanten(get('b4_kln',INIT_KLANTEN));
+            setProducten(restoreFicheCache(get('b4_prd',INIT_PRODUCTS)));
+            setOffertes(get('b4_off',[]));
+            setFacturen(get('b4_fct',[]));
+          } catch(_){}
+          setLoaded(true);
+          dataReady.current = false;
+        }
+      })
+      .catch((err) => {
+        if(err?.message === "timeout") {
+          // Supabase is traag (free tier wake-up) — NIET uitloggen, probeer via onAuthStateChange
+          console.warn("⚠️ Sessie check timeout — wacht op onAuthStateChange...");
+          // Laad localStorage data alvast zodat app niet blokkeert
+          try {
+            const get = (k,fb)=>{ try{const v=localStorage.getItem(k);return v?JSON.parse(v):fb;}catch(_){return fb;} };
+            setSettings(get('b4_set',INIT_SETTINGS));
+            setKlanten(get('b4_kln',INIT_KLANTEN));
+            setProducten(restoreFicheCache(get('b4_prd',INIT_PRODUCTS)));
+            setOffertes(get('b4_off',[]));
+            setFacturen(get('b4_fct',[]));
+          } catch(_){}
+          setLoaded(true); // Toon app op basis van localStorage
+          // onAuthStateChange pikt de sessie op zodra Supabase wakker is
+        } else {
+          // Echte auth fout (corrupte token) — dan pas tokens wissen
+          console.warn("⚠️ Auth fout:", err?.message);
+          try {
+            Object.keys(localStorage)
+              .filter(k => k.startsWith('sb-') || k.includes('supabase'))
+              .forEach(k => localStorage.removeItem(k));
+          } catch(_){}
+          setLoaded(true);
+        }
+      });
 
     sb.auth.onAuthStateChange((event, session) => {
       if(event==="SIGNED_IN" && session?.user && !dataLoaded) loadUserData(session.user);
