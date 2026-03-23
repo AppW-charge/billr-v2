@@ -1861,7 +1861,7 @@ export default function App() {
             return o;
           });
           if(changed) {
-            setTimeout(()=>notify('📬 Nieuwe reactie van klant ontvangen!','ok'),100);
+            setTimeout(()=>notify('📬 Klant heeft gereageerd op offerte!','ok'),100);
             setTimeout(flushSaves, 600);
           }
           return changed ? next : prev;
@@ -1917,10 +1917,9 @@ export default function App() {
       !autoPromptedRef.current.has(o.id)
     );
     if(nieuwGoedgekeurd.length > 0) {
-      // Open planningModal voor eerste goedgekeurde zonder datum
       autoPromptedRef.current.add(nieuwGoedgekeurd[0].id);
-      // Kleine delay zodat UI settled is
-      setTimeout(() => setPlanningModal(nieuwGoedgekeurd[0]), 600);
+      // Kleine delay zodat UI settled is - check of modal niet al open is
+      setTimeout(() => setPlanningModal(m => m ? m : nieuwGoedgekeurd[0]), 600);
     }
   }, [offertes, user]);
   // Auto-poll tracking elke 60s enkel op dashboard
@@ -3171,6 +3170,21 @@ export default function App() {
 }
 
 // ─── DASHBOARD ────────────────────────────────────────────────────
+function RefreshBtn({onRefresh}) {
+  const [loading, setLoading] = React.useState(false);
+  const [ok, setOk] = React.useState(false);
+  const doRefresh = async () => {
+    setLoading(true); setOk(false);
+    await onRefresh();
+    setLoading(false); setOk(true);
+    setTimeout(() => setOk(false), 2000);
+  };
+  return <button className="btn btn-sm" onClick={doRefresh} disabled={loading}
+    style={{minWidth:80, background: ok ? "#10b981" : undefined, color: ok ? "#fff" : undefined}}>
+    {loading ? "\u23f3 laden..." : ok ? "\u2705 Bijgewerkt" : "\xf0\x9f\x94\x84 Vernieuwen"}
+  </button>;
+}
+
 function Dashboard({offertes, facturen, onGoto, onNew, onFactuur, settings, offerteViews, offerteResponses, planningProposals, onLogboek, onPlan, onPlanDelete, widgetOrder, setWidgetOrder, onRefreshTracking, websiteLeads=[], onLeadRefresh, onLeadStatus, onLeadToOfferte}) {
   const instTypesSetting = settings;
   const openOff = offertes.filter(o=>o.status==="verstuurd");
@@ -3310,7 +3324,7 @@ function Dashboard({offertes, facturen, onGoto, onNew, onFactuur, settings, offe
       <div className="card mb4" key="w-logboek" style={{border:"1px solid #c7d2fe",background:"#fafafe"}}>
         <div className="card-h">
           <div className="card-t" style={{color:"#4338ca"}}>📊 Offerte Logboek</div>
-          <button className="btn btn-sm" onClick={async()=>{await onRefreshTracking();}} title="Ophalen">🔄</button>
+          <RefreshBtn onRefresh={onRefreshTracking}/>
         </div>
         {verstuurdOff.length===0?<div style={{color:"#94a3b8",textAlign:"center",padding:"12px 0",fontSize:13}}>Nog geen offertes verstuurd</div>:(
           verstuurdOff.map(o=>{
@@ -3406,7 +3420,7 @@ function Dashboard({offertes, facturen, onGoto, onNew, onFactuur, settings, offe
       <div className="card mb4" key="w-afspraken" style={{border:"1px solid #86efac",background:"#fafffe"}}>
         <div className="card-h">
           <div className="card-t" style={{color:"#059669"}}>📅 Afspraken overzicht</div>
-          <button className="btn btn-sm" onClick={async()=>{await onRefreshTracking();}} title="Ophalen">🔄</button>
+          <RefreshBtn onRefresh={onRefreshTracking}/>
         </div>
         {wachtend.length>0&&<div style={{marginBottom:12}}>
           <div style={{fontSize:10,fontWeight:700,color:"#f59e0b",textTransform:"uppercase",letterSpacing:".5px",marginBottom:4}}>⏳ Wacht op klant ({wachtend.length})</div>
