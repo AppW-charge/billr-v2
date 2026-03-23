@@ -66,25 +66,26 @@ const sbDel = async (key, userId) => {
 };
 
 // Laad ALLE data in één query (veel sneller dan 11 losse calls)
-const sbGetAll = async (userId) => {
+const sbGetAll = async (userId, excludeKeys) => {
   if(!userId) return {};
   try {
-    const { data, error } = await sb.from("user_data").select("key,value,updated_at").eq("user_id", userId);
-    if(error) {
-      console.error("[Supabase] GET ALL failed:", error.message, error.details, error.hint);
-      return {};
+    let q = sb.from("user_data").select("key,value,updated_at").eq("user_id", userId);
+    if(excludeKeys && excludeKeys.length > 0) {
+      q = q.not("key", "in", "(" + excludeKeys.join(",") + ")");
     }
+    const { data, error } = await q;
+    if(error) { console.error("[Supabase] GET ALL failed:", error.message); return {}; }
     if(!data) return {};
-    console.log(`☁️ Supabase LOAD: ${data.length} keys geladen`);
-    // Geef zowel value als updated_at terug
+    const excl = excludeKeys && excludeKeys.length > 0 ? " (excl. " + excludeKeys.join(",") + ")" : "";
+    console.log("☁️ Supabase LOAD: " + data.length + " keys" + excl);
     const result = {};
     data.forEach(r => { result[r.key] = r.value; result[r.key+"__ts"] = r.updated_at; });
     return result;
-  } catch(e) {
-    console.error("[Supabase] GET ALL exception:", e);
-    return {};
-  }
+  } catch(e) { console.error("[Supabase] GET ALL exception:", e); return {}; }
 };
+// Lite versie: ZONDER b4_prd (producten+afbeeldingen = grootste key) voor sync
+const sbGetLite = (userId) => sbGetAll(userId, ["b4_prd"]);
+
 
 // Backwards compat aliases
 const localGet = sbGet;
@@ -1639,25 +1640,11 @@ export default function App() {
         console.log(`☁️ Supabase: ${Object.keys(sbData).length} keys`);
         if(sbData["b4_set"]) setSettings(parse(sbData["b4_set"], INIT_SETTINGS));
         if(sbData["b4_kln"]) setKlanten(parse(sbData["b4_kln"], INIT_KLANTEN));
-        // Laad producten + fiches uit dedicated product_fiches tabel
+        // Producten: laden uit Supabase, fiches via localStorage cache (geen extra query = minder egress)
         if(sbData["b4_prd"]) {
           const prods = parse(sbData["b4_prd"], INIT_PRODUCTS);
-          try {
-            const fr = await sb.from('product_fiches').select('product_id,fiches').eq('user_id', u.id);
-            if(fr.error) { console.warn("[Fiches] Laad fout:", fr.error.message); setProducten(restoreFicheCache(prods)); }
-            else if(fr.data && fr.data.length > 0) {
-              const sbFicheCache = {};
-              fr.data.forEach(r => { if(r.fiches && r.fiches.length > 0) sbFicheCache[r.product_id] = r.fiches; });
-              console.log(`✅ Fiches geladen: ${Object.keys(sbFicheCache).length} producten`);
-              setProducten(restoreFicheCache(prods, sbFicheCache));
-            } else {
-              console.warn("[Fiches] Geen fiches in product_fiches tabel — val terug op localStorage cache");
-              setProducten(restoreFicheCache(prods)); // pikt localStorage billr_fiche_cache op
-            }
-          } catch(fe) {
-            console.error("[Fiches] Exception:", fe.message);
-            setProducten(restoreFicheCache(prods));
-          }
+          setProducten(restoreFicheCache(prods)); // gebruikt billr_fiche_cache uit localStorage
+          console.log("Producten geladen: " + prods.length);
         }
         if(sbData["b4_off"]) {
           const raw=parse(sbData["b4_off"],[]);
@@ -1698,7 +1685,7 @@ export default function App() {
         // Retry Supabase na 4s (wacht op wake-up free tier)
         setTimeout(async () => {
           try {
-            const retry = await Promise.race([sbGetAll(u.id), new Promise(r=>setTimeout(()=>r(null),8000))]);
+            const retry = await Promise.race([sbGetLite(u.id), new Promise(r=>setTimeout(()=>r(null),8000))]);
             if(retry && Object.keys(retry).length > 0) {
               console.log("✅ Supabase retry geslaagd:", Object.keys(retry).length, "keys");
               const p2 = (k,fb) => { try{return retry[k]?JSON.parse(retry[k]):fb;}catch(_){return fb;} };
@@ -1707,16 +1694,8 @@ export default function App() {
               if(retry["b4_off"]) { const offs=p2("b4_off",[]); const seen=new Set(); setOffertes(offs.filter(o=>{ if(!o.id||seen.has(o.id)) return false; seen.add(o.id); return true; })); }
               if(retry["b4_fct"]) setFacturen(p2("b4_fct",[]));
               if(retry["b4_prd"]) {
-                const retryProds = p2("b4_prd",[]);
-                try {
-                  const frRetry = await sb.from('product_fiches').select('product_id,fiches').eq('user_id', u.id);
-                  if(frRetry.data && frRetry.data.length > 0) {
-                    const sfc = {};
-                    frRetry.data.forEach(r => { if(r.fiches && r.fiches.length > 0) sfc[r.product_id] = r.fiches; });
-                    setProducten(restoreFicheCache(retryProds, sfc));
-                  } else { setProducten(restoreFicheCache(retryProds)); }
-                } catch(_) { setProducten(restoreFicheCache(retryProds)); }
-              }
+                setProducten(restoreFicheCache(p2("b4_prd",[])));
+              }}
               if(retry["b4_cn"])  setCreditnotas(p2("b4_cn",[]));
               if(retry["b4_ga"])  setGaranties(p2("b4_ga",[]));
               Object.entries(retry).forEach(([k,v])=>{ try{localStorage.setItem(k,v);}catch(_){} });
@@ -1729,25 +1708,26 @@ export default function App() {
       dataReady.current = true;
 
 
-      // ── MIGRATIE: zorg dat ALLE producten met fiches in product_fiches tabel staan ──
-      // (voor producten die voor de nieuwe tabel werden opgeslagen)
+      // Migratie fiches: eenmalig, enkel als nog niet gedaan deze week
       setTimeout(async () => {
         try {
+          const lastMig = localStorage.getItem("billr_fiche_mig");
+          const weekAgo = Date.now() - 7*24*3600*1000;
+          if(lastMig && parseInt(lastMig) > weekAgo) return; // max 1x per week
           const cache = (() => { try { const r = localStorage.getItem("billr_fiche_cache"); return r ? JSON.parse(r) : {}; } catch(_) { return {}; } })();
           if(Object.keys(cache).length === 0) return;
-          // Haal op welke producten al in de tabel staan
           const existing = await sb.from('product_fiches').select('product_id').eq('user_id', u.id);
           const existingIds = new Set((existing.data||[]).map(r => r.product_id));
-          // Sla ontbrekende op
           const toMigrate = Object.entries(cache)
             .filter(([pid, fiches]) => !existingIds.has(pid) && fiches?.length > 0 && fiches.some(f => f.data))
             .map(([pid, fiches]) => ({ user_id: u.id, product_id: pid, fiches, updated_at: new Date().toISOString() }));
           if(toMigrate.length > 0) {
             await sb.from('product_fiches').upsert(toMigrate, { onConflict: 'user_id,product_id' });
-            console.log(`✅ Migratie: ${toMigrate.length} product fiches naar Supabase`);
+            console.log("Migratie: " + toMigrate.length + " fiches");
           }
-        } catch(e) { console.warn('Migratie fiche cache:', e.message); }
-      }, 3000); // 3s na startup zodat andere data al geladen is
+          localStorage.setItem("billr_fiche_mig", String(Date.now()));
+        } catch(e) { console.warn("Migratie fiche cache:", e.message); }
+      }, 5000);
     };
 
     // Sessie check — met timeout zodat Supabase free tier wake-up ons niet uitlogt
@@ -1846,28 +1826,11 @@ export default function App() {
         });
         setOfferteResponses(grouped);
 
-        // Bouw nummer→shareId mapping
-        let nummerToShareId = {};
-        try {
-          const shareIds = Object.keys(grouped).slice(0,20);
-          if(shareIds.length > 0) {
-            // Probeer eerst nummer kolom, dan fallback naar offerte_data
-            const {data:shares} = await sb.from('offerte_shares')
-              .select('id,nummer,offerte_data')
-              .in('id', shareIds);
-            if(shares) shares.forEach(s=>{ 
-              const nr = s.nummer || s.offerte_data?.nummer;
-              if(nr) nummerToShareId[nr]=s.id; 
-            });
-          }
-        } catch(e){ console.warn('shareMap:', e.message); }
-
-        // Auto-sync: match op id OF via nummer (cross-device)
+        // Auto-sync: match enkel op offerte.id (geen extra offerte_shares query)
         setOffertes(prev => {
           let changed = false;
           const next = prev.map(o => {
-            const shareId = nummerToShareId[o.nummer];
-            let oResp = grouped[o.id] || (shareId ? grouped[shareId] : null);
+            let oResp = grouped[o.id];
             if(!oResp || !oResp.length) return o;
             const latest = [...oResp].sort((a,b)=>new Date(b.submitted_at)-new Date(a.submitted_at))[0];
             const respTs = latest.submitted_at;
@@ -2035,10 +1998,11 @@ export default function App() {
     localTimestamps.current[key] = Date.now();
     try { localStorage.setItem("billr_ts", JSON.stringify(localTimestamps.current)); } catch(_){}
     
-    // Supabase: batchen + debounce 2s — max 1 call per 2s ipv per keypress
+    // Debounce: 10s voor b4_prd (producten veranderen zelden), 2s voor andere keys
+    const debounceMs = key === "b4_prd" ? 10000 : 2000;
     pendingSaves.current[key] = json;
     if(saveTimer.current) clearTimeout(saveTimer.current);
-    saveTimer.current = setTimeout(flushSaves, 2000);
+    saveTimer.current = setTimeout(flushSaves, debounceMs);
   }, [user, flushSaves]);
 
   // Bij afsluiten én tab wisselen: meteen flushen
@@ -2236,13 +2200,13 @@ export default function App() {
     let lastSync = Date.now();
     const handleVisibility = async () => {
       if(document.visibilityState!=="visible" || !user) return;
-      if(Date.now()-lastSync < 30000) return;
+      if(Date.now()-lastSync < 300000) return; // min 5 min tussen syncs
       lastSync = Date.now();
       try {
-        // EERST pending saves flushen — anders laadt andere browser oude data
         await flushSaves();
+        // sbGetLite: geen b4_prd (producten+afbeeldingen) - scheelt 80% egress
         const allData = await Promise.race([
-          sbGetAll(user.id),
+          sbGetLite(user.id),
           new Promise(r=>setTimeout(()=>r(null),6000))
         ]);
         const hasReal = allData && Object.keys(allData).length > 0 &&
@@ -2258,16 +2222,7 @@ export default function App() {
         };
         if(allData["b4_set"] && sbNewer("b4_set")) { const s=p("b4_set",null); if(s?.bedrijf?.naam||s?.email?.eigen) setSettings(s); }
         if(allData["b4_kln"] && sbNewer("b4_kln")) setKlanten(p("b4_kln",[]));
-        if(allData["b4_prd"] && sbNewer("b4_prd")) {
-          try {
-            const fr2 = await sb.from('product_fiches').select('product_id,fiches').eq('user_id', user.id);
-            if(fr2.data && fr2.data.length > 0) {
-              const sfc = {};
-              fr2.data.forEach(r => { if(r.fiches && r.fiches.some(f=>f.data)) sfc[r.product_id] = r.fiches; });
-              setProducten(restoreFicheCache(p("b4_prd",[]), sfc));
-            } else { setProducten(restoreFicheCache(p("b4_prd",[]))); }
-          } catch(_) { setProducten(restoreFicheCache(p("b4_prd",[]))); }
-        }
+        // b4_prd niet via mobile sync (te groot) - producten worden beheerd in dezelfde browser
         if(allData["b4_off"] && sbNewer("b4_off")) { 
           const v=p("b4_off",null); 
           if(v!==null) {
@@ -2453,16 +2408,9 @@ export default function App() {
       const dc = sj.accentKleur || settings?.thema?.kleur || bed.kleur || "#1a2e4a";
 
       // Laad fiche cache: ALTIJD uit product_fiches tabel (authoritative source)
+      // Fiches uit localStorage cache (al gesynchroniseerd bij product opslaan)
       let ficheCache = {};
-      try { const raw = localStorage.getItem("billr_fiche_cache"); if(raw) ficheCache = JSON.parse(raw); } catch(_){}
-      try {
-        const productIds = (offerte.lijnen||[]).map(l=>l.productId).filter(Boolean);
-        if(productIds.length > 0 && user) {
-          const fr = await sb.from('product_fiches').select('product_id,fiches').eq('user_id',user.id).in('product_id',productIds);
-          // Tabel data OVERSCHRIJFT localStorage cache — tabel is altijd autoritatief
-          if(fr.data) fr.data.forEach(r=>{ ficheCache[r.product_id] = r.fiches; });
-        }
-      } catch(_){}
+      try { const lsRaw = localStorage.getItem("billr_fiche_cache"); if(lsRaw) ficheCache = JSON.parse(lsRaw); } catch(_){}
 
       // Bouw lijnen ZONDER base64 voor het hoofdrecord (klein → geen timeout)
       const cleanLijnen = (offerte.lijnen||[]).map(l => {
@@ -3077,7 +3025,7 @@ export default function App() {
 
           <div className="content">
             {pg==="dashboard"&&<Dashboard offertes={offertes} facturen={factMet} onGoto={gotoFiltered} onNew={()=>{setEditOff(null);setWizOpen(true)}} onFactuur={d=>setFactModal(d)} settings={settings} offerteViews={offerteViews} offerteResponses={offerteResponses} planningProposals={planningProposals} onLogboek={o=>setLogboekModal(o)} onPlan={o=>setPlanningModal(o)} onPlanDelete={id=>{updOff(id,{planStatus:"geannuleerd",planDatum:null,planTijd:null,logActie:"🗑 Afspraak geannuleerd"});setTimeout(flushSaves,100);}} widgetOrder={widgetOrder} setWidgetOrder={setWidgetOrder} onRefreshTracking={fetchOfferteTracking}/>}
-            {pg==="offertes"&&<OffertesPage offertes={offertes} initFilter={pgFilter} onView={d=>setViewDoc({doc:d,type:"offerte"})} onEdit={d=>{setEditOff(d);setWizOpen(true)}} onStatus={handleOffStatus} onBulkStatus={bulkUpdOff} onFactuur={d=>setFactModal(d)} onDelete={id=>{setOffertes(p=>p.filter(o=>o.id!==id));localTimestamps.current["b4_off"]=Date.now();try{localStorage.setItem("billr_ts",JSON.stringify(localTimestamps.current));}catch(_){}notify("Verwijderd");setTimeout(flushSaves,100);}} onNew={()=>{setEditOff(null);setWizOpen(true)}} onEmail={d=>{shareOfferte(d);setEmailModal({doc:d,type:"offerte"});}} onPlan={d=>setPlanningModal(d)} onShare={d=>{shareOfferte(d);notify("🔗 Publieke link vernieuwd ✓");}} settings={settings}/>}
+            {pg==="offertes"&&<OffertesPage offertes={offertes} initFilter={pgFilter} onView={d=>setViewDoc({doc:d,type:"offerte"})} onEdit={d=>{setEditOff(d);setWizOpen(true)}} onStatus={handleOffStatus} onBulkStatus={bulkUpdOff} onFactuur={d=>setFactModal(d)} onDelete={id=>{setOffertes(p=>p.filter(o=>o.id!==id));localTimestamps.current["b4_off"]=Date.now();try{localStorage.setItem("billr_ts",JSON.stringify(localTimestamps.current));}catch(_){}notify("Verwijderd");setTimeout(flushSaves,100);}} onNew={()=>{setEditOff(null);setWizOpen(true)}} onEmail={async d=>{await shareOfferte(d);setEmailModal({doc:d,type:"offerte"});}} onPlan={d=>setPlanningModal(d)} onShare={d=>{shareOfferte(d);notify("🔗 Publieke link vernieuwd ✓");}} settings={settings}/>}
             {pg==="facturen"&&<FacturenPage facturen={factMet} settings={settings} initFilter={pgFilter} onView={d=>setViewDoc({doc:d,type:"factuur"})} onEdit={f=>{setEditFact(f);setFactuurWizOpen(true);}} onStatus={updFact} onBulkStatus={bulkUpdFact} onDelete={id=>{setFacturen(p=>p.filter(f=>f.id!==id));localTimestamps.current["b4_fct"]=Date.now();try{localStorage.setItem("billr_ts",JSON.stringify(localTimestamps.current));}catch(_){}notify("Verwijderd");setTimeout(flushSaves,100);}} notify={notify} onEmail={d=>setEmailModal({doc:d,type:"factuur"})} onBetaling={f=>setBetalingModal(f)} onAanmaning={f=>setAanmaningModal(f)} onNew={()=>{setEditFact(null);setFactuurWizOpen(true)}}/>}
             {pg==="klanten"&&<KlantenPage klanten={klanten} offertes={offertes} facturen={factMet} view={klantView} onEdit={k=>setKlantModal(k)} onDelete={id=>{setKlanten(p=>p.map(k=>k.id===id?{...k,_verwijderd:true}:k));localTimestamps.current["b4_kln"]=Date.now();try{localStorage.setItem("billr_ts",JSON.stringify(localTimestamps.current));}catch(_){}notify("Klant verwijderd");setTimeout(flushSaves,100);}}/>}
             {pg==="producten"&&<ProductenPage producten={producten} settings={settings} onEdit={p=>setProdModal(p)} onDelete={id=>{setProducten(p=>p.filter(x=>x.id!==id));notify("Verwijderd")}} onToggle={id=>setProducten(p=>p.map(x=>x.id===id?{...x,actief:!x.actief}:x))} onEnrich={upd=>setProducten(p=>p.map(x=>x.id===upd.id?upd:x))} onDuplicate={p=>{const dup={...p,id:uid(),naam:p.naam+" (kopie)",aangemaakt:new Date().toISOString()};setProducten(prev=>[dup,...prev]);notify("Product gedupliceerd ✓");setProdModal(dup);}}/>}
