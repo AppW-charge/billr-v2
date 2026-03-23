@@ -1656,8 +1656,16 @@ export default function App() {
             }
           } catch(_) { setProducten(restoreFicheCache(prods)); }
         }
-        if(sbData["b4_off"]) { const offs=parse(sbData["b4_off"],[]); setOffertes(offs); console.log(`✅ Offertes geladen: ${offs.length}`); }
-        if(sbData["b4_fct"]) { const fcts=parse(sbData["b4_fct"],[]); setFacturen(fcts); console.log(`✅ Facturen geladen: ${fcts.length}`); }
+        if(sbData["b4_off"]) {
+          const raw=parse(sbData["b4_off"],[]);
+          const seenId=new Set(); const offs=raw.filter(o=>{ if(!o.id||seenId.has(o.id)) return false; seenId.add(o.id); return true; });
+          setOffertes(offs); console.log(`✅ Offertes geladen: ${offs.length}${offs.length!==raw.length?' ('+raw.length+' voor dedup)':''}`);
+        }
+        if(sbData["b4_fct"]) {
+          const raw=parse(sbData["b4_fct"],[]);
+          const seenId2=new Set(); const fcts=raw.filter(f=>{ if(!f.id||seenId2.has(f.id)) return false; seenId2.add(f.id); return true; });
+          setFacturen(fcts); console.log(`✅ Facturen geladen: ${fcts.length}`);
+        }
         if(sbData["b4_cn"])  setCreditnotas(parse(sbData["b4_cn"], []));
         if(sbData["b4_am"])  setAanmaningen(parse(sbData["b4_am"], []));
         if(sbData["b4_bt"])  setBetalingen(parse(sbData["b4_bt"], []));
@@ -1857,12 +1865,31 @@ export default function App() {
         });
       }
     } catch(e) { console.warn("Offerte tracking fetch failed:", e); }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [offertes]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if(user) fetchOfferteTracking(); }, [user, fetchOfferteTracking]);
-  // Auto-poll tracking elke 60s op dashboard
+  // Auto-plan prompt: als offerte net op goedgekeurd gezet (door klant via tracking) en nog niet ingepland
+  const autoPromptedRef = useRef(new Set());
   useEffect(() => {
-    if(!user || pg !== "dashboard") return;
-    const iv = setInterval(fetchOfferteTracking, 60000);
+    if(!user) return;
+    const nieuwGoedgekeurd = offertes.filter(o =>
+      o.status === "goedgekeurd" &&
+      !o.planDatum &&
+      !autoPromptedRef.current.has(o.id) &&
+      o.log?.some(l => l.actie?.includes("goedgekeurd"))
+    );
+    if(nieuwGoedgekeurd.length > 0) {
+      // Open planningModal voor eerste goedgekeurde zonder datum
+      autoPromptedRef.current.add(nieuwGoedgekeurd[0].id);
+      // Kleine delay zodat UI settled is
+      setTimeout(() => setPlanningModal(nieuwGoedgekeurd[0]), 600);
+    }
+  }, [offertes, user]);
+  // Auto-poll tracking elke 60s op dashboard EN offertes pagina
+  useEffect(() => {
+    if(!user) return;
+    if(pg !== "dashboard" && pg !== "offertes") return;
+    fetchOfferteTracking(); // Direct bij navigatie
+    const iv = setInterval(fetchOfferteTracking, 30000); // elke 30s ipv 60s
     return () => clearInterval(iv);
   }, [user, pg, fetchOfferteTracking]);
 
@@ -2158,11 +2185,10 @@ export default function App() {
         if(allData["b4_off"] && sbNewer("b4_off")) { 
           const v=p("b4_off",null); 
           if(v!==null) {
-            // Dedup op nummer bij mobile sync
-            const PRIO={verstuurd:5,goedgekeurd:6,gefactureerd:7,afgedrukt:4,afgewezen:3,concept:1};
-            const seen=new Map();
-            v.forEach(o=>{const k=o.nummer||o.id;if(!seen.has(k)||(PRIO[o.status]||0)>(PRIO[seen.get(k).status]||0))seen.set(k,o);});
-            setOffertes([...seen.values()]); 
+            // Dedup op id (primair) bij mobile sync
+            const seenId=new Set(); const deduped=v.filter(o=>{ if(!o.id||seenId.has(o.id)) return false; seenId.add(o.id); return true; });
+            setOffertes(deduped);
+            console.log('✅ Mobile sync offertes:', deduped.length);
           }
         }
         if(allData["b4_fct"] && sbNewer("b4_fct")) { const v=p("b4_fct",null); if(v!==null) setFacturen(v); }
@@ -2239,6 +2265,20 @@ export default function App() {
   const logEntry = (actie) => ({ts: new Date().toISOString(), actie});
   const updOff = (id,upd) => setOffertes(p=>p.map(o=>o.id===id?{...o,...upd,log:[...(o.log||[]),logEntry(upd.status?"Status → "+(OFF_STATUS[upd.status]?.l||upd.status):upd.logActie||"Gewijzigd")]}:o));
   const updFact = (id,upd) => setFacturen(p=>p.map(f=>f.id===id?{...f,...upd,log:[...(f.log||[]),logEntry(upd.status?"Status → "+(FACT_STATUS[upd.status]?.l||upd.status):upd.logActie||"Gewijzigd")]}:f));
+  // Wrapper: bij goedkeuring automatisch PlanningModal openen
+  const handleOffStatus = (id, upd) => {
+    updOff(id, upd);
+    if(upd.status === "goedgekeurd") {
+      // Kleine delay zodat state update eerst verwerkt is
+      setTimeout(() => {
+        setOffertes(prev => {
+          const off = prev.find(o => o.id === id);
+          if(off && !off.planDatum) setPlanningModal({...off, status:"goedgekeurd"});
+          return prev;
+        });
+      }, 300);
+    }
+  };
   const bulkUpdOff = (ids,upd) => setOffertes(p=>p.map(o=>ids.includes(o.id)?{...o,...upd,log:[...(o.log||[]),logEntry(upd.status?"Bulk → "+(OFF_STATUS[upd.status]?.l||upd.status):"Bulk gewijzigd")]}:o));
   const bulkUpdFact = (ids,upd) => setFacturen(p=>p.map(f=>ids.includes(f.id)?{...f,...upd,log:[...(f.log||[]),logEntry(upd.status?"Bulk → "+(FACT_STATUS[upd.status]?.l||upd.status):"Bulk gewijzigd")]}:f));
 
@@ -2283,18 +2323,31 @@ export default function App() {
     
     const finalData = {...data, lijnen: updatedLijnen};
     
-    if(finalData.id && offertes.find(o=>o.id===finalData.id)){
+    // UPDATE bestaande offerte
+    const existingOff = finalData.id ? offertes.find(o=>o.id===finalData.id) : null;
+    if(existingOff) {
       localTimestamps.current["b4_off"]=Date.now();
       try{localStorage.setItem("billr_ts",JSON.stringify(localTimestamps.current));}catch(_){}
-      // Bewaar bestaande log + voeg "Gewijzigd" toe; overschrijf log NIET via spread
-      setOffertes(p=>p.map(o=>o.id===finalData.id?{...o,...finalData,log:[...(o.log||[]),logEntry("📝 Gewijzigd")],aangemaakt:o.aangemaakt||finalData.aangemaakt}:o)); notify("Offerte opgeslagen ✓");
+      // eslint-disable-next-line no-unused-vars
+      const {nummerOverride:_nrOv, ...cleanData} = finalData;
+      cleanData.nummer = existingOff.nummer; // nummer NOOIT wijzigen via edit
+      setOffertes(p=>p.map(o=>o.id===cleanData.id?{...o,...cleanData,log:[...(o.log||[]),logEntry("📝 Gewijzigd")],aangemaakt:o.aangemaakt}:o));
+      notify("Offerte opgeslagen ✓");
     } else {
-      const n={...finalData,id:uid(),nummer:finalData.nummerOverride||nextNr("OFF",offertes,"nummer"),datum:finalData.datum||today(),aangemaakt:new Date().toISOString(),status:"concept",log:[{ts:new Date().toISOString(),actie:"✨ Offerte aangemaakt"}]};
-      // Update timestamp VOOR setOffertes zodat mobile sync niet overschrijft
+      // NIEUW offerte aanmaken
+      const autoNr = nextNr("OFF", offertes, "nummer");
+      const useNr = (finalData.nummerOverride && finalData.nummerOverride.trim()) ? finalData.nummerOverride.trim() : autoNr;
+      const nrInGebruik = offertes.some(o=>o.nummer===useNr);
+      const definitiefNr = nrInGebruik ? autoNr : useNr;
+      // eslint-disable-next-line no-unused-vars
+      const {nummerOverride:_nrOv2, ...cleanNew} = finalData;
+      const n={...cleanNew, id:uid(), nummer:definitiefNr, datum:finalData.datum||today(), aangemaakt:new Date().toISOString(), status:"concept",
+        log:[{ts:new Date().toISOString(), actie:"✨ Offerte aangemaakt als "+definitiefNr}]};
       localTimestamps.current["b4_off"]=Date.now();
       try{localStorage.setItem("billr_ts",JSON.stringify(localTimestamps.current));}catch(_){}
-      setOffertes(p=>[n,...p]); notify("Offerte aangemaakt ✓");
-      // Wis tegenNummer_off na gebruik (éénmalige override)
+      setOffertes(p=>[n,...p]);
+      notify("Offerte aangemaakt ✓");
+      setTimeout(flushSaves, 500); // Meteen naar Supabase — geen 2s wachten
       if(settings?.voorwaarden?.tegenNummer_off) setSettings(s=>({...s,voorwaarden:{...s.voorwaarden,tegenNummer_off:""}}));
     }
     setWizOpen(false); setEditOff(null);
@@ -2938,7 +2991,7 @@ export default function App() {
 
           <div className="content">
             {pg==="dashboard"&&<Dashboard offertes={offertes} facturen={factMet} onGoto={gotoFiltered} onNew={()=>{setEditOff(null);setWizOpen(true)}} onFactuur={d=>setFactModal(d)} settings={settings} offerteViews={offerteViews} offerteResponses={offerteResponses} planningProposals={planningProposals} onLogboek={o=>setLogboekModal(o)} onPlan={o=>setPlanningModal(o)} onPlanDelete={id=>{updOff(id,{planStatus:"geannuleerd",planDatum:null,planTijd:null,logActie:"🗑 Afspraak geannuleerd"});setTimeout(flushSaves,100);}} widgetOrder={widgetOrder} setWidgetOrder={setWidgetOrder} onRefreshTracking={fetchOfferteTracking}/>}
-            {pg==="offertes"&&<OffertesPage offertes={offertes} initFilter={pgFilter} onView={d=>setViewDoc({doc:d,type:"offerte"})} onEdit={d=>{setEditOff(d);setWizOpen(true)}} onStatus={updOff} onBulkStatus={bulkUpdOff} onFactuur={d=>setFactModal(d)} onDelete={id=>{setOffertes(p=>p.filter(o=>o.id!==id));localTimestamps.current["b4_off"]=Date.now();try{localStorage.setItem("billr_ts",JSON.stringify(localTimestamps.current));}catch(_){}notify("Verwijderd");setTimeout(flushSaves,100);}} onNew={()=>{setEditOff(null);setWizOpen(true)}} onEmail={d=>{shareOfferte(d);setEmailModal({doc:d,type:"offerte"});}} onPlan={d=>setPlanningModal(d)} onShare={d=>{shareOfferte(d);notify("🔗 Publieke link vernieuwd ✓");}} settings={settings}/>}
+            {pg==="offertes"&&<OffertesPage offertes={offertes} initFilter={pgFilter} onView={d=>setViewDoc({doc:d,type:"offerte"})} onEdit={d=>{setEditOff(d);setWizOpen(true)}} onStatus={handleOffStatus} onBulkStatus={bulkUpdOff} onFactuur={d=>setFactModal(d)} onDelete={id=>{setOffertes(p=>p.filter(o=>o.id!==id));localTimestamps.current["b4_off"]=Date.now();try{localStorage.setItem("billr_ts",JSON.stringify(localTimestamps.current));}catch(_){}notify("Verwijderd");setTimeout(flushSaves,100);}} onNew={()=>{setEditOff(null);setWizOpen(true)}} onEmail={d=>{shareOfferte(d);setEmailModal({doc:d,type:"offerte"});}} onPlan={d=>setPlanningModal(d)} onShare={d=>{shareOfferte(d);notify("🔗 Publieke link vernieuwd ✓");}} settings={settings}/>}
             {pg==="facturen"&&<FacturenPage facturen={factMet} settings={settings} initFilter={pgFilter} onView={d=>setViewDoc({doc:d,type:"factuur"})} onEdit={f=>{setEditFact(f);setFactuurWizOpen(true);}} onStatus={updFact} onBulkStatus={bulkUpdFact} onDelete={id=>{setFacturen(p=>p.filter(f=>f.id!==id));localTimestamps.current["b4_fct"]=Date.now();try{localStorage.setItem("billr_ts",JSON.stringify(localTimestamps.current));}catch(_){}notify("Verwijderd");setTimeout(flushSaves,100);}} notify={notify} onEmail={d=>setEmailModal({doc:d,type:"factuur"})} onBetaling={f=>setBetalingModal(f)} onAanmaning={f=>setAanmaningModal(f)} onNew={()=>{setEditFact(null);setFactuurWizOpen(true)}}/>}
             {pg==="klanten"&&<KlantenPage klanten={klanten} offertes={offertes} facturen={factMet} view={klantView} onEdit={k=>setKlantModal(k)} onDelete={id=>{setKlanten(p=>p.map(k=>k.id===id?{...k,_verwijderd:true}:k));localTimestamps.current["b4_kln"]=Date.now();try{localStorage.setItem("billr_ts",JSON.stringify(localTimestamps.current));}catch(_){}notify("Klant verwijderd");setTimeout(flushSaves,100);}}/>}
             {pg==="producten"&&<ProductenPage producten={producten} settings={settings} onEdit={p=>setProdModal(p)} onDelete={id=>{setProducten(p=>p.filter(x=>x.id!==id));notify("Verwijderd")}} onToggle={id=>setProducten(p=>p.map(x=>x.id===id?{...x,actief:!x.actief}:x))} onEnrich={upd=>setProducten(p=>p.map(x=>x.id===upd.id?upd:x))} onDuplicate={p=>{const dup={...p,id:uid(),naam:p.naam+" (kopie)",aangemaakt:new Date().toISOString()};setProducten(prev=>[dup,...prev]);notify("Product gedupliceerd ✓");setProdModal(dup);}}/>}
@@ -2983,7 +3036,7 @@ export default function App() {
         }
         setFactuurWizOpen(false);setEditFact(null);
       }} onClose={()=>{setFactuurWizOpen(false);setEditFact(null);}} notify={notify}/>}
-      {viewDoc&&<DocModal doc={viewDoc.doc} type={viewDoc.type} settings={settings} producten={producten} producten={producten} onClose={()=>setViewDoc(null)} onFactuur={d=>{setFactModal(d);setViewDoc(null);}} onStatusOff={s=>{updOff(viewDoc.doc.id,{status:s});notify("Status: "+OFF_STATUS[s]?.l);}} onStatusFact={s=>{updFact(viewDoc.doc.id,{status:s});notify("Status: "+FACT_STATUS[s]?.l);}} onEmail={()=>setEmailModal({doc:viewDoc.doc,type:viewDoc.type})} onPeppol={viewDoc.type==="factuur"?()=>sendPeppol(viewDoc.doc):null} onNummer={nr=>{if(viewDoc.type==="offerte"){updOff(viewDoc.doc.id,{nummer:nr});setViewDoc(p=>({...p,doc:{...p.doc,nummer:nr}}));}else{updFact(viewDoc.doc.id,{nummer:nr});setViewDoc(p=>({...p,doc:{...p.doc,nummer:nr}}));}notify("Nummer bijgewerkt ✓");setTimeout(flushSaves,100);}}/>}
+      {viewDoc&&<DocModal doc={viewDoc.doc} type={viewDoc.type} settings={settings} producten={producten} producten={producten} onClose={()=>setViewDoc(null)} onFactuur={d=>{setFactModal(d);setViewDoc(null);}} onStatusOff={s=>{handleOffStatus(viewDoc.doc.id,{status:s});notify("Status: "+OFF_STATUS[s]?.l);}} onStatusFact={s=>{updFact(viewDoc.doc.id,{status:s});notify("Status: "+FACT_STATUS[s]?.l);}} onEmail={()=>setEmailModal({doc:viewDoc.doc,type:viewDoc.type})} onPeppol={viewDoc.type==="factuur"?()=>sendPeppol(viewDoc.doc):null} onNummer={nr=>{if(viewDoc.type==="offerte"){updOff(viewDoc.doc.id,{nummer:nr});setViewDoc(p=>({...p,doc:{...p.doc,nummer:nr}}));}else{updFact(viewDoc.doc.id,{nummer:nr});setViewDoc(p=>({...p,doc:{...p.doc,nummer:nr}}));}notify("Nummer bijgewerkt ✓");setTimeout(flushSaves,100);}}/>}
       {factModal&&<FactuurModal off={factModal} settings={settings} onMaak={maakFactuur} onClose={()=>setFactModal(null)}/>}
       {klantModal!==null&&<KlantModal klant={klantModal} onSave={k=>{if(k.id){setKlanten(p=>p.map(x=>x.id===k.id?k:x));notify("Klant opgeslagen");}else{setKlanten(p=>[{...k,id:uid(),aangemaakt:new Date().toISOString()},...p]);notify("Klant toegevoegd ✓");}setKlantModal(null);}} onClose={()=>setKlantModal(null)}/>}
       {prodModal!==null&&<ProductModal prod={prodModal} settings={settings} onSave={p=>{
@@ -3460,12 +3513,17 @@ function PlanningModal({offerte, settings, klanten, planningProposals, onSave, o
           {klantAkkoord ? <button className="btn" style={{background:"#10b981",color:"#fff",flex:1,fontWeight:800}} onClick={doBevestigAfspraak} disabled={sending}>
             {sending?"Verzenden...":"✅ Bevestig afspraak & stuur bevestiging"}
           </button> : <>
-            <button className="btn b2" style={{flex:1}} onClick={doSave}>💾 Opslaan</button>
-            <button className="btn" style={{background:"#f59e0b",color:"#fff",flex:1}} onClick={doVoorstelSturen} disabled={sending||!klant.email||!planDatum}>
-              {sending?"Verzenden...":"📅 Voorstel sturen"}
-            </button>
+            <button className="btn b2" style={{flex:1}} onClick={()=>{doSave();onClose();}}>💾 Later</button>
+            {klant.email && planDatum
+              ? <button className="btn" style={{background:"#f59e0b",color:"#fff",flex:2,fontWeight:700}} onClick={doVoorstelSturen} disabled={sending}>
+                  {sending?"Verzenden...":"📅 Voorstel sturen naar klant"}
+                </button>
+              : <button className="btn b2" style={{flex:2,fontWeight:700,opacity:0.6}} disabled>
+                  {!klant.email?"⚠️ Geen email — sla datum op":!planDatum?"Kies eerst een datum":"📅 Voorstel sturen"}
+                </button>
+            }
           </>}
-          {!klant.email&&<div style={{fontSize:11,color:"#ef4444"}}>⚠ Geen email</div>}
+          {!klant.email&&<div style={{fontSize:11,color:"#f59e0b",marginTop:4}}>⚠️ Geen email ingesteld voor deze klant. Datum wordt opgeslagen maar er wordt geen mail verstuurd.</div>}
         </div>
       </div>
     </div>
