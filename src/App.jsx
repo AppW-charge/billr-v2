@@ -1860,7 +1860,10 @@ export default function App() {
             }
             return o;
           });
-          if(changed) setTimeout(()=>notify('📬 Nieuwe reactie van klant ontvangen!','ok'),100);
+          if(changed) {
+            setTimeout(()=>notify('📬 Nieuwe reactie van klant ontvangen!','ok'),100);
+            setTimeout(flushSaves, 600);
+          }
           return changed ? next : prev;
         });
       }
@@ -1895,12 +1898,14 @@ export default function App() {
             if(isAkkoord) { updates.planBevestigdDoorKlant = true; }
             return {...o, ...updates};
           });
+          if(changed) setTimeout(flushSaves, 600);
           return changed ? next : prev;
         });
       }
     } catch(e) { console.warn("Offerte tracking fetch failed:", e); }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => { if(user) fetchOfferteTracking(); }, [user]);
+  // Fetch tracking on load AND when offertes_ref gets populated
+  useEffect(() => { if(user && offertes_ref.current.length > 0) fetchOfferteTracking(); }, [user]);
   // Auto-plan prompt: als offerte net op goedgekeurd gezet (door klant via tracking) en nog niet ingepland
   const autoPromptedRef = useRef(new Set());
   useEffect(() => {
@@ -3305,7 +3310,7 @@ function Dashboard({offertes, facturen, onGoto, onNew, onFactuur, settings, offe
       <div className="card mb4" key="w-logboek" style={{border:"1px solid #c7d2fe",background:"#fafafe"}}>
         <div className="card-h">
           <div className="card-t" style={{color:"#4338ca"}}>📊 Offerte Logboek</div>
-          <button className="btn btn-sm" onClick={onRefreshTracking}>🔄</button>
+          <button className="btn btn-sm" onClick={async()=>{await onRefreshTracking();}} title="Ophalen">🔄</button>
         </div>
         {verstuurdOff.length===0?<div style={{color:"#94a3b8",textAlign:"center",padding:"12px 0",fontSize:13}}>Nog geen offertes verstuurd</div>:(
           verstuurdOff.map(o=>{
@@ -3401,7 +3406,7 @@ function Dashboard({offertes, facturen, onGoto, onNew, onFactuur, settings, offe
       <div className="card mb4" key="w-afspraken" style={{border:"1px solid #86efac",background:"#fafffe"}}>
         <div className="card-h">
           <div className="card-t" style={{color:"#059669"}}>📅 Afspraken overzicht</div>
-          <button className="btn btn-sm" onClick={onRefreshTracking}>🔄</button>
+          <button className="btn btn-sm" onClick={async()=>{await onRefreshTracking();}} title="Ophalen">🔄</button>
         </div>
         {wachtend.length>0&&<div style={{marginBottom:12}}>
           <div style={{fontSize:10,fontWeight:700,color:"#f59e0b",textTransform:"uppercase",letterSpacing:".5px",marginBottom:4}}>⏳ Wacht op klant ({wachtend.length})</div>
@@ -3638,12 +3643,16 @@ function PlanningModal({offerte, settings, klanten, planningProposals, onSave, o
             {sending?"Verzenden...":"✅ Bevestig afspraak & stuur bevestiging"}
           </button> : <>
             <button className="btn b2" style={{flex:1}} onClick={()=>{doSave();onClose();}}>💾 Later</button>
-            {klant.email && planDatum
-              ? <button className="btn" style={{background:"#f59e0b",color:"#fff",flex:2,fontWeight:700}} onClick={doVoorstelSturen} disabled={sending}>
-                  {sending?"Verzenden...":"📅 Voorstel sturen naar klant"}
-                </button>
-              : <button className="btn b2" style={{flex:2,fontWeight:700,opacity:0.6}} disabled>
-                  {!klant.email?"⚠️ Geen email — sla datum op":!planDatum?"Kies eerst een datum":"📅 Voorstel sturen"}
+            {planDatum
+              ? klant.email
+                ? <button className="btn" style={{background:"#f59e0b",color:"#fff",flex:2,fontWeight:700}} onClick={doVoorstelSturen} disabled={sending}>
+                    {sending?"Verzenden...":"📅 Voorstel sturen"}
+                  </button>
+                : <button className="btn b2" style={{flex:2,fontWeight:700}} onClick={()=>{doSave();onClose();}}>
+                    💾 Opslaan zonder email
+                  </button>
+              : <button className="btn b2" style={{flex:2,fontWeight:700,opacity:0.5}} disabled>
+                  Kies eerst een datum
                 </button>
             }
           </>}
