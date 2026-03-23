@@ -168,9 +168,9 @@ const BILLIT_API = {
 };
 
 function getBillitUrl(settings) {
-  // Gebruik altijd de lokale proxy — geen directe Billit API calls (CORS)
-  // /api/billit is een Cloudflare Pages Function die proxyt naar Billit
-  return "/api/billit-proxy";
+  // Direct naar Billit API — Billit staat cross-origin calls toe met Bearer token
+  const env = settings?.integraties?.billitEnv || "production";
+  return env === "sandbox" ? "https://sandbox.billit.be/api" : "https://app.billit.be/api";
 }
 function getBillitEnv(settings) {
   return settings?.integraties?.billitEnv || "production";
@@ -221,12 +221,10 @@ async function kboLookup(vatNumber, cbeApiKey = null) {
       }
     } catch(e) { console.warn("[KBO] Proxy failed:", e.message); }
 
-    // BRON 2: VIES via corsproxy.io (publieke CORS proxy)
+    // BRON 2: VIES via allorigins.win (betrouwbare publieke CORS proxy)
     try {
-      const viesUrl = encodeURIComponent(`https://ec.europa.eu/taxation_customs/vies/rest-api/ms/BE/vat/${cleaned}`);
-      const r2 = await fetch(`https://corsproxy.io/?${viesUrl}`, {
-        headers: { "Accept": "application/json", "x-requested-with": "XMLHttpRequest" }
-      });
+      const viesTarget = "https://ec.europa.eu/taxation_customs/vies/rest-api/ms/BE/vat/" + cleaned;
+      const r2 = await fetch("https://api.allorigins.win/raw?url=" + encodeURIComponent(viesTarget));
       if(r2.ok) {
         const d2 = await r2.json();
         if(d2 && d2.valid && d2.name && d2.name !== "---") {
@@ -237,19 +235,16 @@ async function kboLookup(vatNumber, cbeApiKey = null) {
             if(parts.length >= 2) { baseResult.gemeente = parts[parts.length-1]; baseResult.adres = parts.slice(0,-1).join(", "); }
             else { baseResult.adres = d2.address; }
           }
-          console.log("[KBO] \u2713 SUCCESS via corsproxy+VIES:", baseResult.naam);
+          console.log("[KBO] \u2713 SUCCESS via allorigins+VIES:", baseResult.naam);
           return baseResult;
         }
       }
-    } catch(e2) { console.warn("[KBO] corsproxy VIES failed:", e2.message); }
+    } catch(e2) { console.warn("[KBO] allorigins VIES failed:", e2.message); }
 
-    // BRON 3: cbeapi.be via corsproxy.io
+    // BRON 3: cbeapi.be via allorigins.win
     try {
-      const cbeUrl = encodeURIComponent(`https://cbeapi.be/api/enterprise/${cleaned}`);
-      const hdrs = cbeApiKey
-        ? { "Accept": "application/json", "Authorization": `Bearer ${cbeApiKey}`, "x-requested-with": "XMLHttpRequest" }
-        : { "Accept": "application/json", "x-requested-with": "XMLHttpRequest" };
-      const r3 = await fetch(`https://corsproxy.io/?${cbeUrl}`, { headers: hdrs });
+      const cbeTarget = "https://cbeapi.be/api/enterprise/" + cleaned;
+      const r3 = await fetch("https://api.allorigins.win/raw?url=" + encodeURIComponent(cbeTarget));
       if(r3.ok) {
         const d3 = await r3.json();
         if(d3 && (d3.denomination || d3.name)) {
@@ -259,11 +254,11 @@ async function kboLookup(vatNumber, cbeApiKey = null) {
           baseResult.gemeente = `${d3.address?.zipcode||""} ${d3.address?.city||""}`.trim();
           baseResult.tel = d3.contact?.phone || "";
           baseResult.email = d3.contact?.email || "";
-          console.log("[KBO] \u2713 SUCCESS via corsproxy+cbeapi:", baseResult.naam);
+          console.log("[KBO] \u2713 SUCCESS via allorigins+cbeapi:", baseResult.naam);
           return baseResult;
         }
       }
-    } catch(e3) { console.warn("[KBO] corsproxy cbeapi failed:", e3.message); }
+    } catch(e3) { console.warn("[KBO] allorigins cbeapi failed:", e3.message); }
 
     console.warn("[KBO] Alle bronnen gefaald \u2014 BTW geldig maar geen bedrijfsdata");
     return baseResult;
@@ -281,9 +276,9 @@ async function checkPeppolBillit(vatNumber, settings) {
   const env = getBillitEnv(settings);
   
   try {
-    // Via /api/billit Cloudflare proxy — geen CORS issues
-    const path = `/v1/peppol/participantInformation/${query}`;
-    const resp = await fetch(`/api/billit?path=${encodeURIComponent(path)}&env=${env}`, {
+    // Direct naar Billit API (Billit staat Bearer token calls toe)
+    const billitBase = getBillitUrl(settings);
+    const resp = await fetch(`${billitBase}/v1/peppol/participantInformation/${query}`, {
       headers: billitHeaders(settings)
     });
     if(resp.ok) {
@@ -363,7 +358,8 @@ async function sendViaBillit(factuur, settings) {
   const order = billrToBillitOrder(factuur, settings);
   
   const env = getBillitEnv(settings);
-  const createResp = await fetch(`/api/billit?path=${encodeURIComponent("/v1/order")}&env=${env}`, {
+  const billitBase = getBillitUrl(settings);
+  const createResp = await fetch(`${billitBase}/v1/order`, {
     method: "POST",
     headers,
     body: JSON.stringify(order)
@@ -381,7 +377,7 @@ async function sendViaBillit(factuur, settings) {
   
   // Stap 2: Versturen via Peppol
   console.log("[BILLIT] Stap 2: Versturen via Peppol...");
-  const sendResp = await fetch(`/api/billit?path=${encodeURIComponent("/v1/order/commands/send")}&env=${env}`, {
+  const sendResp = await fetch(`${billitBase}/v1/order/commands/send`, {
     method: "POST",
     headers,
     body: JSON.stringify({
@@ -406,7 +402,8 @@ async function testBillitConnection(settings) {
   if(!apiKey) return { ok: false, error: "Geen API key" };
   const env = getBillitEnv(settings);
   try {
-    const resp = await fetch(`/api/billit?path=${encodeURIComponent("/v1/account")}&env=${env}`, {
+    const base = getBillitUrl(settings);
+    const resp = await fetch(`${base}/v1/account`, {
       headers: billitHeaders(settings)
     });
     if(resp.ok) {
