@@ -1627,14 +1627,20 @@ export default function App() {
           const prods = parse(sbData["b4_prd"], INIT_PRODUCTS);
           try {
             const fr = await sb.from('product_fiches').select('product_id,fiches').eq('user_id', u.id);
-            if(fr.data && fr.data.length > 0) {
+            if(fr.error) { console.warn("[Fiches] Laad fout:", fr.error.message); setProducten(restoreFicheCache(prods)); }
+            else if(fr.data && fr.data.length > 0) {
               const sbFicheCache = {};
-              fr.data.forEach(r => { sbFicheCache[r.product_id] = r.fiches; });
+              fr.data.forEach(r => { if(r.fiches && r.fiches.length > 0) sbFicheCache[r.product_id] = r.fiches; });
+              console.log(`✅ Fiches geladen: ${Object.keys(sbFicheCache).length} producten`);
               setProducten(restoreFicheCache(prods, sbFicheCache));
             } else {
-              setProducten(restoreFicheCache(prods));
+              console.warn("[Fiches] Geen fiches in product_fiches tabel — val terug op localStorage cache");
+              setProducten(restoreFicheCache(prods)); // pikt localStorage billr_fiche_cache op
             }
-          } catch(_) { setProducten(restoreFicheCache(prods)); }
+          } catch(fe) {
+            console.error("[Fiches] Exception:", fe.message);
+            setProducten(restoreFicheCache(prods));
+          }
         }
         if(sbData["b4_off"]) {
           const raw=parse(sbData["b4_off"],[]);
@@ -1683,7 +1689,17 @@ export default function App() {
               if(retry["b4_kln"]) setKlanten(p2("b4_kln", []));
               if(retry["b4_off"]) { const offs=p2("b4_off",[]); const seen=new Set(); setOffertes(offs.filter(o=>{ if(!o.id||seen.has(o.id)) return false; seen.add(o.id); return true; })); }
               if(retry["b4_fct"]) setFacturen(p2("b4_fct",[]));
-              if(retry["b4_prd"]) setProducten(restoreFicheCache(p2("b4_prd",[])));
+              if(retry["b4_prd"]) {
+                const retryProds = p2("b4_prd",[]);
+                try {
+                  const frRetry = await sb.from('product_fiches').select('product_id,fiches').eq('user_id', u.id);
+                  if(frRetry.data && frRetry.data.length > 0) {
+                    const sfc = {};
+                    frRetry.data.forEach(r => { if(r.fiches && r.fiches.length > 0) sfc[r.product_id] = r.fiches; });
+                    setProducten(restoreFicheCache(retryProds, sfc));
+                  } else { setProducten(restoreFicheCache(retryProds)); }
+                } catch(_) { setProducten(restoreFicheCache(retryProds)); }
+              }
               if(retry["b4_cn"])  setCreditnotas(p2("b4_cn",[]));
               if(retry["b4_ga"])  setGaranties(p2("b4_ga",[]));
               Object.entries(retry).forEach(([k,v])=>{ try{localStorage.setItem(k,v);}catch(_){} });
@@ -2004,14 +2020,16 @@ export default function App() {
     document.addEventListener('visibilitychange', onHide);
     return ()=>{ window.removeEventListener('beforeunload', flush); document.removeEventListener('visibilitychange', onHide); };
   }, [flushSaves]);
+  // Track welke fiche-hashes al naar Supabase zijn gestuurd
+  const savedFicheHashes = useRef({});
+
   const saveFicheCache = useCallback((productenArr) => {
     try {
       // Stap 1: update localStorage cache (altijd, onmiddellijk)
       let existing = {};
       try { const r = localStorage.getItem("billr_fiche_cache"); if(r) existing = JSON.parse(r); } catch(_){}
       const cache = {...existing};
-      let changed = false;
-      const toSave = []; // producten met fiches om naar Supabase te sturen
+      const toSave = []; // ALLEEN fiches die nieuw/gewijzigd zijn
 
       productenArr.forEach(p => {
         let fiches = null;
@@ -2021,14 +2039,20 @@ export default function App() {
           fiches = [{data: p.technischeFiche, naam: p.fichNaam||"fiche.pdf"}];
         }
         if(fiches) {
+          // Hash = naam + datalengte per fiche - snel, geen crypto
+          const hash = fiches.map(f => (f.naam||"") + String((f.data||"").length)).join("|");
+          const alreadySaved = savedFicheHashes.current[p.id] === hash;
           cache[p.id] = fiches;
-          changed = true;
-          if(user) toSave.push({user_id: user.id, product_id: p.id, fiches, updated_at: new Date().toISOString()});
+          if(!alreadySaved && user) {
+            toSave.push({user_id: user.id, product_id: p.id, fiches, updated_at: new Date().toISOString()});
+            savedFicheHashes.current[p.id] = hash;
+          }
         }
       });
 
-      if(changed) {
-        try { localStorage.setItem("billr_fiche_cache", JSON.stringify(cache)); } catch(_){}
+      try { localStorage.setItem("billr_fiche_cache", JSON.stringify(cache)); } catch(_){}
+      if(toSave.length > 0) {
+        console.log("Fiches opslaan: " + toSave.length + " product(en)");
         // Stap 2: sla op in product_fiches tabel (apart van user_data — geen grootteproblemen)
         if(user && toSave.length > 0) {
           sb.from('product_fiches').upsert(toSave, {onConflict:'user_id,product_id'})
@@ -2059,8 +2083,11 @@ export default function App() {
       }
       if(!cache) return productenArr;
       return productenArr.map(p => {
-        if(cache[p.id] && !(p.technischeFiches?.some(f => f.data))) {
-          return { ...p, technischeFiches: cache[p.id] };
+        const cached = cache[p.id];
+        // Controleer of cached fiches echte data hebben (niet enkel metadata)
+        const hasRealData = Array.isArray(cached) && cached.some(f => f.data && f.data.length > 100);
+        if(hasRealData && !(p.technischeFiches?.some(f => f.data))) {
+          return { ...p, technischeFiches: cached };
         }
         return p;
       });
@@ -2071,6 +2098,12 @@ export default function App() {
   useEffect(()=>{ saveKey("b4_fct", facturen);  },[facturen,   saveKey]);
   useEffect(()=>{ saveKey("b4_kln", klanten);   },[klanten,    saveKey]);
   useEffect(()=>{ saveKey("b4_prd", producten); },[producten, saveKey]);
+  // Automatisch fiches naar Supabase product_fiches tabel als producten met data worden geladen
+  useEffect(()=>{
+    if(!user) return;
+    const metFiches = producten.filter(p => p.technischeFiches?.some(f => f.data && f.data.length > 100));
+    if(metFiches.length > 0) saveFicheCache(metFiches);
+  },[producten, user]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(()=>{ saveKey("b4_set", settings);  },[settings,   saveKey]);
   useEffect(()=>{ saveKey("b4_cn",  creditnotas);},[creditnotas,saveKey]);
   useEffect(()=>{ saveKey("b4_am",  aanmaningen);},[aanmaningen,saveKey]);
@@ -2198,8 +2231,11 @@ export default function App() {
         if(allData["b4_prd"] && sbNewer("b4_prd")) {
           try {
             const fr2 = await sb.from('product_fiches').select('product_id,fiches').eq('user_id', user.id);
-            const sfc = fr2.data&&fr2.data.length>0 ? Object.fromEntries(fr2.data.map(r=>[r.product_id,r.fiches])) : null;
-            setProducten(restoreFicheCache(p("b4_prd",[]), sfc));
+            if(fr2.data && fr2.data.length > 0) {
+              const sfc = {};
+              fr2.data.forEach(r => { if(r.fiches && r.fiches.some(f=>f.data)) sfc[r.product_id] = r.fiches; });
+              setProducten(restoreFicheCache(p("b4_prd",[]), sfc));
+            } else { setProducten(restoreFicheCache(p("b4_prd",[]))); }
           } catch(_) { setProducten(restoreFicheCache(p("b4_prd",[]))); }
         }
         if(allData["b4_off"] && sbNewer("b4_off")) { 
