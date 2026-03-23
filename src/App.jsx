@@ -1544,7 +1544,21 @@ export default function App() {
   useEffect(()=>{ try { sessionStorage.setItem("billr_pg", pg); } catch(_){} },[pg]);
   const [klanten, setKlanten] = useState(INIT_KLANTEN);
   const [producten, setProducten] = useState(INIT_PRODUCTS);
-  const [offertes, setOffertes] = useState([]);
+  const [offertes, _setOffertes] = useState([]);
+  const setOffertes = useCallback((valOrFn) => {
+    _setOffertes(prev => {
+      const next = typeof valOrFn === 'function' ? valOrFn(prev) : valOrFn;
+      if(!Array.isArray(next)) return next;
+      const PRIO = {verstuurd:5,goedgekeurd:6,gefactureerd:7,afgedrukt:4,afgewezen:3,concept:1};
+      const seen = new Map();
+      next.forEach(o => {
+        const key = o.nummer || o.id;
+        if(!seen.has(key)) { seen.set(key, o); return; }
+        if((PRIO[o.status]||0) > (PRIO[seen.get(key).status]||0)) seen.set(key, o);
+      });
+      return [...seen.values()];
+    });
+  }, []);
   const [facturen, setFacturen] = useState([]);
   const [settings, setSettings] = useState(INIT_SETTINGS);
   const [loaded, setLoaded] = useState(false);
@@ -1679,27 +1693,7 @@ export default function App() {
 
       // Nu mogen saves plaatsvinden
       dataReady.current = true;
-      // Dedupliceer offertes + meteen opslaan
-      setTimeout(() => {
-        setOffertes(prev => {
-          const STATUS_PRIO = {verstuurd:5,goedgekeurd:6,gefactureerd:7,afgedrukt:4,afgewezen:3,concept:1};
-          const seen = new Map();
-          prev.forEach(o => {
-            const key = o.nummer || o.id;
-            if(!seen.has(key)) { seen.set(key, o); return; }
-            const cur = seen.get(key);
-            if((STATUS_PRIO[o.status]||0) > (STATUS_PRIO[cur.status]||0)) seen.set(key, o);
-          });
-          const deduped = [...seen.values()];
-          if(deduped.length !== prev.length) {
-            console.log(`🧹 Dedup: ${prev.length}→${deduped.length}`);
-            // Sla op — dataReady is nu true
-            pendingSaves.current["b4_off"] = JSON.stringify(deduped.map(o=>{const c={...o};if(c.technischeFiche&&c.technischeFiche.length>500)c.technischeFiche="[PDF]";if(c.technischeFiches)c.technischeFiches=c.technischeFiches.map(f=>({naam:f.naam||"",url:f.url||""}));return c;}));
-            flushSaves();
-          }
-          return deduped;
-        });
-      }, 200);
+
 
       // ── MIGRATIE: zorg dat ALLE producten met fiches in product_fiches tabel staan ──
       // (voor producten die voor de nieuwe tabel werden opgeslagen)
