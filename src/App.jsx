@@ -1577,6 +1577,8 @@ export default function App() {
   const [editFact, setEditFact] = useState(null);
   // Acceptatie tokens voor offertes (klant klikt op link in email)
   const [acceptTokens, setAcceptTokens] = useState({});
+  const offertes_ref = useRef([]); // Altijd actuele offertes zonder re-render trigger
+  useEffect(() => { offertes_ref.current = offertes; }, [offertes]);
   const [dossierModal, setDossierModal] = useState(null);
   const [tijdModal, setTijdModal] = useState(null);
   const [planningModal, setPlanningModal] = useState(null);
@@ -1818,10 +1820,16 @@ export default function App() {
   // ═══ OFFERTE TRACKING — fetch views + responses from Supabase ═══
   const fetchOfferteTracking = useCallback(async () => {
     try {
-      const { data: views } = await sb.from('offerte_views').select('offerte_id, viewed_at, user_agent');
-      const { data: responses } = await sb.from('offerte_responses').select('offerte_id, status, periode, opmerkingen, submitted_at');
+      // Filter op eigen offerte IDs - geen data van andere gebruikers ophalen
+      const offerteIds = offertes_ref.current.map(o => o.id).filter(Boolean);
+      if(offerteIds.length === 0) return;
+      const { data: views } = await sb.from('offerte_views').select('offerte_id, viewed_at, user_agent')
+        .in('offerte_id', offerteIds).order('viewed_at', {ascending:false}).limit(200);
+      const { data: responses } = await sb.from('offerte_responses').select('offerte_id, status, periode, opmerkingen, submitted_at')
+        .in('offerte_id', offerteIds).order('submitted_at', {ascending:false}).limit(200);
       let proposals = null;
-      try { const r = await sb.from('planning_proposals').select('*'); proposals = r.data; } catch(_){}
+      try { const r = await sb.from('planning_proposals').select('*')
+        .in('offerte_id', offerteIds).limit(100); proposals = r.data; } catch(_){}
       if(views) {
         const grouped = {};
         views.forEach(v => {
@@ -2959,7 +2967,7 @@ export default function App() {
         setPg("offertes");
       }
     }
-  },[offertes.length, loaded]);
+  },[loaded]); // eslint-disable-line react-hooks/exhaustive-deps -- intentionally runs once after load
 
   if(!loaded) return (
     <div style={{display:"flex",alignItems:"center",justifyContent:"center",height:"100dvh",fontFamily:"Inter,sans-serif",background:"#1a2e4a",flexDirection:"column",gap:16}}>
