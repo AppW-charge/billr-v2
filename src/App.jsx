@@ -1717,7 +1717,6 @@ export default function App() {
       dataReady.current = true;
       // Reset dedup cache zodat eerste save na load altijd doorgaat
       // (voorkomt dat gewijzigde data niet gesaved wordt na herlaad)
-      if(window.__billrLastSaved) window.__billrLastSaved = {};
 
 
       // Migratie fiches: eenmalig, enkel als nog niet gedaan deze week
@@ -1905,7 +1904,7 @@ export default function App() {
     } catch(e) { console.warn("Offerte tracking fetch failed:", e); }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   // Fetch tracking on load AND when offertes_ref gets populated
-  useEffect(() => { if(user && offertes_ref.current.length > 0) fetchOfferteTracking(); }, [user]);
+  useEffect(() => { if(user) { setTimeout(fetchOfferteTracking, 2000); } }, [user]);
   // Auto-plan prompt: als offerte net op goedgekeurd gezet (door klant via tracking) en nog niet ingepland
   const autoPromptedRef = useRef(new Set());
   useEffect(() => {
@@ -1922,10 +1921,13 @@ export default function App() {
       setTimeout(() => setPlanningModal(m => m ? m : nieuwGoedgekeurd[0]), 600);
     }
   }, [offertes, user]);
-  // Auto-poll tracking elke 60s enkel op dashboard
+  // Auto-poll tracking: 30s op offertes, 60s op dashboard
   useEffect(() => {
-    if(!user || pg !== "dashboard") return;
-    const iv = setInterval(fetchOfferteTracking, 60000);
+    if(!user) return;
+    if(pg !== "dashboard" && pg !== "offertes") return;
+    fetchOfferteTracking(); // Meteen bij navigatie
+    const interval = pg === "offertes" ? 30000 : 60000;
+    const iv = setInterval(fetchOfferteTracking, interval);
     return () => clearInterval(iv);
   }, [user, pg]);
 
@@ -1962,8 +1964,6 @@ export default function App() {
   const pendingSaves = useRef({});
   const saveTimer = useRef(null);
   const lastSavedJson = useRef({}); // dedup: sla hash op van laatste gesaved waarde per key
-  // Sync ref with window object for reset capability
-  if(!window.__billrLastSaved) window.__billrLastSaved = {};
   // localTimestamps: bewaard in localStorage zodat page reload de timestamps niet verliest
   const localTimestamps = useRef((() => {
     try { const r=localStorage.getItem("billr_ts"); return r?JSON.parse(r):{}; } catch(_){ return {}; }
@@ -2013,11 +2013,7 @@ export default function App() {
     const batch = {...pendingSaves.current};
     pendingSaves.current = {};
     for(const [key, json] of Object.entries(batch)) {
-      try {
-        const ok = await sbSet(key, json, user.id);
-        // Als save mislukt: reset dedup zodat volgende poging wel doorgaat
-        if(!ok) delete lastSavedJson.current[key];
-      } catch(_){ delete lastSavedJson.current[key]; }
+      try { await sbSet(key, json, user.id); } catch(_){}
     }
   }, [user]);
 
@@ -2029,10 +2025,6 @@ export default function App() {
     const stripped = stripBase64(key, val);
     const json = JSON.stringify(stripped);
     
-    // Dedup: sla niet op als data niet gewijzigd is
-    if(lastSavedJson.current[key] === json) return;
-    lastSavedJson.current[key] = json;
-
     // localStorage: meteen (snel, lokaal)
     try { localStorage.setItem(key, json); } catch(e) { try { localStorage.removeItem(key); } catch(_){} }
     
@@ -2040,9 +2032,11 @@ export default function App() {
     localTimestamps.current[key] = Date.now();
     try { localStorage.setItem("billr_ts", JSON.stringify(localTimestamps.current)); } catch(_){}
     
-    // Debounce: 10s voor b4_prd (producten veranderen zelden), 2s voor andere keys
-    const debounceMs = key === "b4_prd" ? 10000 : 2000;
+    // Batch saves: voeg toe aan pending, flush na debounce
+    // b4_prd: 10s debounce (zelden gewijzigd), rest: 1s
+    const debounceMs = key === "b4_prd" ? 10000 : 1000;
     pendingSaves.current[key] = json;
+    // Reset timer alleen als er nog geen flush gepland is voor deze batch
     if(saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(flushSaves, debounceMs);
   }, [user, flushSaves]);
@@ -2346,7 +2340,7 @@ export default function App() {
     return `${customPre}-${y}-${String(next).padStart(3,"0")}`;
   };
   const logEntry = (actie) => ({ts: new Date().toISOString(), actie});
-  const updOff = (id,upd) => { setOffertes(p=>p.map(o=>o.id===id?{...o,...upd,log:[...(o.log||[]),logEntry(upd.status?"Status → "+(OFF_STATUS[upd.status]?.l||upd.status):upd.logActie||"Gewijzigd")]}:o)); setTimeout(flushSaves, 500); };
+  const updOff = (id,upd) => { setOffertes(p=>p.map(o=>o.id===id?{...o,...upd,log:[...(o.log||[]),logEntry(upd.status?"Status → "+(OFF_STATUS[upd.status]?.l||upd.status):upd.logActie||"Gewijzigd")]}:o)); setTimeout(flushSaves, 300); };
   const updFact = (id,upd) => { setFacturen(p=>p.map(f=>f.id===id?{...f,...upd,log:[...(f.log||[]),logEntry(upd.status?"Status → "+(FACT_STATUS[upd.status]?.l||upd.status):upd.logActie||"Gewijzigd")]}:f)); setTimeout(flushSaves, 500); };
   // Wrapper: bij goedkeuring automatisch PlanningModal openen
   const handleOffStatus = (id, upd) => {
