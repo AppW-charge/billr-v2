@@ -1578,6 +1578,7 @@ export default function App() {
   const [editFact, setEditFact] = useState(null);
   // Acceptatie tokens voor offertes (klant klikt op link in email)
   const [acceptTokens, setAcceptTokens] = useState({});
+  const [websiteLeads, setWebsiteLeads] = useState([]); // Aanvragen van website
   const offertes_ref = useRef([]); // Altijd actuele offertes zonder re-render trigger
   useEffect(() => { offertes_ref.current = offertes; }, [offertes]);
   const [dossierModal, setDossierModal] = useState(null);
@@ -1910,6 +1911,30 @@ export default function App() {
   useEffect(() => {
     if(!user || pg !== "dashboard") return;
     const iv = setInterval(fetchOfferteTracking, 60000);
+    return () => clearInterval(iv);
+  }, [user, pg]);
+
+  // Website leads laden + elke 2 min pollen op dashboard
+  const fetchWebsiteLeads = useCallback(async () => {
+    if(!user) return;
+    try {
+      const { data, error } = await sb.from("website_leads")
+        .select("*")
+        .order("created_at", { ascending: false })
+        .limit(50);
+      if(!error && data) {
+        setWebsiteLeads(data);
+        // Badge notificatie voor nieuwe ongelezen leads
+        const nieuw = data.filter(l => l.status === "nieuw").length;
+        if(nieuw > 0) document.title = `(${nieuw}) BILLR`;
+        else document.title = "BILLR";
+      }
+    } catch(e) { console.warn("Leads fetch:", e.message); }
+  }, [user]);
+  useEffect(() => { if(user) fetchWebsiteLeads(); }, [user, fetchWebsiteLeads]);
+  useEffect(() => {
+    if(!user || pg !== "dashboard") return;
+    const iv = setInterval(fetchWebsiteLeads, 120000); // elke 2 min
     return () => clearInterval(iv);
   }, [user, pg]);
 
@@ -2370,7 +2395,7 @@ export default function App() {
       localTimestamps.current["b4_off"]=Date.now();
       try{localStorage.setItem("billr_ts",JSON.stringify(localTimestamps.current));}catch(_){}
       // eslint-disable-next-line no-unused-vars
-      const {nummerOverride:_nrOv, ...cleanData} = finalData;
+      const {nummerOverride:_nrOv, log:_wizLog, ...cleanData} = finalData; // strip wizard log + nummerOverride
       cleanData.nummer = existingOff.nummer; // nummer NOOIT wijzigen via edit
       setOffertes(p=>p.map(o=>o.id===cleanData.id?{...o,...cleanData,log:[...(o.log||[]),logEntry("📝 Gewijzigd")],aangemaakt:o.aangemaakt}:o));
       notify("Offerte opgeslagen ✓");
@@ -3024,7 +3049,7 @@ export default function App() {
           </div>
 
           <div className="content">
-            {pg==="dashboard"&&<Dashboard offertes={offertes} facturen={factMet} onGoto={gotoFiltered} onNew={()=>{setEditOff(null);setWizOpen(true)}} onFactuur={d=>setFactModal(d)} settings={settings} offerteViews={offerteViews} offerteResponses={offerteResponses} planningProposals={planningProposals} onLogboek={o=>setLogboekModal(o)} onPlan={o=>setPlanningModal(o)} onPlanDelete={id=>{updOff(id,{planStatus:"geannuleerd",planDatum:null,planTijd:null,logActie:"🗑 Afspraak geannuleerd"});setTimeout(flushSaves,100);}} widgetOrder={widgetOrder} setWidgetOrder={setWidgetOrder} onRefreshTracking={fetchOfferteTracking}/>}
+            {pg==="dashboard"&&<Dashboard offertes={offertes} facturen={factMet} onGoto={gotoFiltered} onNew={()=>{setEditOff(null);setWizOpen(true)}} onFactuur={d=>setFactModal(d)} settings={settings} offerteViews={offerteViews} offerteResponses={offerteResponses} planningProposals={planningProposals} onLogboek={o=>setLogboekModal(o)} onPlan={o=>setPlanningModal(o)} onPlanDelete={id=>{updOff(id,{planStatus:"geannuleerd",planDatum:null,planTijd:null,logActie:"🗑 Afspraak geannuleerd"});setTimeout(flushSaves,100);}} widgetOrder={widgetOrder} setWidgetOrder={setWidgetOrder} onRefreshTracking={fetchOfferteTracking} websiteLeads={websiteLeads} onLeadRefresh={fetchWebsiteLeads} onLeadStatus={async(id,status)=>{try{await sb.from("website_leads").update({status}).eq("id",id);fetchWebsiteLeads();}catch(_){}}} onLeadToOfferte={(lead)=>{setEditOff(null);setWizOpen(true);notify("Aanvraag: "+lead.naam);}}/>}
             {pg==="offertes"&&<OffertesPage offertes={offertes} initFilter={pgFilter} onView={d=>setViewDoc({doc:d,type:"offerte"})} onEdit={d=>{setEditOff(d);setWizOpen(true)}} onStatus={handleOffStatus} onBulkStatus={bulkUpdOff} onFactuur={d=>setFactModal(d)} onDelete={id=>{setOffertes(p=>p.filter(o=>o.id!==id));localTimestamps.current["b4_off"]=Date.now();try{localStorage.setItem("billr_ts",JSON.stringify(localTimestamps.current));}catch(_){}notify("Verwijderd");setTimeout(flushSaves,100);}} onNew={()=>{setEditOff(null);setWizOpen(true)}} onEmail={async d=>{await shareOfferte(d);setEmailModal({doc:d,type:"offerte"});}} onPlan={d=>setPlanningModal(d)} onShare={d=>{shareOfferte(d);notify("🔗 Publieke link vernieuwd ✓");}} settings={settings}/>}
             {pg==="facturen"&&<FacturenPage facturen={factMet} settings={settings} initFilter={pgFilter} onView={d=>setViewDoc({doc:d,type:"factuur"})} onEdit={f=>{setEditFact(f);setFactuurWizOpen(true);}} onStatus={updFact} onBulkStatus={bulkUpdFact} onDelete={id=>{setFacturen(p=>p.filter(f=>f.id!==id));localTimestamps.current["b4_fct"]=Date.now();try{localStorage.setItem("billr_ts",JSON.stringify(localTimestamps.current));}catch(_){}notify("Verwijderd");setTimeout(flushSaves,100);}} notify={notify} onEmail={d=>setEmailModal({doc:d,type:"factuur"})} onBetaling={f=>setBetalingModal(f)} onAanmaning={f=>setAanmaningModal(f)} onNew={()=>{setEditFact(null);setFactuurWizOpen(true)}}/>}
             {pg==="klanten"&&<KlantenPage klanten={klanten} offertes={offertes} facturen={factMet} view={klantView} onEdit={k=>setKlantModal(k)} onDelete={id=>{setKlanten(p=>p.map(k=>k.id===id?{...k,_verwijderd:true}:k));localTimestamps.current["b4_kln"]=Date.now();try{localStorage.setItem("billr_ts",JSON.stringify(localTimestamps.current));}catch(_){}notify("Klant verwijderd");setTimeout(flushSaves,100);}}/>}
@@ -3114,7 +3139,7 @@ export default function App() {
 }
 
 // ─── DASHBOARD ────────────────────────────────────────────────────
-function Dashboard({offertes, facturen, onGoto, onNew, onFactuur, settings, offerteViews, offerteResponses, planningProposals, onLogboek, onPlan, onPlanDelete, widgetOrder, setWidgetOrder, onRefreshTracking}) {
+function Dashboard({offertes, facturen, onGoto, onNew, onFactuur, settings, offerteViews, offerteResponses, planningProposals, onLogboek, onPlan, onPlanDelete, widgetOrder, setWidgetOrder, onRefreshTracking, websiteLeads=[], onLeadRefresh, onLeadStatus, onLeadToOfferte}) {
   const instTypesSetting = settings;
   const openOff = offertes.filter(o=>o.status==="verstuurd");
   const openFact = facturen.filter(f=>f.status!=="betaald"&&f.status!=="concept");
@@ -3138,7 +3163,7 @@ function Dashboard({offertes, facturen, onGoto, onNew, onFactuur, settings, offe
   const [dragId, setDragId] = useState(null);
   const [dragOverId, setDragOverId] = useState(null);
   const [editMode, setEditMode] = useState(false);
-  const defaultOrder = ["statistieken","recenteOffertes","openFacturen","goedgekeurdeOffertes","offerteLogboek","afspraken","snelleActies","agenda"];
+  const defaultOrder = ["websiteAanvragen","statistieken","recenteOffertes","openFacturen","goedgekeurdeOffertes","offerteLogboek","afspraken","snelleActies","agenda"];
   const order = widgetOrder || settings.dashboardWidgets?.widgetOrder || defaultOrder;
   const dw = settings.dashboardWidgets || {};
 
@@ -3381,6 +3406,44 @@ function Dashboard({offertes, facturen, onGoto, onNew, onFactuur, settings, offe
         </div>}
       </div>);
     })(),
+  websiteAanvragen: ()=> (
+    <div className="card mb4" key="w-aanvragen" style={{border:"2px solid #f59e0b",background:"#fffbeb"}}>
+      <div className="card-h">
+        <div className="card-t" style={{color:"#d97706"}}>
+          🌐 Website Aanvragen
+          {websiteLeads.filter(l=>l.status==="nieuw").length > 0 &&
+            <span style={{marginLeft:8,background:"#ef4444",color:"#fff",borderRadius:10,padding:"1px 8px",fontSize:11,fontWeight:700}}>
+              {websiteLeads.filter(l=>l.status==="nieuw").length}
+            </span>
+          }
+        </div>
+        <button className="btn btn-sm" onClick={onLeadRefresh} style={{fontSize:11}}>&#x1F504;</button>
+      </div>
+      {websiteLeads.length === 0
+        ? <div style={{color:"#94a3b8",fontSize:13,textAlign:"center",padding:"16px 0"}}>Nog geen aanvragen via de website</div>
+        : websiteLeads.slice(0,6).map(lead=>(
+          <div key={lead.id} style={{display:"flex",gap:10,padding:"10px 0",borderBottom:"1px solid #fde68a",alignItems:"flex-start"}}>
+            <div style={{width:8,height:8,borderRadius:"50%",background:lead.status==="nieuw"?"#ef4444":"#10b981",flexShrink:0,marginTop:6}}/>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{fontWeight:700,fontSize:13}}>
+                {lead.naam||"Onbekend"}
+                {lead.status==="nieuw"&&<span style={{marginLeft:6,fontSize:10,fontWeight:700,color:"#ef4444",background:"#fef2f2",borderRadius:4,padding:"1px 5px"}}>NIEUW</span>}
+              </div>
+              <div style={{fontSize:11,color:"#78350f"}}>{lead.service||lead.type||""} {lead.gemeente?"· "+lead.gemeente:""}</div>
+              <div style={{fontSize:11,color:"#92400e",marginTop:2}}>{lead.email||""}{lead.tel?" · "+lead.tel:""}</div>
+              <div style={{fontSize:10,color:"#94a3b8"}}>{lead.created_at?new Date(lead.created_at).toLocaleDateString("nl-BE",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"}):""}</div>
+              {lead.bericht&&<div style={{fontSize:11,color:"#64748b",marginTop:3,fontStyle:"italic",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:240}}>"{lead.bericht}"</div>}
+            </div>
+            <div style={{display:"flex",flexDirection:"column",gap:4,flexShrink:0}}>
+              <button className="btn btn-sm" style={{background:"#d4ff00",color:"#1a2e4c",fontWeight:700,fontSize:10}}
+                onClick={()=>{onLeadStatus(lead.id,"behandeld");onLeadToOfferte(lead);}}>+ Offerte</button>
+              {lead.status==="nieuw"&&<button className="btn btn-sm" style={{fontSize:10}}
+                onClick={()=>onLeadStatus(lead.id,"behandeld")}>Gelezen</button>}
+            </div>
+          </div>
+        ))
+      }
+    </div>),
   };
 
   const wrapDraggable = (id, content) => {
