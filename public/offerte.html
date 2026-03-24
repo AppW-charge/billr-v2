@@ -4,9 +4,13 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>Offerte laden...</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:Inter,Arial,sans-serif;background:#f1f5f9;color:#1e293b;min-height:100vh}
+body{font-family:Inter,Arial,sans-serif;background:#f1f5f9;color:#1e293b}
 #loader{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;gap:14px}
 .spin{width:44px;height:44px;border:4px solid #e2e8f0;border-top-color:#1a2e4a;border-radius:50%;animation:spin .8s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
@@ -14,24 +18,50 @@ body{font-family:Inter,Arial,sans-serif;background:#f1f5f9;color:#1e293b;min-hei
 #err h2{color:#ef4444;font-size:20px;font-weight:800}
 #err p{color:#64748b;font-size:14px;max-width:420px;line-height:1.6}
 .retry-btn{background:#1a2e4a;color:#fff;border:none;padding:10px 24px;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600}
-
-/* Wrapper */
-#app{display:none;max-width:860px;margin:0 auto;padding:24px 16px 80px}
-.doc-page{background:#fff;max-width:860px;width:100%;margin:0 auto 20px;box-shadow:0 2px 12px rgba(0,0,0,.1);border-radius:4px;overflow:visible}
-.doc-page-lbl{text-align:center;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#94a3b8;margin-bottom:5px;margin-top:16px}
-
-/* Voorblad (page 1) */
-.cov{display:grid;grid-template-columns:42% 58%;min-height:480px}
+#root{max-width:900px;margin:0 auto;padding:24px 16px 80px}
+.doc-page{background:#fff;max-width:820px;width:100%;margin:0 auto 20px;box-shadow:0 2px 12px rgba(0,0,0,.1);border-radius:4px;overflow:visible;box-sizing:border-box;display:flex;flex-direction:column;position:relative}
+.doc-page:first-child{page-break-before:avoid}
+.doc-page-lbl{text-align:center;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#94a3b8;margin-bottom:5px}
+.screen-only{display:block}
+.print-only{display:none}
+.no-print{display:block}
+.cov{display:grid;grid-template-columns:42% 58%;min-height:240mm;height:100%}
+@media(max-width:768px){
+.doc-wrap{width:100%!important;overflow-x:auto!important}
+.doc-page{max-width:100%!important;width:100%!important;box-shadow:0 1px 6px rgba(0,0,0,.08)!important;margin-bottom:10px!important}
+.cov{grid-template-columns:36% 64%!important;min-height:auto!important}
+.cov-l{padding:16px 12px!important}
+.cov-r{padding:16px 14px!important}
+.cov-doctype{font-size:28px!important;letter-spacing:-1px!important}
+.qt-pg,.fct-pg{padding:12px!important}
+.qt-header{flex-direction:column;gap:8px}
+.qt-from-logo{max-height:28px!important}
+.qt-dtype{font-size:20px!important}
+.qt-parties{grid-template-columns:1fr!important;gap:8px!important}
+.qt-meta-bar{flex-wrap:wrap}
+.qt-meta-item{min-width:50%}
+.qt-tbl{font-size:10.5px!important}
+.qt-tbl th,.qt-tbl td{padding:5px 6px!important}
+.qt-totals{justify-content:stretch}
+.qt-tot-box{min-width:0!important;width:100%!important}
+.grp-hdr{font-size:10px!important;padding:4px 8px!important}
+.prod-page{padding:12px!important}
+.prod-item{grid-template-columns:80px 1fr!important;gap:10px!important}
+.prod-img,.prod-img-ph{width:80px!important;height:70px!important}
+.fct-pg,.fct-pg2{padding:12px!important}
+}
 .cov-l{display:flex;flex-direction:column;padding:44px 32px;position:relative;overflow:hidden}
+.cov-l::after{content:'';position:absolute;bottom:-80px;right:-80px;width:240px;height:240px;border-radius:50%;background:rgba(255,255,255,.06)}
 .cov-logo{max-width:140px;max-height:52px;object-fit:contain;margin-bottom:14px;filter:brightness(0) invert(1)}
 .cov-logo-mark{width:52px;height:52px;border-radius:10px;background:rgba(255,255,255,.15);border:1.5px solid rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;font-size:26px;margin-bottom:12px}
 .cov-co-name{font-weight:900;font-size:21px;color:#fff;letter-spacing:-.5px;margin-bottom:3px}
 .cov-co-tag{font-size:11px;color:rgba(255,255,255,.55);margin-bottom:auto}
 .cov-contact{margin-top:auto;font-size:11px;color:rgba(255,255,255,.5);line-height:1.9}
 .cov-contact strong{color:rgba(255,255,255,.8)}
+.cov-inst-badge{display:inline-flex;align-items:center;gap:8px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);border-radius:30px;padding:7px 14px;color:#fff;font-weight:700;font-size:13px;margin-top:16px;align-self:flex-start}
 .cov-r{padding:44px 40px;display:flex;flex-direction:column;justify-content:space-between}
-.cov-doctype{font-weight:900;font-size:52px;letter-spacing:-2.5px;line-height:1;color:#1e293b}
-.cov-docnum{font-family:monospace;font-size:12.5px;background:#f0f4f8;padding:3px 10px;border-radius:5px;display:inline-block;margin-top:5px;margin-bottom:28px;font-weight:700}
+.cov-doctype{font-weight:900;font-size:52px;letter-spacing:-2.5px;line-height:1}
+.cov-docnum{font-family:'JetBrains Mono',monospace;font-size:12.5px;background:#f0f4f8;padding:3px 10px;border-radius:5px;display:inline-block;margin-top:5px;margin-bottom:28px;font-weight:700}
 .cov-for-lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#94a3b8;margin-bottom:7px}
 .cov-client-name{font-size:22px;font-weight:900;letter-spacing:-.5px;margin-bottom:3px}
 .cov-client-co{font-size:14px;color:#475569;font-weight:600;margin-bottom:3px}
@@ -40,15 +70,23 @@ body{font-family:Inter,Arial,sans-serif;background:#f1f5f9;color:#1e293b;min-hei
 .cov-meta-lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:#94a3b8;margin-bottom:2px}
 .cov-meta-val{font-size:13px;font-weight:700;color:#1e293b}
 .cov-total{font-size:22px;font-weight:900;letter-spacing:-.5px}
-
-/* Offerte detail (page 3 style) */
+.prod-page{padding:30px 40px}
+.prod-item{display:grid;grid-template-columns:130px 1fr;gap:22px;margin-bottom:26px;padding-bottom:26px;border-bottom:1px solid #f1f5f9}
+.prod-item:last-child{border-bottom:none;margin-bottom:0;padding-bottom:0}
+.prod-img{width:130px;height:100px;object-fit:contain;border-radius:8px;background:#f8fafc;border:1px solid #e2e8f0}
+.prod-img-ph{width:130px;height:100px;border-radius:8px;background:#f0f4f8;display:flex;align-items:center;justify-content:center;font-size:38px;border:1px solid #e2e8f0}
+.prod-cat-tag{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;background:#eff6ff;color:#2563eb;padding:2px 8px;border-radius:4px;display:inline-block;margin-bottom:6px}
+.prod-naam{font-weight:800;font-size:15px;color:#1e293b;margin-bottom:4px;letter-spacing:-.3px}
+.prod-desc{font-size:12px;color:#475569;line-height:1.7;margin-bottom:8px}
+.prod-specs{display:flex;flex-wrap:wrap;gap:5px}
+.prod-spec{background:#f8fafc;border:1px solid #e2e8f0;border-radius:4px;padding:2px 8px;font-size:10.5px;font-weight:600;color:#475569}
 .qt-pg{padding:30px 40px}
 .qt-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:22px;padding-bottom:18px;border-bottom:2px solid #f0f4f8}
 .qt-from-logo{max-height:40px;max-width:120px;object-fit:contain;margin-bottom:6px}
 .qt-from-name{font-weight:900;font-size:18px;letter-spacing:-.4px;margin-bottom:2px}
 .qt-from-info{font-size:10.5px;color:#64748b;line-height:1.9}
 .qt-dtype{font-weight:900;font-size:28px;letter-spacing:-.8px;text-align:right}
-.qt-dnum{font-family:monospace;font-size:11.5px;background:#f0f4f8;padding:2px 8px;border-radius:4px;display:inline-block;margin-top:4px}
+.qt-dnum{font-family:'JetBrains Mono',monospace;font-size:11.5px;background:#f0f4f8;padding:2px 8px;border-radius:4px;display:inline-block;margin-top:4px}
 .qt-meta-bar{display:flex;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;overflow:hidden;margin-bottom:18px}
 .qt-meta-item{flex:1;padding:9px 14px;border-right:1px solid #e2e8f0}
 .qt-meta-item:last-child{border-right:none}
@@ -59,6 +97,7 @@ body{font-family:Inter,Arial,sans-serif;background:#f1f5f9;color:#1e293b;min-hei
 .qt-party-name{font-weight:700;font-size:13px;margin-bottom:2px}
 .qt-party-info{font-size:11.5px;color:#475569;line-height:1.8}
 .grp-hdr{padding:7px 12px;border-radius:4px 4px 0 0;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:#fff;margin-top:12px}
+.grp-hdr:first-child{margin-top:0}
 .qt-tbl{width:100%;border-collapse:collapse;border:1px solid #e2e8f0;border-top:none}
 .qt-tbl th{background:#f8fafc;padding:7px 10px;text-align:left;font-size:10px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid #e2e8f0}
 .qt-tbl th.r,.qt-tbl td.r{text-align:right}
@@ -66,336 +105,857 @@ body{font-family:Inter,Arial,sans-serif;background:#f1f5f9;color:#1e293b;min-hei
 .qt-tbl tbody tr:nth-child(even){background:#fafbfc}
 .qt-tbl td{padding:8px 10px;border-bottom:1px solid #f1f5f9;font-size:11.5px}
 .qt-tbl tbody tr:last-child td{border-bottom:none}
-.qt-item-main{font-weight:600}
-.qt-item-sub{font-size:10.5px;color:#64748b;margin-top:1px}
-.grp-sub{display:flex;justify-content:space-between;padding:7px 12px;background:#f8fafc;border:1px solid #e2e8f0;border-top:none;font-size:11.5px;color:#475569}
+.qt-item-main{font-weight:600;color:#1e293b}
+.qt-item-sub{font-size:10px;color:#64748b;margin-top:1px;font-style:italic}
+.grp-sub{display:flex;justify-content:flex-end;gap:12px;padding:5px 12px;background:#f0f4f8;border:1px solid #e2e8f0;border-top:none;font-size:11.5px;font-weight:700;margin-bottom:2px}
 .qt-totals{display:flex;justify-content:flex-end;margin-top:18px}
 .qt-tot-box{min-width:260px;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden}
 .qt-tot-row{display:flex;justify-content:space-between;padding:7px 14px;font-size:12.5px;border-bottom:1px solid #f1f5f9}
 .qt-tot-row.last{border-bottom:none;font-weight:800;font-size:15px;padding:10px 14px}
 .qt-tot-row.btwr{color:#64748b;font-size:11.5px}
+.qt-tot-row.krt{color:#ef4444}
+.qt-fiches{margin-top:14px;padding:10px 14px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:7px}
 .qt-betaal{margin-top:14px;padding:11px 13px;background:#f0fdf4;border:1px solid #86efac;border-radius:6px;font-size:12px;line-height:1.8}
 .qt-notes{margin-top:10px;padding:11px 13px;background:#fffbeb;border:1px solid #fde68a;border-radius:6px;font-size:12px;color:#78350f}
-.qt-footer{padding:10px 40px;display:flex;justify-content:space-between;align-items:center;margin-top:auto}
+.qt-voorschot{margin-top:8px;padding:9px 13px;background:#f0f4ff;border:1px solid #a5b4fc;border-radius:6px;font-size:12px;color:#3730a3}
+.qt-sign{margin-top:18px;display:grid;grid-template-columns:1fr;gap:16px}
+.qt-sign-box{border:1.5px dashed #cbd5e1;border-radius:7px;padding:16px;min-height:70px;position:relative}
+.qt-sign-lbl{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:#94a3b8;margin-bottom:4px}
+.qt-confirm-link{margin-top:10px;padding:11px 13px;background:#f0f4ff;border:1px solid #818cf8;border-radius:6px;font-size:11.5px;color:#3730a3;display:flex;align-items:center;gap:8px}
+.qt-footer{padding:10px 40px;display:flex;justify-content:space-between;align-items:center;margin-top:auto;page-break-inside:avoid}
 .qt-footer-txt{font-size:10px;color:rgba(255,255,255,.5)}
+.qt-footer-txt strong{color:rgba(255,255,255,.8)}
+.stamp{display:inline-block;border:3px solid #10b981;color:#10b981;font-weight:900;font-size:20px;letter-spacing:2px;padding:4px 16px;border-radius:4px;transform:rotate(-6deg);opacity:.8}
+.fct-pg{padding:30px 40px}
+.fct-pg2{padding:30px 40px}
+.fct-pg2-title{font-weight:900;font-size:16px;margin-bottom:14px;color:#1e293b}
+.legal-txt{font-size:11px;color:#475569;line-height:1.9;white-space:pre-wrap}
+.info-card{background:#fff;border:1px solid var(--bdr);border-radius:10px;padding:14px;box-shadow:var(--sh)}
+.info-card-header{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.info-badge{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:5px;font-size:11px;font-weight:700}
+.gar-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px}
+.tijd-row{display:grid;grid-template-columns:80px 1fr 100px 80px 80px 90px;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid #f1f5f9;font-size:13px}
+.btw-grid{display:grid;grid-template-columns:60px 1fr 100px 120px 120px;gap:8px;align-items:center;padding:8px 12px;font-size:13px;border-bottom:1px solid #f1f5f9}
+.btw-code{font-family:'JetBrains Mono',monospace;font-weight:800;font-size:16px;color:var(--p);background:#f0f4f8;border-radius:5px;padding:2px 6px;text-align:center}
+.qt-footer-txt{font-size:10px;color:rgba(255,255,255,.55)}
 .legal-txt{font-size:11px;line-height:1.6;color:#475569;white-space:pre-wrap}
-
-/* Technische fiches */
-.fiche-sectie{margin-top:8px}
-.fiche-card{background:#fff;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;margin-bottom:16px}
-.fiche-hdr{padding:12px 16px;background:#f8fafc;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;gap:8px}
-.fiche-hdr-naam{font-weight:700;font-size:13px}
-.fiche-hdr-prod{font-size:11px;color:#64748b}
-.fiche-page{width:100%;height:297mm;position:relative;overflow:hidden;background:#f8fafc}
-.fiche-embed{width:100%;height:100%;border:none;display:block}
-
+.fiche-print-page{break-before:page}
+.qt-voorschot{margin-top:8px;padding:9px 13px;background:#f0f4ff;border:1px solid #a5b4fc;border-radius:6px;font-size:12px;color:#3730a3}
 /* Bevestigingsblok */
-.bblok{border:2px solid var(--dc,#1a2e4a);border-radius:10px;padding:24px;margin-top:24px;text-align:center;background:#fff}
-.bblok h3{font-size:17px;font-weight:800;margin-bottom:8px}
-.bblok p{font-size:13px;color:#64748b;margin-bottom:20px;line-height:1.6}
-.btn-ok{background:var(--dc,#1a2e4a);color:#fff;border:none;padding:13px 36px;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer;margin:5px;display:inline-block}
-.btn-nok{background:#f1f5f9;color:#475569;border:1px solid #e2e8f0;padding:11px 26px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;margin:5px}
-.ok-banner{background:#d1fae5;border:2px solid #10b981;border-radius:10px;padding:18px 24px;text-align:center;margin-top:24px}
+.bblok{border:2px solid var(--dc,#1a2e4a);border-radius:10px;padding:28px;margin-top:24px;text-align:center;background:#fff}
+.bblok h3{font-size:18px;font-weight:800;margin-bottom:8px}
+.bblok p{font-size:13px;color:#64748b;margin-bottom:24px;line-height:1.6}
+.btn-ok{background:var(--dc,#1a2e4a);color:#fff;border:none;padding:14px 40px;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer;margin:6px}
+.btn-nok{background:#f1f5f9;color:#475569;border:1px solid #e2e8f0;padding:12px 28px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;margin:6px}
+.ok-banner{background:#d1fae5;border:2px solid #10b981;border-radius:10px;padding:20px 24px;text-align:center;margin-top:24px}
 .ok-banner h3{color:#065f46;font-weight:800;font-size:18px}
-.nok-banner{background:#fef2f2;border:2px solid #ef4444;border-radius:10px;padding:18px 24px;text-align:center;margin-top:24px}
-.pform{background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:16px;margin-top:14px;text-align:left}
-.pform label{font-size:12px;font-weight:600;color:#475569;display:block;margin-bottom:4px}
-.pform input,.pform textarea{width:100%;border:1px solid #e2e8f0;border-radius:6px;padding:8px 10px;font-size:13px;font-family:inherit;margin-bottom:10px}
-.pform textarea{resize:vertical;min-height:70px}
-
+.nok-banner{background:#fef2f2;border:2px solid #ef4444;border-radius:10px;padding:20px 24px;text-align:center;margin-top:24px}
+.pform{background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:20px;margin-top:16px;text-align:left}
+.pform label{font-size:12px;font-weight:600;color:#475569;display:block;margin-bottom:4px;margin-top:12px}
+.pform input,.pform textarea{width:100%;border:1px solid #e2e8f0;border-radius:6px;padding:9px 11px;font-size:13px;font-family:inherit;color:#1e293b}
+.pform textarea{resize:vertical;min-height:80px}
 @media(max-width:600px){
-  .cov{grid-template-columns:1fr}
-  .cov-l{padding:28px 20px}
-  .cov-r{padding:24px 20px}
-  .qt-pg{padding:20px 16px}
-  .qt-parties{grid-template-columns:1fr;gap:12px}
-  .qt-meta-bar{flex-wrap:wrap}
-  .qt-meta-item{min-width:50%}
-  .qt-tbl{font-size:10.5px}
+  .cov{grid-template-columns:1fr}.cov-l{padding:28px 20px}.cov-r{padding:24px 20px}
+  .qt-pg{padding:20px 16px}.qt-parties{grid-template-columns:1fr}
+  .qt-meta-bar{flex-wrap:wrap}.qt-meta-item{min-width:50%}
   .qt-footer{padding:10px 16px;flex-direction:column;gap:2px;text-align:center}
 }
 </style>
 </head>
 <body>
 <div id="loader"><div class="spin"></div><div style="font-size:14px;font-weight:600;color:#64748b">Offerte laden...</div></div>
-<div id="err"><h2>Offerte niet beschikbaar</h2><p id="errmsg">Deze offerte kon niet worden geladen.</p><button class="retry-btn" onclick="location.reload()">Opnieuw proberen</button></div>
-<div id="app"></div>
+<div id="err"><h2>Offerte niet beschikbaar</h2><p id="errmsg">Offerte kon niet geladen worden.</p><button class="retry-btn" onclick="location.reload()">Opnieuw proberen</button></div>
+<div id="root"></div>
+
 <script>
+// pdfjs worker
+if(window.pdfjsLib) pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+
+// Supabase
 var SB="https://qxnxbqkdvvblfkihmjxy.supabase.co";
 var KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF4bnhicWtkdnZibGZraWhtanh5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMzNTI3MTMsImV4cCI6MjA4ODkyODcxM30.1JDvrHgxLpU1GZqSjDVGtfnFJg8PHuD-aFpHOxAY1To";
-var params=new URLSearchParams(location.search);
-var OID=params.get("id");
-var ONR=params.get("nr");
-var alleFiches=[];
+async function sbGet(p){var r=await fetch(SB+p,{headers:{"apikey":KEY,"Authorization":"Bearer "+KEY}});if(!r.ok)throw new Error(r.status);return r.json();}
+async function sbPost(p,b){var r=await fetch(SB+p,{method:"POST",headers:{"apikey":KEY,"Authorization":"Bearer "+KEY,"Content-Type":"application/json","Prefer":"return=minimal"},body:JSON.stringify(b)});return r.ok||r.status===201;}
+</script>
 
-function fmtE(n){return"\u20AC\u00A0"+Number(n||0).toFixed(2).replace(".",",").replace(/\B(?=(\d{3})+(?!\d))/g,".");}
-function fmtD(d){if(!d)return"\u2014";try{return new Date(d).toLocaleDateString("nl-BE",{day:"2-digit",month:"2-digit",year:"numeric"});}catch(_){return d;}}
-function esc(s){return String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");}
-function h(){return{"apikey":KEY,"Authorization":"Bearer "+KEY,"Content-Type":"application/json"};}
-async function sbGet(p){var r=await fetch(SB+p,{headers:h()});if(!r.ok)throw new Error("HTTP "+r.status);return r.json();}
-async function sbPost(p,b){var r=await fetch(SB+p,{method:"POST",headers:Object.assign({"Prefer":"return=minimal"},h()),body:JSON.stringify(b)});return r.ok||r.status===201;}
-function showErr(m){document.getElementById("loader").style.display="none";document.getElementById("err").style.display="flex";if(m)document.getElementById("errmsg").textContent=m;}
+<script type="text/babel">
+const { useState, useEffect, useRef, useCallback } = React;
 
-async function load(){
-  if(!OID){showErr("Geen offerte-ID in de URL.");return;}
-  var data=null;
-  for(var i=1;i<=3;i++){
-    try{
-      var rows=await sbGet("/rest/v1/offerte_shares?id=eq."+encodeURIComponent(OID)+"&select=offerte_data,nummer");
-      if(rows&&rows.length>0&&rows[0].offerte_data){data=rows[0].offerte_data;break;}
-    }catch(e){console.warn("Poging "+i+":",e.message);}
-    if(i<3)await new Promise(function(r){setTimeout(r,2000);});
-  }
-  if(!data){showErr("Offerte '"+esc(ONR||OID)+"' niet gevonden. Neem contact op met W-Charge BV.");return;}
-  // Technische fiches laden
-  try{
-    var fr=await sbGet("/rest/v1/offerte_fiches?offerte_id=eq."+encodeURIComponent(OID)+"&select=product_id,fiches");
-    if(fr&&fr.length>0){
-      (data.lijnen||[]).forEach(function(l){
-        var pid=l.productId||l.id;
-        var row=fr.find(function(r){return r.product_id===pid;});
-        var fiches=(row&&row.fiches)||[];
-        fiches.filter(function(f){return f.data&&f.data.length>100;}).forEach(function(f){
-          alleFiches.push({productNaam:l.naam||"",naam:f.naam||"fiche.pdf",data:f.data,type:f.type||"application/pdf"});
-        });
-      });
+// ─── HELPERS ─────────────────────────────────────────────────────
+const fmtDate = d => d ? new Date(d).toLocaleDateString("nl-BE",{day:"2-digit",month:"2-digit",year:"numeric"}) : "—";
+const fmtEuro = n => "€\u00A0" + Number(n||0).toFixed(2).replace(".",",").replace(/\B(?=(\d{3})+(?!\d))/g,".");
+const addDays = (d,n) => { const r=new Date(d); r.setDate(r.getDate()+n); return r.toISOString().split("T")[0]; };
+const today = () => new Date().toISOString().split("T")[0];
+const stripBe = s => (s||"").replace(/[^0-9]/g,"");
+const fmtBtwnr = n => { const c=stripBe(n); return c.length>=9?"BE "+c.slice(0,4)+"."+c.slice(4,7)+"."+c.slice(7):(n||""); };
+
+const BEBAT_TARIEF = 2.89; // Standaard — overschrijfbaar via settings.voorwaarden.bebatTarief
+const getBebatTarief = (settings) => Number(settings?.voorwaarden?.bebatTarief) || BEBAT_TARIEF;
+const BEBAT_BTW = 21;
+
+// Bepaal of een product BEBAT-plichtig is
+// Batterij-onderdelen zijn dat: naam bevat "batter" maar NIET "bms"
+const isBebatProduct = (naam="",cat="") => {
+  const n = naam.toLowerCase();
+  const c = cat.toLowerCase();
+  if(n.includes("bms") || n.includes("battery management")) return false;
+  return n.includes("batter") || c.includes("batter");
+};
+
+function calcTotals(lijnen=[], bebatTarief=BEBAT_TARIEF) {
+  // BTW komt van de lijn (bepaald door klantregime bij aanmaken offerte)
+  // NOOIT van het product zelf
+  const sub = lijnen.reduce((s,l)=>s+(l.prijs*l.aantal),0);
+  const gr={};
+  lijnen.forEach(l=>{
+    const r=l.btw||0; // 0 als verlegd, 6 of 21 anders
+    if(r>0){if(!gr[r])gr[r]=0;gr[r]+=l.prijs*l.aantal*(r/100);}
+    // BEBAT toeslag — altijd 21% BTW
+    if(l.bebatKg && l.bebatKg>0 && isBebatProduct(l.naam,l.cat||"")) {
+      const bebatEx = l.bebatKg * l.aantal * bebatTarief;
+      if(!gr[BEBAT_BTW])gr[BEBAT_BTW]=0;
+      gr[BEBAT_BTW]+=bebatEx*(BEBAT_BTW/100);
     }
-  }catch(e){console.warn("Fiches:",e.message);}
-  render(data);
-  try{sbPost("/rest/v1/offerte_views",{offerte_id:OID,user_agent:navigator.userAgent,viewed_at:new Date().toISOString()});}catch(_){}
-}
-
-function calcTot(lijnen){
-  var sub=0,bm={};
-  (lijnen||[]).forEach(function(l){
-    if(l.type==="informatief"||(!l.prijs&&l.prijs!==0))return;
-    var lp=(l.prijs||0)*(l.aantal||1);sub+=lp;
-    var r=l.btw||0;bm[r]=(bm[r]||0)+lp*r/100;
   });
-  var tb=Object.values(bm).reduce(function(a,b){return a+b;},0);
-  return{sub:sub,bm:bm,tot:sub+tb};
+  const btw=Object.values(gr).reduce((s,v)=>s+v,0);
+  const bebatSub = lijnen.reduce((s,l)=>{
+    if(l.bebatKg&&l.bebatKg>0&&isBebatProduct(l.naam,l.cat||"")) return s+l.bebatKg*l.aantal*bebatTarief;
+    return s;
+  },0);
+  return {subtotaal:sub,btw,totaal:sub+bebatSub+btw,btwGroepen:gr,bebatSub};
 }
 
-function render(d){
-  var bed=d._bed||{};
-  var dc=d._dc||"#1a2e4a";
-  var sj=d._sj||{};
-  var tot=calcTot(d.lijnen||[]);
-  var isOK=d.status==="goedgekeurd"||d.klantAkkoord;
-  var isNOK=d.status==="afgewezen";
-  document.title="Offerte "+esc(d.nummer||"")+" \u2014 "+esc(bed.naam||"");
-  document.documentElement.style.setProperty("--dc",dc);
+// ─── OGM / GESTRUCTUREERDE MEDEDELING ────────────────────────────
+const BEBAT_TARIEF = 2.89;
+const BEBAT_BTW = 21;
+const getBebatTarief = (s) => Number(s?.voorwaarden?.bebatTarief) || BEBAT_TARIEF;
+const stripBe = s => (s||"").replace(/[^0-9]/g,"");
+const fmtBtwnr = n => { const c=stripBe(n); return c.length>=9?"BE "+c.slice(0,4)+"."+c.slice(4,7)+"."+c.slice(7):(n||""); };
+const isBebatProduct = (naam="",cat="") => { const n=naam.toLowerCase(); if(n.includes("bms")||n.includes("battery management")) return false; return n.includes("batter")||cat.toLowerCase().includes("batter"); };
 
-  // Groepen + lijnen
-  var groepen=d.groepen||[];
-  var lijnen=d.lijnen||[];
-  function getLijnenPerGroep(){
-    var result=[];
-    var usedGroepen=groepen.filter(function(g){return lijnen.some(function(l){return l.groepId===g.id;});});
-    usedGroepen.forEach(function(g){result.push({id:g.id,naam:g.naam,items:lijnen.filter(function(l){return l.groepId===g.id;})});});
-    var rest=lijnen.filter(function(l){return !groepen.find(function(g){return g.id===l.groepId;});});
-    if(rest.length>0)result.push({id:"rest",naam:"Producten",items:rest});
-    return result;
-  }
-  var lpg=getLijnenPerGroep();
-  if(lpg.length===0)lpg=[{id:"rest",naam:"Producten",items:lijnen}];
+function calcTotals(lijnen=[], bebatTarief=BEBAT_TARIEF) {
+  // BTW komt van de lijn (bepaald door klantregime bij aanmaken offerte)
+  // NOOIT van het product zelf
+  const sub = lijnen.reduce((s,l)=>s+(l.prijs*l.aantal),0);
+  const gr={};
+  lijnen.forEach(l=>{
+    const r=l.btw||0; // 0 als verlegd, 6 of 21 anders
+    if(r>0){if(!gr[r])gr[r]=0;gr[r]+=l.prijs*l.aantal*(r/100);}
+    // BEBAT toeslag — altijd 21% BTW
+    if(l.bebatKg && l.bebatKg>0 && isBebatProduct(l.naam,l.cat||"")) {
+      const bebatEx = l.bebatKg * l.aantal * bebatTarief;
+      if(!gr[BEBAT_BTW])gr[BEBAT_BTW]=0;
+      gr[BEBAT_BTW]+=bebatEx*(BEBAT_BTW/100);
+    }
+  });
+  const btw=Object.values(gr).reduce((s,v)=>s+v,0);
+  const bebatSub = lijnen.reduce((s,l)=>{
+    if(l.bebatKg&&l.bebatKg>0&&isBebatProduct(l.naam,l.cat||"")) return s+l.bebatKg*l.aantal*bebatTarief;
+    return s;
+  },0);
+  return {subtotaal:sub,btw,totaal:sub+bebatSub+btw,btwGroepen:gr,bebatSub};
+}
 
-  function renderGroepen(){
-    var html="";
-    lpg.forEach(function(g){
-      var hasNaam=g.id!=="rest"||lpg.length>1;
-      if(hasNaam)html+="<div class='grp-hdr' style='background:"+dc+"'>"+esc(g.naam)+"</div>";
-      html+="<table class='qt-tbl'><thead><tr><th>Omschrijving</th><th>Eenh.</th><th class='c'>Aantal</th><th class='r'>Prijs excl.</th><th class='r'>BTW</th><th class='r'>Totaal</th></tr></thead><tbody>";
-      g.items.forEach(function(l){
-        if(l.type==="informatief"){
-          html+="<tr style='background:#f8fafc'><td colspan='6' style='padding:6px 10px;font-size:12px;color:#475569;font-style:italic;border-bottom:1px solid #e2e8f0'><span style='font-weight:600;color:#64748b'>&#x2139;&#xFE0F; "+esc(l.naam)+"</span>"+(l.omschr?"<span style='margin-left:6px;color:#94a3b8'> \u2014 "+esc(l.omschr)+"</span>":"")+"</td></tr>";
-          return;
+const BTW_REGIMES = {
+  btw6:    {l:"6% — Woning > 10 jaar (renovatie)", pct:6},
+  btw21:   {l:"21% — Standaard / Nieuwe woning",   pct:21},
+  verlegd: {l:"BTW verlegd (medecontractant B2B)",  pct:0},
+};
+
+const INIT_SETTINGS = {
+  bedrijf:{naam:"",tagline:"",adres:"",gemeente:"",tel:"",email:"",btwnr:"",iban:"",bic:"",website:"",kleur:"#1a2e4a",logo:""},
+  voorwaarden:{betalingstermijn:14,voorschot:"50%",tekst:""},
+  sjabloon:{accentKleur:"#1a2e4a",voorbladTitel:"",handtekeningTekst:"Akkoord klant \u2014 datum, handtekening & naam",footerTekst:"",toonBevestigingslink:true,toonProductpagina:true},
+  layout:{font:"Inter",fontSize:13,logo:{breedte:140,hoogte:52},bedrijf:{velden:{}},klant:{velden:{}},metaBar:{toonDatum:true,toonGeldig:true,toonBtw:true,toonBetaling:true},tabel:{toonOmschr:true,toonBtw:true,toonSubtotalen:true}},
+  thema:{kleur:"#1a2e4a"}
+};
+
+// ─── COMPONENTS ──────────────────────────────────────────────────
+
+function FichePages({fiche, naam, fichNaam, omschr, dc, bed, docNummer}) {
+  const [pageImages, setPageImages] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if(!fiche || fiche==="[PDF]" || !window.pdfjsLib) { 
+      console.warn("FichePages skip:", !fiche?"no fiche":fiche==="[PDF]"?"stripped":"no pdfjsLib");
+      setLoading(false); return; 
+    }
+
+    const render = async () => {
+      try {
+        let pdfDoc;
+        if(fiche.startsWith('data:') || fiche.startsWith('http')) {
+          // Use fetch to convert data URI or URL to ArrayBuffer — avoids atob issues
+          const resp = await fetch(fiche);
+          const buf = await resp.arrayBuffer();
+          pdfDoc = await window.pdfjsLib.getDocument({data: buf}).promise;
+        } else {
+          // Raw base64 string
+          const clean = fiche.replace(/[\s\r\n]/g, '');
+          const raw = atob(clean);
+          const uint8 = new Uint8Array(raw.length);
+          for(let i = 0; i < raw.length; i++) uint8[i] = raw.charCodeAt(i);
+          pdfDoc = await window.pdfjsLib.getDocument({data: uint8}).promise;
         }
-        var sub=(l.prijs||0)*(l.aantal||1);
-        var neg=l.prijs<0;
-        html+="<tr"+(neg?" style='color:#ef4444;font-style:italic'":"")+">"
-          +"<td><div class='qt-item-main'>"+esc(l.naam||"")+"</div>"+(l.omschr?"<div class='qt-item-sub'>"+esc(l.omschr)+"</div>":"")+"</td>"
-          +"<td>"+esc(l.eenheid||"stuk")+"</td>"
-          +"<td class='c'>"+esc(l.aantal||1)+"</td>"
-          +"<td class='r'>"+fmtE(l.prijs||0)+"</td>"
-          +"<td class='r'>"+esc(l.btw||0)+"%</td>"
-          +"<td class='r'><strong>"+fmtE(sub)+"</strong></td>"
-          +"</tr>";
-      });
-      html+="</tbody></table>";
-      var gsub=g.items.filter(function(l){return l.type!=="informatief";}).reduce(function(s,l){return s+(l.prijs||0)*(l.aantal||1);},0);
-      if(hasNaam)html+="<div class='grp-sub'><span>Subtotaal "+esc(g.naam)+":</span><strong>"+fmtE(gsub)+"</strong></div>";
+        const imgs = [];
+        for(let i = 1; i <= pdfDoc.numPages; i++) {
+          const page = await pdfDoc.getPage(i);
+          const scale = 2.0;
+          const viewport = page.getViewport({scale});
+          const canvas = document.createElement('canvas');
+          canvas.width = viewport.width;
+          canvas.height = viewport.height;
+          await page.render({canvasContext: canvas.getContext('2d'), viewport}).promise;
+          imgs.push(canvas.toDataURL('image/png'));
+        }
+        console.log(`✅ Fiche gerenderd: ${fichNaam||naam} — ${imgs.length} pagina's`);
+        setPageImages(imgs);
+      } catch(e) { console.error("Fiche render error:", fichNaam||naam, e.message); }
+      setLoading(false);
+    };
+    render();
+  }, [fiche]);
+
+  if(loading) return (
+    <div className="doc-page" style={{pageBreakBefore:"always",display:"flex",alignItems:"center",justifyContent:"center",minHeight:200}}>
+      <div style={{textAlign:"center",color:"#64748b",padding:40}}>
+        <div style={{fontSize:24,marginBottom:8}}>⟳</div>
+        <div style={{fontSize:13}}>Technische fiche laden: {naam}...</div>
+      </div>
+    </div>
+  );
+
+  // No images rendered — show download fallback
+  if(pageImages.length === 0) {
+    const pdfSrc = fiche.startsWith('data:') ? fiche : `data:application/pdf;base64,${fiche}`;
+    return (
+      <div>
+        <div className="doc-page-lbl">Technische fiche — {naam}</div>
+        <div className="doc-page" style={{pageBreakBefore:"always"}}>
+          <div style={{height:5,background:dc,flexShrink:0}}/>
+          <div style={{padding:"30mm 20mm",textAlign:"center"}}>
+            <div style={{fontSize:36,marginBottom:16}}>📋</div>
+            <div style={{fontWeight:800,fontSize:20,color:"#1e293b",marginBottom:8}}>{naam}</div>
+            {omschr&&<div style={{fontSize:13,color:"#64748b",marginBottom:20}}>{omschr}</div>}
+            <div style={{fontSize:13,color:"#94a3b8",marginBottom:20}}>Technische fiche: {fichNaam||"document.pdf"}</div>
+            <a href={pdfSrc} download={fichNaam||`${naam}-fiche.pdf`}
+              style={{fontSize:13,color:"#059669",background:"#dcfce7",padding:"10px 20px",borderRadius:8,textDecoration:"none",fontWeight:600}}>
+              📥 Download PDF
+            </a>
+          </div>
+          <div className="qt-footer" style={{background:dc}}>
+            <div className="qt-footer-txt"><strong>{bed.naam}</strong> · {bed.adres}, {bed.gemeente}</div>
+            <div className="qt-footer-txt">{fichNaam||"technische-fiche.pdf"}</div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Each PDF page = its own A4 doc-page (perfect for print)
+  return (
+    <div>
+      {pageImages.map((img, i) => (
+        <div key={`fp-${i}`}>
+          <div className="doc-page-lbl">Technische fiche — {naam} (pagina {i+1}/{pageImages.length})</div>
+          <div className="doc-page fiche-print-page" style={{pageBreakBefore:"always",breakBefore:"page"}}>
+            <div style={{height:5,background:dc,flexShrink:0}}/>
+            {i === 0 && (
+              <div style={{padding:"4mm 8mm 2mm",display:"flex",justifyContent:"space-between",alignItems:"center",borderBottom:"1px solid #e2e8f0"}}>
+                <div>
+                  <div style={{fontSize:9,fontWeight:700,color:"#94a3b8",textTransform:"uppercase",letterSpacing:.6}}>Technische fiche</div>
+                  <div style={{fontWeight:800,fontSize:14,color:"#1e293b"}}>{naam}</div>
+                </div>
+                <div style={{textAlign:"right",fontSize:9,color:"#94a3b8"}}>{bed.naam} · {docNummer}</div>
+              </div>
+            )}
+            <div style={{padding:i===0?"2mm 6mm 4mm":"4mm 6mm",flex:1,display:"flex",alignItems:"flex-start",justifyContent:"center",overflow:"hidden"}}>
+              <img src={img} alt={`${naam} p${i+1}`} style={{width:"100%",height:"auto",maxHeight:i===0?"250mm":"270mm",objectFit:"contain",display:"block"}}/>
+            </div>
+            <div style={{padding:"2mm 8mm",display:"flex",justifyContent:"space-between",alignItems:"center",fontSize:9,color:"#94a3b8",borderTop:"1px solid #e2e8f0"}}>
+              <span>{bed.naam}</span>
+              <span>{fichNaam||"technische-fiche.pdf"} · pagina {i+1}/{pageImages.length}</span>
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function OfferteDocument({doc, settings, ficheCache={}, producten=[]}) {
+  // Bouw fiche cache: producten state + doorgegeven cache + localStorage
+  const _fc = (() => {
+    const c = {...ficheCache};
+    try { const r=localStorage.getItem("billr_fiche_cache"); if(r) { const lc=JSON.parse(r); Object.entries(lc).forEach(([k,v])=>{ if(!c[k]) c[k]=v; }); } } catch(_){}
+    producten.forEach(p => {
+      if(p.technischeFiches?.some(f=>f.data)) c[p.id] = p.technischeFiches.filter(f=>f.data);
+      else if(p.technischeFiche && p.technischeFiche.length>100) c[p.id] = [{data:p.technischeFiche,naam:p.fichNaam||"fiche.pdf"}];
     });
-    return html;
+    return c;
+  })();
+  const bed = settings?.bedrijf || INIT_SETTINGS.bedrijf;
+  const sj = settings?.sjabloon || INIT_SETTINGS.sjabloon || {};
+  const lyt = settings?.layout || INIT_SETTINGS.layout || {};
+  const dc = sj.accentKleur || settings?.thema?.kleur || bed.kleur || "#1a2e4a";
+  
+  // Logo instellingen - aparte voorblad en offerte/factuur
+  const logoVoorblad = {
+    w: lyt.logo?.voorblad?.breedte || lyt.logo?.breedte || sj.logoBreedte || 200,
+    h: lyt.logo?.voorblad?.hoogte || lyt.logo?.hoogte || sj.logoHoogte || 80,
+    pos: lyt.logo?.voorblad?.positie || lyt.logo?.positie || sj.logoPositie || "links",
+    zIndex: lyt.logo?.voorblad?.zIndex !== undefined ? lyt.logo.voorblad.zIndex : 10,
+    ruimteBoven: lyt.logo?.voorblad?.ruimteBoven || 2
+  };
+  const logoOfferte = {
+    w: lyt.logo?.offerte?.breedte || lyt.logo?.breedte || sj.logoBreedte || 140,
+    h: lyt.logo?.offerte?.hoogte || lyt.logo?.hoogte || sj.logoHoogte || 52,
+    pos: lyt.logo?.offerte?.positie || lyt.logo?.positie || sj.logoPositie || "links",
+    zIndex: lyt.logo?.offerte?.zIndex !== undefined ? lyt.logo.offerte.zIndex : 10,
+    ruimteBoven: lyt.logo?.offerte?.ruimteBoven || 2
+  };
+  
+  const logoPos = sj.logoPositie || "links-boven"; // Legacy, voor oude voorbladen
+  const docFont = lyt.font || sj.fontFamily || "Inter";
+  const docFontSize = lyt.fontSize || sj.fontSize || 13;
+  const txtKleur = lyt.tekstKleur || "#1e293b";
+  // Layout-driven visibility
+  const toonHandtekening = lyt.handtekening?.toon !== false && sj.toonHandtekening !== false;
+  const toonVoorwaarden = lyt.voorwaarden?.toon !== false && sj.toonVoorblad !== false;
+  const toonWatermark = lyt.watermark?.toon === true || sj.toonWatermark;
+  const watermarkTekst = lyt.watermark?.tekst || "CONCEPT";
+  const titelFormaat = lyt.titel?.formaat || "titel";
+  const titelTekst = titelFormaat === "geen" ? "" : titelFormaat === "aangepast" ? (lyt.titel?.aangepasteNaam || sj.voorbladTitel || "OFFERTE") : sj.voorbladTitel || "OFFERTE";
+  const titelHoofdletters = lyt.titel?.hoofdletters !== false;
+  const titelFontSize = lyt.titel?.fontSize || 28;
+  const titelPositie = lyt.titel?.positie || "rechts";
+  // Bedrijf velden
+  const bedVelden = lyt.bedrijf?.velden || {};
+  const klantVelden = lyt.klant?.velden || {};
+  const metaBar = lyt.metaBar || {};
+  const tabelOpts = lyt.tabel || {};
+  const tot = calcTotals(doc.lijnen||[], getBebatTarief(settings));
+  const kortingBedrag = doc.kortingType==="pct" ? tot.subtotaal*(doc.korting/100) : Number(doc.korting||0);
+  const eindTot = doc.korting>0 ? tot.totaal - kortingBedrag*(1+0.21) : tot.totaal;
+  const inst = INST_TYPES.find(t=>t.id===doc.installatieType);
+  const groepen = doc.groepen||[];
+  const lijnenPerGroep = [...groepen.map(g=>({...g,items:(doc.lijnen||[]).filter(l=>l.groepId===g.id)})).filter(g=>g.items.length>0), {id:"rest",naam:"Producten",items:(doc.lijnen||[]).filter(l=>!l.groepId||!groepen.find(g=>g.id===l.groepId))}.items.length>0?{id:"rest",naam:"Producten",items:(doc.lijnen||[]).filter(l=>!l.groepId||!groepen.find(g=>g.id===l.groepId))}:null].filter(Boolean);
+  const uniqueProds = [...new Map((doc.lijnen||[]).filter(l=>l.naam).map(l=>[l.productId||l.id,l])).values()];
+  const confirmLink = `mailto:?subject=Akkoord offerte ${doc.nummer||""}%20—%20${encodeURIComponent(bed.naam)}&body=Geachte%20${encodeURIComponent(bed.naam)}%2C%0A%0AHierbij%20bevestig%20ik%20mijn%20akkoord%20met%20offerte%20${doc.nummer||""}%20d.d.%20${fmtDate(doc.aangemaakt)}%20voor%20een%20totaalbedrag%20van%20${encodeURIComponent(fmtEuro(eindTot))}.%0A%0AMet%20vriendelijke%20groeten%2C%0A${encodeURIComponent(doc.klant?.naam||"")}`;
+
+  const ontwerp = sj.ontwerpOfferte || "kl_split";
+
+  // ── Voorblad helpers
+  const CovKlantInfo = () => (
+    <div style={{fontFamily:docFont}}>
+      <div style={{fontSize:10,fontWeight:700,letterSpacing:1,textTransform:"uppercase",color:"#94a3b8",marginBottom:4}}>Opgemaakt voor</div>
+      {klantVelden.naam!==false&&<div style={{fontWeight:800,fontSize:20,color:txtKleur,lineHeight:1.2}}>{doc.klant?.naam||"—"}</div>}
+      {klantVelden.bedrijf!==false&&doc.klant?.bedrijf&&<div style={{fontWeight:600,fontSize:14,color:"#475569",marginTop:2}}>{doc.klant.bedrijf}</div>}
+      <div style={{fontSize:lyt.klant?.fontSize||12,color:"#64748b",marginTop:6}}>
+        {klantVelden.adres!==false&&doc.klant?.adres&&<div>{doc.klant.adres}</div>}
+        {klantVelden.gemeente!==false&&doc.klant?.gemeente&&<div>{doc.klant.gemeente}</div>}
+      </div>
+      {klantVelden.btwnr!==false&&doc.klant?.btwnr&&<div style={{fontFamily:"JetBrains Mono,monospace",fontSize:11,color:"#94a3b8",marginTop:4}}>{fmtBtwnr(doc.klant.btwnr)}</div>}
+      {klantVelden.tel!==false&&doc.klant?.tel&&<div style={{fontSize:11,color:"#94a3b8"}}>{doc.klant.tel}</div>}
+      {klantVelden.email!==false&&doc.klant?.email&&<div style={{fontSize:11,color:"#94a3b8"}}>{doc.klant.email}</div>}
+    </div>
+  );
+  const CovMeta = ({light}) => (
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"12px 24px"}}>
+      {[{l:"Datum",v:fmtDate(doc.aangemaakt)},{l:"Geldig tot",v:fmtDate(doc.vervaldatum)},{l:"Referentie",v:doc.nummer},{l:"Totaal incl. BTW",v:fmtEuro(eindTot),big:true}].map((m,i)=>(
+        <div key={i}>
+          <div style={{fontSize:10,fontWeight:700,letterSpacing:.8,textTransform:"uppercase",color:light?"rgba(255,255,255,.5)":"#94a3b8",marginBottom:2}}>{m.l}</div>
+          <div style={{fontWeight:m.big?800:600,fontSize:m.big?18:13,color:light?"#fff":m.big?dc:"#1e293b",fontFamily:m.l==="Referentie"?"JetBrains Mono,monospace":undefined}}>{m.v}</div>
+        </div>
+      ))}
+    </div>
+  );
+  const CovBedrijf = ({light}) => (
+    <div style={{fontFamily:docFont}}>
+      {bed.logo?<img src={bed.logo} alt="" style={{maxWidth:logoVoorblad.w,maxHeight:logoVoorblad.h,marginBottom:8,objectFit:"contain",display:"block",position:"relative",zIndex:logoVoorblad.zIndex}}/>:<div style={{fontSize:28,marginBottom:4}}>⚡</div>}
+      {bedVelden.naam!==false&&<div style={{fontWeight:lyt.bedrijf?.naamVet!==false?900:700,fontSize:lyt.bedrijf?.naamFontSize||18,color:light?"#fff":txtKleur,letterSpacing:-0.5}}>{bed.naam}</div>}
+      <div style={{fontSize:11,color:light?"rgba(255,255,255,.6)":"#94a3b8",marginTop:2}}>{bed.tagline}</div>
+      <div style={{fontSize:lyt.bedrijf?.fontSize||11,color:light?"rgba(255,255,255,.7)":"#64748b",marginTop:8,lineHeight:1.8}}>
+        {bedVelden.adres!==false&&<div>{bed.adres}</div>}
+        {bedVelden.gemeente!==false&&<div>{bed.gemeente}</div>}
+        {bedVelden.tel!==false&&bed.tel&&<div>{bed.tel}</div>}
+        {bedVelden.email!==false&&bed.email&&<div>{bed.email}</div>}
+      </div>
+    </div>
+  );
+
+  return(
+    <div className="doc-wrap">
+      {/* PAGE 1: VOORBLAD */}
+      {sj.toonVoorblad!==false&&<>
+      <div className="doc-page-lbl">Pagina 1 — Voorblad</div>
+      <div className="doc-page">
+
+        {/* ONTWERP 1: Klassiek gesplitst */}
+        {ontwerp==="kl_split"&&<div className="cov">
+          <div className="cov-l" style={{background:`linear-gradient(155deg,${dc} 0%,${dc}ee 70%,#0f172a 100%)`}}>
+            <CovBedrijf light/>
+            {inst&&<div className="cov-inst-badge"><span style={{fontSize:20}}>{inst.icon}</span>{inst.l}</div>}
+          </div>
+          <div className="cov-r">
+            <div>
+              {titelFormaat!=="geen"&&<div className="cov-doctype" style={{color:dc,fontSize:titelFontSize,textTransform:titelHoofdletters?"uppercase":"none"}}>{titelTekst}</div>}
+              <div className="cov-docnum">{doc.nummer}</div>
+            </div>
+            <CovKlantInfo/>
+            <CovMeta/>
+            <div style={{fontSize:11,color:"#94a3b8",marginTop:10}}>{bed.naam} · {fmtBtwnr(bed.btwnr)} · IBAN: {bed.iban}</div>
+          </div>
+        </div>}
+
+        {/* ONTWERP 2: Modern top-banner */}
+        {ontwerp==="modern_top"&&<div style={{minHeight:"297mm",display:"flex",flexDirection:"column"}}>
+          <div style={{background:`linear-gradient(135deg,${dc},${dc}cc)`,padding:"40px 48px 32px",color:"#fff"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+              <div>
+                {bed.logo?<img src={bed.logo} alt="" style={{maxHeight:logoVoorblad.h,maxWidth:logoVoorblad.w,marginBottom:8,filter:"brightness(0) invert(1)",objectFit:"contain",position:"relative",zIndex:logoVoorblad.zIndex}}/>:<div style={{fontSize:24,fontWeight:900,letterSpacing:-1}}>{bed.naam}</div>}
+                <div style={{fontSize:11,opacity:.7,marginTop:2}}>{bed.tagline}</div>
+              </div>
+              <div style={{textAlign:"right"}}>
+                <div style={{fontSize:32,fontWeight:900,letterSpacing:-1}}>{sj.voorbladTitel||"OFFERTE"}</div>
+                <div style={{fontFamily:"JetBrains Mono,monospace",fontSize:14,opacity:.8,marginTop:2}}>{doc.nummer}</div>
+              </div>
+            </div>
+          </div>
+          <div style={{padding:"40px 48px",flex:1,display:"grid",gridTemplateColumns:"1fr 1fr",gap:40}}>
+            <CovKlantInfo/>
+            <CovMeta/>
+          </div>
+          <div style={{padding:"0 48px 32px",borderTop:"1px solid #e2e8f0",paddingTop:24}}>
+            <div style={{fontSize:11,color:"#94a3b8"}}>{bed.naam} · {bed.adres}, {bed.gemeente} · {bed.tel} · {bed.email} · {fmtBtwnr(bed.btwnr)}</div>
+          </div>
+        </div>}
+
+        {/* ONTWERP 3: Minimalistisch */}
+        {ontwerp==="minimal"&&<div style={{minHeight:"297mm",padding:"60px 64px",display:"flex",flexDirection:"column",justifyContent:"space-between"}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+            <div>
+              <div style={{fontWeight:900,fontSize:22,color:dc,letterSpacing:-1}}>{bed.naam}</div>
+              <div style={{fontSize:11,color:"#94a3b8",marginTop:2}}>{bed.tagline}</div>
+            </div>
+            <div style={{textAlign:"right"}}>
+              <div style={{fontSize:11,fontWeight:700,letterSpacing:2,textTransform:"uppercase",color:"#94a3b8"}}>{sj.voorbladTitel||"Offerte"}</div>
+              <div style={{fontFamily:"JetBrains Mono,monospace",fontSize:20,fontWeight:800,color:"#1e293b",marginTop:2}}>{doc.nummer}</div>
+            </div>
+          </div>
+          <div style={{borderLeft:`4px solid ${dc}`,paddingLeft:24}}>
+            <CovKlantInfo/>
+          </div>
+          <CovMeta/>
+          <div style={{fontSize:10,color:"#cbd5e1"}}>{bed.naam} · {fmtBtwnr(bed.btwnr)} · {bed.iban} · {bed.tel}</div>
+        </div>}
+
+        {/* ONTWERP 4: Diagonaal */}
+        {ontwerp==="diagonal"&&<div style={{minHeight:"297mm",position:"relative",overflow:"hidden"}}>
+          <div style={{position:"absolute",top:0,left:0,right:0,height:"55%",background:`linear-gradient(150deg,${dc} 60%,transparent 60%)`}}/>
+          <div style={{position:"absolute",top:0,left:0,right:0,height:"55%",background:`linear-gradient(150deg,${dc}dd 60%,${dc}33 100%)`}}/>
+          <div style={{position:"relative",padding:"48px 52px",color:"#fff"}}>
+            <div style={{fontWeight:900,fontSize:20,letterSpacing:-0.5}}>{bed.naam}</div>
+            <div style={{fontSize:11,opacity:.7,marginTop:2}}>{bed.tagline}</div>
+            <div style={{marginTop:"15mm"}}>
+              <div style={{fontWeight:900,fontSize:36,letterSpacing:-1,lineHeight:1}}>{sj.voorbladTitel||"OFFERTE"}</div>
+              <div style={{fontFamily:"JetBrains Mono,monospace",fontSize:14,opacity:.8,marginTop:4}}>{doc.nummer}</div>
+            </div>
+          </div>
+          <div style={{position:"relative",padding:"0 52px",marginTop:"5mm",display:"grid",gridTemplateColumns:"1fr 1fr",gap:32}}>
+            <CovKlantInfo/>
+            <CovMeta/>
+          </div>
+          <div style={{position:"absolute",bottom:24,left:52,right:52,fontSize:10,color:"#94a3b8",borderTop:"1px solid #e2e8f0",paddingTop:10}}>
+            {bed.naam} · {bed.adres}, {bed.gemeente} · {fmtBtwnr(bed.btwnr)}
+          </div>
+        </div>}
+
+        {/* ONTWERP 5: Gecentreerd */}
+        {ontwerp==="centered"&&<div style={{minHeight:"297mm",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",textAlign:"center",padding:"48px",gap:32}}>
+          <div>
+            {bed.logo?<img src={bed.logo} alt="" style={{maxHeight:logoVoorblad.h,maxWidth:logoVoorblad.w,marginBottom:10,objectFit:"contain",position:"relative",zIndex:logoVoorblad.zIndex}}/>:<div style={{fontSize:40,marginBottom:8}}>⚡</div>}
+            <div style={{fontWeight:900,fontSize:22,color:dc}}>{bed.naam}</div>
+            <div style={{fontSize:11,color:"#94a3b8"}}>{bed.tagline}</div>
+          </div>
+          <div style={{width:60,height:4,background:dc,borderRadius:2}}/>
+          <div>
+            <div style={{fontSize:11,fontWeight:700,letterSpacing:2,textTransform:"uppercase",color:"#94a3b8"}}>{sj.voorbladTitel||"Offerte"}</div>
+            <div style={{fontFamily:"JetBrains Mono,monospace",fontSize:24,fontWeight:800,color:"#1e293b",marginTop:4}}>{doc.nummer}</div>
+          </div>
+          <div style={{background:"#f8fafc",borderRadius:12,padding:"24px 32px",minWidth:320,textAlign:"left"}}>
+            <CovKlantInfo/>
+          </div>
+          <CovMeta/>
+          <div style={{fontSize:10,color:"#cbd5e1"}}>{bed.naam} · {fmtBtwnr(bed.btwnr)} · IBAN: {bed.iban}</div>
+        </div>}
+
+      </div>
+
+      </>}
+      {/* PAGE 2: PRODUCTINFO + TECHNISCHE FICHES */}
+      {sj.toonProductpagina!==false&&uniqueProds.length>0&&<>
+        <div className="doc-page-lbl">Pagina 2 — Productinformatie & Technische fiches</div>
+        <div className="doc-page">
+          <div style={{height:6,background:dc,borderRadius:"4px 4px 0 0",flexShrink:0}}/>
+          <div className="prod-page">
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end",marginBottom:6}}>
+              <div>
+                <div style={{fontWeight:900,fontSize:20,color:dc,letterSpacing:"-.5px"}}>{inst?.icon} Productinformatie & Technische Fiches</div>
+                <div style={{fontSize:12,color:"#64748b",marginTop:2}}>Geselecteerde producten voor {doc.klant?.naam||"de klant"}</div>
+              </div>
+              <div style={{fontSize:10,color:"#94a3b8",textAlign:"right"}}>{bed.naam} · {doc.nummer}</div>
+            </div>
+            <div style={{height:1,background:"#e2e8f0",marginBottom:20}}/>
+            {uniqueProds.map((l,i)=>{
+              // Parse technische fiche specs
+              const rawSpecs = l.specs||[];
+              // Group specs: first 3 regular, rest as table entries
+              const specRows = rawSpecs.filter(s=>s.includes(":")||s.includes("="))
+                .map(s=>{const ci=s.indexOf(":");const eq=s.indexOf("=");const si=ci>=0&&(eq<0||ci<=eq)?ci:eq;return si>=0?{key:s.slice(0,si).trim(),val:s.slice(si+1).trim()}:{key:s.trim(),val:""};});
+              const bulletSpecs = rawSpecs.filter(s=>!s.includes(":")||specRows.find(r=>r.key+" :"+r.val===s));
+              return(
+                <div key={i} style={{marginBottom:28,pageBreakInside:"avoid"}}>
+                  {/* Product header with image + naam */}
+                  <div style={{display:"flex",gap:16,alignItems:"flex-start",marginBottom:10}}>
+                    {l.imageUrl&&<div style={{flexShrink:0,width:90,height:90,borderRadius:10,overflow:"hidden",border:"1px solid #e2e8f0",background:"#f8fafc",display:"flex",alignItems:"center",justifyContent:"center"}}>
+                      <img src={l.imageUrl} alt="" style={{width:"100%",height:"100%",objectFit:"contain"}} onError={e=>{e.target.parentElement.style.display="none"}}/>
+                    </div>}
+                    <div style={{flex:1}}>
+                      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
+                        <span style={{background:dc,color:"#fff",borderRadius:5,padding:"2px 9px",fontSize:10,fontWeight:700}}>{groepen.find(g=>g.id===l.groepId)?.naam||l.cat||"Product"}</span>
+                        <span style={{fontSize:11,color:"#94a3b8"}}>×{l.aantal} {l.eenheid}</span>
+                      </div>
+                      <div style={{fontWeight:800,fontSize:16,color:"#1e293b",lineHeight:1.3,marginBottom:4}}>{l.naam}</div>
+                      {l.omschr&&<div style={{fontSize:12.5,color:"#475569",lineHeight:1.6}}>{l.omschr}</div>}
+                    </div>
+                    <div style={{flexShrink:0,textAlign:"right",background:"#f8fafc",borderRadius:8,padding:"10px 14px",border:"1px solid #e2e8f0"}}>
+                      <div style={{fontSize:10,color:"#94a3b8",fontWeight:600}}>EENHEIDSPRIJS</div>
+                      <div style={{fontWeight:800,fontSize:16,color:dc}}>{fmtEuro(l.prijs)}</div>
+                      <div style={{fontSize:10,color:"#94a3b8"}}>BTW {l.btw}%</div>
+                    </div>
+                  </div>
+                  {/* Technische fiche als tabel indien specs aanwezig */}
+                  {rawSpecs.length>0&&(
+                    <div style={{background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:8,padding:"12px 14px"}}>
+                      <div style={{fontWeight:700,fontSize:11,letterSpacing:.8,textTransform:"uppercase",color:dc,marginBottom:8}}>📋 Technische specificaties</div>
+                      {specRows.length>0?(
+                        <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+                          <tbody>{specRows.map((r,j)=>(
+                            <tr key={j} style={{borderBottom:"1px solid #e2e8f0"}}>
+                              <td style={{padding:"4px 8px",fontWeight:600,color:"#475569",width:"40%",background:j%2===0?"#fff":"#f8fafc"}}>{r.key}</td>
+                              <td style={{padding:"4px 8px",color:"#1e293b",background:j%2===0?"#fff":"#f8fafc"}}>{r.val}</td>
+                            </tr>
+                          ))}</tbody>
+                        </table>
+                      ):(
+                        <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+                          {rawSpecs.map((s,j)=>(
+                            <span key={j} style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:5,padding:"3px 9px",fontSize:11.5,color:"#374151"}}>✓ {s}</span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {i<uniqueProds.length-1&&<div style={{height:1,background:"#e2e8f0",marginTop:20}}/>}
+                  {/* Technische fiches — download links */}
+                  {((l.technischeFiches||[]).some(f=>f.data||f.url)||l.technischeFiche)&&<div style={{marginTop:8,display:"flex",flexWrap:"wrap",gap:4}}>
+                    {(l.technischeFiches||[]).filter(f=>f.data||f.url).map((f,fi)=>(
+                      <a key={fi} href={f.data||f.url} download={f.naam||"fiche.pdf"} style={{display:"inline-flex",alignItems:"center",gap:5,background:"#eff6ff",border:"1px solid #bfdbfe",borderRadius:6,padding:"5px 12px",fontSize:11.5,color:"#2563eb",textDecoration:"none",fontWeight:600}}>📎 {f.naam||"Technische fiche"}</a>
+                    ))}
+                    {l.technischeFiche&&l.technischeFiche!=="[PDF]"&&!(l.technischeFiches||[]).length&&(
+                      <a href={l.technischeFiche} download={l.fichNaam||"fiche.pdf"} style={{display:"inline-flex",alignItems:"center",gap:5,background:"#eff6ff",border:"1px solid #bfdbfe",borderRadius:6,padding:"5px 12px",fontSize:11.5,color:"#2563eb",textDecoration:"none",fontWeight:600}}>📎 {l.fichNaam||"Technische fiche"}</a>
+                    )}
+                    {/* Fiches zonder data — toon als label (cache nog niet geladen) */}
+                    {(l.technischeFiches||[]).filter(f=>!f.data&&!f.url).map((f,fi)=>(
+                      <span key={"lbl"+fi} style={{display:"inline-flex",alignItems:"center",gap:4,background:"#f1f5f9",border:"1px solid #e2e8f0",borderRadius:5,padding:"3px 10px",fontSize:11,color:"#64748b"}}>📎 {f.naam||"Fiche "+(fi+1)}</span>
+                    ))}
+                  </div>}
+                </div>
+              );
+            })}
+          </div>
+          <div className="qt-footer" style={{background:dc}}><div className="qt-footer-txt"><strong>{bed.naam}</strong></div><div className="qt-footer-txt">{bed.tel} · {bed.email}</div><div className="qt-footer-txt">{bed.website}</div></div>
+        </div>
+      </>}
+
+      {/* PAGE 3: OFFERTEDETAIL */}
+      <div className="doc-page-lbl">Pagina 3 — Offertedetail</div>
+      <div className="doc-page">
+        <div style={{height:5,background:dc,flexShrink:0}}/>
+        <div className="qt-pg">
+          <div className="qt-header">
+            <div>
+              {bed.logo?<img src={bed.logo} alt="" style={{maxWidth:logoOfferte.w,maxHeight:logoOfferte.h,objectFit:"contain",position:"relative",zIndex:logoOfferte.zIndex}}/>:<div className="qt-from-name" style={{color:dc}}>⚡ {bed.naam}</div>}
+              <div className="qt-from-info">{bed.adres} · {bed.gemeente}<br/>{bed.tel} · {bed.email} · {fmtBtwnr(bed.btwnr)}</div>
+            </div>
+            <div style={{textAlign:"right"}}>
+              <div className="qt-dtype" style={{color:dc}}>OFFERTE</div>
+              <div className="qt-dnum" style={{color:dc}}>{doc.nummer}</div>
+            </div>
+          </div>
+          <div className="qt-meta-bar">
+            {metaBar.toonDatum!==false&&<div className="qt-meta-item"><div className="qt-meta-lbl">Datum</div><div className="qt-meta-val">{fmtDate(doc.aangemaakt)}</div></div>}
+            {metaBar.toonGeldig!==false&&<div className="qt-meta-item"><div className="qt-meta-lbl">Geldig tot</div><div className="qt-meta-val">{fmtDate(doc.vervaldatum)}</div></div>}
+            {metaBar.toonBtw!==false&&<div className="qt-meta-item"><div className="qt-meta-lbl">BTW-regime</div><div className="qt-meta-val">{BTW_REGIMES[doc.btwRegime]?.l?.split("—")[0]?.trim()||"—"}</div></div>}
+            {metaBar.toonBetaling!==false&&<div className="qt-meta-item"><div className="qt-meta-lbl">Betaling</div><div className="qt-meta-val">{doc.betalingstermijn} dagen</div></div>}
+          </div>
+          <div className="qt-parties">
+            <div style={{direction:"ltr"}}>{bedVelden.naam!==false&&<div className="qt-party-name">{bed.naam}</div>}{bedVelden.adres!==false&&<div className="qt-party-info">{bed.adres}</div>}{bedVelden.gemeente!==false&&<div className="qt-party-info">{bed.gemeente}</div>}<div style={{fontFamily:"JetBrains Mono,monospace",fontSize:10.5,color:"#64748b",marginTop:3}}>{bedVelden.btwnr!==false&&<>{fmtBtwnr(bed.btwnr)}<br/></>}{bedVelden.iban!==false&&<>IBAN: {bed.iban}<br/></>}{bedVelden.tel!==false&&<>{bed.tel}<br/></>}{bedVelden.email!==false&&<>{bed.email}</>}</div></div>
+            <div style={{direction:"ltr"}}><div className="qt-party-lbl">Klant</div>{klantVelden.naam!==false&&<div className="qt-party-name">{doc.klant?.naam}</div>}{klantVelden.bedrijf!==false&&doc.klant?.bedrijf&&<div style={{fontWeight:600,color:"#475569",fontSize:12.5}}>{doc.klant.bedrijf}</div>}{klantVelden.adres!==false&&<div className="qt-party-info">{doc.klant?.adres}</div>}{klantVelden.gemeente!==false&&<div className="qt-party-info">{doc.klant?.gemeente}</div>}{klantVelden.btwnr!==false&&doc.klant?.btwnr&&<div style={{fontFamily:"JetBrains Mono,monospace",fontSize:10.5,color:"#64748b"}}>{fmtBtwnr(doc.klant.btwnr)}</div>}{klantVelden.tel!==false&&doc.klant?.tel&&<div style={{fontSize:11,color:"#64748b"}}>{doc.klant.tel}</div>}{klantVelden.email!==false&&doc.klant?.email&&<div style={{fontSize:11,color:"#64748b"}}>{doc.klant.email}</div>}</div>
+          </div>
+          {lijnenPerGroep.map(g=>(
+            <div key={g.id}>
+              <div className="grp-hdr" style={{background:dc}}>{g.naam}</div>
+              <table className="qt-tbl">
+                <thead><tr><th>Omschrijving</th><th>Eenh.</th><th className="c">Aantal</th><th className="r">Prijs excl.</th><th className="r">BTW</th><th className="r">Totaal</th></tr></thead>
+                <tbody>{g.items.map((l,i)=>{
+                  const isInfo = !l.productId && l.prijs===0 && l.naam;
+                  if(isInfo) return(
+                    <tr key={i} style={{background:"#f8fafc"}}>
+                      <td colSpan={6} style={{padding:"6px 10px",fontSize:12,color:"#475569",fontStyle:"italic",borderBottom:"1px solid #e2e8f0"}}>
+                        <span style={{fontWeight:600,color:"#64748b"}}>ℹ️ {l.naam}</span>
+                        {l.omschr&&<span style={{marginLeft:6,color:"#94a3b8"}}> — {l.omschr}</span>}
+                      </td>
+                    </tr>
+                  );
+                  return(
+                  <tr key={i} style={l.prijs<0?{color:"#ef4444",fontStyle:"italic"}:{}}>
+                    <td><div className="qt-item-main">{l.naam}</div>{l.omschr&&<div className="qt-item-sub">{l.omschr}</div>}</td>
+                    <td>{l.eenheid||"stuk"}</td><td className="c">{l.aantal}</td>
+                    <td className="r">{fmtEuro(l.prijs)}</td>
+                    <td className="r">{l.btw}%</td>
+                    <td className="r"><strong>{fmtEuro(l.prijs*l.aantal)}</strong></td>
+                  </tr>
+                  );
+                })}</tbody>
+              </table>
+              <div className="grp-sub"><span>Subtotaal {g.naam}:</span><strong>{fmtEuro(g.items.reduce((s,l)=>s+l.prijs*l.aantal,0))}</strong></div>
+            </div>
+          ))}
+          <div className="qt-totals">
+            <div className="qt-tot-box">
+              <div className="qt-tot-row"><span>Subtotaal excl. BTW</span><span>{fmtEuro(tot.subtotaal)}</span></div>
+              {tot.bebatSub>0&&<div className="qt-tot-row btwr"><span>♻️ BEBAT bijdrage</span><span>{fmtEuro(tot.bebatSub)}</span></div>}
+              {Object.entries(tot.btwGroepen).map(([p,b])=><div key={p} className="qt-tot-row btwr"><span>BTW {p}%</span><span>{fmtEuro(b)}</span></div>)}
+              {doc.korting>0&&<div className="qt-tot-row krt"><span>Korting {doc.kortingType==="pct"?`(${doc.korting}%)`:"(forfait)"}</span><span>−{fmtEuro(kortingBedrag*(1+0.21))}</span></div>}
+              <div className="qt-tot-row last" style={{background:dc,color:"#fff"}}><span>TOTAAL incl. BTW</span><span>{fmtEuro(eindTot)}</span></div>
+            </div>
+          </div>
+          <div className="qt-betaal"><strong>Betaling:</strong> IBAN {bed.iban} · BIC {bed.bic} · Mededeling: {doc.nummer}</div>
+          {doc.voorschot&&doc.voorschot!=="Geen voorschot"&&<div className="qt-voorschot">💡 <strong>Voorschot:</strong> {doc.voorschot} te betalen vóór aanvang van de werken.</div>}
+          {doc.notities&&<div className="qt-notes"><strong>Opmerking:</strong> {doc.notities}</div>}
+          <div className="qt-sign">
+            <div className="qt-sign-box">
+              <div className="qt-sign-lbl">{sj.handtekeningTekst||"Akkoord klant — datum, handtekening & naam"}</div>
+              <div style={{fontSize:12,color:"#94a3b8",marginTop:8}}>Gelieve ondertekend terug te bezorgen of digitaal te bevestigen via onderstaande link.</div>
+            </div>
+          </div>
+          {sj.toonBevestigingslink!==false&&<div className="qt-confirm-link">
+            📧 <strong>Digitaal akkoord:</strong> <a href={confirmLink} style={{color:"#4338ca",textDecoration:"underline"}}>Klik hier om uw offerte te bevestigen via email</a>
+          </div>}
+        </div>
+        <div className="qt-footer" style={{background:dc}}><div className="qt-footer-txt"><strong>{bed.naam}</strong> · {bed.adres}, {bed.gemeente}</div><div className="qt-footer-txt">BTW: <strong>{fmtBtwnr(bed.btwnr)}</strong></div><div className="qt-footer-txt">{sj.footerTekst||`IBAN: ${bed.iban}`}</div></div>
+      </div>
+
+      {/* PAGE 4: VOORWAARDEN */}
+      <div className="doc-page-lbl">Pagina 4 — Voorwaarden</div>
+      <div className="doc-page">
+        <div style={{height:5,background:dc,flexShrink:0}}/>
+        <div style={{padding:"30px 36px",flex:1,overflow:"hidden"}}>
+          <div style={{fontWeight:900,fontSize:18,color:dc,marginBottom:16,letterSpacing:"-.4px"}}>Algemene Verkoopsvoorwaarden & Verklaringen</div>
+          <div className="legal-txt" style={{fontSize:11,lineHeight:1.6}}>{settings?.voorwaarden?.tekst||INIT_SETTINGS.voorwaarden.tekst}</div>
+        </div>
+        <div className="qt-footer" style={{background:dc}}><div className="qt-footer-txt"><strong>{bed.naam}</strong> · {bed.adres}, {bed.gemeente}</div><div className="qt-footer-txt">BTW: <strong>{fmtBtwnr(bed.btwnr)}</strong> · {bed.website}</div></div>
+      </div>
+
+      {/* TECHNISCHE FICHES — AAN HET EINDE, elke PDF-pagina = eigen A4 */}
+      {uniqueProds.filter(l=>(l.technischeFiche&&l.technischeFiche!=="[PDF]")||(l.technischeFiches||[]).length>0).map((l,fi)=>{
+        console.log(`📎 Fiche sectie voor ${l.naam}:`, 
+          'technischeFiche:', l.technischeFiche ? (l.technischeFiche.length>100?l.technischeFiche.slice(0,50)+'...':l.technischeFiche) : 'null',
+          'technischeFiches:', (l.technischeFiches||[]).map(f=>({naam:f.naam, hasData:!!f.data, dataLen:f.data?.length||0, url:f.url||''}))
+        );
+        return(
+        <div key={`fiche-grp-${fi}`}>
+          {/* Legacy: single technischeFiche — alleen als GEEN array */}
+          {l.technischeFiche&&l.technischeFiche!=="[PDF]"&&l.technischeFiche.length>100&&!(l.technischeFiches||[]).length&&
+            <FichePages fiche={l.technischeFiche} naam={l.naam} fichNaam={l.fichNaam} omschr={l.omschr} dc={dc} bed={bed} docNummer={doc.nummer}/>}
+          {/* Nieuw: array technischeFiches — render ALLE met data */}
+          {(l.technischeFiches||[]).map((f,ffi)=>{
+            // Haal data op: eerst van lijn zelf, dan uit _fc (realtime cache met producten state)
+            const cachedFiches = _fc[l.productId] || _fc[l.id] || [];
+            const cached = cachedFiches.find(cf => cf.naam === f.naam) || cachedFiches[0] || null;
+            const ficheData = f.data || f.url || cached?.data || null;
+            if(!ficheData || ficheData.length < 100) {
+              // Geen base64 data — toon placeholder
+              return(
+                <div key={`fiche-ph-${fi}-${ffi}`}>
+                  <div className="doc-page-lbl">Technische fiche — {f.naam||l.naam}</div>
+                  <div className="doc-page" style={{pageBreakBefore:"always"}}>
+                    <div style={{height:5,background:dc,flexShrink:0}}/>
+                    <div style={{padding:"30mm 20mm",textAlign:"center"}}>
+                      <div style={{fontSize:36,marginBottom:16}}>📋</div>
+                      <div style={{fontWeight:800,fontSize:20,color:"#1e293b",marginBottom:8}}>{l.naam}</div>
+                      <div style={{fontSize:14,color:"#94a3b8",marginBottom:8}}>{f.naam||"Technische fiche"}</div>
+                      <div style={{fontSize:12,color:"#f59e0b",padding:"8px 16px",background:"#fffbeb",borderRadius:8,display:"inline-block"}}>⚠ PDF data niet beschikbaar — product opnieuw opslaan om fiches te herstellen</div>
+                    </div>
+                  </div>
+                </div>
+              );
+            }
+            return <FichePages key={`fiche-${fi}-${ffi}`} fiche={ficheData} naam={l.naam} fichNaam={f.naam} omschr={l.omschr} dc={dc} bed={bed} docNummer={doc.nummer}/>;
+          })}
+        </div>
+      );})}
+    </div>
+  );
+}
+
+
+// ─── BEVESTIGINGSBLOK ────────────────────────────────────────────
+function Bevestiging({offerteId, status, klantAkkoord, toonBevestigingslink}) {
+  const [fase, setFase] = useState("start"); // start | pform | ok | nok
+  const [datum, setDatum] = useState("");
+  const [notitie, setNotitie] = useState("");
+  const [sending, setSending] = useState(false);
+
+  if(toonBevestigingslink===false) return null;
+  const isOK = status==="goedgekeurd" || klantAkkoord;
+  const isNOK = status==="afgewezen";
+
+  if(isOK || fase==="ok") return (
+    <div className="ok-banner">
+      <h3>✅ Offerte goedgekeurd</h3>
+      <p style={{color:"#059669",marginTop:6,fontSize:13}}>Bedankt voor uw bevestiging. We nemen spoedig contact op.</p>
+    </div>
+  );
+  if(isNOK || fase==="nok") return (
+    <div className="nok-banner">
+      <h3>Offerte afgewezen</h3>
+      <p style={{color:"#991b1b",marginTop:6,fontSize:13}}>Bedankt voor uw reactie. Neem gerust contact op als u vragen heeft.</p>
+    </div>
+  );
+
+  const doAkkoord = async () => {
+    setSending(true);
+    try {
+      await sbPost("/rest/v1/offerte_responses", {offerte_id:offerteId, status:"goedgekeurd", periode:datum||null, opmerkingen:notitie||null, submitted_at:new Date().toISOString()});
+      setFase("ok");
+    } catch(e) { alert("Er ging iets mis. Probeer opnieuw of bel ons direct."); }
+    setSending(false);
+  };
+  const doAfwijzen = async () => {
+    if(!window.confirm("Bent u zeker dat u deze offerte wilt afwijzen?")) return;
+    try {
+      await sbPost("/rest/v1/offerte_responses", {offerte_id:offerteId, status:"afgewezen", submitted_at:new Date().toISOString()});
+      setFase("nok");
+    } catch(e) { alert("Er ging iets mis."); }
+  };
+
+  return (
+    <div className="bblok">
+      <h3>Uw reactie</h3>
+      <p>Gaat u akkoord met deze offerte?</p>
+      {fase==="start" && (
+        <div>
+          <button className="btn-ok" onClick={()=>setFase("pform")}>✅&nbsp; Akkoord</button>
+          <button className="btn-nok" onClick={doAfwijzen}>❌&nbsp; Niet akkoord</button>
+        </div>
+      )}
+      {fase==="pform" && (
+        <div className="pform">
+          <label>Gewenste datum (optioneel)</label>
+          <input type="date" value={datum} onChange={e=>setDatum(e.target.value)}/>
+          <label style={{marginTop:12}}>Opmerkingen (optioneel)</label>
+          <textarea value={notitie} onChange={e=>setNotitie(e.target.value)} placeholder="Bijv. speciale instructies, toegang..."/>
+          <div style={{display:"flex",gap:10,marginTop:14}}>
+            <button className="btn-nok" onClick={()=>setFase("start")} style={{flex:1}}>← Terug</button>
+            <button className="btn-ok" onClick={doAkkoord} disabled={sending} style={{flex:2,margin:0}}>
+              {sending?"Verzenden...":"✅ Bevestigen"}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── HOOFD APP ───────────────────────────────────────────────────
+function App() {
+  const [data, setData] = useState(null);
+  const [ficheCache, setFicheCache] = useState({});
+  const [error, setError] = useState(null);
+  const params = new URLSearchParams(location.search);
+  const OID = params.get("id");
+  const ONR = params.get("nr");
+
+  useEffect(() => {
+    if(!OID) { setError("Geen offerte-ID in de URL."); return; }
+    (async () => {
+      let d = null;
+      for(let i=1;i<=3;i++) {
+        try {
+          const rows = await sbGet("/rest/v1/offerte_shares?id=eq."+encodeURIComponent(OID)+"&select=offerte_data");
+          if(rows&&rows[0]&&rows[0].offerte_data) { d=rows[0].offerte_data; break; }
+        } catch(e) { console.warn("Poging",i,e.message); }
+        if(i<3) await new Promise(r=>setTimeout(r,2000));
+      }
+      if(!d) { setError("Offerte '"+(ONR||OID)+"' niet gevonden."); return; }
+      setData(d);
+      // Register view
+      try { sbPost("/rest/v1/offerte_views",{offerte_id:OID,user_agent:navigator.userAgent,viewed_at:new Date().toISOString()}); } catch(_){}
+      // Load fiches
+      try {
+        const fr = await sbGet("/rest/v1/offerte_fiches?offerte_id=eq."+encodeURIComponent(OID)+"&select=product_id,fiches");
+        if(fr&&fr.length>0) {
+          const cache = {};
+          fr.forEach(r => { if(r.fiches&&r.fiches.some(f=>f.data)) cache[r.product_id]=r.fiches; });
+          setFicheCache(cache);
+        }
+      } catch(_){}
+    })();
+  }, []);
+
+  if(error) {
+    document.getElementById("loader").style.display="none";
+    document.getElementById("err").style.display="flex";
+    document.getElementById("errmsg").textContent=error;
+    return null;
   }
+  if(!data) return null;
 
-  // BTW rijen
-  var btwH="";
-  Object.keys(tot.bm).sort().forEach(function(pct){
-    if(tot.bm[pct]>0.01)btwH+="<div class='qt-tot-row btwr'><span>BTW "+pct+"%</span><span>"+fmtE(tot.bm[pct])+"</span></div>";
-  });
-
-  // Voorschot
-  var vsH="";
-  var vs=d.voorschot||d._voorschot||"";
-  if(vs&&vs!=="Geen voorschot"){var vsp=parseFloat(vs);if(!isNaN(vsp)&&vsp>0)vsH="<div class='qt-notes'>&#x1F4A1; <strong>Voorschot:</strong> "+esc(vs)+" te betalen v\xF3\xF3r aanvang van de werken.</div>";}
-
-  // Technische fiches sectie
-  var fichesH="";
-  if(alleFiches.length>0){
-    fichesH="";
-    alleFiches.forEach(function(f){
-      var b64=f.data;
-      if(b64&&b64.indexOf("base64,")>-1)b64=b64.split("base64,")[1];
-      var dataUri="data:"+f.type+";base64,"+b64;
-      fichesH+="<div class='doc-page-lbl'>Technische fiche — "+esc(f.productNaam)+" — "+esc(f.naam)+"</div>"
-        +"<div class='doc-page'>"
-        +"<div style='height:5px;background:"+dc+"'></div>"
-        +"<div class='fiche-page'>"
-        +"<embed class='fiche-embed' src='"+dataUri+"' type='application/pdf'/>"
-        +"</div>"
-        +"<div class='qt-footer' style='background:"+dc+"'><span class='qt-footer-txt'><strong>"+esc(bed.naam||"")+"</strong></span><span class='qt-footer-txt'>"+esc(bed.tel||"")+" · "+esc(bed.email||"")+"</span></div>"
-        +"</div>";
-    });
-
-  }
-
-  // Bevestigingsblok
-  var bH="";
-  if(sj.toonBevestigingslink!==false){
-    if(isOK)bH="<div class='ok-banner'><h3>\u2705 Offerte goedgekeurd</h3><p style='color:#059669;font-size:13px;margin-top:4px'>Bedankt voor uw bevestiging. We nemen spoedig contact op.</p></div>";
-    else if(isNOK)bH="<div class='nok-banner'><h3>Offerte afgewezen</h3><p style='font-size:13px;color:#991b1b;margin-top:4px'>Bedankt voor uw reactie. Neem contact op met vragen.</p></div>";
-    else bH="<div class='bblok'>"
-      +"<h3>Uw reactie</h3>"
-      +"<p>Bent u akkoord met deze offerte?</p>"
-      +"<div id='actieblok' style='display:flex;gap:12px;justify-content:center;flex-wrap:wrap'>"
-      +"<button class='btn-ok' onclick='showPform()'>✅ Akkoord</button>"
-      +"<button class='btn-nok' onclick='doAfwijzen()'>❌ Niet akkoord</button>"
-      +"</div>"
-      +"<div id='pform' class='pform' style='display:none'>"
-      +"<p style='font-size:13px;color:#475569;margin-bottom:14px'>Optioneel: voorkeursdatum voor de installatie</p>"
-      +"<label>Gewenste datum (optioneel)</label><input type='date' id='pdatum'/>"
-      +"<label>Opmerkingen (optioneel)</label><textarea id='pnotitie' placeholder='Bijv. speciale instructies...'></textarea>"
-      +"<div style='display:flex;gap:10px'>"
-      +"<button class='btn-nok' onclick='document.getElementById(`pform`).style.display=`none`;document.getElementById(`actieblok`).style.display=`flex`;' style='flex:1'>← Terug</button>"
-      +"<button class='btn-ok' style='flex:2' onclick='doAkkoord()'>✅ Bevestigen</button>"
-      +"</div></div></div>";
-  }
-
-  // Logo
-  var logoH=bed.logo?"<img class='qt-from-logo' src='"+esc(bed.logo)+"' alt='"+esc(bed.naam||"")+"' onerror='this.style.display=`none`'/>":"";
-
-  // Voorwaarden
-  var vwH=d._voorwaarden?"<div class='doc-page-lbl'>Pagina — Algemene Voorwaarden</div><div class='doc-page'><div style='height:5px;background:"+dc+"'></div><div style='padding:30px 40px;flex:1'><div style='font-weight:900;font-size:18px;color:"+dc+";margin-bottom:16px'>Algemene Verkoopsvoorwaarden &amp; Verklaringen</div><div class='legal-txt'>"+esc(d._voorwaarden)+"</div></div><div class='qt-footer' style='background:"+dc+"'><span class='qt-footer-txt'><strong>"+esc(bed.naam||"")+"</strong> &middot; "+esc(bed.adres||"")+"</span><span class='qt-footer-txt'>BTW: "+esc(bed.btwnr||"")+"</span></div></div>":"";
-
-  var html=
-    // PAGE 1: VOORBLAD
-    "<div class='doc-page-lbl'>Voorblad</div>"
-    +"<div class='doc-page'>"
-    +"<div class='cov'>"
-    +"<div class='cov-l' style='background:"+dc+"'>"
-    +(bed.logo?"<img class='cov-logo' src='"+esc(bed.logo)+"' alt='' onerror='this.style.display=`none`'/>"
-             :"<div class='cov-logo-mark'>\u26A1</div>")
-    +"<div class='cov-co-name'>"+esc(bed.naam||"")+"</div>"
-    +"<div class='cov-co-tag'>&nbsp;</div>"
-    +"<div class='cov-contact'>"
-    +(bed.adres?"<div>"+esc(bed.adres)+"</div>":"")
-    +(bed.gemeente?"<div>"+esc(bed.gemeente)+"</div>":"")
-    +(bed.tel?"<div><strong>"+esc(bed.tel)+"</strong></div>":"")
-    +(bed.email?"<div>"+esc(bed.email)+"</div>":"")
-    +"</div></div>"
-    +"<div class='cov-r'>"
-    +"<div>"
-    +"<div class='cov-doctype' style='color:"+dc+"'>OFFERTE</div>"
-    +"<div class='cov-docnum'>"+esc(d.nummer||"")+"</div>"
-    +"<div class='cov-for-lbl'>Offerte voor</div>"
-    +"<div class='cov-client-name'>"+esc((d.klant&&d.klant.naam)||"")+"</div>"
-    +(d.klant&&d.klant.bedrijf?"<div class='cov-client-co'>"+esc(d.klant.bedrijf)+"</div>":"")
-    +"<div class='cov-client-addr'>"
-    +(d.klant&&d.klant.adres?"<div>"+esc(d.klant.adres)+"</div>":"")
-    +(d.klant&&d.klant.gemeente?"<div>"+esc(d.klant.gemeente)+"</div>":"")
-    +(d.klant&&d.klant.btwnr?"<div>"+esc(d.klant.btwnr)+"</div>":"")
-    +"</div></div>"
-    +"<div class='cov-meta'>"
-    +"<div><div class='cov-meta-lbl'>Datum</div><div class='cov-meta-val'>"+fmtD(d.datum||d.aangemaakt)+"</div></div>"
-    +"<div><div class='cov-meta-lbl'>Geldig tot</div><div class='cov-meta-val'>"+fmtD(d.vervaldatum)+"</div></div>"
-    +"<div><div class='cov-meta-lbl'>Referentie</div><div class='cov-meta-val' style='font-family:monospace'>"+esc(d.nummer||"")+"</div></div>"
-    +"<div><div class='cov-meta-lbl'>Totaal incl. BTW</div><div class='cov-meta-val cov-total' style='color:"+dc+"'>"+fmtE(tot.tot)+"</div></div>"
-    +"</div></div></div></div>"
-
-    // PAGE 2 (DETAIL)
-    +"<div class='doc-page-lbl'>Offertedetail</div>"
-    +"<div class='doc-page'><div style='height:5px;background:"+dc+"'></div>"
-    +"<div class='qt-pg'>"
-    +"<div class='qt-header'>"
-    +"<div>"+logoH
-    +(logoH?"":"<div class='qt-from-name' style='color:"+dc+"'>\u26A1 "+esc(bed.naam||"")+"</div>")
-    +"<div class='qt-from-info'>"+esc(bed.adres||"")+" &middot; "+esc(bed.gemeente||"")+"<br/>"+esc(bed.tel||"")+" &middot; "+esc(bed.email||"")+(bed.btwnr?" &middot; BTW "+esc(bed.btwnr):"")+"</div></div>"
-    +"<div style='text-align:right'><div class='qt-dtype' style='color:"+dc+"'>OFFERTE</div><div class='qt-dnum' style='color:"+dc+"'>"+esc(d.nummer||"")+"</div></div>"
-    +"</div>"
-    +"<div class='qt-meta-bar'>"
-    +"<div class='qt-meta-item'><div class='qt-meta-lbl'>Datum</div><div class='qt-meta-val'>"+fmtD(d.datum||d.aangemaakt)+"</div></div>"
-    +"<div class='qt-meta-item'><div class='qt-meta-lbl'>Geldig tot</div><div class='qt-meta-val'>"+fmtD(d.vervaldatum)+"</div></div>"
-    +(d.btwRegime==="verlegd"?"<div class='qt-meta-item'><div class='qt-meta-lbl'>BTW-regime</div><div class='qt-meta-val'>Verlegd</div></div>":"")
-    +(d.betalingstermijn?"<div class='qt-meta-item'><div class='qt-meta-lbl'>Betaling</div><div class='qt-meta-val'>"+esc(d.betalingstermijn)+" dagen</div></div>":"")
-    +"</div>"
-    +"<div class='qt-parties'>"
-    +"<div><div class='qt-party-name' style='color:"+dc+"'>"+esc(bed.naam||"")+"</div>"
-    +"<div class='qt-party-info'>"+esc(bed.adres||"")+"<br/>"+esc(bed.gemeente||"")+(bed.btwnr?"<br/>BTW: "+esc(bed.btwnr):"")+(bed.iban?"<br/>IBAN: "+esc(bed.iban):"")+"</div></div>"
-    +"<div><div class='qt-party-lbl'>Klant</div><div class='qt-party-name'>"+esc((d.klant&&d.klant.naam)||"")+"</div>"
-    +(d.klant&&d.klant.bedrijf?"<div style='font-weight:600;color:#475569;font-size:12.5px'>"+esc(d.klant.bedrijf)+"</div>":"")
-    +"<div class='qt-party-info'>"+esc((d.klant&&d.klant.adres)||"")+"<br/>"+esc((d.klant&&d.klant.gemeente)||"")
-    +(d.klant&&d.klant.btwnr?"<br/>BTW: "+esc(d.klant.btwnr):"")
-    +(d.klant&&d.klant.tel?"<br/>"+esc(d.klant.tel):"")
-    +(d.klant&&d.klant.email?"<br/>"+esc(d.klant.email):"")
-    +"</div></div></div>"
-    +renderGroepen()
-    +"<div class='qt-totals'><div class='qt-tot-box'>"
-    +"<div class='qt-tot-row'><span>Subtotaal excl. BTW</span><span>"+fmtE(tot.sub)+"</span></div>"
-    +btwH
-    +"<div class='qt-tot-row last' style='background:"+dc+";color:#fff'><span>TOTAAL incl. BTW</span><span>"+fmtE(tot.tot)+"</span></div>"
-    +"</div></div>"
-    +(bed.iban?"<div class='qt-betaal'><strong>Betaling:</strong> IBAN "+esc(bed.iban)+(bed.bic?" &middot; BIC "+esc(bed.bic):"")+" &middot; Mededeling: "+esc(d.nummer||"")+"</div>":"")
-    +vsH
-    +(d.notities?"<div class='qt-notes'><strong>Opmerking:</strong> "+esc(d.notities)+"</div>":"")
-    +"</div>"
-    +"<div class='qt-footer' style='background:"+dc+"'>"
-    +"<span class='qt-footer-txt'><strong>"+esc(bed.naam||"")+"</strong> &middot; "+esc(bed.adres||"")+", "+esc(bed.gemeente||"")+"</span>"
-    +"<span class='qt-footer-txt'>BTW: <strong>"+esc(bed.btwnr||"")+"</strong></span>"
-    +"<span class='qt-footer-txt'>"+(bed.iban?"IBAN: "+esc(bed.iban):"")+"</span>"
-    +"</div></div>"
-
-    // FICHES
-    +fichesH
-
-    // VOORWAARDEN
-    +vwH
-
-    // BEVESTIGING
-    +(bH?"<div style='padding:0 8px'>"+bH+"</div>":"");
-
-  document.getElementById("app").innerHTML=html;
-  document.getElementById("app").style.display="block";
   document.getElementById("loader").style.display="none";
+  const dc = data._dc || "#1a2e4a";
+  document.documentElement.style.setProperty("--dc", dc);
+  document.title = "Offerte "+(data.nummer||"")+" — "+(data._bed?.naam||"");
+
+  // Build settings from stored data
+  const settings = {
+    ...INIT_SETTINGS,
+    bedrijf: data._bed || INIT_SETTINGS.bedrijf,
+    sjabloon: {...INIT_SETTINGS.sjabloon, ...(data._sj||{}), accentKleur:dc},
+    layout: data._lyt ? {...INIT_SETTINGS.layout, ...(data._lyt||{})} : INIT_SETTINGS.layout,
+    voorwaarden: {...INIT_SETTINGS.voorwaarden, tekst:data._voorwaarden||"", voorschot:data._voorschot||"50%"},
+    thema: {kleur:dc},
+  };
+
+  return (
+    <div>
+      <OfferteDocument doc={data} settings={settings} ficheCache={ficheCache}/>
+      <div style={{padding:"0 8px 16px"}}>
+        <Bevestiging
+          offerteId={OID}
+          status={data.status}
+          klantAkkoord={data.klantAkkoord}
+          toonBevestigingslink={data._sj?.toonBevestigingslink}
+        />
+      </div>
+    </div>
+  );
 }
 
-function showPform(){document.getElementById("pform").style.display="block";document.getElementById("actieblok").style.display="none";}
-async function doAkkoord(){
-  var datum=document.getElementById("pdatum").value||"";
-  var notitie=document.getElementById("pnotitie").value||"";
-  try{
-    await sbPost("/rest/v1/offerte_responses",{offerte_id:OID,status:"goedgekeurd",periode:datum||null,opmerkingen:notitie||null,submitted_at:new Date().toISOString()});
-    document.querySelector(".bblok").outerHTML="<div class='ok-banner'><h3>\u2705 Offerte goedgekeurd!</h3><p style='color:#059669;font-size:13px;margin-top:4px'>Bedankt"+(datum?" \u2014 voorkeursdatum: "+datum:"")+". We nemen spoedig contact op.</p></div>";
-  }catch(e){alert("Er ging iets mis. Probeer opnieuw of neem contact op.");}
-}
-async function doAfwijzen(){
-  if(!confirm("Bent u zeker dat u deze offerte wilt afwijzen?"))return;
-  try{
-    await sbPost("/rest/v1/offerte_responses",{offerte_id:OID,status:"afgewezen",submitted_at:new Date().toISOString()});
-    document.querySelector(".bblok").outerHTML="<div class='nok-banner'><h3>Offerte afgewezen</h3><p style='font-size:13px;color:#991b1b;margin-top:4px'>Bedankt voor uw reactie.</p></div>";
-  }catch(e){alert("Er ging iets mis.");}
-}
-load();
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
 </script>
 </body>
 </html>
