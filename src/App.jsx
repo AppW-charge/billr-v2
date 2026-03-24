@@ -1861,7 +1861,7 @@ export default function App() {
           });
           if(changed) {
             setTimeout(()=>notify('📬 Klant heeft gereageerd op offerte!','ok'),100);
-            setTimeout(flushSaves, 600);
+            setTimeout(()=>flushSavesRef.current(), 600);
           }
           return changed ? next : prev;
         });
@@ -1897,7 +1897,7 @@ export default function App() {
             if(isAkkoord) { updates.planBevestigdDoorKlant = true; }
             return {...o, ...updates};
           });
-          if(changed) setTimeout(flushSaves, 600);
+          if(changed) setTimeout(()=>flushSavesRef.current(), 600);
           return changed ? next : prev;
         });
       }
@@ -2016,6 +2016,9 @@ export default function App() {
       try { await sbSet(key, json, user.id); } catch(_){}
     }
   }, [user]);
+  // Ref zodat callbacks met [] dependency altijd de actuele flushSaves hebben
+  const flushSavesRef = useRef(flushSaves);
+  useEffect(() => { flushSavesRef.current = flushSaves; }, [flushSaves]);
 
   const saveKey = useCallback((key, val) => { 
     if(!dataReady.current) return;
@@ -2042,7 +2045,7 @@ export default function App() {
     const debounceMs = key === "b4_prd" ? 10000 : 1000;
     pendingSaves.current[key] = json;
     if(saveTimer.current) clearTimeout(saveTimer.current);
-    saveTimer.current = setTimeout(flushSaves, debounceMs);
+    saveTimer.current = setTimeout(()=>flushSavesRef.current(), debounceMs);
   }, [user, flushSaves]);
 
   // Bij afsluiten én tab wisselen: meteen flushen
@@ -2344,8 +2347,8 @@ export default function App() {
     return `${customPre}-${y}-${String(next).padStart(3,"0")}`;
   };
   const logEntry = (actie) => ({ts: new Date().toISOString(), actie});
-  const updOff = (id,upd) => { setOffertes(p=>p.map(o=>o.id===id?{...o,...upd,log:[...(o.log||[]),logEntry(upd.status?"Status → "+(OFF_STATUS[upd.status]?.l||upd.status):upd.logActie||"Gewijzigd")]}:o)); setTimeout(flushSaves, 300); };
-  const updFact = (id,upd) => { setFacturen(p=>p.map(f=>f.id===id?{...f,...upd,log:[...(f.log||[]),logEntry(upd.status?"Status → "+(FACT_STATUS[upd.status]?.l||upd.status):upd.logActie||"Gewijzigd")]}:f)); setTimeout(flushSaves, 500); };
+  const updOff = (id,upd) => { setOffertes(p=>p.map(o=>o.id===id?{...o,...upd,log:[...(o.log||[]),logEntry(upd.status?"Status → "+(OFF_STATUS[upd.status]?.l||upd.status):upd.logActie||"Gewijzigd")]}:o)); setTimeout(()=>flushSavesRef.current(), 300); };
+  const updFact = (id,upd) => { setFacturen(p=>p.map(f=>f.id===id?{...f,...upd,log:[...(f.log||[]),logEntry(upd.status?"Status → "+(FACT_STATUS[upd.status]?.l||upd.status):upd.logActie||"Gewijzigd")]}:f)); setTimeout(()=>flushSavesRef.current(), 500); };
   // Wrapper: bij goedkeuring automatisch PlanningModal openen
   const handleOffStatus = (id, upd) => {
     updOff(id, upd);
@@ -2427,7 +2430,7 @@ export default function App() {
       try{localStorage.setItem("billr_ts",JSON.stringify(localTimestamps.current));}catch(_){}
       setOffertes(p=>[n,...p]);
       notify("Offerte aangemaakt ✓");
-      setTimeout(flushSaves, 500); // Meteen naar Supabase — geen 2s wachten
+      setTimeout(()=>flushSavesRef.current(), 500); // Meteen naar Supabase — geen 2s wachten
       if(settings?.voorwaarden?.tegenNummer_off) setSettings(s=>({...s,voorwaarden:{...s.voorwaarden,tegenNummer_off:""}}));
     }
     setWizOpen(false); setEditOff(null);
@@ -3078,10 +3081,10 @@ export default function App() {
           </div>
 
           <div className="content">
-            {pg==="dashboard"&&<Dashboard offertes={offertes} facturen={factMet} onGoto={gotoFiltered} onNew={()=>{setEditOff(null);setWizOpen(true)}} onFactuur={d=>setFactModal(d)} settings={settings} offerteViews={offerteViews} offerteResponses={offerteResponses} planningProposals={planningProposals} onLogboek={o=>setLogboekModal(o)} onPlan={o=>setPlanningModal(o)} onPlanDelete={id=>{updOff(id,{planStatus:"geannuleerd",planDatum:null,planTijd:null,logActie:"🗑 Afspraak geannuleerd"});setTimeout(flushSaves,100);}} widgetOrder={widgetOrder} setWidgetOrder={setWidgetOrder} onRefreshTracking={fetchOfferteTracking} websiteLeads={websiteLeads} onLeadRefresh={fetchWebsiteLeads} onLeadStatus={async(id,status)=>{try{await sb.from("website_leads").update({status}).eq("id",id);fetchWebsiteLeads();}catch(_){}}} onLeadToOfferte={(lead)=>{setEditOff(null);setWizOpen(true);notify("Aanvraag: "+lead.naam);}}/>}
-            {pg==="offertes"&&<OffertesPage offertes={offertes} initFilter={pgFilter} onView={d=>setViewDoc({doc:d,type:"offerte"})} onEdit={d=>{setEditOff(d);setWizOpen(true)}} onStatus={handleOffStatus} onBulkStatus={bulkUpdOff} onFactuur={d=>setFactModal(d)} onDelete={id=>{setOffertes(p=>p.filter(o=>o.id!==id));localTimestamps.current["b4_off"]=Date.now();try{localStorage.setItem("billr_ts",JSON.stringify(localTimestamps.current));}catch(_){}notify("Verwijderd");setTimeout(flushSaves,100);}} onNew={()=>{setEditOff(null);setWizOpen(true)}} onEmail={async d=>{await shareOfferte(d);setEmailModal({doc:d,type:"offerte"});}} onPlan={d=>setPlanningModal(d)} onShare={d=>{shareOfferte(d);notify("🔗 Publieke link vernieuwd ✓");}} settings={settings}/>}
-            {pg==="facturen"&&<FacturenPage facturen={factMet} settings={settings} initFilter={pgFilter} onView={d=>setViewDoc({doc:d,type:"factuur"})} onEdit={f=>{setEditFact(f);setFactuurWizOpen(true);}} onStatus={updFact} onBulkStatus={bulkUpdFact} onDelete={id=>{setFacturen(p=>p.filter(f=>f.id!==id));localTimestamps.current["b4_fct"]=Date.now();try{localStorage.setItem("billr_ts",JSON.stringify(localTimestamps.current));}catch(_){}notify("Verwijderd");setTimeout(flushSaves,100);}} notify={notify} onEmail={d=>setEmailModal({doc:d,type:"factuur"})} onBetaling={f=>setBetalingModal(f)} onAanmaning={f=>setAanmaningModal(f)} onNew={()=>{setEditFact(null);setFactuurWizOpen(true)}}/>}
-            {pg==="klanten"&&<KlantenPage klanten={klanten} offertes={offertes} facturen={factMet} view={klantView} onEdit={k=>setKlantModal(k)} onDelete={id=>{setKlanten(p=>p.map(k=>k.id===id?{...k,_verwijderd:true}:k));localTimestamps.current["b4_kln"]=Date.now();try{localStorage.setItem("billr_ts",JSON.stringify(localTimestamps.current));}catch(_){}notify("Klant verwijderd");setTimeout(flushSaves,100);}}/>}
+            {pg==="dashboard"&&<Dashboard offertes={offertes} facturen={factMet} onGoto={gotoFiltered} onNew={()=>{setEditOff(null);setWizOpen(true)}} onFactuur={d=>setFactModal(d)} settings={settings} offerteViews={offerteViews} offerteResponses={offerteResponses} planningProposals={planningProposals} onLogboek={o=>setLogboekModal(o)} onPlan={o=>setPlanningModal(o)} onPlanDelete={id=>{updOff(id,{planStatus:"geannuleerd",planDatum:null,planTijd:null,logActie:"🗑 Afspraak geannuleerd"});setTimeout(()=>flushSavesRef.current(),100);}} widgetOrder={widgetOrder} setWidgetOrder={setWidgetOrder} onRefreshTracking={fetchOfferteTracking} websiteLeads={websiteLeads} onLeadRefresh={fetchWebsiteLeads} onLeadStatus={async(id,status)=>{try{await sb.from("website_leads").update({status}).eq("id",id);fetchWebsiteLeads();}catch(_){}}} onLeadToOfferte={(lead)=>{setEditOff(null);setWizOpen(true);notify("Aanvraag: "+lead.naam);}}/>}
+            {pg==="offertes"&&<OffertesPage offertes={offertes} initFilter={pgFilter} onView={d=>setViewDoc({doc:d,type:"offerte"})} onEdit={d=>{setEditOff(d);setWizOpen(true)}} onStatus={handleOffStatus} onBulkStatus={bulkUpdOff} onFactuur={d=>setFactModal(d)} onDelete={id=>{setOffertes(p=>p.filter(o=>o.id!==id));localTimestamps.current["b4_off"]=Date.now();try{localStorage.setItem("billr_ts",JSON.stringify(localTimestamps.current));}catch(_){}notify("Verwijderd");setTimeout(()=>flushSavesRef.current(),100);}} onNew={()=>{setEditOff(null);setWizOpen(true)}} onEmail={async d=>{await shareOfferte(d);setEmailModal({doc:d,type:"offerte"});}} onPlan={d=>setPlanningModal(d)} onShare={d=>{shareOfferte(d);notify("🔗 Publieke link vernieuwd ✓");}} settings={settings}/>}
+            {pg==="facturen"&&<FacturenPage facturen={factMet} settings={settings} initFilter={pgFilter} onView={d=>setViewDoc({doc:d,type:"factuur"})} onEdit={f=>{setEditFact(f);setFactuurWizOpen(true);}} onStatus={updFact} onBulkStatus={bulkUpdFact} onDelete={id=>{setFacturen(p=>p.filter(f=>f.id!==id));localTimestamps.current["b4_fct"]=Date.now();try{localStorage.setItem("billr_ts",JSON.stringify(localTimestamps.current));}catch(_){}notify("Verwijderd");setTimeout(()=>flushSavesRef.current(),100);}} notify={notify} onEmail={d=>setEmailModal({doc:d,type:"factuur"})} onBetaling={f=>setBetalingModal(f)} onAanmaning={f=>setAanmaningModal(f)} onNew={()=>{setEditFact(null);setFactuurWizOpen(true)}}/>}
+            {pg==="klanten"&&<KlantenPage klanten={klanten} offertes={offertes} facturen={factMet} view={klantView} onEdit={k=>setKlantModal(k)} onDelete={id=>{setKlanten(p=>p.map(k=>k.id===id?{...k,_verwijderd:true}:k));localTimestamps.current["b4_kln"]=Date.now();try{localStorage.setItem("billr_ts",JSON.stringify(localTimestamps.current));}catch(_){}notify("Klant verwijderd");setTimeout(()=>flushSavesRef.current(),100);}}/>}
             {pg==="producten"&&<ProductenPage producten={producten} settings={settings} onEdit={p=>setProdModal(p)} onDelete={id=>{setProducten(p=>p.filter(x=>x.id!==id));notify("Verwijderd")}} onToggle={id=>setProducten(p=>p.map(x=>x.id===id?{...x,actief:!x.actief}:x))} onEnrich={upd=>setProducten(p=>p.map(x=>x.id===upd.id?upd:x))} onDuplicate={p=>{const dup={...p,id:uid(),naam:p.naam+" (kopie)",aangemaakt:new Date().toISOString()};setProducten(prev=>[dup,...prev]);notify("Product gedupliceerd ✓");setProdModal(dup);}}/>}
             {pg==="agenda"&&<div style={{height:"calc(100vh - 70px)",margin:"-22px",overflow:"hidden"}}><iframe src={`${window.location.origin}/planner.html`} style={{width:"100%",height:"100%",border:"none"}} title="Agenda"/></div>}
             {pg==="rapportage"&&<Rapportage offertes={offertes} facturen={factMet}/>}
@@ -3124,7 +3127,7 @@ export default function App() {
         }
         setFactuurWizOpen(false);setEditFact(null);
       }} onClose={()=>{setFactuurWizOpen(false);setEditFact(null);}} notify={notify}/>}
-      {viewDoc&&<DocModal doc={viewDoc.doc} type={viewDoc.type} settings={settings} producten={producten} producten={producten} onClose={()=>setViewDoc(null)} onFactuur={d=>{setFactModal(d);setViewDoc(null);}} onStatusOff={s=>{handleOffStatus(viewDoc.doc.id,{status:s});notify("Status: "+OFF_STATUS[s]?.l);}} onStatusFact={s=>{updFact(viewDoc.doc.id,{status:s});notify("Status: "+FACT_STATUS[s]?.l);}} onEmail={()=>setEmailModal({doc:viewDoc.doc,type:viewDoc.type})} onPeppol={viewDoc.type==="factuur"?()=>sendPeppol(viewDoc.doc):null} onNummer={nr=>{if(viewDoc.type==="offerte"){updOff(viewDoc.doc.id,{nummer:nr});setViewDoc(p=>({...p,doc:{...p.doc,nummer:nr}}));}else{updFact(viewDoc.doc.id,{nummer:nr});setViewDoc(p=>({...p,doc:{...p.doc,nummer:nr}}));}notify("Nummer bijgewerkt ✓");setTimeout(flushSaves,100);}}/>}
+      {viewDoc&&<DocModal doc={viewDoc.doc} type={viewDoc.type} settings={settings} producten={producten} producten={producten} onClose={()=>setViewDoc(null)} onFactuur={d=>{setFactModal(d);setViewDoc(null);}} onStatusOff={s=>{handleOffStatus(viewDoc.doc.id,{status:s});notify("Status: "+OFF_STATUS[s]?.l);}} onStatusFact={s=>{updFact(viewDoc.doc.id,{status:s});notify("Status: "+FACT_STATUS[s]?.l);}} onEmail={()=>setEmailModal({doc:viewDoc.doc,type:viewDoc.type})} onPeppol={viewDoc.type==="factuur"?()=>sendPeppol(viewDoc.doc):null} onNummer={nr=>{if(viewDoc.type==="offerte"){updOff(viewDoc.doc.id,{nummer:nr});setViewDoc(p=>({...p,doc:{...p.doc,nummer:nr}}));}else{updFact(viewDoc.doc.id,{nummer:nr});setViewDoc(p=>({...p,doc:{...p.doc,nummer:nr}}));}notify("Nummer bijgewerkt ✓");setTimeout(()=>flushSavesRef.current(),100);}}/>}
       {factModal&&<FactuurModal off={factModal} settings={settings} onMaak={maakFactuur} onClose={()=>setFactModal(null)}/>}
       {klantModal!==null&&<KlantModal klant={klantModal} onSave={k=>{if(k.id){setKlanten(p=>p.map(x=>x.id===k.id?k:x));notify("Klant opgeslagen");}else{setKlanten(p=>[{...k,id:uid(),aangemaakt:new Date().toISOString()},...p]);notify("Klant toegevoegd ✓");}setKlantModal(null);}} onClose={()=>setKlantModal(null)}/>}
       {prodModal!==null&&<ProductModal prod={prodModal} settings={settings} onSave={p=>{
