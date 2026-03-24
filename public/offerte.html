@@ -86,7 +86,8 @@ body{font-family:Inter,Arial,sans-serif;background:#f1f5f9;color:#1e293b;min-hei
 .fiche-hdr{padding:12px 16px;background:#f8fafc;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;gap:8px}
 .fiche-hdr-naam{font-weight:700;font-size:13px}
 .fiche-hdr-prod{font-size:11px;color:#64748b}
-.fiche-embed{width:100%;border:none;display:block;min-height:700px;background:#f8fafc}
+.fiche-page{width:100%;height:297mm;position:relative;overflow:hidden;background:#f8fafc}
+.fiche-embed{width:100%;height:100%;border:none;display:block}
 
 /* Bevestigingsblok */
 .bblok{border:2px solid var(--dc,#1a2e4a);border-radius:10px;padding:24px;margin-top:24px;text-align:center;background:#fff}
@@ -242,17 +243,21 @@ function render(d){
   // Technische fiches sectie
   var fichesH="";
   if(alleFiches.length>0){
-    fichesH="<div class='doc-page-lbl'>Technische Fiches</div><div class='doc-page'><div style='height:5px;background:"+dc+"'></div><div style='padding:24px 30px'><div style='font-weight:800;font-size:16px;color:"+dc+";margin-bottom:16px'>&#x1F4CE; Technische Fiches</div>";
+    fichesH="";
     alleFiches.forEach(function(f){
       var b64=f.data;
       if(b64&&b64.indexOf("base64,")>-1)b64=b64.split("base64,")[1];
       var dataUri="data:"+f.type+";base64,"+b64;
-      fichesH+="<div class='fiche-card'>"
-        +"<div class='fiche-hdr'><span style='font-size:18px'>&#x1F4C4;</span><div><div class='fiche-hdr-naam'>"+esc(f.naam)+"</div><div class='fiche-hdr-prod'>"+esc(f.productNaam)+"</div></div></div>"
+      fichesH+="<div class='doc-page-lbl'>Technische fiche — "+esc(f.productNaam)+" — "+esc(f.naam)+"</div>"
+        +"<div class='doc-page'>"
+        +"<div style='height:5px;background:"+dc+"'></div>"
+        +"<div class='fiche-page'>"
         +"<embed class='fiche-embed' src='"+dataUri+"' type='application/pdf'/>"
+        +"</div>"
+        +"<div class='qt-footer' style='background:"+dc+"'><span class='qt-footer-txt'><strong>"+esc(bed.naam||"")+"</strong></span><span class='qt-footer-txt'>"+esc(bed.tel||"")+" · "+esc(bed.email||"")+"</span></div>"
         +"</div>";
     });
-    fichesH+="</div><div class='qt-footer' style='background:"+dc+"'><span class='qt-footer-txt'><strong>"+esc(bed.naam||"")+"</strong></span><span class='qt-footer-txt'>"+esc(bed.tel||"")+" \xB7 "+esc(bed.email||"")+"</span></div></div>";
+
   }
 
   // Bevestigingsblok
@@ -260,12 +265,21 @@ function render(d){
   if(sj.toonBevestigingslink!==false){
     if(isOK)bH="<div class='ok-banner'><h3>\u2705 Offerte goedgekeurd</h3><p style='color:#059669;font-size:13px;margin-top:4px'>Bedankt voor uw bevestiging. We nemen spoedig contact op.</p></div>";
     else if(isNOK)bH="<div class='nok-banner'><h3>Offerte afgewezen</h3><p style='font-size:13px;color:#991b1b;margin-top:4px'>Bedankt voor uw reactie. Neem contact op met vragen.</p></div>";
-    else bH="<div class='bblok'><h3>Uw reactie</h3><p>Gaat u akkoord met deze offerte?</p>"
-      +"<div id='actieblok'><button class='btn-ok' onclick='showPform()'>\u2705 Akkoord</button><button class='btn-nok' onclick='doAfwijzen()'>Niet akkoord</button></div>"
-      +"<div id='pform' class='pform' style='display:none'><p style='font-size:13px;color:#475569;margin-bottom:14px'>Optioneel: voorkeursdatum voor de installatie</p>"
+    else bH="<div class='bblok'>"
+      +"<h3>Uw reactie</h3>"
+      +"<p>Bent u akkoord met deze offerte?</p>"
+      +"<div id='actieblok' style='display:flex;gap:12px;justify-content:center;flex-wrap:wrap'>"
+      +"<button class='btn-ok' onclick='showPform()'>✅ Akkoord</button>"
+      +"<button class='btn-nok' onclick='doAfwijzen()'>❌ Niet akkoord</button>"
+      +"</div>"
+      +"<div id='pform' class='pform' style='display:none'>"
+      +"<p style='font-size:13px;color:#475569;margin-bottom:14px'>Optioneel: voorkeursdatum voor de installatie</p>"
       +"<label>Gewenste datum (optioneel)</label><input type='date' id='pdatum'/>"
       +"<label>Opmerkingen (optioneel)</label><textarea id='pnotitie' placeholder='Bijv. speciale instructies...'></textarea>"
-      +"<button class='btn-ok' style='width:100%;margin:0' onclick='doAkkoord()'>\u2705 Bevestigen</button></div></div>";
+      +"<div style='display:flex;gap:10px'>"
+      +"<button class='btn-nok' onclick='document.getElementById(`pform`).style.display=`none`;document.getElementById(`actieblok`).style.display=`flex`;' style='flex:1'>← Terug</button>"
+      +"<button class='btn-ok' style='flex:2' onclick='doAkkoord()'>✅ Bevestigen</button>"
+      +"</div></div></div>";
   }
 
   // Logo
