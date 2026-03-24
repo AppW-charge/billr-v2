@@ -3468,7 +3468,6 @@ function Dashboard({offertes, facturen, onGoto, onNew, onFactuur, settings, offe
           <div className="card-t" style={{color:"#059669"}}>📅 Afspraken overzicht</div>
           <RefreshBtn onRefresh={onRefreshTracking}/>
         </div>
-                </div>}
         {geplande.length>0&&<div>
           <div style={{fontSize:10,fontWeight:700,color:"#059669",textTransform:"uppercase",letterSpacing:".5px",marginBottom:4}}>✅ Ingepland ({geplande.length})</div>
           {geplande.map(o=>(
