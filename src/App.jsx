@@ -2640,16 +2640,18 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
     
     const templateParams = {
       // EmailJS variabelen - zet in template: To = {{to_email}}
-      to_email: recipientEmail,          // VERPLICHT in template "To" veld
-      recipient_email: recipientEmail,   // alias
-      email: recipientEmail,             // alias
+      to_email: recipientEmail,
+      recipient_email: recipientEmail,
+      email: recipientEmail,
       to_name: klantData?.naam || doc.klant?.naam || "Klant",
       customer_name: klantData?.naam || doc.klant?.naam || "Klant",
+      name: klantData?.naam || doc.klant?.naam || "Klant",  // alias voor {{name}} in template
       from_name: bed.naam || "BILLR",
+      from_email: emailCfg.eigen || bed.email || "",
       reply_to: emailCfg.eigen || bed.email || "",
-      subject: type === "offerte" 
-        ? `Offerte ${doc.nummer} — ${bed.naam||""}` 
-        : `Factuur ${doc.nummer} — ${bed.naam||""}`,
+      subject: type === "offerte"
+        ? `Offerte ${doc.nummer} - ${bed.naam||""}`
+        : `Factuur ${doc.nummer} - ${bed.naam||""}`,
       // Document specifieke variabelen
       [type === "offerte" ? "quote_number" : "invoice_number"]: doc.nummer,
       [type === "offerte" ? "quote_date" : "invoice_date"]: fmtDate(doc.datum || doc.aangemaakt),
@@ -2785,15 +2787,17 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
         : `Planning geannuleerd — ${offerte.nummer}`,
       html_body: htmlEmail,
     };
+    console.log("📧 Planning email:", {serviceId, templateId, to: klantData.email});
     try {
       const response = await window.emailjs.send(serviceId, templateId, templateParams);
+      console.log("✅ Planning email response:", response);
       if(response.status === 200) {
-        notify(`📧 Planning ${isVoorstel?"voorstel":"annulering"} verzonden naar ${klantData.email}`, "ok");
+        notify(`📧 ${isVoorstel?"Planningsvoorstel":"Annulering"} verzonden naar ${klantData.email}`, "ok");
         return true;
       }
     } catch(error) {
       console.error("Planning EmailJS Error:", error);
-      notify(`❌ Email mislukt: ${error?.text || error?.message || "Controleer EmailJS instellingen"}`, "er");
+      notify(`❌ Planning email mislukt: ${error?.text || error?.message || JSON.stringify(error)}`, "er");
       return false;
     }
   };
@@ -2826,9 +2830,11 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
   const sendPlanningConfirmation = async (offerte, planData) => {
     if(!window.emailjs) { notify("EmailJS niet geladen", "er"); return; }
     const emailCfg = settings?.email || {};
-    const serviceId = emailCfg.emailjsServiceId || "service_qrkvr0d";
-    const templateId = emailCfg.emailjsTemplatePlanning || "template_5nckw9f";
-    const pubKey = emailCfg.emailjsPublicKey || "04zsVAk5imDpo-8GJ";
+    const serviceId = emailCfg.emailjsServiceId;
+    const templateId = emailCfg.emailjsTemplatePlanning || emailCfg.emailjsTemplateOfferte;
+    const pubKey = emailCfg.emailjsPublicKey;
+    if(!serviceId || !templateId || !pubKey) { notify("\u274c EmailJS niet geconfigureerd in Instellingen.", "er"); return; }
+    console.log("📧 Bevestigingsmail:", {serviceId, templateId});
     window.emailjs.init(pubKey);
     const klantData = klanten.find(k => k.id === offerte.klantId) || offerte.klant || {};
     const bed = settings?.bedrijf || {};
@@ -2943,9 +2949,9 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
 
       // Laad EmailJS
       try { await loadEmailJS(); } catch(_) { return; }
-      const pubKey = emailCfg.emailjsPublicKey || "04zsVAk5imDpo-8GJ";
-      const serviceId = emailCfg.emailjsServiceId || "service_qrkvr0d";
-      const templateId = emailCfg.emailjsTemplatePlanning || "template_5nckw9f";
+      const pubKey = emailCfg.emailjsPublicKey;
+      const serviceId = emailCfg.emailjsServiceId;
+      const templateId = emailCfg.emailjsTemplatePlanning || emailCfg.emailjsTemplateOfferte;
       window.emailjs.init(pubKey);
 
       for(const offerte of teHerinnerenOffertes) {
@@ -7061,12 +7067,12 @@ function EmailModal({doc,type,settings,onClose,onSend,onAcceptToken}) {
     setSending(true); setError("");
     try {
       await loadEmailJS();
-      const pubKey = ejCfg.emailjsPublicKey || "04zsVAk5imDpo-8GJ";
-      const svcId = ejCfg.emailjsServiceId || "service_qrkvr0d";
+      const pubKey = ejCfg.emailjsPublicKey;
+      const svcId = ejCfg.emailjsServiceId;
       const tmplId = type==="offerte" 
-        ? (ejCfg.emailjsTemplateOfferte || "template_5nckw9f") 
-        : (ejCfg.emailjsTemplateFactuur || "template_pe412p8");
-      
+        ? ejCfg.emailjsTemplateOfferte
+        : ejCfg.emailjsTemplateFactuur;
+      if(!pubKey || !svcId || !tmplId) { setError("EmailJS niet geconfigureerd. Controleer Service ID, Template ID en Public Key in Instellingen."); setSending(false); return; }
       window.emailjs.init(pubKey);
       
       // Strip base64 images uit HTML (anders overschrijdt het de 50KB EmailJS limiet)
@@ -7546,6 +7552,7 @@ function InstellingenPage({settings,setSettings,notify,onExportBackup,onImportBa
           <div style={{fontSize:11,color:"#60a5fa",padding:"8px 10px",background:"rgba(255,255,255,.5)",borderRadius:6,marginTop:4}}>
             📋 <strong>EmailJS template variabelen:</strong> to_email, to_name, subject, html_body, from_name, reply_to
           </div>
+          <EmailJSTestBtn settings={form} notify={notify}/>
         </div>
 
         {/* KBO & PEPPOL INTEGRATIES */}
@@ -8961,6 +8968,56 @@ function BTWAangiftePage({facturen,offertes,settings}) {
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+function EmailJSTestBtn({settings, notify}) {
+  const [sending, setSending] = useState(false);
+  const [result, setResult] = useState(null);
+  const cfg = settings?.email || {};
+
+  const doTest = async () => {
+    if(!cfg.emailjsServiceId || !cfg.emailjsPublicKey || !cfg.emailjsTemplateOfferte) {
+      setResult({ok:false, msg:"Vul eerst Service ID, Public Key en Template ID offerte in."});
+      return;
+    }
+    setSending(true); setResult(null);
+    try {
+      if(!window.emailjs) {
+        await new Promise((res,rej)=>{const s=document.createElement("script");s.src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js";s.onload=res;s.onerror=rej;document.head.appendChild(s);});
+      }
+      window.emailjs.init(cfg.emailjsPublicKey);
+      const r = await window.emailjs.send(cfg.emailjsServiceId, cfg.emailjsTemplateOfferte, {
+        to_email: cfg.eigen || "info@w-charge.be",
+        to_name: "Test",
+        from_name: settings?.bedrijf?.naam || "BILLR",
+        reply_to: cfg.eigen || "",
+        subject: "Test - EmailJS BILLR werkt!",
+        html_body: "<p>Test vanuit BILLR. EmailJS is correct geconfigureerd!</p>",
+        name: "Test",
+      });
+      setResult({ok:true, msg:"Test verstuurd naar: "+(cfg.eigen||"?")+" (status "+r.status+")"});
+    } catch(e) {
+      setResult({ok:false, msg:"Mislukt: "+(e?.text||e?.message||JSON.stringify(e))});
+    }
+    setSending(false);
+  };
+
+  return (
+    <div style={{marginTop:8}}>
+      <button className="btn" style={{background:"#2563eb",color:"#fff",fontWeight:700}} onClick={doTest} disabled={sending}>
+        {sending ? "Verzenden..." : "Stuur test-email"}
+      </button>
+      {result && (
+        <div style={{marginTop:6,padding:"8px 12px",borderRadius:6,fontSize:12,
+          background:result.ok?"#d1fae5":"#fef2f2",
+          color:result.ok?"#065f46":"#991b1b",
+          border:"1px solid "+(result.ok?"#10b981":"#ef4444")}}>
+          {result.ok ? "OK: " : "FOUT: "}{result.msg}
+        </div>
+      )}
+      <div style={{fontSize:10,color:"#94a3b8",marginTop:4}}>Test-email gaat naar het afzender e-mailadres</div>
     </div>
   );
 }
