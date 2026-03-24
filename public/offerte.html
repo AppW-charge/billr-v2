@@ -225,53 +225,6 @@ function calcTotals(lijnen=[], bebatTarief=BEBAT_TARIEF) {
   return {subtotaal:sub,btw,totaal:sub+bebatSub+btw,btwGroepen:gr,bebatSub};
 }
 
-// ─── OGM / GESTRUCTUREERDE MEDEDELING ────────────────────────────
-const BEBAT_TARIEF = 2.89;
-const BEBAT_BTW = 21;
-const getBebatTarief = (s) => Number(s?.voorwaarden?.bebatTarief) || BEBAT_TARIEF;
-const stripBe = s => (s||"").replace(/[^0-9]/g,"");
-const fmtBtwnr = n => { const c=stripBe(n); return c.length>=9?"BE "+c.slice(0,4)+"."+c.slice(4,7)+"."+c.slice(7):(n||""); };
-const isBebatProduct = (naam="",cat="") => { const n=naam.toLowerCase(); if(n.includes("bms")||n.includes("battery management")) return false; return n.includes("batter")||cat.toLowerCase().includes("batter"); };
-
-function calcTotals(lijnen=[], bebatTarief=BEBAT_TARIEF) {
-  // BTW komt van de lijn (bepaald door klantregime bij aanmaken offerte)
-  // NOOIT van het product zelf
-  const sub = lijnen.reduce((s,l)=>s+(l.prijs*l.aantal),0);
-  const gr={};
-  lijnen.forEach(l=>{
-    const r=l.btw||0; // 0 als verlegd, 6 of 21 anders
-    if(r>0){if(!gr[r])gr[r]=0;gr[r]+=l.prijs*l.aantal*(r/100);}
-    // BEBAT toeslag — altijd 21% BTW
-    if(l.bebatKg && l.bebatKg>0 && isBebatProduct(l.naam,l.cat||"")) {
-      const bebatEx = l.bebatKg * l.aantal * bebatTarief;
-      if(!gr[BEBAT_BTW])gr[BEBAT_BTW]=0;
-      gr[BEBAT_BTW]+=bebatEx*(BEBAT_BTW/100);
-    }
-  });
-  const btw=Object.values(gr).reduce((s,v)=>s+v,0);
-  const bebatSub = lijnen.reduce((s,l)=>{
-    if(l.bebatKg&&l.bebatKg>0&&isBebatProduct(l.naam,l.cat||"")) return s+l.bebatKg*l.aantal*bebatTarief;
-    return s;
-  },0);
-  return {subtotaal:sub,btw,totaal:sub+bebatSub+btw,btwGroepen:gr,bebatSub};
-}
-
-const BTW_REGIMES = {
-  btw6:    {l:"6% — Woning > 10 jaar (renovatie)", pct:6},
-  btw21:   {l:"21% — Standaard / Nieuwe woning",   pct:21},
-  verlegd: {l:"BTW verlegd (medecontractant B2B)",  pct:0},
-};
-
-const INIT_SETTINGS = {
-  bedrijf:{naam:"",tagline:"",adres:"",gemeente:"",tel:"",email:"",btwnr:"",iban:"",bic:"",website:"",kleur:"#1a2e4a",logo:""},
-  voorwaarden:{betalingstermijn:14,voorschot:"50%",tekst:""},
-  sjabloon:{accentKleur:"#1a2e4a",voorbladTitel:"",handtekeningTekst:"Akkoord klant \u2014 datum, handtekening & naam",footerTekst:"",toonBevestigingslink:true,toonProductpagina:true},
-  layout:{font:"Inter",fontSize:13,logo:{breedte:140,hoogte:52},bedrijf:{velden:{}},klant:{velden:{}},metaBar:{toonDatum:true,toonGeldig:true,toonBtw:true,toonBetaling:true},tabel:{toonOmschr:true,toonBtw:true,toonSubtotalen:true}},
-  thema:{kleur:"#1a2e4a"}
-};
-
-// ─── COMPONENTS ──────────────────────────────────────────────────
-
 function FichePages({fiche, naam, fichNaam, omschr, dc, bed, docNummer}) {
   const [pageImages, setPageImages] = useState([]);
   const [loading, setLoading] = useState(true);
