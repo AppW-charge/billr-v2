@@ -2639,8 +2639,10 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
     const bed = settings?.bedrijf || {};
     
     const templateParams = {
-      // Standaard variabelen (voor alle templates)
-      to_email: recipientEmail,
+      // EmailJS variabelen - zet in template: To = {{to_email}}
+      to_email: recipientEmail,          // VERPLICHT in template "To" veld
+      recipient_email: recipientEmail,   // alias
+      email: recipientEmail,             // alias
       to_name: klantData?.naam || doc.klant?.naam || "Klant",
       customer_name: klantData?.naam || doc.klant?.naam || "Klant",
       from_name: bed.naam || "BILLR",
