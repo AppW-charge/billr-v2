@@ -1674,6 +1674,15 @@ export default function App() {
         if(sbData["b4_at"])  setAcceptTokens(parse(sbData["b4_at"], {}));
         if(sbData["b4_wo"])  setWidgetOrder(parse(sbData["b4_wo"], null));
         Object.entries(sbData).forEach(([k,v])=>{ try{localStorage.setItem(k,v);}catch(_){} });
+        // Initialiseer localTimestamps op basis van Supabase timestamps
+        Object.entries(sbData).forEach(([k,v])=>{
+          if(k.endsWith("__ts") && v) {
+            const baseKey = k.replace("__ts","");
+            if(!localTimestamps.current[baseKey])
+              localTimestamps.current[baseKey] = new Date(v).getTime();
+          }
+        });
+        try { localStorage.setItem("billr_ts", JSON.stringify(localTimestamps.current)); } catch(_){}
       } else {
         // Supabase timeout/leeg — localStorage fallback (snel laden)
         console.warn("⚠️ Supabase timeout — localStorage fallback");
@@ -1861,22 +1870,7 @@ export default function App() {
           });
           if(changed) {
             setTimeout(()=>notify('📬 Klant heeft gereageerd op offerte!','ok'),100);
-            // Direct naar Supabase - geen debounce
-            setTimeout(async () => {
-              if(!dataReady.current) return;
-              const stripped = next.map(doc => {
-                const cl = {...doc};
-                if(cl.lijnen) cl.lijnen = cl.lijnen.map(l => { const ll={...l}; if(ll.technischeFiche&&String(ll.technischeFiche).length>500)ll.technischeFiche=null; if(ll.technischeFiches)ll.technischeFiches=ll.technischeFiches.map(f=>({naam:f.naam||"",url:f.url||"",type:f.type||""})); return ll; });
-                return cl;
-              });
-              const json = JSON.stringify(stripped);
-              try { localStorage.setItem("b4_off", json); } catch(_){}
-              // Update localTimestamps voor sync conflict detectie
-              localTimestamps.current["b4_off"] = Date.now() + 5000;
-              try { localStorage.setItem("billr_ts", JSON.stringify(localTimestamps.current)); } catch(_){}
-              const { data: { user: u } } = await sb.auth.getUser();
-              if(u) await sbSet("b4_off", json, u.id);
-            }, 200);
+            setTimeout(()=>flushSavesRef.current(), 400);
           }
           return changed ? next : prev;
         });
@@ -1946,17 +1940,16 @@ export default function App() {
     return () => clearInterval(iv);
   }, [user, pg]);
 
-  // Website leads laden + elke 2 min pollen op dashboard
-  const fetchWebsiteLeads = useCallback(async () => {
+  // Website leads laden
+  const fetchWebsiteLeads = useCallback(async (filter="alle") => {
     if(!user) return;
     try {
-      const { data, error } = await sb.from("website_leads")
-        .select("*")
-        .order("created_at", { ascending: false })
-        .limit(50);
+      let q = sb.from("website_leads").select("*").order("created_at", { ascending: false }).limit(100);
+      if(filter === "nieuw") q = q.eq("status","nieuw");
+      else if(filter === "behandeld") q = q.eq("status","behandeld");
+      const { data, error } = await q;
       if(!error && data) {
         setWebsiteLeads(data);
-        // Badge notificatie voor nieuwe ongelezen leads
         const nieuw = data.filter(l => l.status === "nieuw").length;
         if(nieuw > 0) document.title = `(${nieuw}) BILLR`;
         else document.title = "BILLR";
@@ -1964,9 +1957,28 @@ export default function App() {
     } catch(e) { console.warn("Leads fetch:", e.message); }
   }, [user]);
   useEffect(() => { if(user) fetchWebsiteLeads(); }, [user, fetchWebsiteLeads]);
+  // Realtime subscription voor nieuwe leads
+  useEffect(() => {
+    if(!user) return;
+    const ch = sb.channel("website_leads_rt")
+      .on("postgres_changes", {event:"*",schema:"public",table:"website_leads"}, (payload) => {
+        fetchWebsiteLeads();
+        if(payload.eventType==="INSERT") {
+          if(Notification.permission==="granted") {
+            try { new Notification("Nieuwe W-Charge aanvraag!", {body:`Van: ${payload.new?.naam||"?"}
+Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
+          } else if(Notification.permission==="default") {
+            Notification.requestPermission();
+          }
+        }
+      })
+      .subscribe();
+    return () => sb.removeChannel(ch);
+  }, [user, fetchWebsiteLeads]);
+  // Polling fallback elke 2 min op dashboard
   useEffect(() => {
     if(!user || pg !== "dashboard") return;
-    const iv = setInterval(fetchWebsiteLeads, 120000); // elke 2 min
+    const iv = setInterval(fetchWebsiteLeads, 120000);
     return () => clearInterval(iv);
   }, [user, pg]);
 
@@ -2284,17 +2296,31 @@ export default function App() {
         if(allData["b4_off"] && sbNewer("b4_off")) { 
           const v=p("b4_off",null); 
           if(v!==null) {
-            const seenId=new Set(); const deduped=v.filter(o=>{ if(!o.id||seenId.has(o.id)) return false; seenId.add(o.id); return true; });
-            // Smart merge: lokale versie wint als die rijker is
+            const seenId=new Set(); const sbOffs=v.filter(o=>{ if(!o.id||seenId.has(o.id)) return false; seenId.add(o.id); return true; });
+            // Smart merge per offerte: neem de rijkste versie
             setOffertes(prev => {
-              const lm={}; prev.forEach(o=>lm[o.id]=o);
-              return deduped.map(o=>{
-                const loc=lm[o.id]; if(!loc) return o;
-                const localRijker=(loc.planDatum&&!o.planDatum)||(loc.klantAkkoord&&!o.klantAkkoord)||(loc.planBevestigingVerstuurd&&!o.planBevestigingVerstuurd)||(loc.status==="goedgekeurd"&&o.status==="verstuurd")||((loc.log||[]).length>(o.log||[]).length);
-                return localRijker?loc:o;
-              });
+              if(!prev.length) return sbOffs; // Leeg lokaal = gebruik Supabase
+              const sbMap={}; sbOffs.forEach(o=>sbMap[o.id]=o);
+              // Check of lokale versie recenter is (via localTimestamps)
+              const localTs = localTimestamps.current["b4_off"] || 0;
+              const sbTs = allData["b4_off__ts"] ? new Date(allData["b4_off__ts"]).getTime() : 0;
+              const localIsRecenter = localTs >= sbTs - 10000; // 10s tolerantie voor klokafwijking
+              if(localIsRecenter) {
+                // Lokaal is recent: merge Supabase-only offertes toe (nieuwe op ander device)
+                const localIds = new Set(prev.map(o=>o.id));
+                const nieuweVanSb = sbOffs.filter(o=>!localIds.has(o.id));
+                return nieuweVanSb.length ? [...prev, ...nieuweVanSb] : prev;
+              } else {
+                // Supabase is recenter: gebruik Supabase maar bewaar lokale planning
+                const localMap={}; prev.forEach(o=>localMap[o.id]=o);
+                return sbOffs.map(o=>{
+                  const loc=localMap[o.id]; if(!loc) return o;
+                  const localRijker=(loc.planDatum&&!o.planDatum)||(loc.klantAkkoord&&!o.klantAkkoord)||(loc.planBevestigingVerstuurd&&!o.planBevestigingVerstuurd)||((loc.log||[]).length>(o.log||[]).length);
+                  return localRijker?loc:o;
+                });
+              }
             });
-            console.log('\xe2\x9c\x85 Mobile sync smart merge:', deduped.length);
+            console.log('\xe2\x9c\x85 Mobile sync merge b4_off');
           }
         }
                 if(allData["b4_fct"] && sbNewer("b4_fct")) { const v=p("b4_fct",null); if(v!==null) setFacturen(v); }
@@ -2370,29 +2396,14 @@ export default function App() {
   };
   const logEntry = (actie) => ({ts: new Date().toISOString(), actie});
   const updOff = (id,upd) => {
+    // Pure state update
     setOffertes(p => {
       const next = p.map(o=>o.id===id?{...o,...upd,log:[...(o.log||[]),logEntry(upd.status?"Status → "+(OFF_STATUS[upd.status]?.l||upd.status):upd.logActie||"Gewijzigd")]}:o);
-      // Direct naar Supabase - geen debounce voor status/log wijzigingen
-      if(user && dataReady.current) {
-        const stripped = next.map(doc => {
-          const cl = {...doc};
-          if(cl.lijnen) cl.lijnen = cl.lijnen.map(l => {
-            const ll = {...l};
-            if(ll.technischeFiche && String(ll.technischeFiche).length > 500) ll.technischeFiche = null;
-            if(ll.technischeFiches) ll.technischeFiches = ll.technischeFiches.map(f => ({naam:f.naam||"",url:f.url||"",type:f.type||""}));
-            return ll;
-          });
-          return cl;
-        });
-        const json = JSON.stringify(stripped);
-        try { localStorage.setItem("b4_off", json); } catch(_){}
-        // Update localTimestamps VOOR sbSet zodat mobile sync niet overschrijft
-        localTimestamps.current["b4_off"] = Date.now() + 5000; // +5s marge
-        try { localStorage.setItem("billr_ts", JSON.stringify(localTimestamps.current)); } catch(_){}
-        sbSet("b4_off", json, user.id).catch(()=>{});
-      }
       return next;
     });
+    // saveKey wordt getriggerd via useEffect([offertes]) na re-render
+    // Maar we schedulen ook een directe flush na 500ms om zeker te zijn
+    setTimeout(()=>flushSavesRef.current(), 500);
   };
   const updFact = (id,upd) => { setFacturen(p=>p.map(f=>f.id===id?{...f,...upd,log:[...(f.log||[]),logEntry(upd.status?"Status → "+(FACT_STATUS[upd.status]?.l||upd.status):upd.logActie||"Gewijzigd")]}:f)); setTimeout(()=>flushSavesRef.current(), 500); };
   // Wrapper: bij goedkeuring automatisch PlanningModal openen
@@ -3485,45 +3496,70 @@ function Dashboard({offertes, facturen, onGoto, onNew, onFactuur, settings, offe
         </div>}
       </div>);
     })(),
-  websiteAanvragen: ()=> (
+  websiteAanvragen: (()=>{
+    const [leadFilter, setLeadFilter] = useState("alle");
+    const zichtbaar = leadFilter==="alle" ? websiteLeads : websiteLeads.filter(l=>l.status===leadFilter);
+    const aantalNieuw = websiteLeads.filter(l=>l.status==="nieuw").length;
+    const aantalBeh = websiteLeads.filter(l=>l.status==="behandeld").length;
+    return (
     <div className="card mb4" key="w-aanvragen" style={{border:"2px solid #f59e0b",background:"#fffbeb"}}>
-      <div className="card-h">
-        <div className="card-t" style={{color:"#d97706"}}>
+      <div className="card-h" style={{flexWrap:"wrap",gap:8}}>
+        <div className="card-t" style={{color:"#d97706",display:"flex",alignItems:"center",gap:6}}>
           🌐 Website Aanvragen
-          {websiteLeads.filter(l=>l.status==="nieuw").length > 0 &&
-            <span style={{marginLeft:8,background:"#ef4444",color:"#fff",borderRadius:10,padding:"1px 8px",fontSize:11,fontWeight:700}}>
-              {websiteLeads.filter(l=>l.status==="nieuw").length}
-            </span>
-          }
+          {aantalNieuw>0&&<span style={{background:"#ef4444",color:"#fff",borderRadius:10,padding:"1px 8px",fontSize:11,fontWeight:700}}>{aantalNieuw}</span>}
         </div>
-        <button className="btn btn-sm" onClick={onLeadRefresh} style={{fontSize:11}}>&#x1F504;</button>
+        <div style={{display:"flex",gap:4,alignItems:"center",flexWrap:"wrap"}}>
+          {[["alle","Alle"],["nieuw","Nieuw"],["behandeld","Behandeld"]].map(([v,l])=>(
+            <button key={v} className="btn btn-sm"
+              style={{fontSize:10,background:leadFilter===v?"#f59e0b":"#fff",color:leadFilter===v?"#fff":"#78350f",border:"1px solid #fde68a",fontWeight:leadFilter===v?700:500}}
+              onClick={()=>setLeadFilter(v)}>{l}{v==="alle"?` (${websiteLeads.length})`:v==="nieuw"?` (${aantalNieuw})`:` (${aantalBeh})`}</button>
+          ))}
+          <button className="btn btn-sm" onClick={onLeadRefresh} style={{fontSize:10,marginLeft:4}} title="Verversen">🔄</button>
+        </div>
       </div>
-      {websiteLeads.length === 0
-        ? <div style={{color:"#94a3b8",fontSize:13,textAlign:"center",padding:"16px 0"}}>Nog geen aanvragen via de website</div>
-        : websiteLeads.slice(0,6).map(lead=>(
-          <div key={lead.id} style={{display:"flex",gap:10,padding:"10px 0",borderBottom:"1px solid #fde68a",alignItems:"flex-start"}}>
-            <div style={{width:8,height:8,borderRadius:"50%",background:lead.status==="nieuw"?"#ef4444":"#10b981",flexShrink:0,marginTop:6}}/>
-            <div style={{flex:1,minWidth:0}}>
-              <div style={{fontWeight:700,fontSize:13}}>
-                {lead.naam||"Onbekend"}
-                {lead.status==="nieuw"&&<span style={{marginLeft:6,fontSize:10,fontWeight:700,color:"#ef4444",background:"#fef2f2",borderRadius:4,padding:"1px 5px"}}>NIEUW</span>}
+      {zichtbaar.length===0
+        ? <div style={{color:"#94a3b8",fontSize:13,textAlign:"center",padding:"20px 0"}}>{websiteLeads.length===0?"Nog geen aanvragen via de website":"Geen aanvragen in dit filter"}</div>
+        : <div>
+          {zichtbaar.map(lead=>(
+            <div key={lead.id} style={{padding:"12px 0",borderBottom:"1px solid #fde68a"}}>
+              <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
+                <div style={{width:9,height:9,borderRadius:"50%",background:lead.status==="nieuw"?"#ef4444":"#10b981",flexShrink:0,marginTop:5}}/>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
+                    <span style={{fontWeight:800,fontSize:13}}>{lead.naam||"Onbekend"}</span>
+                    {lead.status==="nieuw"&&<span style={{fontSize:10,fontWeight:700,color:"#ef4444",background:"#fef2f2",borderRadius:4,padding:"1px 6px"}}>NIEUW</span>}
+                    <span style={{fontSize:10,color:"#94a3b8"}}>{lead.created_at?new Date(lead.created_at).toLocaleString("nl-BE",{day:"2-digit",month:"2-digit",year:"2-digit",hour:"2-digit",minute:"2-digit"}):""}</span>
+                  </div>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"2px 12px",marginTop:4}}>
+                    {lead.service&&<div style={{fontSize:11,color:"#78350f"}}>🔧 <strong>{lead.service}</strong></div>}
+                    {lead.gemeente&&<div style={{fontSize:11,color:"#92400e"}}>📍 {lead.gemeente}</div>}
+                    {lead.email&&<div style={{fontSize:11}}><a href={"mailto:"+lead.email} style={{color:"#2563eb"}}>📧 {lead.email}</a></div>}
+                    {lead.tel&&<div style={{fontSize:11}}><a href={"tel:"+lead.tel} style={{color:"#2563eb"}}>📞 {lead.tel}</a></div>}
+                  </div>
+                  {lead.bericht&&<div style={{fontSize:11,color:"#64748b",marginTop:5,background:"#fff",borderRadius:5,padding:"5px 8px",border:"1px solid #fde68a",fontStyle:"italic"}}>"�{lead.bericht}"</div>}
+                </div>
+                <div style={{display:"flex",flexDirection:"column",gap:4,flexShrink:0}}>
+                  <button className="btn btn-sm" style={{background:"#d4ff00",color:"#1a2e4c",fontWeight:700,fontSize:11,whiteSpace:"nowrap"}}
+                    onClick={()=>{onLeadStatus(lead.id,"behandeld");onLeadToOfferte(lead);}}>
+                    📝 Maak offerte
+                  </button>
+                  {lead.status==="nieuw"
+                    ?<button className="btn btn-sm" style={{fontSize:10,background:"#f0fdf4",color:"#059669",border:"1px solid #86efac"}} onClick={()=>onLeadStatus(lead.id,"behandeld")}>✅ Behandeld</button>
+                    :<button className="btn btn-sm" style={{fontSize:10,background:"#f8fafc",color:"#64748b"}} onClick={()=>onLeadStatus(lead.id,"nieuw")}>🔄 Heropen</button>
+                  }
+                </div>
               </div>
-              <div style={{fontSize:11,color:"#78350f"}}>{lead.service||lead.type||""} {lead.gemeente?"· "+lead.gemeente:""}</div>
-              <div style={{fontSize:11,color:"#92400e",marginTop:2}}>{lead.email||""}{lead.tel?" · "+lead.tel:""}</div>
-              <div style={{fontSize:10,color:"#94a3b8"}}>{lead.created_at?new Date(lead.created_at).toLocaleDateString("nl-BE",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"}):""}</div>
-              {lead.bericht&&<div style={{fontSize:11,color:"#64748b",marginTop:3,fontStyle:"italic",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:240}}>"{lead.bericht}"</div>}
             </div>
-            <div style={{display:"flex",flexDirection:"column",gap:4,flexShrink:0}}>
-              <button className="btn btn-sm" style={{background:"#d4ff00",color:"#1a2e4c",fontWeight:700,fontSize:10}}
-                onClick={()=>{onLeadStatus(lead.id,"behandeld");onLeadToOfferte(lead);}}>+ Offerte</button>
-              {lead.status==="nieuw"&&<button className="btn btn-sm" style={{fontSize:10}}
-                onClick={()=>onLeadStatus(lead.id,"behandeld")}>Gelezen</button>}
-            </div>
+          ))}
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginTop:12,padding:"10px 4px",borderTop:"1px solid #fde68a"}}>
+            <div style={{textAlign:"center"}}><div style={{fontWeight:800,fontSize:18,color:"#ef4444"}}>{aantalNieuw}</div><div style={{fontSize:10,color:"#78350f"}}>Nieuwe leads</div></div>
+            <div style={{textAlign:"center"}}><div style={{fontWeight:800,fontSize:18,color:"#10b981"}}>{aantalBeh}</div><div style={{fontSize:10,color:"#64748b"}}>Behandeld</div></div>
+            <div style={{textAlign:"center"}}><div style={{fontWeight:800,fontSize:18,color:"#1e293b"}}>{websiteLeads.length}</div><div style={{fontSize:10,color:"#64748b"}}>Totaal</div></div>
           </div>
-        ))
+        </div>
       }
-    </div>),
-  };
+    </div>);
+  })(),
 
   const wrapDraggable = (id, content) => {
     if(!content) return null;
