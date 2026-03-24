@@ -883,68 +883,167 @@ function OfferteDocument({doc, settings, ficheCache={}, producten=[]}) {
 }
 
 
-// ─── BEVESTIGINGSBLOK ────────────────────────────────────────────
+// ─── BEVESTIGINGSBLOK (sticky floating) ─────────────────────────
 function Bevestiging({offerteId, status, klantAkkoord, toonBevestigingslink}) {
-  const [fase, setFase] = useState("start"); // start | pform | ok | nok
+  const [fase, setFase] = useState("start");
   const [datum, setDatum] = useState("");
   const [notitie, setNotitie] = useState("");
   const [sending, setSending] = useState(false);
+  const [minimized, setMinimized] = useState(false);
 
   if(toonBevestigingslink===false) return null;
   const isOK = status==="goedgekeurd" || klantAkkoord;
   const isNOK = status==="afgewezen";
 
   if(isOK || fase==="ok") return (
-    <div className="ok-banner">
-      <h3>✅ Offerte goedgekeurd</h3>
-      <p style={{color:"#059669",marginTop:6,fontSize:13}}>Bedankt voor uw bevestiging. We nemen spoedig contact op.</p>
+    <div style={{position:"fixed",bottom:24,right:24,zIndex:9999,maxWidth:380,background:"#d1fae5",border:"2px solid #10b981",borderRadius:14,padding:"18px 22px",boxShadow:"0 8px 32px rgba(0,0,0,.18)"}}>
+      <div style={{fontWeight:800,fontSize:16,color:"#065f46",marginBottom:4}}>✅ Offerte goedgekeurd</div>
+      <div style={{fontSize:13,color:"#059669"}}>Bedankt! We nemen spoedig contact op.</div>
     </div>
   );
   if(isNOK || fase==="nok") return (
-    <div className="nok-banner">
-      <h3>Offerte afgewezen</h3>
-      <p style={{color:"#991b1b",marginTop:6,fontSize:13}}>Bedankt voor uw reactie. Neem gerust contact op als u vragen heeft.</p>
+    <div style={{position:"fixed",bottom:24,right:24,zIndex:9999,maxWidth:380,background:"#fef2f2",border:"2px solid #ef4444",borderRadius:14,padding:"18px 22px",boxShadow:"0 8px 32px rgba(0,0,0,.18)"}}>
+      <div style={{fontWeight:800,fontSize:16,color:"#991b1b",marginBottom:4}}>Offerte afgewezen</div>
+      <div style={{fontSize:13,color:"#b91c1c"}}>Bedankt voor uw reactie.</div>
     </div>
   );
 
   const doAkkoord = async () => {
     setSending(true);
     try {
-      await sbPost("/rest/v1/offerte_responses", {offerte_id:offerteId, status:"goedgekeurd", periode:datum||null, opmerkingen:notitie||null, submitted_at:new Date().toISOString()});
+      await sbPost("/rest/v1/offerte_responses", {
+        offerte_id: offerteId,
+        status: "goedgekeurd",
+        periode: datum || null,
+        opmerkingen: notitie || null,
+        submitted_at: new Date().toISOString()
+      });
       setFase("ok");
-    } catch(e) { alert("Er ging iets mis. Probeer opnieuw of bel ons direct."); }
+    } catch(e) { alert("Er ging iets mis. Probeer opnieuw."); }
     setSending(false);
   };
+
   const doAfwijzen = async () => {
     if(!window.confirm("Bent u zeker dat u deze offerte wilt afwijzen?")) return;
     try {
-      await sbPost("/rest/v1/offerte_responses", {offerte_id:offerteId, status:"afgewezen", submitted_at:new Date().toISOString()});
+      await sbPost("/rest/v1/offerte_responses", {
+        offerte_id: offerteId,
+        status: "afgewezen",
+        submitted_at: new Date().toISOString()
+      });
       setFase("nok");
     } catch(e) { alert("Er ging iets mis."); }
   };
 
+  // Minimum datum = vandaag
+  const today = new Date().toISOString().split("T")[0];
+
   return (
-    <div className="bblok">
-      <h3>Uw reactie</h3>
-      <p>Gaat u akkoord met deze offerte?</p>
-      {fase==="start" && (
-        <div>
-          <button className="btn-ok" onClick={()=>setFase("pform")}>✅&nbsp; Akkoord</button>
-          <button className="btn-nok" onClick={doAfwijzen}>❌&nbsp; Niet akkoord</button>
-        </div>
-      )}
-      {fase==="pform" && (
-        <div className="pform">
-          <label>Gewenste datum (optioneel)</label>
-          <input type="date" value={datum} onChange={e=>setDatum(e.target.value)}/>
-          <label style={{marginTop:12}}>Opmerkingen (optioneel)</label>
-          <textarea value={notitie} onChange={e=>setNotitie(e.target.value)} placeholder="Bijv. speciale instructies, toegang..."/>
-          <div style={{display:"flex",gap:10,marginTop:14}}>
-            <button className="btn-nok" onClick={()=>setFase("start")} style={{flex:1}}>← Terug</button>
-            <button className="btn-ok" onClick={doAkkoord} disabled={sending} style={{flex:2,margin:0}}>
-              {sending?"Verzenden...":"✅ Bevestigen"}
-            </button>
-          </div>
+    <div style={{
+      position:"fixed", bottom:24, right:24, zIndex:9999,
+      width: minimized ? "auto" : 360,
+      background:"#fff",
+      border:"2px solid var(--dc,#1a2e4a)",
+      borderRadius:14,
+      boxShadow:"0 8px 40px rgba(0,0,0,.22)",
+      overflow:"hidden",
+      transition:"all .2s"
+    }}>
+      {/* Header */}
+      <div style={{
+        background:"var(--dc,#1a2e4a)", color:"#fff",
+        padding:"12px 16px",
+        display:"flex", justifyContent:"space-between", alignItems:"center",
+        cursor:"pointer"
+      }} onClick={()=>setMinimized(m=>!m)}>
+        <span style={{fontWeight:700,fontSize:14}}>📋 Uw reactie op de offerte</span>
+        <span style={{fontSize:18,lineHeight:1}}>{minimized ? "▲" : "▼"}</span>
+      </div>
+
+      {!minimized && (
+        <div style={{padding:"16px"}}>
+          {fase === "start" && (
+            <>
+              <p style={{fontSize:13,color:"#475569",marginBottom:16,lineHeight:1.5}}>
+                Gaat u akkoord met deze offerte? U kunt ook een voorkeursdatum meegeven.
+              </p>
+              <div style={{display:"flex",gap:10}}>
+                <button style={{
+                  flex:2, background:"var(--dc,#1a2e4a)", color:"#fff",
+                  border:"none", padding:"12px", borderRadius:8,
+                  fontSize:14, fontWeight:700, cursor:"pointer"
+                }} onClick={()=>setFase("pform")}>
+                  ✅ Akkoord
+                </button>
+                <button style={{
+                  flex:1, background:"#fef2f2", color:"#ef4444",
+                  border:"1px solid #fecaca", padding:"12px", borderRadius:8,
+                  fontSize:13, fontWeight:600, cursor:"pointer"
+                }} onClick={doAfwijzen}>
+                  ❌ Afwijzen
+                </button>
+              </div>
+            </>
+          )}
+
+          {fase === "pform" && (
+            <>
+              <p style={{fontSize:13,color:"#475569",marginBottom:12}}>
+                Optioneel: kies een voorkeursdatum voor de installatie.
+              </p>
+              <label style={{fontSize:11,fontWeight:700,color:"#64748b",display:"block",marginBottom:4}}>
+                📅 Gewenste datum (optioneel)
+              </label>
+              <input
+                type="date"
+                min={today}
+                value={datum}
+                onChange={e=>setDatum(e.target.value)}
+                style={{
+                  width:"100%", border:"1.5px solid var(--dc,#1a2e4a)",
+                  borderRadius:7, padding:"9px 11px", fontSize:14,
+                  marginBottom:10, color:"#1e293b", fontFamily:"inherit",
+                  cursor:"pointer"
+                }}
+              />
+              <label style={{fontSize:11,fontWeight:700,color:"#64748b",display:"block",marginBottom:4}}>
+                💬 Opmerkingen (optioneel)
+              </label>
+              <textarea
+                value={notitie}
+                onChange={e=>setNotitie(e.target.value)}
+                placeholder="Bijv. toegang, speciale instructies..."
+                rows={2}
+                style={{
+                  width:"100%", border:"1px solid #e2e8f0", borderRadius:7,
+                  padding:"8px 10px", fontSize:13, fontFamily:"inherit",
+                  resize:"none", marginBottom:12
+                }}
+              />
+              <div style={{display:"flex",gap:8}}>
+                <button style={{
+                  flex:1, background:"#f1f5f9", color:"#475569",
+                  border:"1px solid #e2e8f0", padding:"10px", borderRadius:7,
+                  fontSize:12, cursor:"pointer"
+                }} onClick={()=>setFase("start")}>
+                  ← Terug
+                </button>
+                <button style={{
+                  flex:2, background:"var(--dc,#1a2e4a)", color:"#fff",
+                  border:"none", padding:"10px", borderRadius:7,
+                  fontSize:14, fontWeight:700, cursor:"pointer",
+                  opacity: sending ? 0.7 : 1
+                }} onClick={doAkkoord} disabled={sending}>
+                  {sending ? "⏳ Verzenden..." : "✅ Bevestigen"}
+                </button>
+              </div>
+              {datum && (
+                <div style={{marginTop:8,fontSize:11,color:"#059669",textAlign:"center"}}>
+                  📅 Voorkeur: {new Date(datum+"T12:00:00").toLocaleDateString("nl-BE",{weekday:"long",day:"numeric",month:"long",year:"numeric"})}
+                </div>
+              )}
+            </>
+          )}
         </div>
       )}
     </div>
