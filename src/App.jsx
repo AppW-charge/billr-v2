@@ -3560,6 +3560,7 @@ function Dashboard({offertes, facturen, onGoto, onNew, onFactuur, settings, offe
       }
     </div>);
   })(),
+  };
 
   const wrapDraggable = (id, content) => {
     if(!content) return null;
