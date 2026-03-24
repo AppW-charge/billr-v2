@@ -1533,6 +1533,7 @@ function openPlannerWithOfferte(offerte) {
 // ─── MAIN APP ────────────────────────────────────────────────────
 export default function App() {
   const [user, setUser] = useState(null);
+  const userRef = useRef(null); // Altijd actuele user voor callbacks
   const [pg, setPg] = useState(()=>{ try { return sessionStorage.getItem("billr_pg")||"dashboard"; } catch(_) { return "dashboard"; }});
   const [pgFilter, setPgFilter] = useState(null); // filter when clicking dashboard
 
@@ -1624,6 +1625,7 @@ export default function App() {
       dataLoaded = true;
       const appUser = { id: u.id, email: u.email, naam: u.user_metadata?.naam || u.email.split("@")[0], rol: "admin" };
       setUser(appUser);
+      userRef.current = appUser;
       setLoaded(true);
 
       const parse = (raw, fb) => { try { return raw ? JSON.parse(raw) : fb; } catch(_) { return fb; } };
@@ -1799,7 +1801,7 @@ export default function App() {
 
     sb.auth.onAuthStateChange((event, session) => {
       if(event==="SIGNED_IN" && session?.user && !dataLoaded) loadUserData(session.user);
-      if(event==="SIGNED_OUT") { setUser(null); setLoaded(true); dataReady.current=false; }
+      if(event==="SIGNED_OUT") { setUser(null); userRef.current=null; setLoaded(true); dataReady.current=false; }
     });
 
     // Noodstop: als na 20s nog niet geladen → toon toch de app
@@ -1870,7 +1872,7 @@ export default function App() {
           });
           if(changed) {
             setTimeout(()=>notify('📬 Klant heeft gereageerd op offerte!','ok'),100);
-            setTimeout(()=>flushSavesRef.current(), 400);
+            saveOfferteDirect(next);
           }
           return changed ? next : prev;
         });
@@ -2395,15 +2397,41 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
     return `${customPre}-${y}-${String(next).padStart(3,"0")}`;
   };
   const logEntry = (actie) => ({ts: new Date().toISOString(), actie});
-  const updOff = (id,upd) => {
-    // Pure state update
-    setOffertes(p => {
-      const next = p.map(o=>o.id===id?{...o,...upd,log:[...(o.log||[]),logEntry(upd.status?"Status → "+(OFF_STATUS[upd.status]?.l||upd.status):upd.logActie||"Gewijzigd")]}:o);
+
+  // Direct Supabase schrijven voor offerte updates - omzeilt volledige save pipeline
+  const saveOfferteDirect = useCallback(async (nieuweOffertes) => {
+    const u = userRef.current;
+    if(!u || !dataReady.current) return;
+    try {
+      const stripped = nieuweOffertes.map(doc => {
+        const cl = {...doc};
+        if(cl.lijnen) cl.lijnen = cl.lijnen.map(l => {
+          const ll = {...l};
+          if(ll.technischeFiche && String(ll.technischeFiche).length > 500) ll.technischeFiche = null;
+          if(ll.technischeFiches) ll.technischeFiches = ll.technischeFiches.map(f => ({naam:f.naam||"",url:f.url||"",type:f.type||""}));
+          return ll;
+        });
+        return cl;
+      });
+      const json = JSON.stringify(stripped);
+      // localStorage altijd synchroon
+      try { localStorage.setItem("b4_off", json); } catch(_){}
+      // localTimestamps bijwerken zodat mobile sync niet overschrijft
+      localTimestamps.current["b4_off"] = Date.now() + 10000;
+      try { localStorage.setItem("billr_ts", JSON.stringify(localTimestamps.current)); } catch(_){}
+      // Direct naar Supabase
+      await sbSet("b4_off", json, u.id);
+    } catch(e) { console.warn("saveOfferteDirect:", e.message); }
+  }, []);
+
+  const updOff = (id, upd) => {
+    setOffertes(prev => {
+      const actie = upd.status ? "Status → "+(OFF_STATUS[upd.status]?.l||upd.status) : upd.logActie||"Gewijzigd";
+      const next = prev.map(o => o.id===id ? {...o,...upd, log:[...(o.log||[]), logEntry(actie)]} : o);
+      // Direct opslaan naar Supabase via ref (geen stale closure)
+      saveOfferteDirect(next);
       return next;
     });
-    // saveKey wordt getriggerd via useEffect([offertes]) na re-render
-    // Maar we schedulen ook een directe flush na 500ms om zeker te zijn
-    setTimeout(()=>flushSavesRef.current(), 500);
   };
   const updFact = (id,upd) => { setFacturen(p=>p.map(f=>f.id===id?{...f,...upd,log:[...(f.log||[]),logEntry(upd.status?"Status → "+(FACT_STATUS[upd.status]?.l||upd.status):upd.logActie||"Gewijzigd")]}:f)); setTimeout(()=>flushSavesRef.current(), 500); };
   // Wrapper: bij goedkeuring automatisch PlanningModal openen
