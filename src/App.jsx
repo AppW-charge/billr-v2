@@ -1813,8 +1813,8 @@ export default function App() {
   // Re-init wanneer settings veranderen (zodat de juiste public key gebruikt wordt)
   useEffect(() => {
     if(window.emailjs) {
-      const pubKey = settings?.email?.emailjsPublicKey || "04zsVAk5imDpo-8GJ";
-      window.emailjs.init(pubKey);
+      const pubKey = settings?.email?.emailjsPublicKey;
+      if(pubKey) window.emailjs.init(pubKey);
       console.log("✅ EmailJS geïnitialiseerd met key:", pubKey.slice(0,6) + "...");
     }
   }, [settings?.email?.emailjsPublicKey]);
@@ -2621,13 +2621,17 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
     
     // Gebruik instellingen, fallback naar hardcoded defaults
     const emailCfg = settings?.email || {};
-    const serviceId = emailCfg.emailjsServiceId || "service_qrkvr0d";
+    const serviceId = emailCfg.emailjsServiceId;
     const templateId = type === "offerte" 
-      ? (emailCfg.emailjsTemplateOfferte || "template_5nckw9f") 
-      : (emailCfg.emailjsTemplateFactuur || "template_pe412p8");
-    
-    // Re-init met juiste public key (voor het geval settings veranderd zijn)
-    const pubKey = emailCfg.emailjsPublicKey || "04zsVAk5imDpo-8GJ";
+      ? emailCfg.emailjsTemplateOfferte
+      : emailCfg.emailjsTemplateFactuur;
+    const pubKey = emailCfg.emailjsPublicKey;
+
+    // Valideer instellingen
+    if(!serviceId || !templateId || !pubKey) {
+      notify("\u274c EmailJS niet geconfigureerd. Controleer Service ID, Template ID en Public Key in Instellingen.", "er");
+      return false;
+    }
     window.emailjs.init(pubKey);
     
     const klantData = klanten.find(k => k.id === doc.klantId);
@@ -2696,9 +2700,10 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
   const sendPlanningEmail = async (offerte, planData, emailType="bevestiging") => {
     if(!window.emailjs) { notify("EmailJS niet geladen", "er"); return false; }
     const emailCfg = settings?.email || {};
-    const serviceId = emailCfg.emailjsServiceId || "service_qrkvr0d";
-    const templateId = emailCfg.emailjsTemplatePlanning || "template_5nckw9f";
-    const pubKey = emailCfg.emailjsPublicKey || "04zsVAk5imDpo-8GJ";
+    const serviceId = emailCfg.emailjsServiceId;
+    const templateId = emailCfg.emailjsTemplatePlanning || emailCfg.emailjsTemplateOfferte;
+    const pubKey = emailCfg.emailjsPublicKey;
+    if(!serviceId || !templateId || !pubKey) { notify("\u274c EmailJS niet geconfigureerd in Instellingen.", "er"); return false; }
     window.emailjs.init(pubKey);
     const klantData = klanten.find(k => k.id === offerte.klantId) || offerte.klant || {};
     const bed = settings?.bedrijf || {};
