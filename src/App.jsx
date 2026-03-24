@@ -1837,7 +1837,7 @@ export default function App() {
         });
         setOfferteResponses(grouped);
 
-        // Auto-sync: match enkel op offerte.id (geen extra offerte_shares query)
+        // Auto-sync klantreactie -> status bijwerken + direct opslaan
         setOffertes(prev => {
           let changed = false;
           const next = prev.map(o => {
@@ -1861,7 +1861,20 @@ export default function App() {
           });
           if(changed) {
             setTimeout(()=>notify('📬 Klant heeft gereageerd op offerte!','ok'),100);
-            setTimeout(()=>flushSavesRef.current(), 600);
+            // Direct naar Supabase - geen debounce
+            setTimeout(async () => {
+              if(!dataReady.current) return;
+              const stripped = next.map(doc => {
+                const cl = {...doc};
+                if(cl.lijnen) cl.lijnen = cl.lijnen.map(l => { const ll={...l}; if(ll.technischeFiche&&String(ll.technischeFiche).length>500)ll.technischeFiche=null; if(ll.technischeFiches)ll.technischeFiches=ll.technischeFiches.map(f=>({naam:f.naam||"",url:f.url||"",type:f.type||""})); return ll; });
+                return cl;
+              });
+              const json = JSON.stringify(stripped);
+              try { localStorage.setItem("b4_off", json); } catch(_){}
+              // Gebruik de user uit de closure via Supabase auth
+              const { data: { user: u } } = await sb.auth.getUser();
+              if(u) await sbSet("b4_off", json, u.id);
+            }, 200);
           }
           return changed ? next : prev;
         });
@@ -2347,7 +2360,28 @@ export default function App() {
     return `${customPre}-${y}-${String(next).padStart(3,"0")}`;
   };
   const logEntry = (actie) => ({ts: new Date().toISOString(), actie});
-  const updOff = (id,upd) => { setOffertes(p=>p.map(o=>o.id===id?{...o,...upd,log:[...(o.log||[]),logEntry(upd.status?"Status → "+(OFF_STATUS[upd.status]?.l||upd.status):upd.logActie||"Gewijzigd")]}:o)); setTimeout(()=>flushSavesRef.current(), 300); };
+  const updOff = (id,upd) => {
+    setOffertes(p => {
+      const next = p.map(o=>o.id===id?{...o,...upd,log:[...(o.log||[]),logEntry(upd.status?"Status → "+(OFF_STATUS[upd.status]?.l||upd.status):upd.logActie||"Gewijzigd")]}:o);
+      // Direct naar Supabase - geen debounce voor status/log wijzigingen
+      if(user && dataReady.current) {
+        const stripped = next.map(doc => {
+          const cl = {...doc};
+          if(cl.lijnen) cl.lijnen = cl.lijnen.map(l => {
+            const ll = {...l};
+            if(ll.technischeFiche && String(ll.technischeFiche).length > 500) ll.technischeFiche = null;
+            if(ll.technischeFiches) ll.technischeFiches = ll.technischeFiches.map(f => ({naam:f.naam||"",url:f.url||"",type:f.type||""}));
+            return ll;
+          });
+          return cl;
+        });
+        const json = JSON.stringify(stripped);
+        try { localStorage.setItem("b4_off", json); } catch(_){}
+        sbSet("b4_off", json, user.id).catch(()=>{});
+      }
+      return next;
+    });
+  };
   const updFact = (id,upd) => { setFacturen(p=>p.map(f=>f.id===id?{...f,...upd,log:[...(f.log||[]),logEntry(upd.status?"Status → "+(FACT_STATUS[upd.status]?.l||upd.status):upd.logActie||"Gewijzigd")]}:f)); setTimeout(()=>flushSavesRef.current(), 500); };
   // Wrapper: bij goedkeuring automatisch PlanningModal openen
   const handleOffStatus = (id, upd) => {
