@@ -1871,7 +1871,9 @@ export default function App() {
               });
               const json = JSON.stringify(stripped);
               try { localStorage.setItem("b4_off", json); } catch(_){}
-              // Gebruik de user uit de closure via Supabase auth
+              // Update localTimestamps voor sync conflict detectie
+              localTimestamps.current["b4_off"] = Date.now() + 5000;
+              try { localStorage.setItem("billr_ts", JSON.stringify(localTimestamps.current)); } catch(_){}
               const { data: { user: u } } = await sb.auth.getUser();
               if(u) await sbSet("b4_off", json, u.id);
             }, 200);
@@ -2282,13 +2284,20 @@ export default function App() {
         if(allData["b4_off"] && sbNewer("b4_off")) { 
           const v=p("b4_off",null); 
           if(v!==null) {
-            // Dedup op id (primair) bij mobile sync
             const seenId=new Set(); const deduped=v.filter(o=>{ if(!o.id||seenId.has(o.id)) return false; seenId.add(o.id); return true; });
-            setOffertes(deduped);
-            console.log('✅ Mobile sync offertes:', deduped.length);
+            // Smart merge: lokale versie wint als die rijker is
+            setOffertes(prev => {
+              const lm={}; prev.forEach(o=>lm[o.id]=o);
+              return deduped.map(o=>{
+                const loc=lm[o.id]; if(!loc) return o;
+                const localRijker=(loc.planDatum&&!o.planDatum)||(loc.klantAkkoord&&!o.klantAkkoord)||(loc.planBevestigingVerstuurd&&!o.planBevestigingVerstuurd)||(loc.status==="goedgekeurd"&&o.status==="verstuurd")||((loc.log||[]).length>(o.log||[]).length);
+                return localRijker?loc:o;
+              });
+            });
+            console.log('\xe2\x9c\x85 Mobile sync smart merge:', deduped.length);
           }
         }
-        if(allData["b4_fct"] && sbNewer("b4_fct")) { const v=p("b4_fct",null); if(v!==null) setFacturen(v); }
+                if(allData["b4_fct"] && sbNewer("b4_fct")) { const v=p("b4_fct",null); if(v!==null) setFacturen(v); }
         if(allData["b4_cn"]  && sbNewer("b4_cn"))  setCreditnotas(p("b4_cn",[]));
         if(allData["b4_am"]  && sbNewer("b4_am"))  setAanmaningen(p("b4_am",[]));
         if(allData["b4_bt"]  && sbNewer("b4_bt"))  setBetalingen(p("b4_bt",[]));
@@ -2377,6 +2386,9 @@ export default function App() {
         });
         const json = JSON.stringify(stripped);
         try { localStorage.setItem("b4_off", json); } catch(_){}
+        // Update localTimestamps VOOR sbSet zodat mobile sync niet overschrijft
+        localTimestamps.current["b4_off"] = Date.now() + 5000; // +5s marge
+        try { localStorage.setItem("billr_ts", JSON.stringify(localTimestamps.current)); } catch(_){}
         sbSet("b4_off", json, user.id).catch(()=>{});
       }
       return next;
@@ -3448,28 +3460,15 @@ function Dashboard({offertes, facturen, onGoto, onNew, onFactuur, settings, offe
       </div>
     ),
     afspraken: ()=> (()=>{
-      const geplande = offertes.filter(o=>o.planStatus==="ingepland"&&o.planDatum&&o.status!=="uitgevoerd").sort((a,b)=>(a.planDatum||"").localeCompare(b.planDatum||""));
-      const wachtend = offertes.filter(o=>{const pp=planningProposals?.[o.id]||[];const lp=pp.sort((a,b)=>new Date(b.created_at)-new Date(a.created_at))[0];return lp&&(lp.status==="voorstel"||lp.status==="alternatief");});
-      if(!geplande.length&&!wachtend.length) return null;
+      const geplande = offertes.filter(o=>o.planDatum&&(o.planStatus==="ingepland"||o.planBevestigingVerstuurd)&&o.status!=="uitgevoerd").sort((a,b)=>(a.planDatum||"").localeCompare(b.planDatum||""));
+      if(!geplande.length) return null;
       return(
       <div className="card mb4" key="w-afspraken" style={{border:"1px solid #86efac",background:"#fafffe"}}>
         <div className="card-h">
           <div className="card-t" style={{color:"#059669"}}>📅 Afspraken overzicht</div>
           <RefreshBtn onRefresh={onRefreshTracking}/>
         </div>
-        {wachtend.length>0&&<div style={{marginBottom:12}}>
-          <div style={{fontSize:10,fontWeight:700,color:"#f59e0b",textTransform:"uppercase",letterSpacing:".5px",marginBottom:4}}>⏳ Wacht op klant ({wachtend.length})</div>
-          {wachtend.map(o=>{const pp=(planningProposals?.[o.id]||[]).sort((a,b)=>new Date(b.created_at)-new Date(a.created_at))[0];return(
-            <div key={o.id} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 0",borderBottom:"1px solid #f0fdf4",cursor:"pointer"}} onClick={()=>onPlan(o)}>
-              <div style={{width:8,height:8,borderRadius:"50%",background:pp?.status==="alternatief"?"#f59e0b":"#93c5fd",flexShrink:0}}/>
-              <div style={{flex:1,minWidth:0}}>
-                <div style={{fontWeight:600,fontSize:12}}>{o.klant?.naam||"—"} <span style={{color:"#94a3b8",fontWeight:400}}>— {o.nummer}</span></div>
-                <div style={{fontSize:10,color:pp?.status==="alternatief"?"#d97706":"#64748b"}}>{pp?.status==="alternatief"?"📅 Ander moment voorgesteld":"⏳ Wacht op bevestiging"} — {pp?.plan_data?.planDatum||""} {pp?.plan_data?.planTijd||""}</div>
-              </div>
-              <span style={{fontSize:11,color:"#f59e0b"}}>→</span>
-            </div>
-          );})}
-        </div>}
+                </div>}
         {geplande.length>0&&<div>
           <div style={{fontSize:10,fontWeight:700,color:"#059669",textTransform:"uppercase",letterSpacing:".5px",marginBottom:4}}>✅ Ingepland ({geplande.length})</div>
           {geplande.map(o=>(
@@ -3611,6 +3610,14 @@ function PlanningModal({offerte, settings, klanten, planningProposals, onSave, o
   ];
 
   const doSave = () => onSave(offerte.id, {planDatum, planTijd, planNotities, planStatus});
+  const doDeleteProposal = async () => {
+    if(!window.confirm("Planningsvoorstel verwijderen?")) return;
+    try {
+      await sb.from("planning_proposals").delete().eq("offerte_id", offerte.id);
+      onSave(offerte.id, {planStatus: null, planDatum: null, planTijd: null, logActie: "🗑 Planningsvoorstel verwijderd"});
+      onClose();
+    } catch(e) { console.warn("Delete proposal:", e.message); }
+  };
   const doVoorstelSturen = async () => { 
     setSending(true);
     await onEmail(offerte, {planDatum, planTijd, planNotities, planStatus}, "bevestiging");
@@ -3692,6 +3699,7 @@ function PlanningModal({offerte, settings, klanten, planningProposals, onSave, o
             {sending?"Verzenden...":"✅ Bevestig afspraak & stuur bevestiging"}
           </button> : <>
             <button className="btn b2" style={{flex:1}} onClick={()=>{doSave();onClose();}}>💾 Later</button>
+          {proposals.length>0&&<button className="btn" style={{background:"#fef2f2",color:"#ef4444",border:"1px solid #fecaca",marginTop:6,width:"100%"}} onClick={doDeleteProposal}>🗑 Planningsvoorstel verwijderen</button>}
             {planDatum
               ? klant.email
                 ? <button className="btn" style={{background:"#f59e0b",color:"#fff",flex:2,fontWeight:700}} onClick={doVoorstelSturen} disabled={sending}>
