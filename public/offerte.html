@@ -225,6 +225,123 @@ function calcTotals(lijnen=[], bebatTarief=BEBAT_TARIEF) {
   return {subtotaal:sub,btw,totaal:sub+bebatSub+btw,btwGroepen:gr,bebatSub};
 }
 
+
+
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,6);
+const BTW_REGIMES = {
+  btw6:    {l:"6% — Woning > 10 jaar (renovatie)", pct:6},
+  btw21:   {l:"21% — Standaard / Nieuwe woning",   pct:21},
+  verlegd: {l:"BTW verlegd (medecontractant B2B)",  pct:0},
+};
+
+const INST_TYPES_DEFAULT = [
+  {id:"laadpaal",  l:"Laadpaal",        icon:"⚡", c:"#2563eb", bg:"#eff6ff"},
+  {id:"zon",       l:"Zonnepanelen",    icon:"☀️", c:"#d97706", bg:"#fffbeb"},
+  {id:"batterij",  l:"Batterijsysteem", icon:"🔋", c:"#059669", bg:"#f0fdf4"},
+  {id:"combo",     l:"Gecombineerd",    icon:"🏠", c:"#7c3aed", bg:"#faf5ff"},
+  {id:"vrij",      l:"Vrij",            icon:"📋", c:"#475569", bg:"#f8fafc"},
+];
+// Keep backward-compat alias
+const INST_TYPES = INST_TYPES_DEFAULT;
+// Get dynamic inst types from settings (with fallback)
+const getInstTypes = (settings) => settings?.instTypes?.length ? settings.instTypes : INST_TYPES_DEFAULT;
+// Get dynamic product cats from settings (with fallback)
+const getProdCats = (settings) => settings?.productCats?.length ? settings.productCats : [
+  {id:"c1",naam:"Laadstation",icoon:"⚡",kleur:"#2563eb"},
+  {id:"c2",naam:"Installatie",icoon:"🔧",kleur:"#7c3aed"},
+  {id:"c3",naam:"Keuring",icoon:"🔍",kleur:"#059669"},
+  {id:"c4",naam:"Zonnepanelen",icoon:"☀️",kleur:"#d97706"},
+  {id:"c5",naam:"Batterij",icoon:"🔋",kleur:"#16a34a"},
+  {id:"c6",naam:"Arbeid",icoon:"👷",kleur:"#475569"},
+];
+
+// Cat icons - updated as requested
+const CAT_ICONS = {
+  "Laadstation":      "⚡",
+  "Installatie":      "🔧",
+  "Montage":          "🔧",
+  "Monitoring":       "⚡📊",
+  "Energie":          "📊",
+  "Keuring":          "🔍",
+  "Zonnepanelen":     "☀️",
+  "Omvormer":         "⚙️",
+  "Batterij":         "🔋",
+  "Arbeid":           "🔧",
+  "default":          "📦",
+};
+const getCatIcon = (cat, settings) => {
+  // Try dynamic settings first
+  if(settings?.productCats) {
+    const dynCat = settings.productCats.find(c=>(cat||"").toLowerCase().includes(c.naam.toLowerCase()));
+    if(dynCat) return dynCat.icoon;
+  }
+  // Fallback to static map
+  const key = Object.keys(CAT_ICONS).find(k => (cat||"").toLowerCase().includes(k.toLowerCase()));
+  return key ? CAT_ICONS[key] : CAT_ICONS.default;
+};
+
+const INIT_SETTINGS = {
+  bedrijf:{naam:"",tagline:"",adres:"",gemeente:"",tel:"",email:"",btwnr:"",iban:"",bic:"",website:"",kleur:"#1a2e4a",logo:""},
+  email:{eigen:"info@wcharge.be",boekhouder1:"",boekhouder2:"",cc:"",emailjsServiceId:"",emailjsTemplateOfferte:"",emailjsTemplateFactuur:"",emailjsPublicKey:"",templateOfferte:"Beste {naam},\n\nIn bijlage vindt u onze offerte {nummer} d.d. {datum}, geldig tot {vervaldatum}.\n\nWat mag u verwachten?\n{technische_info}\n\nBij akkoord kunt u de offerte bevestigen via onderstaande link.\nBij vragen staan we steeds voor u klaar.\n\nMet vriendelijke groeten,\n{bedrijf}\n{tel}",templateFactuur:"Beste {naam},\n\nIn bijlage vindt u factuur {nummer} d.d. {datum}.\nGelieve te betalen vóór {vervaldatum}.\n\nBedrag: {totaal}\nIBAN: {iban} · Mededeling: {nummer}\n\nMet vriendelijke groeten,\n{bedrijf}"},
+  integraties:{kboEnabled:true,peppolEnabled:true,billitApiKey:"98050f8c-93aa-4f2e-a206-3f15e4905276",billitEnv:"production",cbeApiKey:"OqzgVJ8I5wqgA8QjB0Aotu446pn7xqVI"},
+  dashboardWidgets:{omzetGrafiek:true,recenteOffertes:true,openFacturen:true,goedgekeurdeOffertes:true,snelleActies:true,statistieken:true,agenda:true,offerteLogboek:true,afspraken:true,widgetOrder:["statistieken","recenteOffertes","openFacturen","goedgekeurdeOffertes","offerteLogboek","afspraken","snelleActies","agenda"]},
+  voorwaarden:{betalingstermijn:14,voorschot:"50%",boekjaarStart:"01-01",nummerPrefix_off:"OFF",nummerPrefix_fct:"FACT",tegenNummer_off:null,tegenNummer_fct:null,bebatTarief:2.89,tekst:`1. Al onze facturen zijn contant betaalbaar op de bankrekening vermeld op de factuur en zullen na verloop van 14 dagen van rechtswege een intrest van 1% per maand meebrengen, zonder aangetekende ingebrekestelling of dagvaarding te noodzaken.\n\n2. Op onze facturen dienen binnen de 8 dagen na ontvangst eventuele opmerkingen te geschieden.\n\n3. Het bedrag van de onbetaald gebleven facturen zal ten titel van schadevergoeding, van rechtswege verhoogd worden met 15% met een minimum van €65,00 vanaf de dag volgend op de vervaldag.\n\n4. Onze facturen zijn betaalbaar te Lochristi, zodat in geval van betwisting enkel de Rechtbanken van het arrondissement Gent bevoegd zijn.\n\nBTW 6% verklaring: Bij gebrek aan schriftelijke betwisting binnen een termijn van één maand vanaf de ontvangst van de factuur, wordt de klant geacht te erkennen dat (1) de werken worden verricht aan een woning waarvan de eerste ingebruikneming heeft plaatsgevonden in een kalenderjaar dat ten minste tien jaar voorafgaat aan de datum van de eerste factuur, (2) de woning na uitvoering uitsluitend of hoofdzakelijk als privéwoning wordt gebruikt en (3) de werken worden gefactureerd aan een eindverbruiker.\n\nBTW verlegd: Verlegging van heffing. Bij gebrek aan schriftelijke betwisting binnen één maand na ontvangst wordt de afnemer geacht te erkennen dat hij een belastingplichtige is gehouden tot periodieke BTW-aangiften.`},
+  thema:{kleur:"#1a2e4a",naam:"Elektrisch Blauw"},
+  layout:{
+    font:"Inter", fontSize:13, tekstKleur:"#1e293b",
+    paginaNummering:false, datumFormaat:"kort",
+    logo:{positie:"links", breedte:140, hoogte:52, ruimteBoven:2},
+    titel:{formaat:"titel", aangepasteNaam:"", positie:"rechts", fontSize:28, hoofdletters:true, ruimteBoven:1, ruimteLinks:5},
+    bedrijf:{positie:"rechts", fontSize:10, naamVet:true, naamFontSize:12, velden:{naam:true,adres:true,gemeente:true,btwnr:true,iban:false,tel:false,email:false}},
+    klant:{positie:"rechts", fontSize:12, velden:{naam:true,bedrijf:true,adres:true,gemeente:true,btwnr:true,tel:false,email:false}},
+    metaBar:{toonDatum:true,toonGeldig:true,toonRef:true,toonBtw:true,toonBetaling:true},
+    tabel:{toonOmschr:true,toonBtw:true,toonSubtotalen:true},
+    footer:{toon:true,tekst:""},
+    handtekening:{toon:true},
+    voorwaarden:{toon:true},
+    notitie:{toon:true},
+    watermark:{toon:false,tekst:"CONCEPT"},
+  },
+  productCats:[
+    {id:"c1",naam:"Laadstation",icoon:"⚡",kleur:"#2563eb"},
+    {id:"c2",naam:"Installatie",icoon:"🔧",kleur:"#7c3aed"},
+    {id:"c3",naam:"Energie monitoring",icoon:"📊",kleur:"#0891b2"},
+    {id:"c4",naam:"Keuring",icoon:"🔍",kleur:"#059669"},
+    {id:"c5",naam:"Zonnepanelen",icoon:"☀️",kleur:"#d97706"},
+    {id:"c6",naam:"Omvormer",icoon:"⚙️",kleur:"#ea580c"},
+    {id:"c7",naam:"Batterij",icoon:"🔋",kleur:"#16a34a"},
+    {id:"c8",naam:"Arbeid",icoon:"👷",kleur:"#475569"},
+  ],
+  instTypes:[
+    {id:"laadpaal",l:"Laadpaal",icon:"⚡",c:"#2563eb",bg:"#eff6ff"},
+    {id:"zon",l:"Zonnepanelen",icon:"☀️",c:"#d97706",bg:"#fffbeb"},
+    {id:"batterij",l:"Batterijsysteem",icon:"🔋",c:"#059669",bg:"#f0fdf4"},
+    {id:"combo",l:"Gecombineerd",icon:"🏠",c:"#7c3aed",bg:"#faf5ff"},
+    {id:"vrij",l:"Vrij",icon:"📋",c:"#475569",bg:"#f8fafc"},
+  ],
+  sjabloon:{
+    toonVoorblad:true,
+    toonProductpagina:true,
+    toonSpecs:true,
+    toonBevestigingslink:true,
+    voorbladTitel:"",
+    voorbladOndertitel:"",
+    voorbladIntro:"",
+    handtekeningTekst:"Geldig voor akkoord — datum, handtekening & naam",
+    footerTekst:"",
+    accentKleur:"",
+    paginaformaat:"A4",
+    ontwerpOfferte:"kl_split",
+    ontwerpFactuur:"classic",
+    logoPositie:"links-boven",
+    logoBreedte:140,
+    logoHoogte:52,
+    ficheWeergave:"eigen-pagina",   // "eigen-pagina" | "half" | "inline"
+    ficheMarge:8,                   // mm marge rondom fiche
+    ficheHoogte:220,                // mm hoogte van de fiche embed (bij half/inline)
+  },
+};
+
 function FichePages({fiche, naam, fichNaam, omschr, dc, bed, docNummer}) {
   const [pageImages, setPageImages] = useState([]);
   const [loading, setLoading] = useState(true);
