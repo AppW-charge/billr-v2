@@ -1660,12 +1660,12 @@ export default function App() {
         if(sbData["b4_off"]) {
           const raw=parse(sbData["b4_off"],[]);
           const seenId=new Set(); const offs=raw.filter(o=>{ if(!o.id||seenId.has(o.id)) return false; seenId.add(o.id); return true; });
-          setOffertes(offs); console.log(`✅ Offertes geladen: ${offs.length}${offs.length!==raw.length?' ('+raw.length+' voor dedup)':''}`);
+          setOffertes(dedupOffertes(offs)); console.log(`✅ Offertes geladen: ${offs.length}${offs.length!==raw.length?' ('+raw.length+' voor dedup)':''}`);
         }
         if(sbData["b4_fct"]) {
           const raw=parse(sbData["b4_fct"],[]);
           const seenId2=new Set(); const fcts=raw.filter(f=>{ if(!f.id||seenId2.has(f.id)) return false; seenId2.add(f.id); return true; });
-          setFacturen(fcts); console.log(`✅ Facturen geladen: ${fcts.length}`);
+          setFacturen(dedupFacturen(fcts)); console.log(`✅ Facturen geladen: ${fcts.length}`);
         }
         if(sbData["b4_cn"])  setCreditnotas(parse(sbData["b4_cn"], []));
         if(sbData["b4_am"])  setAanmaningen(parse(sbData["b4_am"], []));
@@ -1693,7 +1693,7 @@ export default function App() {
         setSettings(ls('b4_set', INIT_SETTINGS));
         setKlanten(ls('b4_kln', INIT_KLANTEN));
         setProducten(restoreFicheCache(ls('b4_prd', INIT_PRODUCTS)));
-        setOffertes(ls('b4_off', []));
+        setOffertes(dedupOffertes(ls('b4_off', [])));
         setFacturen(ls('b4_fct', []));
         setCreditnotas(ls('b4_cn', []));
         setAanmaningen(ls('b4_am', []));
@@ -1712,8 +1712,8 @@ export default function App() {
               const p2 = (k,fb) => { try{return retry[k]?JSON.parse(retry[k]):fb;}catch(_){return fb;} };
               if(retry["b4_set"]) setSettings(p2("b4_set", INIT_SETTINGS));
               if(retry["b4_kln"]) setKlanten(p2("b4_kln", []));
-              if(retry["b4_off"]) { const offs=p2("b4_off",[]); const seen=new Set(); setOffertes(offs.filter(o=>{ if(!o.id||seen.has(o.id)) return false; seen.add(o.id); return true; })); }
-              if(retry["b4_fct"]) setFacturen(p2("b4_fct",[]));
+              if(retry["b4_off"]) { const offs=p2("b4_off",[]); const seen=new Set(); setOffertes(dedupOffertes(offs.filter(o=>{ if(!o.id||seen.has(o.id)) return false; seen.add(o.id); return true; }))); }
+              if(retry["b4_fct"]) setFacturen(dedupFacturen(p2("b4_fct",[])));
               if(retry["b4_prd"]) {
                 setProducten(restoreFicheCache(p2("b4_prd",[])));
               }
@@ -2287,13 +2287,24 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
             setOffertes(prev => {
               if(!prev.length) return sbOffs;
               const localIds = new Set(prev.map(o=>o.id));
-              const sbNieuwe = sbOffs.filter(o=>!localIds.has(o.id));
+              const localNummers = new Set(prev.map(o=>o.nummer).filter(Boolean));
+              const sbNieuwe = sbOffs.filter(o=>!localIds.has(o.id) && !localNummers.has(o.nummer));
               if(sbNieuwe.length) console.log("Mobile sync: "+sbNieuwe.length+" nieuwe");
               return sbNieuwe.length ? [...prev, ...sbNieuwe] : prev;
             });
           }
         }
-                if(allData["b4_fct"] && sbNewer("b4_fct")) { const v=p("b4_fct",null); if(v!==null) setFacturen(v); }
+                if(allData["b4_fct"]) {
+          const vf=p("b4_fct",null);
+          if(vf!==null) {
+            setFacturen(prev => {
+              if(!prev.length) return dedupFacturen(vf);
+              const localNrs = new Set(prev.map(f=>f.nummer).filter(Boolean));
+              const sbNieuwe = vf.filter(f=>f.id && !localNrs.has(f.nummer));
+              return sbNieuwe.length ? dedupFacturen([...prev,...sbNieuwe]) : prev;
+            });
+          }
+        }
         if(allData["b4_cn"]  && sbNewer("b4_cn"))  setCreditnotas(p("b4_cn",[]));
         if(allData["b4_am"]  && sbNewer("b4_am"))  setAanmaningen(p("b4_am",[]));
         if(allData["b4_bt"]  && sbNewer("b4_bt"))  setBetalingen(p("b4_bt",[]));
@@ -2325,7 +2336,9 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
         setOffertes(prev => {
           if(!prev.length) return sbOffs;
           const localIds = new Set(prev.map(o=>o.id));
-          const sbNieuwe = sbOffs.filter(o=>o.id && !localIds.has(o.id));
+              const localNummers = new Set(prev.map(o=>o.nummer).filter(Boolean));
+          const localNummers2 = new Set(prev.map(o=>o.nummer).filter(Boolean));
+          const sbNieuwe = sbOffs.filter(o=>o.id && !localIds.has(o.id) && !localNummers2.has(o.nummer));
           if(sbNieuwe.length) console.log("Auto-sync: "+sbNieuwe.length+" nieuwe");
           return sbNieuwe.length ? [...prev, ...sbNieuwe] : prev;
         });
@@ -2391,6 +2404,44 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
     return `${customPre}-${y}-${String(next).padStart(3,"0")}`;
   };
   const logEntry = (actie) => ({ts: new Date().toISOString(), actie});
+
+  // Dedup offertes: per nummer de meest recente versie (meeste logs) behouden
+  const dedupOffertes = (arr) => {
+    const byNummer = {};
+    arr.forEach(o => {
+      if(!o.id) return;
+      const nr = o.nummer || o.id; // gebruik id als fallback
+      if(!byNummer[nr]) { byNummer[nr] = o; return; }
+      // Behoud de versie met de meeste logs (meest up-to-date)
+      const bestaand = byNummer[nr];
+      const bestaandLogs = (bestaand.log||[]).length;
+      const nieuwLogs = (o.log||[]).length;
+      if(nieuwLogs > bestaandLogs || 
+         (!bestaand.planDatum && o.planDatum) ||
+         (bestaand.status === 'concept' && o.status !== 'concept')) {
+        byNummer[nr] = o;
+      }
+    });
+    return Object.values(byNummer);
+  };
+
+
+
+  // Dedup facturen: per nummer de meest recente versie behouden
+  const dedupFacturen = (arr) => {
+    const byNummer = {};
+    arr.forEach(f => {
+      if(!f.id) return;
+      const nr = f.nummer || f.id;
+      if(!byNummer[nr]) { byNummer[nr] = f; return; }
+      const best = byNummer[nr];
+      if((f.log||[]).length > (best.log||[]).length || 
+         (best.status === 'concept' && f.status !== 'concept')) {
+        byNummer[nr] = f;
+      }
+    });
+    return Object.values(byNummer);
+  };
 
   // Direct Supabase schrijven voor offerte updates - omzeilt volledige save pipeline
   // Strip base64 uit een array van offertes
@@ -2507,7 +2558,7 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
         log:[{ts:new Date().toISOString(), actie:"✨ Offerte aangemaakt als "+definitiefNr}]};
       localTimestamps.current["b4_off"]=Date.now();
       try{localStorage.setItem("billr_ts",JSON.stringify(localTimestamps.current));}catch(_){}
-      setOffertes(p=>[n,...p]);
+      setOffertes(p=>{ const filtered = p.filter(o=>o.nummer!==n.nummer); return [n,...filtered]; });
       notify("Offerte aangemaakt ✓");
       setTimeout(()=>flushSavesRef.current(), 500); // Meteen naar Supabase — geen 2s wachten
       if(settings?.voorwaarden?.tegenNummer_off) setSettings(s=>({...s,voorwaarden:{...s.voorwaarden,tegenNummer_off:""}}));
@@ -2517,7 +2568,7 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
 
   const maakFactuur = (off, extra={}) => {
     const n={id:uid(),nummer:nextNr("FACT",facturen,"nummer"),offerteId:off.id,offerteNr:off.nummer,klantId:off.klantId,klant:off.klant,groepen:off.groepen||[],lijnen:extra.lijnen||off.lijnen,notities:extra.notities||off.notities,betalingstermijn:extra.bt||settings.voorwaarden?.betalingstermijn||14,datum:today(),vervaldatum:addDays(today(),extra.bt||settings.voorwaarden?.betalingstermijn||14),status:"concept",installatieType:off.installatieType,btwRegime:off.btwRegime,voorschot:off.voorschot||settings.voorwaarden?.voorschot,aangemaakt:new Date().toISOString()};
-    setFacturen(p=>[n,...p]); updOff(off.id,{status:"gefactureerd",factuurId:n.id}); setFactModal(null); notify("Factuur aangemaakt ✓"); setPg("facturen"); setPgFilter(null);
+    setFacturen(p=>{ const f2=p.filter(f=>f.nummer!==n.nummer); return [n,...f2]; }); updOff(off.id,{status:"gefactureerd",factuurId:n.id}); setFactModal(null); notify("Factuur aangemaakt ✓"); setPg("facturen"); setPgFilter(null);
   };
 
   // ═══ OFFERTE SHARING — sla snapshot op voor publieke offerte.html pagina ═══
@@ -3221,7 +3272,7 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
         } else {
           const nr = ff.nummerOverride || nextNr("FACT",facturen,"nummer");
           const n={...ff,id:uid(),nummer:nr,datum:ff.datum||today(),vervaldatum:ff.vervaldatum||addDays(today(),ff.betalingstermijn||14),status:"concept",aangemaakt:new Date().toISOString()};
-          setFacturen(p=>[n,...p]);
+          setFacturen(p=>{ const f2=p.filter(f=>f.nummer!==n.nummer); return [n,...f2]; });
           if(settings?.voorwaarden?.tegenNummer_fct) setSettings(s=>({...s,voorwaarden:{...s.voorwaarden,tegenNummer_fct:""}}));
           notify("Factuur aangemaakt ✓");
         }
