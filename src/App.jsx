@@ -637,7 +637,7 @@ const INIT_SETTINGS = {
   bedrijf:{naam:"",tagline:"",adres:"",gemeente:"",tel:"",email:"",btwnr:"",iban:"",bic:"",website:"",kleur:"#1a2e4a",logo:""},
   email:{eigen:"info@wcharge.be",boekhouder1:"",boekhouder2:"",cc:"",emailjsServiceId:"",emailjsTemplateOfferte:"",emailjsTemplateFactuur:"",emailjsPublicKey:"",templateOfferte:"Beste {naam},\n\nIn bijlage vindt u onze offerte {nummer} d.d. {datum}, geldig tot {vervaldatum}.\n\nWat mag u verwachten?\n{technische_info}\n\nBij akkoord kunt u de offerte bevestigen via onderstaande link.\nBij vragen staan we steeds voor u klaar.\n\nMet vriendelijke groeten,\n{bedrijf}\n{tel}",templateFactuur:"Beste {naam},\n\nIn bijlage vindt u factuur {nummer} d.d. {datum}.\nGelieve te betalen vóór {vervaldatum}.\n\nBedrag: {totaal}\nIBAN: {iban} · Mededeling: {nummer}\n\nMet vriendelijke groeten,\n{bedrijf}"},
   integraties:{kboEnabled:true,peppolEnabled:true,billitApiKey:"98050f8c-93aa-4f2e-a206-3f15e4905276",billitEnv:"production",cbeApiKey:"OqzgVJ8I5wqgA8QjB0Aotu446pn7xqVI"},
-  dashboardWidgets:{omzetGrafiek:true,recenteOffertes:true,openFacturen:true,goedgekeurdeOffertes:true,snelleActies:true,statistieken:true,agenda:true,offerteLogboek:true,afspraken:true,widgetOrder:["statistieken","recenteOffertes","openFacturen","goedgekeurdeOffertes","offerteLogboek","afspraken","snelleActies","agenda"]},
+  dashboardWidgets:{omzetGrafiek:true,recenteOffertes:true,openFacturen:true,goedgekeurdeOffertes:true,snelleActies:true,statistieken:true,agenda:true,offerteLogboek:true,afspraken:true,widgetOrder:["todoLijst","statistieken","recenteOffertes","openFacturen","goedgekeurdeOffertes","offerteLogboek","afspraken","snelleActies","agenda"]},
   voorwaarden:{betalingstermijn:14,voorschot:"50%",boekjaarStart:"01-01",nummerPrefix_off:"OFF",nummerPrefix_fct:"FACT",tegenNummer_off:null,tegenNummer_fct:null,bebatTarief:2.89,tekst:`1. Al onze facturen zijn contant betaalbaar op de bankrekening vermeld op de factuur en zullen na verloop van 14 dagen van rechtswege een intrest van 1% per maand meebrengen, zonder aangetekende ingebrekestelling of dagvaarding te noodzaken.\n\n2. Op onze facturen dienen binnen de 8 dagen na ontvangst eventuele opmerkingen te geschieden.\n\n3. Het bedrag van de onbetaald gebleven facturen zal ten titel van schadevergoeding, van rechtswege verhoogd worden met 15% met een minimum van €65,00 vanaf de dag volgend op de vervaldag.\n\n4. Onze facturen zijn betaalbaar te Lochristi, zodat in geval van betwisting enkel de Rechtbanken van het arrondissement Gent bevoegd zijn.\n\nBTW 6% verklaring: Bij gebrek aan schriftelijke betwisting binnen een termijn van één maand vanaf de ontvangst van de factuur, wordt de klant geacht te erkennen dat (1) de werken worden verricht aan een woning waarvan de eerste ingebruikneming heeft plaatsgevonden in een kalenderjaar dat ten minste tien jaar voorafgaat aan de datum van de eerste factuur, (2) de woning na uitvoering uitsluitend of hoofdzakelijk als privéwoning wordt gebruikt en (3) de werken worden gefactureerd aan een eindverbruiker.\n\nBTW verlegd: Verlegging van heffing. Bij gebrek aan schriftelijke betwisting binnen één maand na ontvangst wordt de afnemer geacht te erkennen dat hij een belastingplichtige is gehouden tot periodieke BTW-aangiften.`},
   thema:{kleur:"#1a2e4a",naam:"Elektrisch Blauw"},
   layout:{
@@ -3460,23 +3460,21 @@ function AgendaPage({offertes, settings, onPlan, onPlanDelete}) {
       {/* Header */}
       <div style={{display:"flex",alignItems:"center",gap:16,marginBottom:20,flexWrap:"wrap"}}>
         <div style={{fontSize:22,fontWeight:800,color:"#1e293b"}}>📅 Agenda</div>
-        <div style={{fontSize:13,color:"#64748b"}}>{afspraken.length} bevestigde afspraken</div>
         <button style={{fontSize:11,background:"#fef2f2",color:"#ef4444",border:"1px solid #fecaca",borderRadius:6,padding:"5px 10px",cursor:"pointer"}}
-          title="Wis alle tijdelijk gecachede planner-data (planner.html localStorage)"
-          onClick={()=>{
-            if(!window.confirm("Wis alle gecachede agenda-data van planner.html?\nDit verwijdert dubbele/verouderde afspraken uit de shift-kalender.")) return;
-            // Wis planner localStorage keys
-            ['wcp_shifts','wcp_apts','wcp_billr_apts','planner_apts','billr_appointments'].forEach(k=>{
-              try{localStorage.removeItem(k);}catch(_){}
-            });
-            // Notify iframe
-            const fr = document.querySelector('iframe[title="Agenda"]');
-            if(fr?.contentWindow) {
-              try{fr.contentWindow.postMessage({type:'CLEAR_ALL_APTS'},'*');}catch(_){}
-              setTimeout(()=>fr.src=fr.src,300);
-            }
-            alert("Cache gewist. Herlaad de pagina.");
-          }}>🗑 Wis planner cache</button>
+          title="Wis alle planner-afspraken (Supabase + cache)"
+          onClick={async()=>{
+            if(!window.confirm("Wis ALLE afspraken uit de W-Charge Planner?\n\nDit verwijdert de planner-data, niet de BILLR offertes zelf.")) return;
+            try {
+              const u = window.__billrUserId;
+              if(u) { await sb.from("planner_data").delete().eq("user_id", u); }
+              ["wcp_shifts","wcp_apts","wcp_billr_apts","wcp_data","planner_apts","billr_appointments","wchargePlanner","wcpShifts","wcpApts"].forEach(k=>{
+                try{localStorage.removeItem(k);}catch(_){}
+              });
+              const fr = document.querySelector('iframe[title="Agenda"]');
+              if(fr?.contentWindow) { try{fr.contentWindow.postMessage({type:"CLEAR_ALL_APTS"},"*");}catch(_){} setTimeout(()=>{try{fr.src=fr.src;}catch(_){}},400); }
+              alert("Planner gewist.");
+            } catch(e) { alert("Fout: "+e.message); }
+          }}>🗑 Wis planner</button>
         <div style={{marginLeft:"auto",display:"flex",gap:8,alignItems:"center"}}>
           <button onClick={vorigeM} style={{background:"#f1f5f9",border:"1px solid #e2e8f0",borderRadius:6,padding:"6px 12px",cursor:"pointer",fontSize:16}}>‹</button>
           <div style={{fontWeight:700,fontSize:15,minWidth:150,textAlign:"center",color:dc}}>
@@ -3691,7 +3689,9 @@ function Dashboard({offertes, facturen, onGoto, onNew, onFactuur, settings, offe
   const deleteTodo = (id) => saveTodos(todos.filter(t=>t.id!==id));
   const [todoFilter, setTodoFilter] = useState("open");
   const defaultOrder = ["todoLijst","websiteAanvragen","statistieken","recenteOffertes","openFacturen","goedgekeurdeOffertes","offerteLogboek","afspraken","snelleActies","agenda"];
-  const order = widgetOrder || settings.dashboardWidgets?.widgetOrder || defaultOrder;
+  // Zorg dat todoLijst altijd in de order zit
+  const rawOrder = widgetOrder || settings.dashboardWidgets?.widgetOrder || defaultOrder;
+  const order = rawOrder.includes("todoLijst") ? rawOrder : ["todoLijst", ...rawOrder];
   const dw = settings.dashboardWidgets || {};
 
   const onDragStart = (e, id) => { setDragId(id); e.dataTransfer.effectAllowed="move"; };
