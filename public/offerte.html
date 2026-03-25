@@ -505,7 +505,7 @@ tr.row-active td{border-top:2px solid #2563eb}
 .cov-co-tag{font-size:11px;color:rgba(255,255,255,.55);margin-bottom:auto}
 .cov-contact{margin-top:auto;font-size:11px;color:rgba(255,255,255,.5);line-height:1.9}
 .cov-contact strong{color:rgba(255,255,255,.8)}
-.cov-inst-badge{display:inline-flex;align-items:center;gap:8px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);border-radius:30px;padding:7px 14px;color:#fff;font-weight:700;font-size:13px;margin-top:16px;align-self:flex-start}
+.cov-inst-badge{display:inline-flex;align-items:center;gap:8px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);border-radius:30px;padding:7px 14px;color:#fff;font-weight:700;font-size:13px;margin-top:16px;align-self:flex-start;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .cov-r{padding:44px 40px;display:flex;flex-direction:column;justify-content:space-between}
 .cov-doctype{font-weight:900;font-size:52px;letter-spacing:-2.5px;line-height:1}
 .cov-docnum{font-family:'JetBrains Mono',monospace;font-size:12.5px;background:#f0f4f8;padding:3px 10px;border-radius:5px;display:inline-block;margin-top:5px;margin-bottom:28px;font-weight:700}
@@ -688,6 +688,52 @@ tr.row-active td{border-top:2px solid #2563eb}
   .settings-preview{position:static!important;max-height:none!important;margin-top:20px}
 }
 
+
+/* ═══ OFFERTE.HTML MOBILE FIXES ═══ */
+/* Product row mobile wrap */
+@media(max-width:480px){
+  .prod-row{flex-wrap:wrap!important}
+  .prod-price-box{width:100%!important;text-align:left!important;min-width:0!important;display:flex;align-items:center;gap:12px;padding:8px 12px!important;margin-top:4px}
+  .prod-price-val{font-size:18px!important}
+}
+/* Cover page op mobile */
+@media(max-width:600px){
+  #root{padding:12px 8px 160px}
+  .doc-page{border-radius:6px!important}
+  
+  /* Cover: stapel verticaal op kleine schermen */
+  .cov{display:flex!important;flex-direction:column!important;min-height:auto!important}
+  .cov-l{min-height:140px!important;padding:20px 16px!important;flex-shrink:0}
+  .cov-r{padding:20px 16px!important;flex:1}
+  .cov-doctype{font-size:32px!important;letter-spacing:-1px!important}
+  .cov-ref{font-size:16px!important}
+  
+  /* Cover meta grid: 2 kolommen behouden */
+  .cov-meta{grid-template-columns:1fr 1fr!important;gap:8px 16px!important}
+  .cov-meta-val{font-size:14px!important}
+  
+  /* InstallatieType badge niet afkappen */
+  .cov-type{white-space:nowrap!important;overflow:visible!important;font-size:10px!important}
+  
+  /* Product pagina: prijzen niet afkappen */
+  .prod-item{grid-template-columns:70px 1fr!important;gap:8px!important}
+  .prod-img,.prod-img-ph{width:70px!important;height:60px!important}
+  .prod-price-box{min-width:90px!important;flex-shrink:0!important;padding:8px 10px!important}
+  .prod-price-val{font-size:15px!important;white-space:nowrap!important}
+  
+  /* Offerte detail tabel: toon altijd volledig */
+  .qt-pg{padding:14px 12px!important}
+  .qt-tbl{font-size:11px!important}
+  .qt-tbl th,.qt-tbl td{padding:5px 6px!important;white-space:nowrap!important}
+  .qt-tbl td:last-child{text-align:right!important}
+  
+  /* Totalen box */
+  .qt-totals{flex-direction:column!important;align-items:stretch!important}
+  .qt-tot-box{width:100%!important;max-width:100%!important}
+  
+  /* Bevestigingsknop: volle breedte */
+  .bev-wrap{left:8px!important;right:8px!important;width:auto!important}
+}
 </style>
 </head>
 <body>
@@ -1228,9 +1274,9 @@ function OfferteDocument({doc, settings, ficheCache={}, producten=[]}) {
                       <div style={{fontWeight:800,fontSize:16,color:"#1e293b",lineHeight:1.3,marginBottom:4}}>{l.naam}</div>
                       {l.omschr&&<div style={{fontSize:12.5,color:"#475569",lineHeight:1.6}}>{l.omschr}</div>}
                     </div>
-                    <div style={{flexShrink:0,textAlign:"right",background:"#f8fafc",borderRadius:8,padding:"10px 14px",border:"1px solid #e2e8f0"}}>
+                    <div className="prod-price-box" style={{flexShrink:0,textAlign:"right",background:"#f8fafc",borderRadius:8,padding:"10px 14px",border:"1px solid #e2e8f0",minWidth:110}}>
                       <div style={{fontSize:10,color:"#94a3b8",fontWeight:600}}>EENHEIDSPRIJS</div>
-                      <div style={{fontWeight:800,fontSize:16,color:dc}}>{fmtEuro(l.prijs)}</div>
+                      <div className="prod-price-val" style={{fontWeight:800,fontSize:16,color:dc,whiteSpace:"nowrap"}}>{fmtEuro(l.prijs)}</div>
                       <div style={{fontSize:10,color:"#94a3b8"}}>BTW {l.btw}%</div>
                     </div>
                   </div>
