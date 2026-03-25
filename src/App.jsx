@@ -2480,8 +2480,6 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
   };
   const updFact = (id,upd) => { setFacturen(p=>p.map(f=>f.id===id?{...f,...upd,log:[...(f.log||[]),logEntry(upd.status?"Status → "+(FACT_STATUS[upd.status]?.l||upd.status):upd.logActie||"Gewijzigd")]}:f)); setTimeout(()=>flushSavesRef.current(), 500); };
   // Wrapper: bij goedkeuring automatisch PlanningModal openen
-  const handleOffStatus = (id, upd) => {
-
   const deletePlanning = async (offerteId) => {
     // 1. Clear all planning fields on the offerte
     updOff(offerteId, {planStatus:null, planDatum:null, planTijd:null, planBevestigingVerstuurd:false, klantAkkoord:false, logActie:"Afspraak verwijderd"});
@@ -2497,6 +2495,7 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
     setTimeout(() => flushSavesRef.current(), 100);
   };
 
+  const handleOffStatus = (id, upd) => {
     updOff(id, upd);
     if(upd.status === "goedgekeurd") {
       setTimeout(() => {
