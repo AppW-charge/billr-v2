@@ -2030,7 +2030,6 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
       try { await sbSet(key, json, user.id); } catch(_){}
     }
   }, [user]);
-  }, [user]);
   // Ref zodat callbacks met [] dependency altijd de actuele flushSaves hebben
   const flushSavesRef = useRef(flushSaves);
   useEffect(() => { flushSavesRef.current = flushSaves; }, [flushSaves]);
