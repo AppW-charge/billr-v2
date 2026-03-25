@@ -1531,6 +1531,45 @@ function openPlannerWithOfferte(offerte) {
 }
 
 // ─── MAIN APP ────────────────────────────────────────────────────
+
+const dedupOffertes = (arr) => {
+  const byNummer = {};
+  arr.forEach(o => {
+    if(!o.id) return;
+    const nr = o.nummer || o.id; // gebruik id als fallback
+    if(!byNummer[nr]) { byNummer[nr] = o; return; }
+    // Behoud de versie met de meeste logs (meest up-to-date)
+    const bestaand = byNummer[nr];
+    const bestaandLogs = (bestaand.log||[]).length;
+    const nieuwLogs = (o.log||[]).length;
+    if(nieuwLogs > bestaandLogs || 
+       (!bestaand.planDatum && o.planDatum) ||
+       (bestaand.status === 'concept' && o.status !== 'concept')) {
+      byNummer[nr] = o;
+    }
+  });
+  return Object.values(byNummer);
+};
+
+
+
+// Dedup facturen: per nummer de meest recente versie behouden
+const dedupFacturen = (arr) => {
+  const byNummer = {};
+  arr.forEach(f => {
+    if(!f.id) return;
+    const nr = f.nummer || f.id;
+    if(!byNummer[nr]) { byNummer[nr] = f; return; }
+    const best = byNummer[nr];
+    if((f.log||[]).length > (best.log||[]).length || 
+       (best.status === 'concept' && f.status !== 'concept')) {
+      byNummer[nr] = f;
+    }
+  });
+  return Object.values(byNummer);
+};
+
+
 export default function App() {
   const [user, setUser] = useState(null);
   const userRef = useRef(null); // Altijd actuele user voor callbacks
@@ -2408,42 +2447,6 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
   const logEntry = (actie) => ({ts: new Date().toISOString(), actie});
 
   // Dedup offertes: per nummer de meest recente versie (meeste logs) behouden
-  const dedupOffertes = (arr) => {
-    const byNummer = {};
-    arr.forEach(o => {
-      if(!o.id) return;
-      const nr = o.nummer || o.id; // gebruik id als fallback
-      if(!byNummer[nr]) { byNummer[nr] = o; return; }
-      // Behoud de versie met de meeste logs (meest up-to-date)
-      const bestaand = byNummer[nr];
-      const bestaandLogs = (bestaand.log||[]).length;
-      const nieuwLogs = (o.log||[]).length;
-      if(nieuwLogs > bestaandLogs || 
-         (!bestaand.planDatum && o.planDatum) ||
-         (bestaand.status === 'concept' && o.status !== 'concept')) {
-        byNummer[nr] = o;
-      }
-    });
-    return Object.values(byNummer);
-  };
-
-
-
-  // Dedup facturen: per nummer de meest recente versie behouden
-  const dedupFacturen = (arr) => {
-    const byNummer = {};
-    arr.forEach(f => {
-      if(!f.id) return;
-      const nr = f.nummer || f.id;
-      if(!byNummer[nr]) { byNummer[nr] = f; return; }
-      const best = byNummer[nr];
-      if((f.log||[]).length > (best.log||[]).length || 
-         (best.status === 'concept' && f.status !== 'concept')) {
-        byNummer[nr] = f;
-      }
-    });
-    return Object.values(byNummer);
-  };
 
   // Direct Supabase schrijven voor offerte updates - omzeilt volledige save pipeline
   // Strip base64 uit een array van offertes
