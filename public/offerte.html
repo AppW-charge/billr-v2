@@ -1325,40 +1325,59 @@ function Bevestiging({offerteId, status, klantAkkoord, toonBevestigingslink}) {
   // Minimum datum = vandaag
   const today = new Date().toISOString().split("T")[0];
 
-  // Start collapsed op kleine schermen, open op grote
-  const isMobile = typeof window !== "undefined" && window.innerWidth < 600;
-  const [expanded, setExpanded] = React.useState(!isMobile);
+  const [open, setOpen] = React.useState(false);
 
   return (
-    <div style={{
-      position:"fixed", bottom:0, right:0, left:0, zIndex:9999,
-      background:"#fff",
-      border:"2px solid var(--dc,#1a2e4a)",
-      borderRadius: expanded ? "14px 14px 0 0" : "14px 14px 0 0",
-      boxShadow:"0 -4px 32px rgba(0,0,0,.18)",
-      overflow:"hidden",
-      transition:"max-height .3s ease",
-      maxHeight: expanded ? "600px" : "56px",
-    }}>
-      {/* Header - altijd zichtbaar, klik om uit/inklapppen */}
+    <>
+      {/* Floating knop rechtsonder */}
       <div style={{
-        background:"var(--dc,#1a2e4a)", color:"#fff",
-        padding:"14px 20px",
-        display:"flex", justifyContent:"space-between", alignItems:"center",
-        cursor:"pointer", userSelect:"none",
-        minHeight:56,
-      }} onClick={()=>setExpanded(e=>!e)}>
-        <span style={{fontWeight:700,fontSize:15}}>📋 Uw reactie op de offerte</span>
-        <span style={{
-          fontSize:22, lineHeight:1,
-          transform: expanded ? "rotate(180deg)" : "rotate(0deg)",
-          transition:"transform .25s",
-          display:"inline-block"
-        }}>⌄</span>
+        position:"fixed", bottom:20, right:20, zIndex:9998,
+        display:"flex", flexDirection:"column", alignItems:"flex-end", gap:8
+      }}>
+        <button
+          onClick={()=>setOpen(true)}
+          style={{
+            background:"var(--dc,#1a2e4a)", color:"#fff",
+            border:"none", borderRadius:12,
+            padding:"14px 22px",
+            fontSize:15, fontWeight:800,
+            boxShadow:"0 4px 20px rgba(0,0,0,.3)",
+            cursor:"pointer", display:"flex", alignItems:"center", gap:10,
+            whiteSpace:"nowrap"
+          }}>
+          📋 Reageer op offerte
+        </button>
       </div>
 
-      {expanded && (
-        <div style={{padding:"16px 20px 20px"}}>
+      {/* Popup modal */}
+      {open && (
+        <div style={{
+          position:"fixed", inset:0, zIndex:9999,
+          background:"rgba(0,0,0,.55)",
+          display:"flex", alignItems:"center", justifyContent:"center",
+          padding:16
+        }} onClick={e=>{if(e.target===e.currentTarget)setOpen(false);}}>
+          <div style={{
+            background:"#fff", borderRadius:16,
+            width:"100%", maxWidth:460,
+            boxShadow:"0 12px 48px rgba(0,0,0,.3)",
+            overflow:"hidden",
+            maxHeight:"90vh", overflowY:"auto"
+          }}>
+            {/* Modal header */}
+            <div style={{
+              background:"var(--dc,#1a2e4a)", color:"#fff",
+              padding:"18px 22px",
+              display:"flex", justifyContent:"space-between", alignItems:"center"
+            }}>
+              <span style={{fontWeight:800,fontSize:17}}>📋 Uw reactie op de offerte</span>
+              <button onClick={()=>setOpen(false)} style={{
+                background:"rgba(255,255,255,.2)", border:"none", color:"#fff",
+                borderRadius:8, width:32, height:32, cursor:"pointer",
+                fontSize:18, display:"flex", alignItems:"center", justifyContent:"center"
+              }}>✕</button>
+            </div>
+            <div style={{padding:"22px"}}>
           {fase === "start" && (
             <>
               <p style={{fontSize:13,color:"#475569",marginBottom:16,lineHeight:1.5}}>
@@ -1437,13 +1456,11 @@ function Bevestiging({offerteId, status, klantAkkoord, toonBevestigingslink}) {
               {datum && (
                 <div style={{marginTop:8,fontSize:11,color:"#059669",textAlign:"center"}}>
                   📅 Voorkeur: {new Date(datum+"T12:00:00").toLocaleDateString("nl-BE",{weekday:"long",day:"numeric",month:"long",year:"numeric"})}
-                </div>
-              )}
-            </>
-          )}
-        </div>
-      )}
-    </div>
+                      </div>{/* inner padding */}
+            </div>{/* modal */}
+          </div>{/* overlay */}
+        )}
+      </>
   );
 }
 
