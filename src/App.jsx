@@ -2333,7 +2333,8 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
                 const localMap={}; prev.forEach(o=>localMap[o.id]=o);
                 return sbOffs.map(o=>{
                   const loc=localMap[o.id]; if(!loc) return o;
-                  const localRijker=(loc.planDatum&&!o.planDatum)||(loc.klantAkkoord&&!o.klantAkkoord)||(loc.planBevestigingVerstuurd&&!o.planBevestigingVerstuurd)||((loc.log||[]).length>(o.log||[]).length);
+                  const localDeleted = loc.planDatum===null && o.planDatum; // Lokaal bewust verwijderd
+                  const localRijker=localDeleted||(loc.planDatum&&!o.planDatum)||(loc.klantAkkoord&&!o.klantAkkoord)||(loc.planBevestigingVerstuurd&&!o.planBevestigingVerstuurd)||((loc.log||[]).length>(o.log||[]).length);
                   return localRijker?loc:o;
                 });
               }
@@ -2370,23 +2371,23 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
         // Alleen mergen als Supabase nieuwer is
         if(sbTs <= localTs) return;
         const sbOffs = JSON.parse(sbRow.value);
-        setOffertes(prev => {
-          const localIds = new Set(prev.map(o=>o.id));
-          const sbExtra = sbOffs.filter(o=>o.id && !localIds.has(o.id));
-          if(sbExtra.length === 0) return prev;
-          console.log("Auto-sync: "+sbExtra.length+" nieuwe offerte(s) van Supabase");
-          return [...prev, ...sbExtra];
-        });
-        // Update per-offerte: neem de rijkste versie
+        // Één atomische merge: voeg nieuwe toe + bewaar rijkste versie
         setOffertes(prev => {
           const sbMap = {}; sbOffs.forEach(o=>sbMap[o.id]=o);
-          return prev.map(loc => {
+          const localIds = new Set(prev.map(o=>o.id));
+          // Nieuwe offertes van Supabase (niet lokaal aanwezig)
+          const sbExtra = sbOffs.filter(o=>o.id && !localIds.has(o.id));
+          // Per bestaande offerte: lokaal wint als meer logs OF planDatum bewust null gezet
+          const merged = prev.map(loc => {
             const sb = sbMap[loc.id];
             if(!sb) return loc;
-            // Lokale versie wint als die meer log entries heeft of recentere status
-            const localRijker = (loc.log||[]).length >= (sb.log||[]).length;
+            // Lokaal wint als: meer logs, OF planning bewust verwijderd (planDatum null maar SB heeft datum)
+            const localDeleted = loc.planDatum===null && sb.planDatum;
+            const localRijker = localDeleted || (loc.log||[]).length >= (sb.log||[]).length;
             return localRijker ? loc : sb;
           });
+          if(sbExtra.length>0) console.log("Auto-sync: "+sbExtra.length+" nieuwe offerte(s)");
+          return sbExtra.length ? [...merged, ...sbExtra] : merged;
         });
       } catch(_){}
     }, 180000); // elke 3 minuten
@@ -3263,7 +3264,7 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
           </div>
 
           <div className="content">
-            {pg==="dashboard"&&<Dashboard offertes={offertes} facturen={factMet} onGoto={gotoFiltered} onNew={()=>{setEditOff(null);setWizOpen(true)}} onFactuur={d=>setFactModal(d)} settings={settings} offerteViews={offerteViews} offerteResponses={offerteResponses} planningProposals={planningProposals} onLogboek={o=>setLogboekModal(o)} onPlan={o=>setPlanningModal(o)} onPlanDelete={id=>{updOff(id,{planStatus:"geannuleerd",planDatum:null,planTijd:null,logActie:"🗑 Afspraak geannuleerd"});setTimeout(()=>flushSavesRef.current(),100);}} widgetOrder={widgetOrder} setWidgetOrder={setWidgetOrder} onRefreshTracking={fetchOfferteTracking} websiteLeads={websiteLeads} onLeadRefresh={fetchWebsiteLeads} onLeadStatus={async(id,status)=>{try{await sb.from("website_leads").update({status}).eq("id",id);fetchWebsiteLeads();}catch(_){}}} onLeadToOfferte={(lead)=>{setEditOff(null);setWizOpen(true);notify("Aanvraag: "+lead.naam);}}/>}
+            {pg==="dashboard"&&<Dashboard offertes={offertes} facturen={factMet} onGoto={gotoFiltered} onNew={()=>{setEditOff(null);setWizOpen(true)}} onFactuur={d=>setFactModal(d)} settings={settings} offerteViews={offerteViews} offerteResponses={offerteResponses} planningProposals={planningProposals} onLogboek={o=>setLogboekModal(o)} onPlan={o=>setPlanningModal(o)} onPlanDelete={async(id)=>{updOff(id,{planStatus:null,planDatum:null,planTijd:null,planBevestigingVerstuurd:false,klantAkkoord:false,logActie:"Afspraak verwijderd"});try{await sb.from("planning_proposals").delete().eq("offerte_id",id);}catch(_){}setTimeout(()=>flushSavesRef.current(),100);}} widgetOrder={widgetOrder} setWidgetOrder={setWidgetOrder} onRefreshTracking={fetchOfferteTracking} websiteLeads={websiteLeads} onLeadRefresh={fetchWebsiteLeads} onLeadStatus={async(id,status)=>{try{await sb.from("website_leads").update({status}).eq("id",id);fetchWebsiteLeads();}catch(_){}}} onLeadToOfferte={(lead)=>{setEditOff(null);setWizOpen(true);notify("Aanvraag: "+lead.naam);}}/>}
             {pg==="offertes"&&<OffertesPage offertes={offertes} initFilter={pgFilter} onView={d=>setViewDoc({doc:d,type:"offerte"})} onEdit={d=>{setEditOff(d);setWizOpen(true)}} onStatus={handleOffStatus} onBulkStatus={bulkUpdOff} onFactuur={d=>setFactModal(d)} onDelete={id=>{setOffertes(p=>p.filter(o=>o.id!==id));localTimestamps.current["b4_off"]=Date.now();try{localStorage.setItem("billr_ts",JSON.stringify(localTimestamps.current));}catch(_){}notify("Verwijderd");setTimeout(()=>flushSavesRef.current(),100);}} onNew={()=>{setEditOff(null);setWizOpen(true)}} onEmail={async d=>{await shareOfferte(d);setEmailModal({doc:d,type:"offerte"});}} onPlan={d=>setPlanningModal(d)} onShare={d=>{shareOfferte(d);notify("🔗 Publieke link vernieuwd ✓");}} settings={settings}/>}
             {pg==="facturen"&&<FacturenPage facturen={factMet} settings={settings} initFilter={pgFilter} onView={d=>setViewDoc({doc:d,type:"factuur"})} onEdit={f=>{setEditFact(f);setFactuurWizOpen(true);}} onStatus={updFact} onBulkStatus={bulkUpdFact} onDelete={id=>{setFacturen(p=>p.filter(f=>f.id!==id));localTimestamps.current["b4_fct"]=Date.now();try{localStorage.setItem("billr_ts",JSON.stringify(localTimestamps.current));}catch(_){}notify("Verwijderd");setTimeout(()=>flushSavesRef.current(),100);}} notify={notify} onEmail={d=>setEmailModal({doc:d,type:"factuur"})} onBetaling={f=>setBetalingModal(f)} onAanmaning={f=>setAanmaningModal(f)} onNew={()=>{setEditFact(null);setFactuurWizOpen(true)}}/>}
             {pg==="klanten"&&<KlantenPage klanten={klanten} offertes={offertes} facturen={factMet} view={klantView} onEdit={k=>setKlantModal(k)} onDelete={id=>{setKlanten(p=>p.map(k=>k.id===id?{...k,_verwijderd:true}:k));localTimestamps.current["b4_kln"]=Date.now();try{localStorage.setItem("billr_ts",JSON.stringify(localTimestamps.current));}catch(_){}notify("Klant verwijderd");setTimeout(()=>flushSavesRef.current(),100);}}/>}
@@ -3392,7 +3393,19 @@ function Dashboard({offertes, facturen, onGoto, onNew, onFactuur, settings, offe
   const [dragId, setDragId] = useState(null);
   const [dragOverId, setDragOverId] = useState(null);
   const [editMode, setEditMode] = useState(false);
-  const [kolomConfig, setKolomConfig] = useState(()=>{ try{ return JSON.parse(localStorage.getItem("b4_kolom")||'{"rechts":["goedgekeurdeOffertes","afspraken","websiteAanvragen","todoLijst"]}'); }catch(_){ return {rechts:["goedgekeurdeOffertes","afspraken","websiteAanvragen","todoLijst"]}; } });
+  const [kolomConfig, setKolomConfig] = useState(()=>{
+    try {
+      const saved = JSON.parse(localStorage.getItem("b4_kolom")||"null");
+      // Voeg todoLijst toe aan rechts als het er niet in zit
+      if(saved) {
+        if(!saved.rechts) saved.rechts = [];
+        if(!saved.rechts.includes("todoLijst")) saved.rechts.push("todoLijst");
+        if(!saved.rechts.includes("websiteAanvragen")) saved.rechts.push("websiteAanvragen");
+        return saved;
+      }
+    } catch(_){}
+    return {rechts:["goedgekeurdeOffertes","afspraken","websiteAanvragen","todoLijst"]};
+  });
   // Sla kolomConfig op bij wijziging
   useEffect(()=>{ try{localStorage.setItem("b4_kolom",JSON.stringify(kolomConfig));}catch(_){} },[kolomConfig]);
   // TODO lijst: lokaal in Supabase opgeslagen via saveKey b4_todo
@@ -3615,8 +3628,9 @@ function Dashboard({offertes, facturen, onGoto, onNew, onFactuur, settings, offe
         <iframe src="./planner.html" style={{width:"100%",height:"500px",border:"1px solid #e2e8f0",borderRadius:8,marginTop:10}} title="Agenda"/>
       </div>
     ),
-    afspraken: ()=> (()=>{
-      const geplande = offertes.filter(o=>o.planDatum&&o.planBevestigingVerstuurd===true&&o.status!=="uitgevoerd").sort((a,b)=>(a.planDatum||"").localeCompare(b.planDatum||""));
+    afspraken: ()=> {
+
+      const geplande = offertes.filter(o=>o.planDatum&&o.planBevestigingVerstuurd===true&&o.planStatus!=="geannuleerd"&&o.status!=="uitgevoerd").sort((a,b)=>(a.planDatum||"").localeCompare(b.planDatum||""));
       if(!geplande.length) return null;
       return(
       <div className="card mb4" key="w-afspraken" style={{border:"1px solid #86efac",background:"#fafffe"}}>
@@ -3640,9 +3654,8 @@ function Dashboard({offertes, facturen, onGoto, onNew, onFactuur, settings, offe
           ))}
         </div>}
       </div>);
-    })(),
+    },
   websiteAanvragen: ()=>{
-    const [leadFilter, setLeadFilter] = useState("alle");
     const zichtbaar = leadFilter==="alle" ? websiteLeads : websiteLeads.filter(l=>l.status===leadFilter);
     const aantalNieuw = websiteLeads.filter(l=>l.status==="nieuw").length;
     const aantalBeh = websiteLeads.filter(l=>l.status==="behandeld").length;
