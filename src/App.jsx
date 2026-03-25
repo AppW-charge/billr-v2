@@ -2403,8 +2403,13 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
     notify("📨 Peppol status controleren...", "in");
     const peppolCheck = await checkPeppolBillit(klant.btwnr, settings);
     if(!peppolCheck.registered) {
-      notify(`❌ ${klant.naam || "Klant"} is niet geregistreerd op Peppol. Verstuur via email.`, "er");
-      return;
+      // Controleer ook via algemeen Peppol directory (klant kan op ander access point staan)
+      const confirmed = window.confirm(
+        `⚠️ Billit meldt dat ${klant.naam||"klant"} niet via Billit geregistreerd staat op Peppol.\n\n` +
+        `Dit kan zijn omdat de klant een ander access point gebruikt.\n\n` +
+        `Toch proberen te versturen via Peppol?\n(Annuleren = verstuur via email)`
+      );
+      if(!confirmed) return;
     }
     
     notify("📨 Factuur versturen via Peppol...", "in");
@@ -2515,11 +2520,20 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
           }
         }
       } catch(e) { console.warn("planner_data cleanup:", e.message); }
-      // Also notify planner iframe if open
+      // Also notify planner iframe via postMessage (works cross-origin)
       try {
         const plannerFrame = document.querySelector('iframe[title="Agenda"]');
-        if(plannerFrame?.contentWindow?.WChargePlanner?.removeByNummer) {
-          plannerFrame.contentWindow.WChargePlanner.removeByNummer(offerte.nummer);
+        if(plannerFrame?.contentWindow) {
+          plannerFrame.contentWindow.postMessage({
+            type: 'REMOVE_APT_BY_NUMMER', 
+            nummer: offerte.nummer
+          }, '*');
+          // Also try WChargePlanner API directly
+          if(plannerFrame.contentWindow.WChargePlanner?.removeByNummer) {
+            plannerFrame.contentWindow.WChargePlanner.removeByNummer(offerte.nummer);
+          }
+          // Reload iframe after short delay to reflect changes
+          setTimeout(() => { try { plannerFrame.src = plannerFrame.src; } catch(_){} }, 800);
         }
       } catch(_) {}
     }
@@ -3281,7 +3295,7 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
 
           <div className="content">
             {pg==="dashboard"&&<Dashboard offertes={offertes} facturen={factMet} onGoto={gotoFiltered} onNew={()=>{setEditOff(null);setWizOpen(true)}} onFactuur={d=>setFactModal(d)} settings={settings} offerteViews={offerteViews} offerteResponses={offerteResponses} planningProposals={planningProposals} onLogboek={o=>setLogboekModal(o)} onPlan={o=>setPlanningModal(o)} onPlanDelete={deletePlanning} widgetOrder={widgetOrder} setWidgetOrder={setWidgetOrder} onRefreshTracking={fetchOfferteTracking} websiteLeads={websiteLeads} onLeadRefresh={fetchWebsiteLeads} onLeadStatus={async(id,status)=>{try{await sb.from("website_leads").update({status}).eq("id",id);fetchWebsiteLeads();}catch(_){}}} onLeadToOfferte={(lead)=>{setEditOff(null);setWizOpen(true);notify("Aanvraag: "+lead.naam);}}/>}
-            {pg==="offertes"&&<OffertesPage offertes={offertes} initFilter={pgFilter} onView={d=>setViewDoc({doc:d,type:"offerte"})} onEdit={d=>{setEditOff(d);setWizOpen(true)}} onStatus={handleOffStatus} onBulkStatus={bulkUpdOff} onFactuur={d=>setFactModal(d)} onDelete={id=>{const next=offertes.filter(o=>o.id!==id);setOffertes(next);saveOfferteDirect(next);notify("Verwijderd");}} onNew={()=>{setEditOff(null);setWizOpen(true)}} onEmail={async d=>{await shareOfferte(d);setEmailModal({doc:d,type:"offerte"});}} onPlan={d=>setPlanningModal(d)} onShare={d=>{shareOfferte(d);notify("🔗 Publieke link vernieuwd ✓");}} settings={settings}/>}
+            {pg==="offertes"&&<OffertesPage offertes={offertes} initFilter={pgFilter} onView={d=>setViewDoc({doc:d,type:"offerte"})} onEdit={d=>{setEditOff(d);setWizOpen(true)}} onStatus={handleOffStatus} onBulkStatus={bulkUpdOff} onFactuur={d=>setFactModal(d)} onDelete={id=>{const next=offertes.filter(o=>o.id!==id);setOffertes(next);saveOfferteDirect(next);notify("Verwijderd");}} onNew={()=>{setEditOff(null);setWizOpen(true)}} onEmail={async d=>{try{await shareOfferte(d);}catch(_){}setEmailModal({doc:d,type:"offerte"});}} onPlan={d=>setPlanningModal(d)} onShare={d=>{shareOfferte(d);notify("🔗 Publieke link vernieuwd ✓");}} settings={settings}/>}
             {pg==="facturen"&&<FacturenPage facturen={factMet} settings={settings} initFilter={pgFilter} onView={d=>setViewDoc({doc:d,type:"factuur"})} onEdit={f=>{setEditFact(f);setFactuurWizOpen(true);}} onStatus={updFact} onBulkStatus={bulkUpdFact} onDelete={id=>{setFacturen(p=>p.filter(f=>f.id!==id));localTimestamps.current["b4_fct"]=Date.now();try{localStorage.setItem("billr_ts",JSON.stringify(localTimestamps.current));}catch(_){}notify("Verwijderd");setTimeout(()=>flushSavesRef.current(),100);}} notify={notify} onEmail={d=>setEmailModal({doc:d,type:"factuur"})} onBetaling={f=>setBetalingModal(f)} onAanmaning={f=>setAanmaningModal(f)} onNew={()=>{setEditFact(null);setFactuurWizOpen(true)}}/>}
             {pg==="klanten"&&<KlantenPage klanten={klanten} offertes={offertes} facturen={factMet} view={klantView} onEdit={k=>setKlantModal(k)} onDelete={id=>{setKlanten(p=>p.map(k=>k.id===id?{...k,_verwijderd:true}:k));localTimestamps.current["b4_kln"]=Date.now();try{localStorage.setItem("billr_ts",JSON.stringify(localTimestamps.current));}catch(_){}notify("Klant verwijderd");setTimeout(()=>flushSavesRef.current(),100);}}/>}
             {pg==="producten"&&<ProductenPage producten={producten} settings={settings} onEdit={p=>setProdModal(p)} onDelete={id=>{setProducten(p=>p.filter(x=>x.id!==id));notify("Verwijderd")}} onToggle={id=>setProducten(p=>p.map(x=>x.id===id?{...x,actief:!x.actief}:x))} onEnrich={upd=>setProducten(p=>p.map(x=>x.id===upd.id?upd:x))} onDuplicate={p=>{const dup={...p,id:uid(),naam:p.naam+" (kopie)",aangemaakt:new Date().toISOString()};setProducten(prev=>[dup,...prev]);notify("Product gedupliceerd ✓");setProdModal(dup);}}/>}
@@ -3447,6 +3461,22 @@ function AgendaPage({offertes, settings, onPlan, onPlanDelete}) {
       <div style={{display:"flex",alignItems:"center",gap:16,marginBottom:20,flexWrap:"wrap"}}>
         <div style={{fontSize:22,fontWeight:800,color:"#1e293b"}}>📅 Agenda</div>
         <div style={{fontSize:13,color:"#64748b"}}>{afspraken.length} bevestigde afspraken</div>
+        <button style={{fontSize:11,background:"#fef2f2",color:"#ef4444",border:"1px solid #fecaca",borderRadius:6,padding:"5px 10px",cursor:"pointer"}}
+          title="Wis alle tijdelijk gecachede planner-data (planner.html localStorage)"
+          onClick={()=>{
+            if(!window.confirm("Wis alle gecachede agenda-data van planner.html?\nDit verwijdert dubbele/verouderde afspraken uit de shift-kalender.")) return;
+            // Wis planner localStorage keys
+            ['wcp_shifts','wcp_apts','wcp_billr_apts','planner_apts','billr_appointments'].forEach(k=>{
+              try{localStorage.removeItem(k);}catch(_){}
+            });
+            // Notify iframe
+            const fr = document.querySelector('iframe[title="Agenda"]');
+            if(fr?.contentWindow) {
+              try{fr.contentWindow.postMessage({type:'CLEAR_ALL_APTS'},'*');}catch(_){}
+              setTimeout(()=>fr.src=fr.src,300);
+            }
+            alert("Cache gewist. Herlaad de pagina.");
+          }}>🗑 Wis planner cache</button>
         <div style={{marginLeft:"auto",display:"flex",gap:8,alignItems:"center"}}>
           <button onClick={vorigeM} style={{background:"#f1f5f9",border:"1px solid #e2e8f0",borderRadius:6,padding:"6px 12px",cursor:"pointer",fontSize:16}}>‹</button>
           <div style={{fontWeight:700,fontSize:15,minWidth:150,textAlign:"center",color:dc}}>
@@ -3631,9 +3661,10 @@ function Dashboard({offertes, facturen, onGoto, onNew, onFactuur, settings, offe
   const [kolomConfig, setKolomConfig] = useState(()=>{
     try {
       const saved = JSON.parse(localStorage.getItem("b4_kolom")||"null");
-      // Voeg todoLijst toe aan rechts als het er niet in zit
       if(saved) {
         if(!saved.rechts) saved.rechts = [];
+        // todoLijst altijd in linker kolom (verwijder uit rechts als het er in zit)
+        saved.rechts = saved.rechts.filter(id => id !== "todoLijst");
         if(!saved.rechts.includes("websiteAanvragen")) saved.rechts.push("websiteAanvragen");
         return saved;
       }
