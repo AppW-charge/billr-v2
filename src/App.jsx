@@ -2803,10 +2803,11 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
     <tr style="background:#f1f5f9"><td style="padding:8px 12px;border:1px solid #e2e8f0;font-weight:600">📍 Adres</td><td style="padding:8px 12px;border:1px solid #e2e8f0">${klantData.adres||""}, ${klantData.gemeente||""}</td></tr>
     <tr><td style="padding:8px 12px;border:1px solid #e2e8f0;font-weight:600">💰 Totaal</td><td style="padding:8px 12px;border:1px solid #e2e8f0;font-weight:700;color:${dc}">${fmtEuro(totals.totaal)}</td></tr>
   </table>
-  <div style="margin:20px 0;padding:14px;background:#f0fdf4;border:1px solid #86efac;border-radius:8px">
-    <p style="font-size:13px;color:#064e3b;margin:0 0 8px 0;font-weight:600">Bevestig uw afspraak via deze link:</p>
-    <p style="font-size:12px;margin:0;word-break:break-all"><a href="${planningUrl}" style="color:#059669">${planningUrl}</a></p>
-    <p style="font-size:11px;color:#6b7280;margin:8px 0 0 0">U kunt via deze link ook een ander moment voorstellen.</p>
+  <div style="text-align:center;margin:28px 0">
+    <a href="${planningUrl}" style="display:inline-block;background:#059669;color:#fff;padding:14px 36px;border-radius:10px;text-decoration:none;font-weight:800;font-size:16px;font-family:Inter,Arial,sans-serif;margin-bottom:12px">Akkoord — afspraak bevestigen</a>
+    <br/>
+    <a href="${planningUrl}" style="display:inline-block;background:#f1f5f9;color:#475569;padding:10px 28px;border-radius:8px;text-decoration:none;font-weight:600;font-size:13px;font-family:Inter,Arial,sans-serif;border:1px solid #e2e8f0">Ander moment voorstellen</a>
+    <p style="font-size:11px;color:#94a3b8;margin-top:10px">Beide knoppen leiden naar dezelfde beveiligde pagina.</p>
   </div>
 </div>
 <div style="text-align:center;padding:16px;font-size:11px;color:#94a3b8">${bed.naam||""} · ${bed.tel||""} · ${bed.email||""}</div>
