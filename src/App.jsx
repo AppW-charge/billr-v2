@@ -2482,15 +2482,42 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
   // Wrapper: bij goedkeuring automatisch PlanningModal openen
   const deletePlanning = async (offerteId) => {
     // 1. Clear all planning fields on the offerte
+    const offerte = offertes.find(o=>o.id===offerteId);
     updOff(offerteId, {planStatus:null, planDatum:null, planTijd:null, planBevestigingVerstuurd:false, klantAkkoord:false, logActie:"Afspraak verwijderd"});
     // 2. Remove from local planningProposals state immediately
     setPlanningProposals(prev => { const next={...prev}; delete next[offerteId]; return next; });
     // 3. Delete from Supabase planning_proposals
     try { await sb.from("planning_proposals").delete().eq("offerte_id", offerteId); }
     catch(e) { console.warn("Delete planning_proposals:", e.message); }
-    // 4. Also clear offerte_responses for this offerte
+    // 4. Clear offerte_responses
     try { await sb.from("offerte_responses").delete().eq("offerte_id", offerteId); }
     catch(_) {}
+    // 5. Remove from planner_data (WChargePlanner stores appointments there by offerte nummer)
+    if(offerte?.nummer) {
+      try {
+        const { data: plannerRows } = await sb.from("planner_data").select("id,data").eq("user_id", user.id);
+        if(plannerRows && plannerRows.length > 0) {
+          for(const row of plannerRows) {
+            try {
+              const pd = typeof row.data === "string" ? JSON.parse(row.data) : row.data;
+              if(!pd?.appointments) continue;
+              const filtered = pd.appointments.filter(a => !((a.notes||"").includes(offerte.nummer)));
+              if(filtered.length !== pd.appointments.length) {
+                await sb.from("planner_data").update({data: JSON.stringify({...pd, appointments: filtered})}).eq("id", row.id);
+                console.log("Removed from planner_data:", offerte.nummer);
+              }
+            } catch(_) {}
+          }
+        }
+      } catch(e) { console.warn("planner_data cleanup:", e.message); }
+      // Also notify planner iframe if open
+      try {
+        const plannerFrame = document.querySelector('iframe[title="Agenda"]');
+        if(plannerFrame?.contentWindow?.WChargePlanner?.removeByNummer) {
+          plannerFrame.contentWindow.WChargePlanner.removeByNummer(offerte.nummer);
+        }
+      } catch(_) {}
+    }
     notify("Afspraak verwijderd", "ok");
     setTimeout(() => flushSavesRef.current(), 100);
   };
@@ -3398,6 +3425,7 @@ function AgendaPage({offertes, settings, onPlan, onPlanDelete}) {
   };
 
   const geselecteerdAfspraken = geselecteerd ? (perDatum[geselecteerd]||[]) : [];
+  // Smart sticky sidebar - stays in viewport
 
   // Lijst van alle aankomende afspraken gesorteerd
   const aankomend = [...afspraken]
@@ -3484,8 +3512,8 @@ function AgendaPage({offertes, settings, onPlan, onPlanDelete}) {
           </div>
         </div>
 
-        {/* Zijpanel */}
-        <div>
+        {/* Zijpanel - sticky so it stays visible while scrolling */}
+        <div style={{position:'sticky',top:16}}>
           {/* Geselecteerde dag detail */}
           {geselecteerd && (
             <div style={{background:"#fff",borderRadius:12,boxShadow:"0 2px 12px rgba(0,0,0,.08)",padding:16,marginBottom:16}}>
