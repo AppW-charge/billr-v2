@@ -1714,7 +1714,7 @@ export default function App() {
         if(sbData["b4_ga"])  setGaranties(parse(sbData["b4_ga"], []));
         if(sbData["b4_at"])  setAcceptTokens(parse(sbData["b4_at"], {}));
         if(sbData["b4_wo"])  setWidgetOrder(parse(sbData["b4_wo"], null));
-        if(sbData["b4_todo"]) { try { localStorage.setItem("b4_todo", sbData["b4_todo"]); } catch(_){} }
+        if(sbData["b4_todo"]) { try { const td=JSON.parse(sbData["b4_todo"]); localStorage.setItem("b4_todo", sbData["b4_todo"]); if(Array.isArray(td)) setTodos(td); } catch(_){} }
         Object.entries(sbData).forEach(([k,v])=>{ try{localStorage.setItem(k,v);}catch(_){} });
         // Initialiseer localTimestamps op basis van Supabase timestamps
         Object.entries(sbData).forEach(([k,v])=>{
@@ -2103,10 +2103,10 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
 
   // Bij afsluiten én tab wisselen: meteen flushen
   useEffect(()=>{
-    const flush = ()=>{ if(Object.keys(pendingSaves.current).length>0) flushSaves(); };
+    const flush = ()=>{ /* DISABLED: gebruik saveOfferteDirect voor directe saves */ };
     window.addEventListener('beforeunload', flush);
     // Ook bij tab hide: meteen flushen zodat andere browser altijd actuele data laadt
-    const onHide = ()=>{ if(document.visibilityState==='hidden' && Object.keys(pendingSaves.current).length>0) flushSaves(); };
+    const onHide = ()=>{ /* DISABLED: slapende tabs schrijven nooit naar Supabase */ };
     document.addEventListener('visibilitychange', onHide);
     return ()=>{ window.removeEventListener('beforeunload', flush); document.removeEventListener('visibilitychange', onHide); };
   }, [flushSaves]);
@@ -2296,64 +2296,42 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
     let lastSync = Date.now();
     const handleVisibility = async () => {
       if(document.visibilityState!=="visible" || !user) return;
-      if(Date.now()-lastSync < 300000) return; // min 5 min tussen syncs
+      if(Date.now()-lastSync < 300000) return;
       lastSync = Date.now();
+      // NOOIT schrijven vanuit een slapende tab — enkel lezen
       try {
-        await flushSaves();
-        // sbGetLite: geen b4_prd (producten+afbeeldingen) - scheelt 80% egress
-        const allData = await Promise.race([
-          sbGetLite(user.id),
-          new Promise(r=>setTimeout(()=>r(null),6000))
-        ]);
-        const hasReal = allData && Object.keys(allData).length > 0 &&
-          Object.values(allData).some(v => v && v.length > 10);
-        if(!hasReal) return;
+        const allData = await Promise.race([sbGetLite(user.id), new Promise(r=>setTimeout(()=>r(null),6000))]);
+        if(!allData || !Object.keys(allData).length) return;
         const p = (k,fb) => { try { return allData[k]?JSON.parse(allData[k]):fb; } catch(_){return fb;} };
-        // Alleen laden als Supabase NIEUWER is dan onze laatste lokale wijziging
-        // Zo overschrijft een passieve browser (gsm open laten) nooit actieve wijzigingen
-        const sbNewer = (key) => {
-          const sbTs = allData[key+"__ts"] ? new Date(allData[key+"__ts"]).getTime() : 0;
-          const localTs = localTimestamps.current[key] || 0;
-          return sbTs > localTs; // Supabase is nieuwer → laden
-        };
-        if(allData["b4_set"] && sbNewer("b4_set")) { const s=p("b4_set",null); if(s?.bedrijf?.naam||s?.email?.eigen) setSettings(s); }
-        if(allData["b4_kln"] && sbNewer("b4_kln")) setKlanten(p("b4_kln",[]));
-        // b4_prd niet via mobile sync (te groot) - producten worden beheerd in dezelfde browser
-        if(allData["b4_off"]) { 
-          const v=p("b4_off",null); 
-          if(v!==null) {
-            const seenId=new Set(); const sbOffs=v.filter(o=>{ if(!o.id||seenId.has(o.id)) return false; seenId.add(o.id); return true; });
-            setOffertes(prev => {
-              if(!prev.length) return sbOffs;
-              const localIds = new Set(prev.map(o=>o.id));
-              const localNummers = new Set(prev.map(o=>o.nummer).filter(Boolean));
-              const sbNieuwe = sbOffs.filter(o=>!localIds.has(o.id) && !localNummers.has(o.nummer));
-              if(sbNieuwe.length) console.log("Mobile sync: "+sbNieuwe.length+" nieuwe");
-              return sbNieuwe.length ? [...prev, ...sbNieuwe] : prev;
-            });
+        const sbTs = (key) => allData[key+"__ts"] ? new Date(allData[key+"__ts"]).getTime() : 0;
+        const lcTs = (key) => localTimestamps.current[key] || 0;
+        // Settings/klanten: vervang als Supabase nieuwer
+        if(allData["b4_set"] && sbTs("b4_set") > lcTs("b4_set")) { const s=p("b4_set",null); if(s?.bedrijf?.naam) setSettings(s); }
+        if(allData["b4_kln"] && sbTs("b4_kln") > lcTs("b4_kln")) setKlanten(p("b4_kln",[]));
+        // Offertes: volledig vervangen als Supabase nieuwer, anders enkel toevoegen
+        if(allData["b4_off"]) {
+          if(sbTs("b4_off") > lcTs("b4_off")) {
+            const sbOffs = dedupOffertes(p("b4_off",[]));
+            console.log("Tab sync: Supabase nieuwer →", sbOffs.length, "offertes laden");
+            setOffertes(sbOffs); localTimestamps.current["b4_off"] = sbTs("b4_off");
+          } else {
+            const sbOffs = p("b4_off",[]);
+            setOffertes(prev => { const nrs=new Set(prev.map(o=>o.nummer).filter(Boolean)); const nieuw=sbOffs.filter(o=>o.id&&!nrs.has(o.nummer)); return nieuw.length?dedupOffertes([...prev,...nieuw]):prev; });
           }
         }
-                if(allData["b4_fct"]) {
-          const vf=p("b4_fct",null);
-          if(vf!==null) {
-            setFacturen(prev => {
-              if(!prev.length) return dedupFacturen(vf);
-              const localNrs = new Set(prev.map(f=>f.nummer).filter(Boolean));
-              const sbNieuwe = vf.filter(f=>f.id && !localNrs.has(f.nummer));
-              return sbNieuwe.length ? dedupFacturen([...prev,...sbNieuwe]) : prev;
-            });
+        // Facturen: zelfde aanpak
+        if(allData["b4_fct"]) {
+          if(sbTs("b4_fct") > lcTs("b4_fct")) {
+            setFacturen(dedupFacturen(p("b4_fct",[]))); localTimestamps.current["b4_fct"] = sbTs("b4_fct");
+          } else {
+            const sbFcts = p("b4_fct",[]);
+            setFacturen(prev => { const nrs=new Set(prev.map(f=>f.nummer).filter(Boolean)); const nieuw=sbFcts.filter(f=>f.id&&!nrs.has(f.nummer)); return nieuw.length?dedupFacturen([...prev,...nieuw]):prev; });
           }
         }
-        if(allData["b4_cn"]  && sbNewer("b4_cn"))  setCreditnotas(p("b4_cn",[]));
-        if(allData["b4_am"]  && sbNewer("b4_am"))  setAanmaningen(p("b4_am",[]));
-        if(allData["b4_bt"]  && sbNewer("b4_bt"))  setBetalingen(p("b4_bt",[]));
-        if(allData["b4_ti"]  && sbNewer("b4_ti"))  setTijdslots(p("b4_ti",[]));
-        if(allData["b4_do"]  && sbNewer("b4_do"))  setDossiers(p("b4_do",[]));
-        if(allData["b4_ga"]  && sbNewer("b4_ga"))  setGaranties(p("b4_ga",[]));
-        if(allData["b4_at"]  && sbNewer("b4_at"))  setAcceptTokens(p("b4_at",{}));
-        if(allData["b4_wo"]  && sbNewer("b4_wo"))  setWidgetOrder(p("b4_wo",null));
-        console.log("✅ Mobile sync — last-write-wins");
-      } catch(e) { console.warn("Mobile sync mislukt:",e); }
+        if(allData["b4_at"]&&sbTs("b4_at")>lcTs("b4_at")) setAcceptTokens(p("b4_at",{}));
+        if(allData["b4_wo"]&&sbTs("b4_wo")>lcTs("b4_wo")) setWidgetOrder(p("b4_wo",null));
+        console.log("Tab sync OK — enkel gelezen, nooit geschreven");
+      } catch(e) { console.warn("Tab sync mislukt:",e); }
     };
     document.addEventListener("visibilitychange", handleVisibility);
     return ()=>document.removeEventListener("visibilitychange", handleVisibility);
