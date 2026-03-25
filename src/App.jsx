@@ -3238,7 +3238,7 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
             {pg==="facturen"&&<FacturenPage facturen={factMet} settings={settings} initFilter={pgFilter} onView={d=>setViewDoc({doc:d,type:"factuur"})} onEdit={f=>{setEditFact(f);setFactuurWizOpen(true);}} onStatus={updFact} onBulkStatus={bulkUpdFact} onDelete={id=>{setFacturen(p=>p.filter(f=>f.id!==id));localTimestamps.current["b4_fct"]=Date.now();try{localStorage.setItem("billr_ts",JSON.stringify(localTimestamps.current));}catch(_){}notify("Verwijderd");setTimeout(()=>flushSavesRef.current(),100);}} notify={notify} onEmail={d=>setEmailModal({doc:d,type:"factuur"})} onBetaling={f=>setBetalingModal(f)} onAanmaning={f=>setAanmaningModal(f)} onNew={()=>{setEditFact(null);setFactuurWizOpen(true)}}/>}
             {pg==="klanten"&&<KlantenPage klanten={klanten} offertes={offertes} facturen={factMet} view={klantView} onEdit={k=>setKlantModal(k)} onDelete={id=>{setKlanten(p=>p.map(k=>k.id===id?{...k,_verwijderd:true}:k));localTimestamps.current["b4_kln"]=Date.now();try{localStorage.setItem("billr_ts",JSON.stringify(localTimestamps.current));}catch(_){}notify("Klant verwijderd");setTimeout(()=>flushSavesRef.current(),100);}}/>}
             {pg==="producten"&&<ProductenPage producten={producten} settings={settings} onEdit={p=>setProdModal(p)} onDelete={id=>{setProducten(p=>p.filter(x=>x.id!==id));notify("Verwijderd")}} onToggle={id=>setProducten(p=>p.map(x=>x.id===id?{...x,actief:!x.actief}:x))} onEnrich={upd=>setProducten(p=>p.map(x=>x.id===upd.id?upd:x))} onDuplicate={p=>{const dup={...p,id:uid(),naam:p.naam+" (kopie)",aangemaakt:new Date().toISOString()};setProducten(prev=>[dup,...prev]);notify("Product gedupliceerd ✓");setProdModal(dup);}}/>}
-            {pg==="agenda"&&<div style={{height:"calc(100vh - 70px)",margin:"-22px",overflow:"hidden"}}><iframe src={`${window.location.origin}/planner.html`} style={{width:"100%",height:"100%",border:"none"}} title="Agenda"/></div>}
+            {pg==="agenda"&&<AgendaPage offertes={offertes} settings={settings} onPlan={o=>setPlanningModal(o)} onPlanDelete={async(id)=>{updOff(id,{planStatus:null,planDatum:null,planTijd:null,planBevestigingVerstuurd:false,klantAkkoord:false,logActie:"Afspraak verwijderd"});try{await sb.from("planning_proposals").delete().eq("offerte_id",id);}catch(_){}setTimeout(()=>flushSavesRef.current(),100);}} />}
             {pg==="rapportage"&&<Rapportage offertes={offertes} facturen={factMet}/>}
             {pg==="instellingen"&&<InstellingenPage settings={settings} setSettings={s=>{setSettings(s);notify("Instellingen opgeslagen ✓");}} notify={notify} onExportBackup={doExportBackup} onImportBackup={doImportBackup} onSaveBackupSB={saveBackupToSB} sbClient={sb} userId={user?.id}/>}
             {pg==="creditnotas"&&<CreditnotasPage creditnotas={creditnotas} facturen={facturen} onDelete={id=>{setCreditnotas(p=>p.filter(c=>c.id!==id));notify("Verwijderd");}} onCreate={()=>setCreditnotaModal({})} onView={cn=>setViewDoc({doc:cn,type:"creditnota"})} settings={settings}/>}
@@ -3337,6 +3337,224 @@ function RefreshBtn({onRefresh}) {
     {loading ? "\u23f3 laden..." : ok ? "\u2705 Bijgewerkt" : "\xf0\x9f\x94\x84 Vernieuwen"}
   </button>;
 }
+
+
+// ─── AGENDA PAGE — BILLR eigen kalender ────────────────────────────
+function AgendaPage({offertes, settings, onPlan, onPlanDelete}) {
+  const dc = settings?.sjabloon?.accentKleur || settings?.bedrijf?.kleur || "#1a2e4a";
+  const now = new Date();
+  const [jaar, setJaar] = React.useState(now.getFullYear());
+  const [maand, setMaand] = React.useState(now.getMonth());
+  const [geselecteerd, setGeselecteerd] = React.useState(null);
+
+  // Enkel bevestigde afspraken
+  const afspraken = offertes.filter(o =>
+    o.planBevestigingVerstuurd === true &&
+    o.planDatum &&
+    o.planStatus !== "geannuleerd" &&
+    o.status !== "uitgevoerd"
+  );
+
+  // Per datum groeperen
+  const perDatum = {};
+  afspraken.forEach(o => {
+    const d = o.planDatum;
+    if(!perDatum[d]) perDatum[d] = [];
+    perDatum[d].push(o);
+  });
+
+  // Kalender bouwen
+  const eersteVanMaand = new Date(jaar, maand, 1);
+  const aantalDagen = new Date(jaar, maand + 1, 0).getDate();
+  const startDag = (eersteVanMaand.getDay() + 6) % 7; // Maandag = 0
+
+  const maandNamen = ["Januari","Februari","Maart","April","Mei","Juni","Juli","Augustus","September","Oktober","November","December"];
+  const dagNamen = ["Ma","Di","Wo","Do","Vr","Za","Zo"];
+
+  const vandaag = new Date().toISOString().split("T")[0];
+
+  const vorigeM = () => { if(maand===0){setMaand(11);setJaar(j=>j-1);}else setMaand(m=>m-1); };
+  const volgendeM = () => { if(maand===11){setMaand(0);setJaar(j=>j+1);}else setMaand(m=>m+1); };
+
+  const fmtDatum = d => {
+    if(!d) return "";
+    const dt = new Date(d+"T12:00:00");
+    return dt.toLocaleDateString("nl-BE",{weekday:"long",day:"numeric",month:"long",year:"numeric"});
+  };
+
+  const geselecteerdAfspraken = geselecteerd ? (perDatum[geselecteerd]||[]) : [];
+
+  // Lijst van alle aankomende afspraken gesorteerd
+  const aankomend = [...afspraken]
+    .filter(o => o.planDatum >= vandaag)
+    .sort((a,b) => a.planDatum.localeCompare(b.planDatum));
+
+  const verlopen = [...afspraken]
+    .filter(o => o.planDatum < vandaag)
+    .sort((a,b) => b.planDatum.localeCompare(a.planDatum));
+
+  return (
+    <div style={{padding:"16px 0",maxWidth:1200,margin:"0 auto"}}>
+      {/* Header */}
+      <div style={{display:"flex",alignItems:"center",gap:16,marginBottom:20,flexWrap:"wrap"}}>
+        <div style={{fontSize:22,fontWeight:800,color:"#1e293b"}}>📅 Agenda</div>
+        <div style={{fontSize:13,color:"#64748b"}}>{afspraken.length} bevestigde afspraken</div>
+        <div style={{marginLeft:"auto",display:"flex",gap:8,alignItems:"center"}}>
+          <button onClick={vorigeM} style={{background:"#f1f5f9",border:"1px solid #e2e8f0",borderRadius:6,padding:"6px 12px",cursor:"pointer",fontSize:16}}>‹</button>
+          <div style={{fontWeight:700,fontSize:15,minWidth:150,textAlign:"center",color:dc}}>
+            {maandNamen[maand]} {jaar}
+          </div>
+          <button onClick={volgendeM} style={{background:"#f1f5f9",border:"1px solid #e2e8f0",borderRadius:6,padding:"6px 12px",cursor:"pointer",fontSize:16}}>›</button>
+          <button onClick={()=>{setJaar(now.getFullYear());setMaand(now.getMonth());}} style={{background:dc,color:"#fff",border:"none",borderRadius:6,padding:"6px 12px",cursor:"pointer",fontSize:12,fontWeight:700}}>Vandaag</button>
+        </div>
+      </div>
+
+      <div style={{display:"grid",gridTemplateColumns:"1fr 320px",gap:20,alignItems:"start"}}>
+        {/* Kalender */}
+        <div style={{background:"#fff",borderRadius:12,boxShadow:"0 2px 12px rgba(0,0,0,.08)",overflow:"hidden"}}>
+          {/* Dagkoppen */}
+          <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",background:dc}}>
+            {dagNamen.map(d=>(
+              <div key={d} style={{padding:"10px 4px",textAlign:"center",fontSize:11,fontWeight:700,color:"rgba(255,255,255,.85)",letterSpacing:".5px"}}>{d}</div>
+            ))}
+          </div>
+          {/* Dagen */}
+          <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)"}}>
+            {/* Lege cellen voor begin */}
+            {Array.from({length:startDag}).map((_,i)=>(
+              <div key={"e"+i} style={{minHeight:80,background:"#f8fafc",borderRight:"1px solid #f1f5f9",borderBottom:"1px solid #f1f5f9"}}/>
+            ))}
+            {/* Dagen van de maand */}
+            {Array.from({length:aantalDagen}).map((_,i)=>{
+              const dag = i+1;
+              const datumStr = `${jaar}-${String(maand+1).padStart(2,"0")}-${String(dag).padStart(2,"0")}`;
+              const dagAfspraken = perDatum[datumStr]||[];
+              const isVandaag = datumStr === vandaag;
+              const isGeselecteerd = datumStr === geselecteerd;
+              return (
+                <div key={dag}
+                  onClick={()=>setGeselecteerd(isGeselecteerd?null:datumStr)}
+                  style={{
+                    minHeight:80, padding:"6px 6px 4px",
+                    borderRight:"1px solid #f1f5f9", borderBottom:"1px solid #f1f5f9",
+                    cursor:"pointer",
+                    background: isGeselecteerd ? dc+"11" : isVandaag ? "#fffbeb" : "#fff",
+                    transition:"background .1s",
+                    outline: isGeselecteerd ? `2px solid ${dc}` : isVandaag ? "2px solid #fbbf24" : "none",
+                    outlineOffset:"-2px",
+                    position:"relative"
+                  }}>
+                  <div style={{
+                    fontSize:12, fontWeight: isVandaag||isGeselecteerd ? 800 : 500,
+                    color: isVandaag ? "#d97706" : isGeselecteerd ? dc : "#64748b",
+                    marginBottom:3
+                  }}>{dag}</div>
+                  {dagAfspraken.slice(0,3).map((o,ai)=>(
+                    <div key={o.id}
+                      onClick={e=>{e.stopPropagation();setGeselecteerd(datumStr);}}
+                      style={{
+                        background:dc, color:"#fff",
+                        borderRadius:4, padding:"2px 5px",
+                        fontSize:10, fontWeight:600,
+                        marginBottom:2,
+                        overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"
+                      }}>
+                      {o.planTijd||"09:00"} {o.klant?.naam||o.nummer}
+                    </div>
+                  ))}
+                  {dagAfspraken.length>3&&<div style={{fontSize:9,color:"#94a3b8"}}>+{dagAfspraken.length-3} meer</div>}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Zijpanel */}
+        <div>
+          {/* Geselecteerde dag detail */}
+          {geselecteerd && (
+            <div style={{background:"#fff",borderRadius:12,boxShadow:"0 2px 12px rgba(0,0,0,.08)",padding:16,marginBottom:16}}>
+              <div style={{fontWeight:800,fontSize:14,color:dc,marginBottom:12}}>
+                📅 {fmtDatum(geselecteerd)}
+              </div>
+              {geselecteerdAfspraken.length===0
+                ? <div style={{color:"#94a3b8",fontSize:13,textAlign:"center",padding:"12px 0"}}>Geen afspraken</div>
+                : geselecteerdAfspraken.map(o=>(
+                  <div key={o.id} style={{borderBottom:"1px solid #f1f5f9",paddingBottom:10,marginBottom:10}}>
+                    <div style={{display:"flex",alignItems:"center",gap:8}}>
+                      <div style={{width:8,height:8,borderRadius:"50%",background:dc,flexShrink:0}}/>
+                      <div style={{flex:1}}>
+                        <div style={{fontWeight:700,fontSize:13}}>{o.klant?.naam||"—"}</div>
+                        <div style={{fontSize:11,color:"#64748b"}}>{o.nummer} · {o.planTijd||"09:00"}</div>
+                        <div style={{fontSize:11,color:"#94a3b8"}}>{o.klant?.adres||""} {o.klant?.gemeente||""}</div>
+                        {o.klant?.tel&&<div style={{fontSize:11,color:"#2563eb"}}>{o.klant.tel}</div>}
+                      </div>
+                      <div style={{display:"flex",flexDirection:"column",gap:4}}>
+                        <button style={{background:"#f0fdf4",color:dc,border:`1px solid ${dc}33`,borderRadius:5,padding:"4px 8px",fontSize:10,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}}
+                          onClick={()=>onPlan(o)}>✏️ Bewerk</button>
+                        <button style={{background:"#fef2f2",color:"#ef4444",border:"1px solid #fecaca",borderRadius:5,padding:"4px 8px",fontSize:10,cursor:"pointer"}}
+                          onClick={()=>{if(window.confirm("Afspraak verwijderen voor "+o.nummer+"?"))onPlanDelete(o.id);}}>
+                          🗑 Verwijder
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              }
+            </div>
+          )}
+
+          {/* Aankomende afspraken */}
+          <div style={{background:"#fff",borderRadius:12,boxShadow:"0 2px 12px rgba(0,0,0,.08)",padding:16}}>
+            <div style={{fontWeight:800,fontSize:13,color:dc,marginBottom:10}}>
+              Aankomende afspraken ({aankomend.length})
+            </div>
+            {aankomend.length===0
+              ? <div style={{color:"#94a3b8",fontSize:12,textAlign:"center",padding:"8px 0"}}>Geen geplande afspraken</div>
+              : aankomend.slice(0,10).map(o=>(
+                <div key={o.id} style={{display:"flex",gap:8,alignItems:"flex-start",padding:"6px 0",borderBottom:"1px solid #f1f5f9",cursor:"pointer"}}
+                  onClick={()=>{const d=o.planDatum;if(d){const dt=new Date(d);setJaar(dt.getFullYear());setMaand(dt.getMonth());setGeselecteerd(d);}}}>
+                  <div style={{flexShrink:0,background:dc,color:"#fff",borderRadius:6,padding:"4px 8px",textAlign:"center",minWidth:40}}>
+                    <div style={{fontSize:9,fontWeight:700,textTransform:"uppercase"}}>{new Date(o.planDatum+"T12:00:00").toLocaleDateString("nl-BE",{month:"short"})}</div>
+                    <div style={{fontSize:16,fontWeight:900,lineHeight:1}}>{new Date(o.planDatum+"T12:00:00").getDate()}</div>
+                  </div>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{fontWeight:700,fontSize:12,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{o.klant?.naam||"—"}</div>
+                    <div style={{fontSize:10,color:"#64748b"}}>{o.planTijd||"09:00"} · {o.nummer}</div>
+                    <div style={{fontSize:10,color:"#94a3b8",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{o.klant?.gemeente||""}</div>
+                  </div>
+                  <button style={{flexShrink:0,background:"none",border:"none",color:"#ef4444",cursor:"pointer",fontSize:14,padding:"2px 4px"}}
+                    title="Verwijderen"
+                    onClick={e=>{e.stopPropagation();if(window.confirm("Afspraak verwijderen voor "+o.nummer+"?"))onPlanDelete(o.id);}}>
+                    🗑
+                  </button>
+                </div>
+              ))
+            }
+            {verlopen.length>0&&(
+              <details style={{marginTop:12}}>
+                <summary style={{fontSize:11,color:"#94a3b8",cursor:"pointer",userSelect:"none"}}>
+                  {verlopen.length} verlopen afspraken
+                </summary>
+                <div style={{marginTop:8}}>
+                  {verlopen.slice(0,5).map(o=>(
+                    <div key={o.id} style={{display:"flex",gap:8,alignItems:"center",padding:"4px 0",borderBottom:"1px solid #f1f5f9",opacity:0.6}}>
+                      <div style={{fontSize:11,color:"#94a3b8",minWidth:80}}>{new Date(o.planDatum+"T12:00:00").toLocaleDateString("nl-BE",{day:"2-digit",month:"2-digit"})}</div>
+                      <div style={{flex:1,fontSize:11,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{o.klant?.naam||"—"} · {o.nummer}</div>
+                      <button style={{background:"none",border:"none",color:"#ef4444",cursor:"pointer",fontSize:12,padding:"1px 3px"}}
+                        onClick={()=>{if(window.confirm("Verwijderen?"))onPlanDelete(o.id);}}>🗑</button>
+                    </div>
+                  ))}
+                </div>
+              </details>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 
 function Dashboard({offertes, facturen, onGoto, onNew, onFactuur, settings, offerteViews, offerteResponses, planningProposals, onLogboek, onPlan, onPlanDelete, widgetOrder, setWidgetOrder, onRefreshTracking, websiteLeads=[], onLeadRefresh, onLeadStatus, onLeadToOfferte}) {
   const instTypesSetting = settings;
