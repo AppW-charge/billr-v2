@@ -3654,9 +3654,11 @@ function Dashboard({offertes, facturen, onGoto, onNew, onFactuur, settings, offe
   const [todoInput, setTodoInput] = useState("");
   const saveTodos = (lijst) => {
     setTodos(lijst);
+    const uid = userRef.current?.id;
+    if(!uid) return; // niet ingelogd
     try { localStorage.setItem("b4_todo", JSON.stringify(lijst)); } catch(_){}
-    // Supabase sync
-    sb.from("user_data").upsert({user_id: (window.__billrUserId||""), key:"b4_todo", value:JSON.stringify(lijst), updated_at:new Date().toISOString()},{onConflict:"user_id,key"}).catch(()=>{});
+    // Direct naar Supabase via sbSet (zelfde patroon als offertes)
+    sbSet("b4_todo", JSON.stringify(lijst), uid).catch(e => console.warn("Todo save:", e.message));
   };
   const addTodo = () => {
     const t = todoInput.trim(); if(!t) return;
