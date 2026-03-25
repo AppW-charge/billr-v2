@@ -2,7 +2,16 @@
 <html lang="nl">
 <head>
 <meta charset="UTF-8"/>
-<meta name="viewport" content="width=900, initial-scale=0.5"/>
+<meta name="viewport" content="width=900, initial-scale=0.5" id="vp"/>
+<script>
+(function(){
+  var w = window.screen.width;
+  var scale = Math.min(1.0, w / 900);
+  document.getElementById('vp').setAttribute('content',
+    'width=900, initial-scale=' + scale.toFixed(3) + ', maximum-scale=5.0, user-scalable=yes'
+  );
+})();
+</script>
 <title>Offerte laden...</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -20,7 +29,7 @@ html,body{font-family:'Inter',system-ui,Arial,sans-serif;background:#f1f5f9;colo
 #err h2{color:#ef4444;font-size:20px;font-weight:800}
 #err p{color:#64748b;font-size:14px;max-width:420px;line-height:1.6}
 .retry-btn{background:#1a2e4a;color:#fff;border:none;padding:10px 24px;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600}
-#root{max-width:900px;margin:0 auto;padding:20px 16px 200px;min-width:860px}
+#root{max-width:900px;margin:0 auto;padding:20px 16px 80px;min-width:860px}
 .doc-page{background:#fff;max-width:820px;width:100%;margin:0 auto 20px;box-shadow:0 2px 12px rgba(0,0,0,.1);border-radius:4px;overflow:visible}
 .doc-page-lbl{text-align:center;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#94a3b8;margin-bottom:5px}
 .screen-only{display:block}.print-only{display:none}.no-print{display:block}
@@ -1268,7 +1277,6 @@ function Bevestiging({offerteId, status, klantAkkoord, toonBevestigingslink}) {
   const [datum, setDatum] = useState("");
   const [notitie, setNotitie] = useState("");
   const [sending, setSending] = useState(false);
-  const [minimized, setMinimized] = useState(false);
 
   if(toonBevestigingslink===false) return null;
   const isOK = status==="goedgekeurd" || klantAkkoord;
@@ -1317,30 +1325,40 @@ function Bevestiging({offerteId, status, klantAkkoord, toonBevestigingslink}) {
   // Minimum datum = vandaag
   const today = new Date().toISOString().split("T")[0];
 
+  // Start collapsed op kleine schermen, open op grote
+  const isMobile = typeof window !== "undefined" && window.innerWidth < 600;
+  const [expanded, setExpanded] = React.useState(!isMobile);
+
   return (
     <div style={{
-      position:"fixed", bottom:24, right:24, zIndex:9999,
-      width: minimized ? "auto" : 360,
+      position:"fixed", bottom:0, right:0, left:0, zIndex:9999,
       background:"#fff",
       border:"2px solid var(--dc,#1a2e4a)",
-      borderRadius:14,
-      boxShadow:"0 8px 40px rgba(0,0,0,.22)",
+      borderRadius: expanded ? "14px 14px 0 0" : "14px 14px 0 0",
+      boxShadow:"0 -4px 32px rgba(0,0,0,.18)",
       overflow:"hidden",
-      transition:"all .2s"
+      transition:"max-height .3s ease",
+      maxHeight: expanded ? "600px" : "56px",
     }}>
-      {/* Header */}
+      {/* Header - altijd zichtbaar, klik om uit/inklapppen */}
       <div style={{
         background:"var(--dc,#1a2e4a)", color:"#fff",
-        padding:"12px 16px",
+        padding:"14px 20px",
         display:"flex", justifyContent:"space-between", alignItems:"center",
-        cursor:"pointer"
-      }} onClick={()=>setMinimized(m=>!m)}>
-        <span style={{fontWeight:700,fontSize:14}}>📋 Uw reactie op de offerte</span>
-        <span style={{fontSize:18,lineHeight:1}}>{minimized ? "▲" : "▼"}</span>
+        cursor:"pointer", userSelect:"none",
+        minHeight:56,
+      }} onClick={()=>setExpanded(e=>!e)}>
+        <span style={{fontWeight:700,fontSize:15}}>📋 Uw reactie op de offerte</span>
+        <span style={{
+          fontSize:22, lineHeight:1,
+          transform: expanded ? "rotate(180deg)" : "rotate(0deg)",
+          transition:"transform .25s",
+          display:"inline-block"
+        }}>⌄</span>
       </div>
 
-      {!minimized && (
-        <div style={{padding:"16px"}}>
+      {expanded && (
+        <div style={{padding:"16px 20px 20px"}}>
           {fase === "start" && (
             <>
               <p style={{fontSize:13,color:"#475569",marginBottom:16,lineHeight:1.5}}>
