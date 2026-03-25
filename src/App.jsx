@@ -1675,6 +1675,7 @@ export default function App() {
         if(sbData["b4_ga"])  setGaranties(parse(sbData["b4_ga"], []));
         if(sbData["b4_at"])  setAcceptTokens(parse(sbData["b4_at"], {}));
         if(sbData["b4_wo"])  setWidgetOrder(parse(sbData["b4_wo"], null));
+        if(sbData["b4_todo"]) { try { localStorage.setItem("b4_todo", sbData["b4_todo"]); } catch(_){} }
         Object.entries(sbData).forEach(([k,v])=>{ try{localStorage.setItem(k,v);}catch(_){} });
         // Initialiseer localTimestamps op basis van Supabase timestamps
         Object.entries(sbData).forEach(([k,v])=>{
@@ -1916,22 +1917,6 @@ export default function App() {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   // Fetch tracking on load AND when offertes_ref gets populated
   useEffect(() => { if(user) { setTimeout(fetchOfferteTracking, 2000); } }, [user]);
-  // Auto-plan prompt: als offerte net op goedgekeurd gezet (door klant via tracking) en nog niet ingepland
-  const autoPromptedRef = useRef(new Set());
-  useEffect(() => {
-    if(!user) return;
-    const nieuwGoedgekeurd = offertes.filter(o =>
-      (o.status === "goedgekeurd" || o.klantAkkoord) &&
-      !o.planDatum &&
-      !o.planBevestigingVerstuurd &&
-      !autoPromptedRef.current.has(o.id)
-    );
-    if(nieuwGoedgekeurd.length > 0) {
-      autoPromptedRef.current.add(nieuwGoedgekeurd[0].id);
-      // Kleine delay zodat UI settled is - check of modal niet al open is
-      setTimeout(() => setPlanningModal(m => m ? m : nieuwGoedgekeurd[0]), 600);
-    }
-  }, [offertes, user]);
   // Auto-poll tracking: 30s op offertes, 60s op dashboard
   useEffect(() => {
     if(!user) return;
@@ -2412,6 +2397,7 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
 
   // Expose settings for standalone Peppol functions
   useEffect(()=>{ window.__billrSettings = settings; },[settings]);
+  useEffect(()=>{ window.__billrUserId = user?.id || ""; },[user]);
 
   // ═══ PEPPOL VERZENDING VIA BILLIT ═══
   const sendPeppol = async (factuur) => {
@@ -3406,7 +3392,24 @@ function Dashboard({offertes, facturen, onGoto, onNew, onFactuur, settings, offe
   const [dragId, setDragId] = useState(null);
   const [dragOverId, setDragOverId] = useState(null);
   const [editMode, setEditMode] = useState(false);
-  const defaultOrder = ["websiteAanvragen","statistieken","recenteOffertes","openFacturen","goedgekeurdeOffertes","offerteLogboek","afspraken","snelleActies","agenda"];
+  // TODO lijst: lokaal in Supabase opgeslagen via saveKey b4_todo
+  const [todos, setTodos] = useState(() => { try { return JSON.parse(localStorage.getItem("b4_todo")||"[]"); } catch(_){ return []; } });
+  const [todoInput, setTodoInput] = useState("");
+  const saveTodos = (lijst) => {
+    setTodos(lijst);
+    try { localStorage.setItem("b4_todo", JSON.stringify(lijst)); } catch(_){}
+    // Supabase sync
+    sb.from("user_data").upsert({user_id: (window.__billrUserId||""), key:"b4_todo", value:JSON.stringify(lijst), updated_at:new Date().toISOString()},{onConflict:"user_id,key"}).catch(()=>{});
+  };
+  const addTodo = () => {
+    const t = todoInput.trim(); if(!t) return;
+    saveTodos([{id:Date.now().toString(36),tekst:t,gedaan:false,aangemaakt:new Date().toISOString()}, ...todos]);
+    setTodoInput("");
+  };
+  const toggleTodo = (id) => saveTodos(todos.map(t=>t.id===id?{...t,gedaan:!t.gedaan}:t));
+  const deleteTodo = (id) => saveTodos(todos.filter(t=>t.id!==id));
+  const [todoFilter, setTodoFilter] = useState("open");
+  const defaultOrder = ["todoLijst","websiteAanvragen","statistieken","recenteOffertes","openFacturen","goedgekeurdeOffertes","offerteLogboek","afspraken","snelleActies","agenda"];
   const order = widgetOrder || settings.dashboardWidgets?.widgetOrder || defaultOrder;
   const dw = settings.dashboardWidgets || {};
 
@@ -3699,7 +3702,55 @@ function Dashboard({offertes, facturen, onGoto, onNew, onFactuur, settings, offe
       }
     </div>);
   })(),
-  };
+
+  todoLijst: (()=>{
+    const zichtbare = todoFilter==="alle" ? todos : todoFilter==="open" ? todos.filter(t=>!t.gedaan) : todos.filter(t=>t.gedaan);
+    const aantalOpen = todos.filter(t=>!t.gedaan).length;
+    return (
+    <div className="card mb4" key="w-todo" style={{border:"2px solid #6366f1",background:"#fafafe"}}>
+      <div className="card-h">
+        <div className="card-t" style={{color:"#4f46e5",display:"flex",alignItems:"center",gap:6}}>
+          ✅ To-do
+          {aantalOpen>0&&<span style={{background:"#6366f1",color:"#fff",borderRadius:10,padding:"1px 8px",fontSize:11,fontWeight:700}}>{aantalOpen}</span>}
+        </div>
+        <div style={{display:"flex",gap:4}}>
+          {[["open","Open"],["gedaan","Gedaan"],["alle","Alle"]].map(([v,l])=>(
+            <button key={v} className="btn btn-sm" style={{fontSize:10,background:todoFilter===v?"#6366f1":"#fff",color:todoFilter===v?"#fff":"#64748b",border:"1px solid #e0e7ff",fontWeight:todoFilter===v?700:400}} onClick={()=>setTodoFilter(v)}>{l}</button>
+          ))}
+        </div>
+      </div>
+      {/* Invoer */}
+      <div style={{display:"flex",gap:6,marginBottom:10}}>
+        <input
+          style={{flex:1,border:"1.5px solid #c7d2fe",borderRadius:7,padding:"8px 10px",fontSize:13,fontFamily:"inherit",outline:"none"}}
+          placeholder="Nieuwe taak toevoegen..."
+          value={todoInput}
+          onChange={e=>setTodoInput(e.target.value)}
+          onKeyDown={e=>e.key==="Enter"&&addTodo()}
+        />
+        <button className="btn" style={{background:"#6366f1",color:"#fff",fontWeight:700,padding:"0 14px",borderRadius:7,fontSize:18,lineHeight:1}} onClick={addTodo}>+</button>
+      </div>
+      {/* Lijst */}
+      {zichtbare.length===0
+        ? <div style={{color:"#94a3b8",fontSize:13,textAlign:"center",padding:"12px 0"}}>
+            {todoFilter==="open"?"Geen openstaande taken 🎉":todoFilter==="gedaan"?"Nog niets afgevinkt":"Geen taken"}
+          </div>
+        : zichtbare.map(todo=>(
+          <div key={todo.id} style={{display:"flex",alignItems:"flex-start",gap:10,padding:"8px 4px",borderBottom:"1px solid #e0e7ff"}}>
+            <button
+              onClick={()=>toggleTodo(todo.id)}
+              style={{flexShrink:0,width:22,height:22,borderRadius:5,border:`2px solid ${todo.gedaan?"#6366f1":"#c7d2fe"}`,background:todo.gedaan?"#6366f1":"#fff",color:"#fff",fontSize:13,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",marginTop:1}}
+            >{todo.gedaan?"✓":""}</button>
+            <div style={{flex:1,fontSize:13,color:todo.gedaan?"#94a3b8":"#1e293b",textDecoration:todo.gedaan?"line-through":"none",lineHeight:1.4}}>
+              {todo.tekst}
+            </div>
+            <button onClick={()=>deleteTodo(todo.id)} style={{flexShrink:0,background:"none",border:"none",color:"#cbd5e1",cursor:"pointer",fontSize:15,padding:"0 2px",lineHeight:1}} title="Verwijderen">×</button>
+          </div>
+        ))
+      }
+      {todos.length>0&&<div style={{fontSize:10,color:"#94a3b8",marginTop:8,textAlign:"right"}}>{todos.filter(t=>t.gedaan).length}/{todos.length} afgewerkt</div>}
+    </div>);
+  })(),  };
 
   const wrapDraggable = (id, content) => {
     if(!content) return null;
