@@ -2027,39 +2027,9 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
     const batch = {...pendingSaves.current};
     pendingSaves.current = {};
     for(const [key, json] of Object.entries(batch)) {
-      try {
-        // Voor offertes: merge-before-write zodat stale tabs nooit data overschrijven
-        if(key === "b4_off") {
-          try {
-            const { data: sbRow } = await sb.from("user_data").select("value,updated_at").eq("user_id",user.id).eq("key","b4_off").single();
-            if(sbRow?.value) {
-              const sbTs = sbRow.updated_at ? new Date(sbRow.updated_at).getTime() : 0;
-              const localTs = localTimestamps.current["b4_off"] || 0;
-              if(sbTs > localTs + 5000) {
-                // Supabase heeft recentere data - merge: neem unie
-                const localOffs = JSON.parse(json);
-                const sbOffs = JSON.parse(sbRow.value);
-                const myIds = new Set(localOffs.map(o=>o.id));
-                const sbExtra = sbOffs.filter(o=>o.id && !myIds.has(o.id));
-                if(sbExtra.length > 0) {
-                  const merged = JSON.stringify([...localOffs, ...sbExtra]);
-                  console.log("flushSaves merge: "+sbExtra.length+" extra offerte(s) van Supabase");
-                  try { localStorage.setItem("b4_off", merged); } catch(_){}
-                  await sbSet("b4_off", merged, user.id);
-                  setOffertes(prev => {
-                    const ids = new Set(prev.map(o=>o.id));
-                    const extra = sbExtra.filter(o=>!ids.has(o.id));
-                    return extra.length ? [...prev, ...extra] : prev;
-                  });
-                  continue;
-                }
-              }
-            }
-          } catch(_){} // merge mislukt = gewoon schrijven
-        }
-        await sbSet(key, json, user.id);
-      } catch(_){}
+      try { await sbSet(key, json, user.id); } catch(_){}
     }
+  }, [user]);
   }, [user]);
   // Ref zodat callbacks met [] dependency altijd de actuele flushSaves hebben
   const flushSavesRef = useRef(flushSaves);
@@ -2311,35 +2281,17 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
         if(allData["b4_set"] && sbNewer("b4_set")) { const s=p("b4_set",null); if(s?.bedrijf?.naam||s?.email?.eigen) setSettings(s); }
         if(allData["b4_kln"] && sbNewer("b4_kln")) setKlanten(p("b4_kln",[]));
         // b4_prd niet via mobile sync (te groot) - producten worden beheerd in dezelfde browser
-        if(allData["b4_off"] && sbNewer("b4_off")) { 
+        if(allData["b4_off"]) { 
           const v=p("b4_off",null); 
           if(v!==null) {
             const seenId=new Set(); const sbOffs=v.filter(o=>{ if(!o.id||seenId.has(o.id)) return false; seenId.add(o.id); return true; });
-            // Smart merge per offerte: neem de rijkste versie
             setOffertes(prev => {
-              if(!prev.length) return sbOffs; // Leeg lokaal = gebruik Supabase
-              const sbMap={}; sbOffs.forEach(o=>sbMap[o.id]=o);
-              // Check of lokale versie recenter is (via localTimestamps)
-              const localTs = localTimestamps.current["b4_off"] || 0;
-              const sbTs = allData["b4_off__ts"] ? new Date(allData["b4_off__ts"]).getTime() : 0;
-              const localIsRecenter = localTs >= sbTs - 10000; // 10s tolerantie voor klokafwijking
-              if(localIsRecenter) {
-                // Lokaal is recent: merge Supabase-only offertes toe (nieuwe op ander device)
-                const localIds = new Set(prev.map(o=>o.id));
-                const nieuweVanSb = sbOffs.filter(o=>!localIds.has(o.id));
-                return nieuweVanSb.length ? [...prev, ...nieuweVanSb] : prev;
-              } else {
-                // Supabase is recenter: gebruik Supabase maar bewaar lokale planning
-                const localMap={}; prev.forEach(o=>localMap[o.id]=o);
-                return sbOffs.map(o=>{
-                  const loc=localMap[o.id]; if(!loc) return o;
-                  const localDeleted = loc.planDatum===null && o.planDatum; // Lokaal bewust verwijderd
-                  const localRijker=localDeleted||(loc.planDatum&&!o.planDatum)||(loc.klantAkkoord&&!o.klantAkkoord)||(loc.planBevestigingVerstuurd&&!o.planBevestigingVerstuurd)||((loc.log||[]).length>(o.log||[]).length);
-                  return localRijker?loc:o;
-                });
-              }
+              if(!prev.length) return sbOffs;
+              const localIds = new Set(prev.map(o=>o.id));
+              const sbNieuwe = sbOffs.filter(o=>!localIds.has(o.id));
+              if(sbNieuwe.length) console.log("Mobile sync: "+sbNieuwe.length+" nieuwe");
+              return sbNieuwe.length ? [...prev, ...sbNieuwe] : prev;
             });
-            console.log('\xe2\x9c\x85 Mobile sync merge b4_off');
           }
         }
                 if(allData["b4_fct"] && sbNewer("b4_fct")) { const v=p("b4_fct",null); if(v!==null) setFacturen(v); }
@@ -2371,23 +2323,12 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
         // Alleen mergen als Supabase nieuwer is
         if(sbTs <= localTs) return;
         const sbOffs = JSON.parse(sbRow.value);
-        // Één atomische merge: voeg nieuwe toe + bewaar rijkste versie
         setOffertes(prev => {
-          const sbMap = {}; sbOffs.forEach(o=>sbMap[o.id]=o);
+          if(!prev.length) return sbOffs;
           const localIds = new Set(prev.map(o=>o.id));
-          // Nieuwe offertes van Supabase (niet lokaal aanwezig)
-          const sbExtra = sbOffs.filter(o=>o.id && !localIds.has(o.id));
-          // Per bestaande offerte: lokaal wint als meer logs OF planDatum bewust null gezet
-          const merged = prev.map(loc => {
-            const sb = sbMap[loc.id];
-            if(!sb) return loc;
-            // Lokaal wint als: meer logs, OF planning bewust verwijderd (planDatum null maar SB heeft datum)
-            const localDeleted = loc.planDatum===null && sb.planDatum;
-            const localRijker = localDeleted || (loc.log||[]).length >= (sb.log||[]).length;
-            return localRijker ? loc : sb;
-          });
-          if(sbExtra.length>0) console.log("Auto-sync: "+sbExtra.length+" nieuwe offerte(s)");
-          return sbExtra.length ? [...merged, ...sbExtra] : merged;
+          const sbNieuwe = sbOffs.filter(o=>o.id && !localIds.has(o.id));
+          if(sbNieuwe.length) console.log("Auto-sync: "+sbNieuwe.length+" nieuwe");
+          return sbNieuwe.length ? [...prev, ...sbNieuwe] : prev;
         });
       } catch(_){}
     }, 180000); // elke 3 minuten
@@ -2469,33 +2410,10 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
     const u = userRef.current;
     if(!u || !dataReady.current) return;
     try {
-      // MERGE-BEFORE-WRITE: haal Supabase versie op en neem de UNIE
-      // Zo gaat nooit data verloren als een andere tab/device iets heeft opgeslagen
-      let finalOffertes = nieuweOffertes;
-      try {
-        const { data: sbRow } = await sb.from("user_data").select("value,updated_at").eq("user_id",u.id).eq("key","b4_off").single();
-        if(sbRow?.value) {
-          const sbOffs = JSON.parse(sbRow.value);
-          const sbTs = sbRow.updated_at ? new Date(sbRow.updated_at).getTime() : 0;
-          const localTs = localTimestamps.current["b4_off"] || 0;
-          // Als Supabase recenter is dan onze laatste lokale actie: merge (neem unie)
-          if(sbTs > localTs + 5000) {
-            const myIds = new Set(nieuweOffertes.map(o=>o.id));
-            const sbExtra = sbOffs.filter(o=>o.id && !myIds.has(o.id));
-            if(sbExtra.length > 0) {
-              finalOffertes = [...nieuweOffertes, ...sbExtra];
-              console.log("Merge: "+sbExtra.length+" offerte(s) van Supabase bewaard");
-              // Update lokale state ook
-              setOffertes(finalOffertes);
-            }
-          }
-        }
-      } catch(_){} // merge mislukt = gewoon doorgaan met nieuweOffertes
-
-      const stripped = stripOffertes(finalOffertes);
+      const stripped = stripOffertes(nieuweOffertes);
       const json = JSON.stringify(stripped);
       try { localStorage.setItem("b4_off", json); } catch(_){}
-      localTimestamps.current["b4_off"] = Date.now() + 10000;
+      localTimestamps.current["b4_off"] = Date.now() + 15000;
       try { localStorage.setItem("billr_ts", JSON.stringify(localTimestamps.current)); } catch(_){}
       await sbSet("b4_off", json, u.id);
     } catch(e) { console.warn("saveOfferteDirect:", e.message); }
@@ -3399,12 +3317,11 @@ function Dashboard({offertes, facturen, onGoto, onNew, onFactuur, settings, offe
       // Voeg todoLijst toe aan rechts als het er niet in zit
       if(saved) {
         if(!saved.rechts) saved.rechts = [];
-        if(!saved.rechts.includes("todoLijst")) saved.rechts.push("todoLijst");
         if(!saved.rechts.includes("websiteAanvragen")) saved.rechts.push("websiteAanvragen");
         return saved;
       }
     } catch(_){}
-    return {rechts:["goedgekeurdeOffertes","afspraken","websiteAanvragen","todoLijst"]};
+    return {rechts:["goedgekeurdeOffertes","afspraken","websiteAanvragen"]};
   });
   // Sla kolomConfig op bij wijziging
   useEffect(()=>{ try{localStorage.setItem("b4_kolom",JSON.stringify(kolomConfig));}catch(_){} },[kolomConfig]);
