@@ -3392,6 +3392,9 @@ function Dashboard({offertes, facturen, onGoto, onNew, onFactuur, settings, offe
   const [dragId, setDragId] = useState(null);
   const [dragOverId, setDragOverId] = useState(null);
   const [editMode, setEditMode] = useState(false);
+  const [kolomConfig, setKolomConfig] = useState(()=>{ try{ return JSON.parse(localStorage.getItem("b4_kolom")||'{"rechts":["goedgekeurdeOffertes","afspraken","websiteAanvragen","todoLijst"]}'); }catch(_){ return {rechts:["goedgekeurdeOffertes","afspraken","websiteAanvragen","todoLijst"]}; } });
+  // Sla kolomConfig op bij wijziging
+  useEffect(()=>{ try{localStorage.setItem("b4_kolom",JSON.stringify(kolomConfig));}catch(_){} },[kolomConfig]);
   // TODO lijst: lokaal in Supabase opgeslagen via saveKey b4_todo
   const [todos, setTodos] = useState(() => { try { return JSON.parse(localStorage.getItem("b4_todo")||"[]"); } catch(_){ return []; } });
   const [todoInput, setTodoInput] = useState("");
@@ -3638,7 +3641,7 @@ function Dashboard({offertes, facturen, onGoto, onNew, onFactuur, settings, offe
         </div>}
       </div>);
     })(),
-  websiteAanvragen: (()=>{
+  websiteAanvragen: ()=>{
     const [leadFilter, setLeadFilter] = useState("alle");
     const zichtbaar = leadFilter==="alle" ? websiteLeads : websiteLeads.filter(l=>l.status===leadFilter);
     const aantalNieuw = websiteLeads.filter(l=>l.status==="nieuw").length;
@@ -3701,9 +3704,9 @@ function Dashboard({offertes, facturen, onGoto, onNew, onFactuur, settings, offe
         </div>
       }
     </div>);
-  })(),
+  },
 
-  todoLijst: (()=>{
+  todoLijst: ()=>{
     const zichtbare = todoFilter==="alle" ? todos : todoFilter==="open" ? todos.filter(t=>!t.gedaan) : todos.filter(t=>t.gedaan);
     const aantalOpen = todos.filter(t=>!t.gedaan).length;
     return (
@@ -3750,7 +3753,8 @@ function Dashboard({offertes, facturen, onGoto, onNew, onFactuur, settings, offe
       }
       {todos.length>0&&<div style={{fontSize:10,color:"#94a3b8",marginTop:8,textAlign:"right"}}>{todos.filter(t=>t.gedaan).length}/{todos.length} afgewerkt</div>}
     </div>);
-  })(),  };
+  },
+  };
 
   const wrapDraggable = (id, content) => {
     if(!content) return null;
@@ -3804,9 +3808,27 @@ function Dashboard({offertes, facturen, onGoto, onNew, onFactuur, settings, offe
         </button>
       </div>
       {order.filter(id=>id==="statistieken").map(id=>wrapDraggable(id, widgetMap[id]?.()))}
-      <div className="g2">
-        <div>{order.filter(id=>id==="recenteOffertes").map(id=>wrapDraggable(id, widgetMap[id]?.()))}</div>
-        <div>{order.filter(id=>!["statistieken","recenteOffertes"].includes(id)).map(id=>wrapDraggable(id, widgetMap[id]?.()))}</div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,alignItems:"start"}}>
+        <div>
+          {order.filter(id=>id!=="statistieken"&&!(kolomConfig.rechts||[]).includes(id)&&widgetMap[id]).map(id=>(
+            <div key={id} style={{position:"relative",marginBottom:0}}>
+              {editMode&&<div style={{position:"absolute",top:6,right:6,zIndex:10}}>
+                <button style={{fontSize:10,padding:"2px 7px",background:"#6366f1",color:"#fff",border:"none",borderRadius:4,cursor:"pointer"}} onClick={()=>setKolomConfig(c=>({...c,rechts:[...(c.rechts||[]),id]}))}>Rechts →</button>
+              </div>}
+              {wrapDraggable(id, widgetMap[id]?.())}
+            </div>
+          ))}
+        </div>
+        <div>
+          {order.filter(id=>(kolomConfig.rechts||[]).includes(id)&&widgetMap[id]).map(id=>(
+            <div key={id} style={{position:"relative",marginBottom:0}}>
+              {editMode&&<div style={{position:"absolute",top:6,right:6,zIndex:10}}>
+                <button style={{fontSize:10,padding:"2px 7px",background:"#6366f1",color:"#fff",border:"none",borderRadius:4,cursor:"pointer"}} onClick={()=>setKolomConfig(c=>({...c,rechts:(c.rechts||[]).filter(x=>x!==id)}))}>← Links</button>
+              </div>}
+              {wrapDraggable(id, widgetMap[id]?.())}
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
