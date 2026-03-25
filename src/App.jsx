@@ -2050,7 +2050,7 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
     // localStorage: altijd meteen updaten (snel, lokaal)
     if(changed) {
       try { localStorage.setItem(key, json); } catch(e) { try { localStorage.removeItem(key); } catch(_){} }
-      localTimestamps.current[key] = Date.now();
+      localTimestamps.current[key] = Date.now() + (key==="b4_off"||key==="b4_fct"?15000:0);
       try { localStorage.setItem("billr_ts", JSON.stringify(localTimestamps.current)); } catch(_){}
     }
 
