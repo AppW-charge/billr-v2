@@ -87,6 +87,123 @@ const sbGetAll = async (userId, excludeKeys) => {
 const sbGetLite = (userId) => sbGetAll(userId, ["b4_prd"]);
 
 
+// ─── PER-DOCUMENT OPSLAG (offerte/factuur per nummer) ─────────────
+// Elke offerte = 1 rij: key="off_OFF-2026-001", value=JSON(offerte)
+// Elke factuur  = 1 rij: key="fct_FACT-2026-001", value=JSON(factuur)
+
+const offKey = (nr) => "off_" + nr;
+const fctKey = (nr) => "fct_" + nr;
+
+// Laad alle offertes (alle rijen met key LIKE 'off_%')
+const sbLoadOffertes = async (userId) => {
+  if(!userId) return [];
+  try {
+    const { data, error } = await sb.from("user_data")
+      .select("key,value,updated_at")
+      .eq("user_id", userId)
+      .like("key", "off_%");
+    if(error) { console.error("[sbLoadOffertes]", error.message); return []; }
+    const result = [];
+    (data||[]).forEach(row => {
+      try {
+        const o = JSON.parse(row.value);
+        if(o && o.nummer) result.push({...o, _sbTs: row.updated_at});
+      } catch(_){}
+    });
+    console.log("☁️ Offertes geladen:", result.length);
+    return dedupOffertes(result);
+  } catch(e) { console.error("[sbLoadOffertes]", e); return []; }
+};
+
+// Laad alle facturen
+const sbLoadFacturen = async (userId) => {
+  if(!userId) return [];
+  try {
+    const { data, error } = await sb.from("user_data")
+      .select("key,value,updated_at")
+      .eq("user_id", userId)
+      .like("key", "fct_%");
+    if(error) { console.error("[sbLoadFacturen]", error.message); return []; }
+    const result = [];
+    (data||[]).forEach(row => {
+      try {
+        const f = JSON.parse(row.value);
+        if(f && f.nummer) result.push(f);
+      } catch(_){}
+    });
+    console.log("☁️ Facturen geladen:", result.length);
+    return dedupFacturen(result);
+  } catch(e) { console.error("[sbLoadFacturen]", e); return []; }
+};
+
+// Sla één offerte op (per nummer)
+const sbSaveOfferte = async (offerte, userId) => {
+  if(!offerte?.nummer || !userId) return false;
+  // Strip base64 voor opslag
+  const stripped = {...offerte};
+  if(stripped.lijnen) stripped.lijnen = stripped.lijnen.map(l => {
+    const ll = {...l};
+    if(ll.technischeFiche && String(ll.technischeFiche).length > 500) ll.technischeFiche = null;
+    if(ll.technischeFiches) ll.technischeFiches = ll.technischeFiches.map(f => ({naam:f.naam||"",url:f.url||"",type:f.type||""}));
+    return ll;
+  });
+  return sbSet(offKey(offerte.nummer), JSON.stringify(stripped), userId);
+};
+
+// Sla één factuur op
+const sbSaveFactuur = async (factuur, userId) => {
+  if(!factuur?.nummer || !userId) return false;
+  return sbSet(fctKey(factuur.nummer), JSON.stringify(factuur), userId);
+};
+
+// Verwijder één offerte
+const sbDeleteOfferte = async (nummer, userId) => {
+  if(!nummer || !userId) return false;
+  return sbDel(offKey(nummer), userId);
+};
+
+// Verwijder één factuur
+const sbDeleteFactuur = async (nummer, userId) => {
+  if(!nummer || !userId) return false;
+  return sbDel(fctKey(nummer), userId);
+};
+
+// Migreer oude b4_off blob naar per-document opslag
+const sbMigrateOldData = async (userId) => {
+  if(!userId) return;
+  try {
+    const old = await sbGet("b4_off", userId);
+    if(!old?.value) return;
+    const offertes = JSON.parse(old.value);
+    if(!Array.isArray(offertes) || offertes.length === 0) return;
+    console.log("[Migratie] Oud formaat gevonden:", offertes.length, "offertes, migreren...");
+    for(const o of offertes) {
+      if(o.nummer) await sbSaveOfferte(o, userId);
+    }
+    // Verwijder oude blob na succesvolle migratie
+    await sbDel("b4_off", userId);
+    console.log("[Migratie] ✅ Klaar");
+  } catch(e) { console.warn("[Migratie] mislukt:", e.message); }
+};
+
+// Zelfde voor facturen
+const sbMigrateFacturen = async (userId) => {
+  if(!userId) return;
+  try {
+    const old = await sbGet("b4_fct", userId);
+    if(!old?.value) return;
+    const facturen = JSON.parse(old.value);
+    if(!Array.isArray(facturen) || facturen.length === 0) return;
+    console.log("[Migratie] Oude facturen:", facturen.length, "migreren...");
+    for(const f of facturen) {
+      if(f.nummer) await sbSaveFactuur(f, userId);
+    }
+    await sbDel("b4_fct", userId);
+    console.log("[Migratie] ✅ Facturen klaar");
+  } catch(e) { console.warn("[Migratie facturen]:", e.message); }
+};
+
+
 // Backwards compat aliases
 const localGet = sbGet;
 const localSet = sbSet;
@@ -1696,15 +1813,26 @@ export default function App() {
           } catch(_) { setProducten(restoreFicheCache(prods)); }
           console.log("\u2705 Producten geladen: " + prods.length);
         }
-        if(sbData["b4_off"]) {
-          const raw=parse(sbData["b4_off"],[]);
-          const seenId=new Set(); const offs=raw.filter(o=>{ if(!o.id||seenId.has(o.id)) return false; seenId.add(o.id); return true; });
-          setOffertes(dedupOffertes(offs)); console.log(`✅ Offertes geladen: ${offs.length}${offs.length!==raw.length?' ('+raw.length+' voor dedup)':''}`);
+        // Per-document laden: elk nummer = eigen rij in user_data
+        const offs = await sbLoadOffertes(u.id);
+        if(offs.length > 0) {
+          setOffertes(offs);
+        } else if(sbData["b4_off"]) {
+          // Oud formaat gevonden → laden en meteen migreren
+          const seenId=new Set(); const raw2=parse(sbData["b4_off"],[]);
+          const old=raw2.filter(o=>{ if(!o.id||seenId.has(o.id)) return false; seenId.add(o.id); return true; });
+          setOffertes(dedupOffertes(old));
+          console.log("Oud formaat:", old.length, "offertes → per-document migreren");
+          setTimeout(()=>sbMigrateOldData(u.id), 2000);
         }
-        if(sbData["b4_fct"]) {
-          const raw=parse(sbData["b4_fct"],[]);
-          const seenId2=new Set(); const fcts=raw.filter(f=>{ if(!f.id||seenId2.has(f.id)) return false; seenId2.add(f.id); return true; });
-          setFacturen(dedupFacturen(fcts)); console.log(`✅ Facturen geladen: ${fcts.length}`);
+        const fcts = await sbLoadFacturen(u.id);
+        if(fcts.length > 0) {
+          setFacturen(fcts);
+        } else if(sbData["b4_fct"]) {
+          const seenId3=new Set(); const rawF=parse(sbData["b4_fct"],[]);
+          const oldF=rawF.filter(f=>{ if(!f.id||seenId3.has(f.id)) return false; seenId3.add(f.id); return true; });
+          setFacturen(dedupFacturen(oldF));
+          setTimeout(()=>sbMigrateFacturen(u.id), 3000);
         }
         if(sbData["b4_cn"])  setCreditnotas(parse(sbData["b4_cn"], []));
         if(sbData["b4_am"])  setAanmaningen(parse(sbData["b4_am"], []));
@@ -1955,7 +2083,7 @@ export default function App() {
     } catch(e) { console.warn("Offerte tracking fetch failed:", e); }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   // Fetch tracking on load AND when offertes_ref gets populated
-  useEffect(() => { if(user) { setTimeout(fetchOfferteTracking, 2000); } }, [user]);
+  useEffect(() => { if(user && offertes.length > 0) { fetchOfferteTracking(); } }, [user, offertes.length > 0]);
   // Auto-poll tracking: 30s op offertes, 60s op dashboard
   useEffect(() => {
     if(!user) return;
@@ -2065,7 +2193,9 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
     if(!user || !dataReady.current) return;
     const batch = {...pendingSaves.current};
     pendingSaves.current = {};
+    // Offertes/facturen worden per-document opgeslagen - niet via flushSaves
     for(const [key, json] of Object.entries(batch)) {
+      if(key === "b4_off" || key === "b4_fct") continue; // skip - per-document opgeslagen
       try { await sbSet(key, json, user.id); } catch(_){}
     }
   }, [user]);
@@ -2308,26 +2438,14 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
         // Settings/klanten: vervang als Supabase nieuwer
         if(allData["b4_set"] && sbTs("b4_set") > lcTs("b4_set")) { const s=p("b4_set",null); if(s?.bedrijf?.naam) setSettings(s); }
         if(allData["b4_kln"] && sbTs("b4_kln") > lcTs("b4_kln")) setKlanten(p("b4_kln",[]));
-        // Offertes: volledig vervangen als Supabase nieuwer, anders enkel toevoegen
-        if(allData["b4_off"]) {
-          if(sbTs("b4_off") > lcTs("b4_off")) {
-            const sbOffs = dedupOffertes(p("b4_off",[]));
-            console.log("Tab sync: Supabase nieuwer →", sbOffs.length, "offertes laden");
-            setOffertes(sbOffs); localTimestamps.current["b4_off"] = sbTs("b4_off");
-          } else {
-            const sbOffs = p("b4_off",[]);
-            setOffertes(prev => { const nrs=new Set(prev.map(o=>o.nummer).filter(Boolean)); const nieuw=sbOffs.filter(o=>o.id&&!nrs.has(o.nummer)); return nieuw.length?dedupOffertes([...prev,...nieuw]):prev; });
-          }
+        // Per-document sync: herlaad alle offertes/facturen van Supabase
+        const freshOffs = await sbLoadOffertes(user.id);
+        if(freshOffs.length > 0) {
+          console.log("Tab sync: herlaad", freshOffs.length, "offertes van Supabase");
+          setOffertes(freshOffs);
         }
-        // Facturen: zelfde aanpak
-        if(allData["b4_fct"]) {
-          if(sbTs("b4_fct") > lcTs("b4_fct")) {
-            setFacturen(dedupFacturen(p("b4_fct",[]))); localTimestamps.current["b4_fct"] = sbTs("b4_fct");
-          } else {
-            const sbFcts = p("b4_fct",[]);
-            setFacturen(prev => { const nrs=new Set(prev.map(f=>f.nummer).filter(Boolean)); const nieuw=sbFcts.filter(f=>f.id&&!nrs.has(f.nummer)); return nieuw.length?dedupFacturen([...prev,...nieuw]):prev; });
-          }
-        }
+        const freshFcts = await sbLoadFacturen(user.id);
+        if(freshFcts.length > 0) setFacturen(freshFcts);
         if(allData["b4_at"]&&sbTs("b4_at")>lcTs("b4_at")) setAcceptTokens(p("b4_at",{}));
         if(allData["b4_wo"]&&sbTs("b4_wo")>lcTs("b4_wo")) setWidgetOrder(p("b4_wo",null));
         console.log("Tab sync OK — enkel gelezen, nooit geschreven");
@@ -2444,16 +2562,17 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
     return cl;
   });
 
-  const saveOfferteDirect = useCallback(async (nieuweOffertes) => {
+  const saveOfferteDirect = useCallback(async (nieuweOffertes, gewijzigdeNummers=null) => {
     const u = userRef.current;
     if(!u || !dataReady.current) return;
     try {
-      const stripped = stripOffertes(nieuweOffertes);
-      const json = JSON.stringify(stripped);
-      try { localStorage.setItem("b4_off", json); } catch(_){}
-      localTimestamps.current["b4_off"] = Date.now() + 3600000; // +1 uur: sync overschrijft nooit na een write
-      try { localStorage.setItem("billr_ts", JSON.stringify(localTimestamps.current)); } catch(_){}
-      await sbSet("b4_off", json, u.id);
+      // Per-document opslaan: elke offerte = eigen rij
+      const teSlaan = gewijzigdeNummers
+        ? nieuweOffertes.filter(o => gewijzigdeNummers.includes(o.nummer))
+        : nieuweOffertes;
+      for(const o of teSlaan) {
+        if(o.nummer) await sbSaveOfferte(o, u.id);
+      }
     } catch(e) { console.warn("saveOfferteDirect:", e.message); }
   }, []);
 
@@ -2461,12 +2580,23 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
     setOffertes(prev => {
       const actie = upd.status ? "Status → "+(OFF_STATUS[upd.status]?.l||upd.status) : upd.logActie||"Gewijzigd";
       const next = prev.map(o => o.id===id ? {...o,...upd, log:[...(o.log||[]), logEntry(actie)]} : o);
-      // Direct opslaan naar Supabase via ref (geen stale closure)
-      saveOfferteDirect(next);
+      // Sla enkel de gewijzigde offerte op (per nummer)
+      const gewijzigd = next.find(o => o.id===id);
+      if(gewijzigd?.nummer) {
+        const u = userRef.current;
+        if(u) sbSaveOfferte(gewijzigd, u.id);
+      }
       return next;
     });
   };
-  const updFact = (id,upd) => { setFacturen(p=>p.map(f=>f.id===id?{...f,...upd,log:[...(f.log||[]),logEntry(upd.status?"Status → "+(FACT_STATUS[upd.status]?.l||upd.status):upd.logActie||"Gewijzigd")]}:f)); setTimeout(()=>flushSavesRef.current(), 500); };
+  const updFact = (id,upd) => {
+    setFacturen(prev => {
+      const next = prev.map(f=>f.id===id?{...f,...upd,log:[...(f.log||[]),logEntry(upd.status?"Status → "+(FACT_STATUS[upd.status]?.l||upd.status):upd.logActie||"Gewijzigd")]}:f);
+      const gewijzigd = next.find(f=>f.id===id);
+      if(gewijzigd?.nummer) { const u=userRef.current; if(u) sbSaveFactuur(gewijzigd, u.id); }
+      return next;
+    });
+  };
   // Wrapper: bij goedkeuring automatisch PlanningModal openen
   const deletePlanning = async (offerteId) => {
     // 1. Clear all planning fields on the offerte
@@ -2598,6 +2728,8 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
       localTimestamps.current["b4_off"]=Date.now();
       try{localStorage.setItem("billr_ts",JSON.stringify(localTimestamps.current));}catch(_){}
       setOffertes(p=>{ const filtered = p.filter(o=>o.nummer!==n.nummer); return [n,...filtered]; });
+      // Direct per-document opslaan
+      { const u = userRef.current; if(u && n.nummer) sbSaveOfferte(n, u.id); }
       notify("Offerte aangemaakt ✓");
       setTimeout(()=>flushSavesRef.current(), 500); // Meteen naar Supabase — geen 2s wachten
       if(settings?.voorwaarden?.tegenNummer_off) setSettings(s=>({...s,voorwaarden:{...s.voorwaarden,tegenNummer_off:""}}));
@@ -2607,7 +2739,9 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
 
   const maakFactuur = (off, extra={}) => {
     const n={id:uid(),nummer:nextNr("FACT",facturen,"nummer"),offerteId:off.id,offerteNr:off.nummer,klantId:off.klantId,klant:off.klant,groepen:off.groepen||[],lijnen:extra.lijnen||off.lijnen,notities:extra.notities||off.notities,betalingstermijn:extra.bt||settings.voorwaarden?.betalingstermijn||14,datum:today(),vervaldatum:addDays(today(),extra.bt||settings.voorwaarden?.betalingstermijn||14),status:"concept",installatieType:off.installatieType,btwRegime:off.btwRegime,voorschot:off.voorschot||settings.voorwaarden?.voorschot,aangemaakt:new Date().toISOString()};
-    setFacturen(p=>{ const f2=p.filter(f=>f.nummer!==n.nummer); return [n,...f2]; }); updOff(off.id,{status:"gefactureerd",factuurId:n.id}); setFactModal(null); notify("Factuur aangemaakt ✓"); setPg("facturen"); setPgFilter(null);
+    setFacturen(p=>{ const f2=p.filter(f=>f.nummer!==n.nummer); return [n,...f2]; });
+      { const u = userRef.current; if(u && n.nummer) sbSaveFactuur(n, u.id); }
+      updOff(off.id,{status:"gefactureerd",factuurId:n.id}); setFactModal(null); notify("Factuur aangemaakt ✓"); setPg("facturen"); setPgFilter(null);
   };
 
   // ═══ OFFERTE SHARING — sla snapshot op voor publieke offerte.html pagina ═══
@@ -3272,8 +3406,15 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
           </div>
 
           <div className="content">
-            {pg==="dashboard"&&<Dashboard offertes={offertes} facturen={factMet} onGoto={gotoFiltered} onNew={()=>{setEditOff(null);setWizOpen(true)}} onFactuur={d=>setFactModal(d)} settings={settings} offerteViews={offerteViews} offerteResponses={offerteResponses} planningProposals={planningProposals} onLogboek={o=>setLogboekModal(o)} onPlan={o=>setPlanningModal(o)} onPlanDelete={deletePlanning} widgetOrder={widgetOrder} setWidgetOrder={setWidgetOrder} onRefreshTracking={fetchOfferteTracking} websiteLeads={websiteLeads} onLeadRefresh={fetchWebsiteLeads} onLeadStatus={async(id,status)=>{try{await sb.from("website_leads").update({status}).eq("id",id);fetchWebsiteLeads();}catch(_){}}} onLeadToOfferte={(lead)=>{setEditOff(null);setWizOpen(true);notify("Aanvraag: "+lead.naam);}}/>}
-            {pg==="offertes"&&<OffertesPage offertes={offertes} initFilter={pgFilter} onView={d=>setViewDoc({doc:d,type:"offerte"})} onEdit={d=>{setEditOff(d);setWizOpen(true)}} onStatus={handleOffStatus} onBulkStatus={bulkUpdOff} onFactuur={d=>setFactModal(d)} onDelete={id=>{const next=offertes.filter(o=>o.id!==id);setOffertes(next);saveOfferteDirect(next);notify("Verwijderd");}} onNew={()=>{setEditOff(null);setWizOpen(true)}} onEmail={async d=>{try{await shareOfferte(d);}catch(_){}setEmailModal({doc:d,type:"offerte"});}} onPlan={d=>setPlanningModal(d)} onShare={d=>{shareOfferte(d);notify("🔗 Publieke link vernieuwd ✓");}} settings={settings}/>}
+            {pg==="dashboard"&&<Dashboard offertes={offertes} facturen={factMet} onGoto={gotoFiltered} onNew={()=>{setEditOff(null);setWizOpen(true)}} onFactuur={d=>setFactModal(d)} settings={settings} offerteViews={offerteViews} offerteResponses={offerteResponses} planningProposals={planningProposals} onLogboek={o=>setLogboekModal(o)} onPlan={o=>setPlanningModal(o)} onPlanDelete={deletePlanning} widgetOrder={widgetOrder} setWidgetOrder={setWidgetOrder} onRefreshTracking={fetchOfferteTracking} websiteLeads={websiteLeads} onLeadRefresh={fetchWebsiteLeads} onLeadStatus={async(id,status)=>{try{await sb.from("website_leads").update({status}).eq("id",id);fetchWebsiteLeads();}catch(_){}}} onLeadToOfferte={(lead)=>{setEditOff(null);setWizOpen(true);notify("Aanvraag: "+lead.naam);}} userId={user?.id}/>}
+            {pg==="offertes"&&<OffertesPage offertes={offertes} initFilter={pgFilter} onView={d=>setViewDoc({doc:d,type:"offerte"})} onEdit={d=>{setEditOff(d);setWizOpen(true)}} onStatus={handleOffStatus} onBulkStatus={bulkUpdOff} onFactuur={d=>setFactModal(d)} onDelete={id=>{
+              const toDelete = offertes.find(o=>o.id===id);
+              const next = offertes.filter(o=>o.id!==id);
+              setOffertes(next);
+              // Per-document verwijderen uit Supabase
+              if(toDelete?.nummer && user?.id) sbDeleteOfferte(toDelete.nummer, user.id);
+              notify("Verwijderd");
+            }} onNew={()=>{setEditOff(null);setWizOpen(true)}} onEmail={async d=>{try{await shareOfferte(d);}catch(_){}setEmailModal({doc:d,type:"offerte"});}} onPlan={d=>setPlanningModal(d)} onShare={d=>{shareOfferte(d);notify("🔗 Publieke link vernieuwd ✓");}} settings={settings}/>}
             {pg==="facturen"&&<FacturenPage facturen={factMet} settings={settings} initFilter={pgFilter} onView={d=>setViewDoc({doc:d,type:"factuur"})} onEdit={f=>{setEditFact(f);setFactuurWizOpen(true);}} onStatus={updFact} onBulkStatus={bulkUpdFact} onDelete={id=>{setFacturen(p=>p.filter(f=>f.id!==id));localTimestamps.current["b4_fct"]=Date.now();try{localStorage.setItem("billr_ts",JSON.stringify(localTimestamps.current));}catch(_){}notify("Verwijderd");setTimeout(()=>flushSavesRef.current(),100);}} notify={notify} onEmail={d=>setEmailModal({doc:d,type:"factuur"})} onBetaling={f=>setBetalingModal(f)} onAanmaning={f=>setAanmaningModal(f)} onNew={()=>{setEditFact(null);setFactuurWizOpen(true)}}/>}
             {pg==="klanten"&&<KlantenPage klanten={klanten} offertes={offertes} facturen={factMet} view={klantView} onEdit={k=>setKlantModal(k)} onDelete={id=>{setKlanten(p=>p.map(k=>k.id===id?{...k,_verwijderd:true}:k));localTimestamps.current["b4_kln"]=Date.now();try{localStorage.setItem("billr_ts",JSON.stringify(localTimestamps.current));}catch(_){}notify("Klant verwijderd");setTimeout(()=>flushSavesRef.current(),100);}}/>}
             {pg==="producten"&&<ProductenPage producten={producten} settings={settings} onEdit={p=>setProdModal(p)} onDelete={id=>{setProducten(p=>p.filter(x=>x.id!==id));notify("Verwijderd")}} onToggle={id=>setProducten(p=>p.map(x=>x.id===id?{...x,actief:!x.actief}:x))} onEnrich={upd=>setProducten(p=>p.map(x=>x.id===upd.id?upd:x))} onDuplicate={p=>{const dup={...p,id:uid(),naam:p.naam+" (kopie)",aangemaakt:new Date().toISOString()};setProducten(prev=>[dup,...prev]);notify("Product gedupliceerd ✓");setProdModal(dup);}}/>}
@@ -3610,7 +3751,7 @@ function AgendaPage({offertes, settings, onPlan, onPlanDelete}) {
 }
 
 
-function Dashboard({offertes, facturen, onGoto, onNew, onFactuur, settings, offerteViews, offerteResponses, planningProposals, onLogboek, onPlan, onPlanDelete, widgetOrder, setWidgetOrder, onRefreshTracking, websiteLeads=[], onLeadRefresh, onLeadStatus, onLeadToOfferte}) {
+function Dashboard({offertes, facturen, onGoto, onNew, onFactuur, settings, offerteViews, offerteResponses, planningProposals, onLogboek, onPlan, onPlanDelete, widgetOrder, setWidgetOrder, onRefreshTracking, websiteLeads=[], onLeadRefresh, onLeadStatus, onLeadToOfferte, userId}) {
   const instTypesSetting = settings;
   const openOff = offertes.filter(o=>o.status==="verstuurd");
   const openFact = facturen.filter(f=>f.status!=="betaald"&&f.status!=="concept");
@@ -3654,11 +3795,14 @@ function Dashboard({offertes, facturen, onGoto, onNew, onFactuur, settings, offe
   const [todoInput, setTodoInput] = useState("");
   const saveTodos = (lijst) => {
     setTodos(lijst);
-    const uid = userRef.current?.id;
-    if(!uid) return; // niet ingelogd
+    if(!userId) return;
     try { localStorage.setItem("b4_todo", JSON.stringify(lijst)); } catch(_){}
-    // Direct naar Supabase via sbSet (zelfde patroon als offertes)
-    sbSet("b4_todo", JSON.stringify(lijst), uid).catch(e => console.warn("Todo save:", e.message));
+    const json = JSON.stringify(lijst);
+    sb.from("user_data").upsert(
+      {user_id: userId, key:"b4_todo", value: json, updated_at: new Date().toISOString()},
+      {onConflict:"user_id,key"}
+    ).then(r => { if(r.error) console.warn("Todo save:", r.error.message); })
+    .catch(e => console.warn("Todo save:", e.message));
   };
   const addTodo = () => {
     const t = todoInput.trim(); if(!t) return;
