@@ -393,7 +393,9 @@ async function sendViaRecommand(factuur, settings) {
       quantity: l.aantal || 1,
       vat: {
         percentage: cat === "AE" || cat === "Z" ? "0" : String(btw),
-        category: cat
+        category: cat,
+        ...(cat === "AE" ? { exemptionReasonCode: "VATEX-EU-AE", exemptionReason: "Reverse charge" } : {}),
+        ...(cat === "Z" ? { exemptionReasonCode: "VATEX-EU-O", exemptionReason: "Not subject to VAT" } : {})
       }
     };
   });
@@ -2122,8 +2124,10 @@ export default function App() {
   useEffect(() => {
     if(window.emailjs) {
       const pubKey = settings?.email?.emailjsPublicKey;
-      if(pubKey) window.emailjs.init(pubKey);
-      console.log("✅ EmailJS geïnitialiseerd met key:", pubKey.slice(0,6) + "...");
+      if(pubKey) {
+        window.emailjs.init(pubKey);
+        console.log("✅ EmailJS geïnitialiseerd met key:", pubKey.slice(0,6) + "...");
+      }
     }
   }, [settings?.email?.emailjsPublicKey]);
 
