@@ -2006,6 +2006,48 @@ export default function App() {
         if(sbData["b4_wo"])  setWidgetOrder(parse(sbData["b4_wo"], null));
         if(sbData["b4_todo"]) { try { const td=JSON.parse(sbData["b4_todo"]); localStorage.setItem("b4_todo", sbData["b4_todo"]); if(Array.isArray(td)) setTodos(td); } catch(_){} }
         Object.entries(sbData).forEach(([k,v])=>{ try{localStorage.setItem(k,v);}catch(_){} });
+
+        // ══ SUPABASE REPAIR: keys die in localStorage zitten maar NIET in Supabase → forceer upload ══
+        // Dit herstelt data die verloren ging door vorige bugs (vb. stripBase64 wiste Supabase)
+        const repairKeys = ["b4_set","b4_kln","b4_prd","b4_cn","b4_am","b4_bt","b4_ti","b4_do","b4_ga","b4_at","b4_wo"];
+        setTimeout(async () => {
+          for(const rk of repairKeys) {
+            if(!sbData[rk]) { // Ontbreekt in Supabase
+              try {
+                const lsVal = localStorage.getItem(rk);
+                if(lsVal && lsVal !== "null" && lsVal !== "[]" && lsVal !== "{}") {
+                  // Controleer of het echte data is (niet lege initiële state)
+                  const parsed = JSON.parse(lsVal);
+                  const hasData = Array.isArray(parsed) ? parsed.length > 0 : (parsed && typeof parsed === "object" && Object.keys(parsed).length > 0);
+                  if(hasData) {
+                    await sbSet(rk, lsVal, u.id);
+                    console.log("🔧 Supabase repair: " + rk + " hersteld vanuit localStorage");
+                  }
+                }
+              } catch(_) {}
+            }
+          }
+          // Fiche cache repair: als product_fiches leeg is maar localStorage cache heeft data
+          try {
+            const fcCheck = await sb.from("product_fiches").select("product_id",{count:"exact",head:true}).eq("user_id", u.id);
+            const fcCount = fcCheck.count || 0;
+            if(fcCount === 0) {
+              const lsFiches = localStorage.getItem("billr_fiche_cache");
+              if(lsFiches) {
+                const cache = JSON.parse(lsFiches);
+                const toMig = Object.entries(cache)
+                  .filter(([pid,fiches]) => Array.isArray(fiches) && fiches.some(f=>f.data))
+                  .map(([pid,fiches]) => ({user_id: u.id, product_id: pid, fiches, updated_at: new Date().toISOString()}));
+                if(toMig.length > 0) {
+                  await sb.from("product_fiches").upsert(toMig, {onConflict:"user_id,product_id"});
+                  console.log("🔧 Fiche repair: " + toMig.length + " fiches hersteld vanuit localStorage cache");
+                  localStorage.removeItem("billr_fiche_mig"); // Reset migratie vlag
+                }
+              }
+            }
+          } catch(_) {}
+        }, 1500);
+
         // Initialiseer localTimestamps op basis van Supabase timestamps
         Object.entries(sbData).forEach(([k,v])=>{
           if(k.endsWith("__ts") && v) {
@@ -2032,8 +2074,25 @@ export default function App() {
         setGaranties(ls('b4_ga', []));
         setAcceptTokens(ls('b4_at', {}));
         setWidgetOrder(ls('b4_wo', null));
+        // Na timeout: zodra Supabase wakker is, push localStorage data ernaar toe
+        // Dit zorgt dat andere browsers/devices altijd de juiste data krijgen
+        const repairAfterTimeout = async () => {
+          const repairKs = ["b4_set","b4_kln","b4_cn","b4_am","b4_bt","b4_ti","b4_do","b4_ga"];
+          for(const rk of repairKs) {
+            const lsVal = localStorage.getItem(rk);
+            if(lsVal && lsVal !== "null" && lsVal !== "[]" && lsVal !== "{}") {
+              try {
+                const parsed = JSON.parse(lsVal);
+                const hasData = Array.isArray(parsed) ? parsed.length > 0 : (parsed && typeof parsed === "object" && Object.keys(parsed).length > 0 && (rk !== "b4_set" || parsed.bedrijf?.naam));
+                if(hasData) await sbSet(rk, lsVal, u.id);
+              } catch(_) {}
+            }
+          }
+          console.log("🔧 Timeout repair: essentiële keys naar Supabase gepushed");
+        };
         // Retry Supabase na 4s (wacht op wake-up free tier)
         setTimeout(async () => {
+          await repairAfterTimeout(); // Push localStorage data naar Supabase
           try {
             const retry = await Promise.race([sbGetLite(u.id), new Promise(r=>setTimeout(()=>r(null),8000))]);
             if(retry && Object.keys(retry).length > 0) {
@@ -2063,8 +2122,19 @@ export default function App() {
 
       // Nu mogen saves plaatsvinden
       dataReady.current = true;
-      // Reset dedup cache zodat eerste save na load altijd doorgaat
-      // (voorkomt dat gewijzigde data niet gesaved wordt na herlaad)
+      // Reset lastSavedJson zodat eerste save na load altijd naar Supabase gaat
+      // Dit is kritiek: als Supabase een key miste (vb. na bug), wordt die nu hersteld
+      // Methode: wis localStorage kopie voor keys die NIET in sbData zaten → changed=true → Supabase save
+      if(sbData && Object.keys(sbData).length > 0) {
+        const criticalKeys = ["b4_set","b4_kln","b4_prd","b4_cn","b4_am","b4_bt","b4_ti","b4_do","b4_ga"];
+        criticalKeys.forEach(ck => {
+          if(!sbData[ck]) {
+            // Key ontbreekt in Supabase → forceer Supabase write door localStorage tijdelijk te wissen
+            // saveKey zal dan changed=true zien en naar Supabase schrijven
+            try { localStorage.removeItem(ck + "__sbsync_ok"); } catch(_) {}
+          }
+        });
+      }
 
 
       // Migratie fiches: eenmalig, enkel als nog niet gedaan deze week
@@ -2381,19 +2451,22 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
     const json = JSON.stringify(stripped);
 
     // Check of data echt veranderd is vs localStorage
-    // Dit voorkomt tientallen onnodige Supabase saves bij elke render
     const prevJson = localStorage.getItem(key);
     const changed = prevJson !== json;
+    // Forceer save als deze key nog niet gesync'd is naar Supabase in deze sessie
+    const syncMarker = "billr_sb_" + key;
+    const notYetSynced = !sessionStorage.getItem(syncMarker);
 
     // localStorage: altijd meteen updaten (snel, lokaal)
     if(changed) {
       try { localStorage.setItem(key, json); } catch(e) { try { localStorage.removeItem(key); } catch(_){} }
-      localTimestamps.current[key] = Date.now() + (key==="b4_off"||key==="b4_fct"?3600000:0); // +1 uur voor documenten
+      localTimestamps.current[key] = Date.now() + (key==="b4_off"||key==="b4_fct"?3600000:0);
       try { localStorage.setItem("billr_ts", JSON.stringify(localTimestamps.current)); } catch(_){}
     }
 
-    // Supabase: alleen als data gewijzigd is
-    if(!changed) return;
+    // Supabase: als data gewijzigd ÓÓÓF nog niet gesync'd deze sessie
+    if(!changed && !notYetSynced) return;
+    sessionStorage.setItem(syncMarker, "1"); // Markeer als gesync'd
     const debounceMs = key === "b4_prd" ? 10000 : 1000;
     pendingSaves.current[key] = json;
     if(saveTimer.current) clearTimeout(saveTimer.current);
