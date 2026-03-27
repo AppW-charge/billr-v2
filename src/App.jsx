@@ -37,18 +37,20 @@ const sbSet = async (key, value, userId) => {
   try {
     const uid = userId || (await sb.auth.getUser()).data?.user?.id;
     if(!uid) { console.warn(`[Supabase] SET "${key}" skipped: no user id`); return false; }
-    const { error } = await sb.from("user_data").upsert(
-      { user_id: uid, key, value, updated_at: new Date().toISOString() },
-      { onConflict: "user_id,key" }
-    );
+    const { error } = await Promise.race([
+      sb.from("user_data").upsert(
+        { user_id: uid, key, value, updated_at: new Date().toISOString() },
+        { onConflict: "user_id,key" }
+      ),
+      new Promise((_,rej) => setTimeout(()=>rej(new Error("timeout")), 8000))
+    ]);
     if(error) {
-      console.error(`[Supabase] SET "${key}" FAILED:`, error.message, error.details, error.hint);
+      console.error(`[Supabase] SET "${key}" FAILED:`, error.message);
       return false;
     }
-    console.log(`☁️ Supabase SAVE: ${key}`);
     return true;
   } catch(e) {
-    console.error(`[Supabase] SET "${key}" exception:`, e);
+    if(e.message !== "timeout") console.error(`[Supabase] SET "${key}":`, e.message);
     return false;
   }
 };
@@ -285,28 +287,108 @@ const BILLIT_API = {
   sandbox: "/api/billit"
 };
 
-function getBillitUrl(settings) {
-  // Direct naar Billit API — Billit staat cross-origin calls toe met Bearer token
-  const env = settings?.integraties?.billitEnv || "production";
-  return env === "sandbox" ? "https://sandbox.billit.be/api" : "https://app.billit.be/api";
-}
-function getBillitEnv(settings) {
-  return settings?.integraties?.billitEnv || "production";
-}
+// ─── RECOMMAND PEPPOL API ─────────────────────────────────────────
+// API: https://app.recommand.eu/api/v1/
+// Auth: HTTP Basic key:secret (btoa(key+":"+secret))
+// Docs: https://recommand.eu/en/docs
 
-function getBillitKey(settings) {
-  return settings?.integraties?.billitApiKey || "";
+function getRecommandKey(settings) {
+  return settings?.integraties?.recommandKey || "";
 }
-
-function billitHeaders(settings) {
-  const env = settings?.integraties?.billitEnv || "production";
+function getRecommandSecret(settings) {
+  return settings?.integraties?.recommandSecret || "";
+}
+function getRecommandCompanyId(settings) {
+  return settings?.integraties?.recommandCompanyId || "";
+}
+function getRecommandBase(settings) {
+  const sandbox = settings?.integraties?.recommandSandbox;
+  return sandbox ? "https://app.recommand.eu/api/v1/playgrounds" : "https://app.recommand.eu/api/v1";
+}
+function recommandHeaders(settings) {
+  const key = getRecommandKey(settings);
+  const secret = getRecommandSecret(settings);
+  const creds = btoa(key + ":" + secret);
   return {
-    'Authorization': `Bearer ${getBillitKey(settings)}`,
-    'Content-Type': 'application/json',
-    'Accept': 'application/json',
-    'X-Billit-Env': env
+    "Authorization": "Basic " + creds,
+    "Content-Type": "application/json"
   };
 }
+
+// Controleer of klant geregistreerd staat op Peppol via Recommand
+async function checkPeppolRecommand(btwnr, settings) {
+  const key = getRecommandKey(settings);
+  const secret = getRecommandSecret(settings);
+  if(!key || !secret) return { registered: false, reason: "Geen Recommand API key" };
+  const nr = String(btwnr||"").replace(/[\s.]/g,"").replace(/^BE/i,"");
+  const peppolId = "0208:" + nr;
+  try {
+    const resp = await fetch(`${getRecommandBase(settings)}/verify`, {
+      method: "POST",
+      headers: recommandHeaders(settings),
+      body: JSON.stringify({ peppolAddress: peppolId })
+    });
+    if(!resp.ok) return { registered: false, reason: `HTTP ${resp.status}` };
+    const data = await resp.json();
+    return { registered: data.registered === true, peppolId };
+  } catch(e) {
+    return { registered: false, reason: e.message };
+  }
+}
+
+// Stuur factuur via Recommand Peppol
+async function sendViaRecommand(factuur, settings) {
+  const companyId = getRecommandCompanyId(settings);
+  if(!companyId) throw new Error("Recommand Company ID niet ingesteld in Instellingen → Integraties");
+  const klant = factuur.klant || {};
+  const bed = settings?.bedrijf || {};
+  
+  const adresParts = (klant.adres||"").match(/^(.+?)\s+(\d+\S*)$/) || [null, klant.adres||"", ""];
+  const gemParts = (klant.gemeente||"").match(/^(\d{4})\s+(.+)$/) || [null, "", klant.gemeente||""];
+  const totals = calcTotals(factuur.lijnen||[]);
+  
+  const doc = {
+    invoiceNumber: factuur.nummer,
+    issueDate: factuur.datum || new Date().toISOString().slice(0,10),
+    dueDate: factuur.vervaldatum || factuur.datum,
+    buyer: {
+      vatNumber: (klant.btwnr||"").replace(/[\s.]/g,"") || undefined,
+      name: klant.naam || klant.bedrijf || "",
+      street: adresParts[1] + (adresParts[2] ? " " + adresParts[2] : ""),
+      city: gemParts[2] || klant.gemeente || "",
+      postalZone: gemParts[1] || "",
+      country: "BE"
+    },
+    paymentMeans: [{ iban: (bed.iban||"").replace(/\s/g,"") }],
+    note: factuur.nummer,
+    lines: (factuur.lijnen||[]).filter(l=>l.prijs>0||l.productId).map(l => ({
+      name: l.naam || "",
+      description: l.omschr || undefined,
+      netPriceAmount: String(l.prijs || 0),
+      quantity: l.aantal || 1,
+      vat: { percentage: String(l.btw ?? 21) }
+    }))
+  };
+  
+  const klantNr = String(klant.btwnr||"").replace(/[\s.]/g,"").replace(/^BE/i,"");
+  const recipient = "0208:" + klantNr;
+  const base = getRecommandBase(settings);
+  
+  const resp = await fetch(`${base}/companies/${companyId}/send`, {
+    method: "POST",
+    headers: recommandHeaders(settings),
+    body: JSON.stringify({ recipient, documentType: "invoice", document: doc })
+  });
+  
+  if(!resp.ok) {
+    const err = await resp.json().catch(()=>({}));
+    const msg = err.message || err.error || JSON.stringify(err.errors||err) || `HTTP ${resp.status}`;
+    throw new Error("Recommand: " + msg);
+  }
+  const data = await resp.json();
+  return { documentId: data.id || data.documentId, success: true };
+}
+
 
 // ── KBO Lookup — meerdere bronnen, publieke CORS proxy als fallback ──
 async function kboLookup(vatNumber, cbeApiKey = null) {
@@ -386,7 +468,7 @@ async function kboLookup(vatNumber, cbeApiKey = null) {
 
 // ── Billit: Check PEPPOL status van een klant ──
 async function checkPeppolBillit(vatNumber, settings) {
-  const apiKey = getBillitKey(settings);
+  const apiKey = getRecommandKey(settings);
   if(!apiKey) return { registered: false, reason: "Geen Billit API key" };
   
   const cleaned = String(vatNumber||"").replace(/\s/g,"").replace(/\./g,"");
@@ -466,7 +548,7 @@ function billrToBillitOrder(factuur, settings) {
 
 // ── Billit: Factuur versturen via Peppol ──
 async function sendViaBillit(factuur, settings) {
-  const apiKey = getBillitKey(settings);
+  const apiKey = getRecommandKey(settings);
   if(!apiKey) throw new Error("Geen Billit API key ingesteld");
   
   const headers = billitHeaders(settings);
@@ -516,7 +598,7 @@ async function sendViaBillit(factuur, settings) {
 
 // ── Billit: Test verbinding ──
 async function testBillitConnection(settings) {
-  const apiKey = getBillitKey(settings);
+  const apiKey = getRecommandKey(settings);
   if(!apiKey) return { ok: false, error: "Geen API key" };
   const env = getBillitEnv(settings);
   try {
@@ -753,7 +835,7 @@ const INIT_KLANTEN = [];
 const INIT_SETTINGS = {
   bedrijf:{naam:"",tagline:"",adres:"",gemeente:"",tel:"",email:"",btwnr:"",iban:"",bic:"",website:"",kleur:"#1a2e4a",logo:""},
   email:{eigen:"info@wcharge.be",boekhouder1:"",boekhouder2:"",cc:"",emailjsServiceId:"",emailjsTemplateOfferte:"",emailjsTemplateFactuur:"",emailjsPublicKey:"",templateOfferte:"Beste {naam},\n\nIn bijlage vindt u onze offerte {nummer} d.d. {datum}, geldig tot {vervaldatum}.\n\nWat mag u verwachten?\n{technische_info}\n\nBij akkoord kunt u de offerte bevestigen via onderstaande link.\nBij vragen staan we steeds voor u klaar.\n\nMet vriendelijke groeten,\n{bedrijf}\n{tel}",templateFactuur:"Beste {naam},\n\nIn bijlage vindt u factuur {nummer} d.d. {datum}.\nGelieve te betalen vóór {vervaldatum}.\n\nBedrag: {totaal}\nIBAN: {iban} · Mededeling: {nummer}\n\nMet vriendelijke groeten,\n{bedrijf}"},
-  integraties:{kboEnabled:true,peppolEnabled:true,billitApiKey:"98050f8c-93aa-4f2e-a206-3f15e4905276",billitEnv:"production",cbeApiKey:"OqzgVJ8I5wqgA8QjB0Aotu446pn7xqVI"},
+  integraties:{kboEnabled:true,peppolEnabled:true,recommandKey:"",recommandSecret:"",recommandCompanyId:"",recommandSandbox:true,cbeApiKey:"OqzgVJ8I5wqgA8QjB0Aotu446pn7xqVI"},
   dashboardWidgets:{omzetGrafiek:true,recenteOffertes:true,openFacturen:true,goedgekeurdeOffertes:true,snelleActies:true,statistieken:true,agenda:true,offerteLogboek:true,afspraken:true,widgetOrder:["todoLijst","statistieken","recenteOffertes","openFacturen","goedgekeurdeOffertes","offerteLogboek","afspraken","snelleActies","agenda"]},
   voorwaarden:{betalingstermijn:14,voorschot:"50%",boekjaarStart:"01-01",nummerPrefix_off:"OFF",nummerPrefix_fct:"FACT",tegenNummer_off:null,tegenNummer_fct:null,bebatTarief:2.89,tekst:`1. Al onze facturen zijn contant betaalbaar op de bankrekening vermeld op de factuur en zullen na verloop van 14 dagen van rechtswege een intrest van 1% per maand meebrengen, zonder aangetekende ingebrekestelling of dagvaarding te noodzaken.\n\n2. Op onze facturen dienen binnen de 8 dagen na ontvangst eventuele opmerkingen te geschieden.\n\n3. Het bedrag van de onbetaald gebleven facturen zal ten titel van schadevergoeding, van rechtswege verhoogd worden met 15% met een minimum van €65,00 vanaf de dag volgend op de vervaldag.\n\n4. Onze facturen zijn betaalbaar te Lochristi, zodat in geval van betwisting enkel de Rechtbanken van het arrondissement Gent bevoegd zijn.\n\nBTW 6% verklaring: Bij gebrek aan schriftelijke betwisting binnen een termijn van één maand vanaf de ontvangst van de factuur, wordt de klant geacht te erkennen dat (1) de werken worden verricht aan een woning waarvan de eerste ingebruikneming heeft plaatsgevonden in een kalenderjaar dat ten minste tien jaar voorafgaat aan de datum van de eerste factuur, (2) de woning na uitvoering uitsluitend of hoofdzakelijk als privéwoning wordt gebruikt en (3) de werken worden gefactureerd aan een eindverbruiker.\n\nBTW verlegd: Verlegging van heffing. Bij gebrek aan schriftelijke betwisting binnen één maand na ontvangst wordt de afnemer geacht te erkennen dat hij een belastingplichtige is gehouden tot periodieke BTW-aangiften.`},
   thema:{kleur:"#1a2e4a",naam:"Elektrisch Blauw"},
@@ -2490,32 +2572,35 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
   useEffect(()=>{ window.__billrSettings = settings; },[settings]);
   useEffect(()=>{ window.__billrUserId = user?.id || ""; },[user]);
 
-  // ═══ PEPPOL VERZENDING VIA BILLIT ═══
+  // ═══ PEPPOL VERZENDING VIA RECOMMAND ═══
   const sendPeppol = async (factuur) => {
-    if(!getBillitKey(settings)) { notify("Billit API key niet ingesteld. Ga naar Instellingen → Integraties.", "er"); return; }
+    if(!getRecommandKey(settings) || !getRecommandSecret(settings)) {
+      notify("Recommand API key/secret niet ingesteld. Ga naar Instellingen → Integraties.", "er"); return;
+    }
+    if(!getRecommandCompanyId(settings)) {
+      notify("Recommand Company ID niet ingesteld. Ga naar Instellingen → Integraties.", "er"); return;
+    }
     const klant = factuur.klant || {};
     if(!klant.btwnr) { notify("Klant heeft geen BTW-nummer — Peppol vereist een BTW-nummer.", "er"); return; }
     
     notify("📨 Peppol status controleren...", "in");
-    const peppolCheck = await checkPeppolBillit(klant.btwnr, settings);
-    if(!peppolCheck.registered) {
-      // Controleer ook via algemeen Peppol directory (klant kan op ander access point staan)
-      const confirmed = window.confirm(
-        `⚠️ Billit meldt dat ${klant.naam||"klant"} niet via Billit geregistreerd staat op Peppol.\n\n` +
-        `Dit kan zijn omdat de klant een ander access point gebruikt.\n\n` +
-        `Toch proberen te versturen via Peppol?\n(Annuleren = verstuur via email)`
+    const check = await checkPeppolRecommand(klant.btwnr, settings);
+    if(!check.registered) {
+      const go = window.confirm(
+        `⚠️ ${klant.naam||"Klant"} staat niet geregistreerd op Peppol (${check.reason||""}).\n\n` +
+        `Toch proberen te versturen? (Annuleren = verstuur via email)`
       );
-      if(!confirmed) return;
+      if(!go) return;
     }
     
-    notify("📨 Factuur versturen via Peppol...", "in");
+    notify("📨 Factuur versturen via Recommand Peppol...", "in");
     try {
-      const result = await sendViaBillit(factuur, settings);
+      const result = await sendViaRecommand(factuur, settings);
       updFact(factuur.id, { 
         status: "verstuurd", 
         peppolVerstuurd: true, 
-        peppolId: result.billitId,
-        logActie: `📨 Verzonden via Peppol (Billit ID: ${result.billitId})`
+        peppolId: result.documentId,
+        logActie: `📨 Verzonden via Peppol/Recommand (ID: ${result.documentId})`
       });
       notify(`✅ Factuur ${factuur.nummer} verzonden via Peppol!`, "ok");
     } catch(err) {
@@ -5094,7 +5179,7 @@ function ProductenPage({producten,settings,onEdit,onDelete,onToggle,onEnrich,onD
 // ─── KLANT IMPORT MODAL ───────────────────────────────────────────
 async function checkPeppolDirectory(btwnr, settings) {
   if(!btwnr) return false;
-  const result = await checkPeppolBillit(btwnr, settings || window.__billrSettings || {});
+  const result = await checkPeppolRecommand(btwnr, settings || window.__billrSettings || {});
   return result.registered;
 }
 
@@ -7318,7 +7403,7 @@ function KlantModal({klant,onSave,onClose}) {
       // Scenario 2: BTW geldig maar proxy tijdelijk down
       if(!kboData.naam && kboData.btwnr){
         let peppolFallback = false;
-        try { const pr = await checkPeppolBillit("BE"+nr, settings); peppolFallback = pr.registered; } catch(_){}
+        try { const pr = await checkPeppolRecommand("BE"+nr, settings); peppolFallback = pr.registered; } catch(_){}
         setForm(p=>({
           ...p,
           btwnr: kboData.btwnr,
@@ -7334,7 +7419,7 @@ function KlantModal({klant,onSave,onClose}) {
       // Scenario 3: Success met data
       // Check PEPPOL status via Billit
       let peppolStatus = false;
-      if(settings.integraties?.peppolEnabled && settings.integraties?.billitApiKey) {
+      if(settings.integraties?.peppolEnabled && settings.integraties?.recommandKey) {
         try {
           const result = await checkPeppolBillit(`BE${nr}`, settings);
           peppolStatus = result.registered;
@@ -7681,7 +7766,7 @@ function EmailModal({doc,type,settings,onClose,onSend,onAcceptToken}) {
 
   // Email modus: automatisch (EmailJS), handmatig (mailto), of PEPPOL
   const hasEmailJS = !!(ejCfg.emailjsServiceId && ejCfg.emailjsPublicKey);
-  const hasPeppol = type==="factuur" && settings?.integraties?.peppolEnabled && settings?.integraties?.billitApiKey && doc.klant?.peppolActief;
+  const hasPeppol = type==="factuur" && settings?.integraties?.peppolEnabled && settings?.integraties?.recommandKey && settings?.integraties?.recommandSecret && doc.klant?.peppolActief;
   const [modus, setModus] = useState(hasPeppol ? "peppol" : hasEmailJS ? "auto" : "handmatig");
   const [tab, setTab] = useState("preview"); // "bewerk" | "preview" — standaard preview
   const [sending, setSending] = useState(false);
@@ -7782,7 +7867,7 @@ function EmailModal({doc,type,settings,onClose,onSend,onAcceptToken}) {
   const doPeppolSend = async () => {
     setSending(true); setError("");
     try {
-      const result = await sendViaPeppol(doc, settings);
+      const result = await sendViaRecommand(doc, settings);
       console.log("[PEPPOL] Verzonden:", result);
       setSent(true);
       onSend(true);
@@ -8262,41 +8347,59 @@ function InstellingenPage({settings,setSettings,notify,onExportBackup,onImportBa
           {form.integraties?.peppolEnabled&&(
             <div style={{marginTop:12,padding:12,background:"rgba(255,255,255,.6)",borderRadius:8}}>
               <div className="fg">
-                <label className="fl">🔑 Billit API Key</label>
+                <label className="fl">🔑 Recommand API Key</label>
+                <input 
+                  className="fc" 
+                  type="text"
+                  value={form.integraties?.recommandKey||""} 
+                  onChange={e=>set("integraties","recommandKey",e.target.value)} 
+                  placeholder="key_xxx..."
+                  style={{fontFamily:"JetBrains Mono,monospace"}}
+                />
+              </div>
+              <div className="fg">
+                <label className="fl">🔒 Recommand Secret</label>
                 <input 
                   className="fc" 
                   type="password"
-                  value={form.integraties?.billitApiKey||""} 
-                  onChange={e=>set("integraties","billitApiKey",e.target.value)} 
-                  placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                  value={form.integraties?.recommandSecret||""} 
+                  onChange={e=>set("integraties","recommandSecret",e.target.value)} 
+                  placeholder="secret_xxx..."
                   style={{fontFamily:"JetBrains Mono,monospace"}}
                 />
-                <div style={{fontSize:11,color:"#16a34a",marginTop:4}}>
-                  Login op <a href="https://my.billit.be" target="_blank" rel="noopener noreferrer" style={{color:"#15803d",fontWeight:600}}>my.billit.be</a> → Profiel → API → Kopieer key
+              </div>
+              <div className="fg">
+                <label className="fl">🏢 Company ID</label>
+                <input 
+                  className="fc" 
+                  type="text"
+                  value={form.integraties?.recommandCompanyId||""} 
+                  onChange={e=>set("integraties","recommandCompanyId",e.target.value)} 
+                  placeholder="c_xxx... (uit Recommand dashboard)"
+                  style={{fontFamily:"JetBrains Mono,monospace"}}
+                />
+                <div style={{fontSize:11,color:"#64748b",marginTop:4}}>
+                  Vind dit in <a href="https://app.recommand.eu" target="_blank">app.recommand.eu</a> → Companies → Company ID
                 </div>
               </div>
               <div className="fg">
                 <label className="fl">Omgeving</label>
                 <div style={{display:"flex",gap:6}}>
-                  {[["production","🟢 Productie"],["sandbox","🟡 Sandbox (test)"]].map(([v,l])=>(
-                    <button key={v} className={`btn btn-sm ${form.integraties?.billitEnv===v||(!form.integraties?.billitEnv&&v==="production")?"bp":"bs"}`} onClick={()=>set("integraties","billitEnv",v)}>{l}</button>
+                  {[["false","🟢 Productie"],["true","🟡 Playground (test)"]].map(([v,l])=>(
+                    <button key={v} className={`btn btn-sm ${String(!!form.integraties?.recommandSandbox)===v?"bp":"bs"}`}
+                      onClick={()=>set("integraties","recommandSandbox",v==="true")}>{l}</button>
                   ))}
                 </div>
               </div>
-              <button className="btn btn-sm" style={{background:"#7c3aed",color:"#fff",fontWeight:700,marginTop:8}} onClick={async()=>{
-                const result = await testBillitConnection({integraties:form.integraties});
-                if(result.ok) notify("✅ Billit verbinding OK!","ok");
-                else notify("❌ Billit verbinding mislukt: "+result.error,"er");
-              }}>🔌 Test verbinding</button>
               <div style={{fontSize:11,color:"#15803d",padding:"8px 10px",background:"rgba(34,197,94,.1)",borderRadius:6,marginTop:8}}>
-                <strong>Billit Status:</strong> {form.integraties?.billitApiKey ? "✓ API key ingesteld" : "⚠ API key vereist"} · Omgeving: {form.integraties?.billitEnv==="sandbox"?"Sandbox (test)":"Productie"}
+                <strong>Recommand Status:</strong> {form.integraties?.recommandKey ? "✓ Configuratie ingevuld" : "⚠ API key + secret + company ID vereist"} · 
+                {form.integraties?.recommandSandbox ? "🟡 Playground (geen echte facturen)" : "🟢 Productie"}
               </div>
               <div style={{fontSize:10.5,color:"#059669",marginTop:6,lineHeight:1.5}}>
                 📨 <strong>Peppol versturen:</strong> Open een factuur → klik "📨 Peppol" knop<br/>
-                🔍 <strong>Peppol check:</strong> Bij klant aanmaken wordt automatisch gecheckt of ze op Peppol staan<br/>
-                💡 <strong>120% fiscaal aftrekbaar</strong> tot 2027 voor e-facturatie kosten
+                🔑 <strong>API keys:</strong> <a href="https://app.recommand.eu" target="_blank">app.recommand.eu</a> → Settings → API Keys<br/>
+                📖 <strong>Docs:</strong> <a href="https://recommand.eu/en/docs" target="_blank">recommand.eu/en/docs</a>
               </div>
-            </div>
           )}
         </div>
 
