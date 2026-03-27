@@ -71,7 +71,9 @@ const sbDel = async (key, userId) => {
 const sbGetAll = async (userId, excludeKeys) => {
   if(!userId) return {};
   try {
-    let q = sb.from("user_data").select("key,value,updated_at").eq("user_id", userId);
+    let q = sb.from("user_data").select("key,value,updated_at").eq("user_id", userId)
+      .not("key", "like", "off_%")   // per-doc offertes apart geladen
+      .not("key", "like", "fct_%");  // per-doc facturen apart geladen
     if(excludeKeys && excludeKeys.length > 0) {
       q = q.not("key", "in", "(" + excludeKeys.join(",") + ")");
     }
@@ -1926,9 +1928,10 @@ export default function App() {
       // Laad Supabase — master voor alle data
       let sbData = null;
       try {
+        // Laad settings/klanten/etc via sbGetAll (ZONDER offertes/facturen - die laden per-doc)
         sbData = await Promise.race([
-          sbGetAll(u.id),
-          new Promise(r => setTimeout(()=>r(null), 6000))
+          sbGetAll(u.id, ["b4_prd"]),  // b4_prd apart geladen met fiches
+          new Promise(r => setTimeout(()=>r(null), 8000))
         ]);
       } catch(e) { console.error("Supabase load error:", e); }
 
