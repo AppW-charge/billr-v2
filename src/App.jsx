@@ -2136,8 +2136,10 @@ export default function App() {
   useEffect(() => {
     if(window.emailjs) {
       const pubKey = settings?.email?.emailjsPublicKey;
-      if(pubKey) window.emailjs.init(pubKey);
-      console.log("✅ EmailJS geïnitialiseerd met key:", pubKey.slice(0,6) + "...");
+      if(pubKey) {
+        window.emailjs.init(pubKey);
+        console.log("✅ EmailJS geïnitialiseerd met key:", pubKey.slice(0,6) + "...");
+      }
     }
   }, [settings?.email?.emailjsPublicKey]);
 
