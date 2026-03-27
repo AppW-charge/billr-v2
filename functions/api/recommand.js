@@ -1,12 +1,9 @@
 // Cloudflare Pages Function: /api/recommand
 // Proxies alle Recommand Peppol API calls — omzeilt CORS
-// Route: /api/recommand?path=/v1/companies/xxx/send&sandbox=true
-// Body: doorgegeven aan Recommand
+// Docs: https://recommand.eu/en/docs/getting-started
+// Endpoint: POST /api/v1/{companyId}/send (zelfde URL voor playground en productie)
 
-const RECOMMAND_URLS = {
-  production: "https://app.recommand.eu/api/v1",
-  sandbox:    "https://app.recommand.eu/api/v1/playgrounds"
-};
+const RECOMMAND_BASE = "https://app.recommand.eu/api/v1";
 
 export async function onRequest(context) {
   const { request } = context;
@@ -23,17 +20,14 @@ export async function onRequest(context) {
     return new Response(null, { headers: corsHeaders });
   }
 
-  const path    = url.searchParams.get("path") || "";
-  const sandbox = url.searchParams.get("sandbox") === "true";
-
+  const path = url.searchParams.get("path") || "";
   if (!path) {
     return new Response(JSON.stringify({ error: "path parameter vereist" }), {
       status: 400, headers: corsHeaders
     });
   }
 
-  const baseUrl   = sandbox ? RECOMMAND_URLS.sandbox : RECOMMAND_URLS.production;
-  const targetUrl = `${baseUrl}${path}`;
+  const targetUrl = `${RECOMMAND_BASE}${path}`;
 
   const authHeader = request.headers.get("Authorization");
   if (!authHeader) {
