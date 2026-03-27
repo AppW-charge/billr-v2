@@ -302,8 +302,13 @@ function getRecommandCompanyId(settings) {
   return settings?.integraties?.recommandCompanyId || "";
 }
 function getRecommandBase(settings) {
-  const sandbox = settings?.integraties?.recommandSandbox;
-  return sandbox ? "https://app.recommand.eu/api/v1/playgrounds" : "https://app.recommand.eu/api/v1";
+  // Gebruik lokale Cloudflare proxy om CORS te omzeilen
+  return "/api/recommand";
+}
+function getRecommandPath(settings, path) {
+  // Bouw proxy URL: /api/recommand?path=/v1/companies/xxx&sandbox=true
+  const sandbox = settings?.integraties?.recommandSandbox ? "true" : "false";
+  return `/api/recommand?path=${encodeURIComponent(path)}&sandbox=${sandbox}`;
 }
 function recommandHeaders(settings) {
   const key = getRecommandKey(settings);
@@ -323,7 +328,7 @@ async function checkPeppolRecommand(btwnr, settings) {
   const nr = String(btwnr||"").replace(/[\s.]/g,"").replace(/^BE/i,"");
   const peppolId = "0208:" + nr;
   try {
-    const resp = await fetch(`${getRecommandBase(settings)}/verify`, {
+    const resp = await fetch(getRecommandPath(settings, "/verify"), {
       method: "POST",
       headers: recommandHeaders(settings),
       body: JSON.stringify({ peppolAddress: peppolId })
@@ -372,9 +377,8 @@ async function sendViaRecommand(factuur, settings) {
   
   const klantNr = String(klant.btwnr||"").replace(/[\s.]/g,"").replace(/^BE/i,"");
   const recipient = "0208:" + klantNr;
-  const base = getRecommandBase(settings);
   
-  const resp = await fetch(`${base}/companies/${companyId}/send`, {
+  const resp = await fetch(getRecommandPath(settings, `/companies/${companyId}/send`), {
     method: "POST",
     headers: recommandHeaders(settings),
     body: JSON.stringify({ recipient, documentType: "invoice", document: doc })
