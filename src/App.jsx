@@ -378,7 +378,7 @@ async function sendViaRecommand(factuur, settings) {
   const klantNr = String(klant.btwnr||"").replace(/[\s.]/g,"").replace(/^BE/i,"");
   const recipient = "0208:" + klantNr;
   
-  const resp = await fetch(getRecommandPath(settings, `/companies/${companyId}/send`), {
+  const resp = await fetch(getRecommandPath(settings, `/${companyId}/send`), {
     method: "POST",
     headers: recommandHeaders(settings),
     body: JSON.stringify({ recipient, documentType: "invoice", document: doc })
