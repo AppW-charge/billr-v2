@@ -435,9 +435,10 @@ async function sendViaRecommand(factuur, settings) {
 
   if(!resp.ok) {
     const err = await resp.json().catch(()=>({}));
-    const errList = err.root || err.errors || err.message || err.error || JSON.stringify(err);
-    const msg = Array.isArray(errList) ? errList.join("\n") : String(errList);
-    throw new Error("Recommand validatie:\n" + msg);
+    let errList = err.root || err.errors || err.message || err.error || err;
+    if(Array.isArray(errList)) errList = errList.slice(0,3).join("\n");
+    else if(typeof errList === "object") errList = JSON.stringify(errList);
+    throw new Error("Recommand: " + String(errList).slice(0,300));
   }
   const data = await resp.json();
   return { documentId: data.id || data.documentId, success: true };
@@ -8202,6 +8203,22 @@ function InstellingenPage({settings,setSettings,notify,onExportBackup,onImportBa
   const [tab,setTab]=useState(isFirstRun?"bedrijf":"bedrijf");
   const [openLyt,setOpenLyt]=useState({algemeen:true});
   const [form,setForm]=useState(JSON.parse(JSON.stringify({...INIT_SETTINGS,...settings,bedrijf:{...INIT_SETTINGS.bedrijf,...settings.bedrijf},email:{...INIT_SETTINGS.email,...settings.email},voorwaarden:{...INIT_SETTINGS.voorwaarden,...settings.voorwaarden},thema:{...INIT_SETTINGS.thema,...settings.thema},sjabloon:{...INIT_SETTINGS.sjabloon,...(settings.sjabloon||{})},layout:{...INIT_SETTINGS.layout,...(settings.layout||{}),logo:{...INIT_SETTINGS.layout.logo,...(settings.layout?.logo||{})},titel:{...INIT_SETTINGS.layout.titel,...(settings.layout?.titel||{})},bedrijf:{...INIT_SETTINGS.layout.bedrijf,...(settings.layout?.bedrijf||{}),velden:{...INIT_SETTINGS.layout.bedrijf.velden,...(settings.layout?.bedrijf?.velden||{})}},klant:{...INIT_SETTINGS.layout.klant,...(settings.layout?.klant||{}),velden:{...INIT_SETTINGS.layout.klant.velden,...(settings.layout?.klant?.velden||{})}},metaBar:{...INIT_SETTINGS.layout.metaBar,...(settings.layout?.metaBar||{})},tabel:{...INIT_SETTINGS.layout.tabel,...(settings.layout?.tabel||{})},footer:{...INIT_SETTINGS.layout.footer,...(settings.layout?.footer||{})},handtekening:{...INIT_SETTINGS.layout.handtekening,...(settings.layout?.handtekening||{})},voorwaarden:{...INIT_SETTINGS.layout.voorwaarden,...(settings.layout?.voorwaarden||{})},notitie:{...INIT_SETTINGS.layout.notitie,...(settings.layout?.notitie||{})},watermark:{...INIT_SETTINGS.layout.watermark,...(settings.layout?.watermark||{})}},productCats:settings.productCats||INIT_SETTINGS.productCats,instTypes:settings.instTypes||INIT_SETTINGS.instTypes,instTypeGroepen:settings.instTypeGroepen||{}})));
+  // Hersync form wanneer settings later geladen worden (b.v. na Supabase load)
+  const settingsRef = React.useRef(settings?.bedrijf?.naam);
+  React.useEffect(() => {
+    if(settings?.bedrijf?.naam && settings.bedrijf.naam !== settingsRef.current) {
+      settingsRef.current = settings.bedrijf.naam;
+      setForm(JSON.parse(JSON.stringify({...INIT_SETTINGS,...settings,
+        bedrijf:{...INIT_SETTINGS.bedrijf,...settings.bedrijf},
+        email:{...INIT_SETTINGS.email,...settings.email},
+        voorwaarden:{...INIT_SETTINGS.voorwaarden,...settings.voorwaarden},
+        thema:{...INIT_SETTINGS.thema,...settings.thema},
+        sjabloon:{...INIT_SETTINGS.sjabloon,...(settings.sjabloon||{})},
+        layout:{...INIT_SETTINGS.layout,...(settings.layout||{})},
+        integraties:{...INIT_SETTINGS.integraties,...(settings.integraties||{})}
+      })));
+    }
+  }, [settings?.bedrijf?.naam]);
   
   // Scroll preservation - voorkom scroll jump bij alle wijzigingen
   const contentRef = useRef(null);
