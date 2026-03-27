@@ -346,47 +346,98 @@ async function sendViaRecommand(factuur, settings) {
   if(!companyId) throw new Error("Recommand Company ID niet ingesteld in Instellingen → Integraties");
   const klant = factuur.klant || {};
   const bed = settings?.bedrijf || {};
-  
+
+  // Adres parsing
   const adresParts = (klant.adres||"").match(/^(.+?)\s+(\d+\S*)$/) || [null, klant.adres||"", ""];
-  const gemParts = (klant.gemeente||"").match(/^(\d{4})\s+(.+)$/) || [null, "", klant.gemeente||""];
-  const totals = calcTotals(factuur.lijnen||[]);
-  
+  const gemParts   = (klant.gemeente||"").match(/^(\d{4})\s+(.+)$/) || [null, "", klant.gemeente||""];
+  const bedAdres   = (bed.adres||"").match(/^(.+?)\s+(\d+\S*)$/)    || [null, bed.adres||"", ""];
+  const bedGem     = (bed.gemeente||"").match(/^(\d{4})\s+(.+)$/)   || [null, "", bed.gemeente||""];
+
+  // BTW regime - bepaal VAT category
+  const btwRegime = factuur.btwRegime || klant.btwRegime || "btw21";
+  const isVerlegdBtw = btwRegime === "verlegd" || btwRegime === "medecontractant";
+  const isVrijgesteld = btwRegime === "vrijgesteld" || btwRegime === "btw0";
+
+  // Seller BTW met BE prefix (BR-CO-09)
+  const sellerVat = (bed.btwnr||"").replace(/[\s.]/g,"");
+  const sellerVatFull = sellerVat.startsWith("BE") ? sellerVat : "BE" + sellerVat;
+
+  // Buyer BTW met BE prefix
+  const buyerVatRaw = (klant.btwnr||"").replace(/[\s.]/g,"");
+  const buyerVatFull = buyerVatRaw ? (buyerVatRaw.startsWith("BE") ? buyerVatRaw : "BE" + buyerVatRaw) : undefined;
+
+  // IBAN (BR-50: verplicht bij credit transfer)
+  const iban = (bed.iban||"").replace(/\s/g,"");
+
+  // Factuurlijnen — filter negatieve kortinglijnen uit als aparte discount
+  const positiefLijnen = (factuur.lijnen||[]).filter(l => (l.prijs||0) > 0 && (l.naam||"").trim());
+  const kortingLijnen  = (factuur.lijnen||[]).filter(l => (l.prijs||0) < 0);
+  const totaalKorting  = kortingLijnen.reduce((s,l) => s + Math.abs((l.prijs||0) * (l.aantal||1)), 0);
+
+  // VAT category per lijn
+  const vatCategorie = (btw) => {
+    if(isVerlegdBtw) return "AE"; // VAT reverse charge
+    if(isVrijgesteld || btw === 0) return "Z"; // Zero rated
+    return "S"; // Standard rated
+  };
+
+  const lines = positiefLijnen.map(l => {
+    const btw = l.btw ?? 21;
+    const cat = vatCategorie(btw);
+    return {
+      name: l.naam || "",
+      description: l.omschr || undefined,
+      netPriceAmount: String(Math.abs(l.prijs || 0)),
+      quantity: l.aantal || 1,
+      vat: {
+        percentage: cat === "AE" || cat === "Z" ? "0" : String(btw),
+        category: cat
+      }
+    };
+  });
+
   const doc = {
     invoiceNumber: factuur.nummer,
     issueDate: factuur.datum || new Date().toISOString().slice(0,10),
     dueDate: factuur.vervaldatum || factuur.datum,
+    note: factuur.nummer + (isVerlegdBtw ? " — BTW verlegd (medecontractant)" : ""),
+    seller: {
+      vatNumber: sellerVatFull,
+      name: bed.naam || "W-Charge BV",
+      street: (bedAdres[1]||"") + (bedAdres[2] ? " " + bedAdres[2] : ""),
+      city: bedGem[2] || bed.gemeente || "",
+      postalZone: bedGem[1] || "",
+      country: "BE",
+      email: bed.email || undefined,
+      phone: bed.tel || undefined
+    },
     buyer: {
-      vatNumber: (klant.btwnr||"").replace(/[\s.]/g,"") || undefined,
+      vatNumber: buyerVatFull,
       name: klant.naam || klant.bedrijf || "",
-      street: adresParts[1] + (adresParts[2] ? " " + adresParts[2] : ""),
+      street: (adresParts[1]||"") + (adresParts[2] ? " " + adresParts[2] : ""),
       city: gemParts[2] || klant.gemeente || "",
       postalZone: gemParts[1] || "",
       country: "BE"
     },
-    paymentMeans: [{ iban: (bed.iban||"").replace(/\s/g,"") }],
-    note: factuur.nummer,
-    lines: (factuur.lijnen||[]).filter(l=>l.prijs>0||l.productId).map(l => ({
-      name: l.naam || "",
-      description: l.omschr || undefined,
-      netPriceAmount: String(l.prijs || 0),
-      quantity: l.aantal || 1,
-      vat: { percentage: String(l.btw ?? 21) }
-    }))
+    ...(iban ? { paymentMeans: [{ paymentMethod: "credit_transfer", reference: factuur.nummer, iban }] } : {}),
+    ...(totaalKorting > 0 ? { allowances: [{ amount: String(totaalKorting.toFixed(2)), reason: "Korting" }] } : {}),
+    lines
   };
-  
-  const klantNr = String(klant.btwnr||"").replace(/[\s.]/g,"").replace(/^BE/i,"");
+
+  const klantNr = buyerVatRaw.replace(/^BE/i,"");
   const recipient = "0208:" + klantNr;
-  
+
   const resp = await fetch(getRecommandPath(settings, `/${companyId}/send`), {
     method: "POST",
     headers: recommandHeaders(settings),
     body: JSON.stringify({ recipient, documentType: "invoice", document: doc })
   });
-  
+
   if(!resp.ok) {
     const err = await resp.json().catch(()=>({}));
-    const msg = err.message || err.error || JSON.stringify(err.errors||err) || `HTTP ${resp.status}`;
-    throw new Error("Recommand: " + msg);
+    const errList = err.root || err.errors || err.message || err.error || JSON.stringify(err);
+    const msg = Array.isArray(errList) ? errList.join("\n") : String(errList);
+    throw new Error("Recommand validatie:\n" + msg);
   }
   const data = await resp.json();
   return { documentId: data.id || data.documentId, success: true };
