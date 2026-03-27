@@ -8400,6 +8400,7 @@ function InstellingenPage({settings,setSettings,notify,onExportBackup,onImportBa
                 🔑 <strong>API keys:</strong> <a href="https://app.recommand.eu" target="_blank">app.recommand.eu</a> → Settings → API Keys<br/>
                 📖 <strong>Docs:</strong> <a href="https://recommand.eu/en/docs" target="_blank">recommand.eu/en/docs</a>
               </div>
+            </div>
           )}
         </div>
 
