@@ -75,9 +75,9 @@ const sbGetAll = async (userId, excludeKeys) => {
       .not("key", "like", "off_%")   // per-doc offertes apart geladen
       .not("key", "like", "fct_%");  // per-doc facturen apart geladen
     if(excludeKeys && excludeKeys.length > 0) {
-      excludeKeys.forEach(k => { q = q.neq("key", k); });
+      q = q.not("key", "in", "(" + excludeKeys.join(",") + ")");
     }
-    const { data, error } = await Promise.race([q, new Promise((_,rej)=>setTimeout(()=>rej(new Error("sbGetAll timeout")),9000))]);
+    const { data, error } = await q;
     if(error) { console.error("[Supabase] GET ALL failed:", error.message); return {}; }
     if(!data) return {};
     const excl = excludeKeys && excludeKeys.length > 0 ? " (excl. " + excludeKeys.join(",") + ")" : "";
@@ -85,7 +85,7 @@ const sbGetAll = async (userId, excludeKeys) => {
     const result = {};
     data.forEach(r => { result[r.key] = r.value; result[r.key+"__ts"] = r.updated_at; });
     return result;
-  } catch(e) { console.error("[Supabase] GET ALL exception:", e.message); return {}; }
+  } catch(e) { console.error("[Supabase] GET ALL exception:", e); return {}; }
 };
 // Lite versie: ZONDER b4_prd (producten+afbeeldingen = grootste key) voor sync
 const sbGetLite = (userId) => sbGetAll(userId, ["b4_prd"]);
@@ -393,9 +393,7 @@ async function sendViaRecommand(factuur, settings) {
       quantity: l.aantal || 1,
       vat: {
         percentage: cat === "AE" || cat === "Z" ? "0" : String(btw),
-        category: cat,
-        ...(cat === "AE" ? { exemptionReasonCode: "VATEX-EU-AE", exemptionReason: "Reverse charge" } : {}),
-        ...(cat === "Z" ? { exemptionReasonCode: "VATEX-EU-O", exemptionReason: "Not subject to VAT" } : {})
+        category: cat
       }
     };
   });
@@ -404,7 +402,7 @@ async function sendViaRecommand(factuur, settings) {
     invoiceNumber: factuur.nummer,
     issueDate: factuur.datum || new Date().toISOString().slice(0,10),
     dueDate: factuur.vervaldatum || factuur.datum,
-    note: isVerlegdBtw ? "BTW verlegd — medecontractant art. 51§2 W.BTW" : (isVrijgesteld ? "Vrijgesteld van BTW" : factuur.nummer),
+    note: factuur.nummer + (isVerlegdBtw ? " — BTW verlegd (medecontractant)" : ""),
     seller: {
       vatNumber: sellerVatFull,
       name: bed.naam || "W-Charge BV",
@@ -1941,29 +1939,19 @@ export default function App() {
         console.log(`☁️ Supabase: ${Object.keys(sbData).length} keys`);
         if(sbData["b4_set"]) setSettings(parse(sbData["b4_set"], INIT_SETTINGS));
         if(sbData["b4_kln"]) setKlanten(parse(sbData["b4_kln"], INIT_KLANTEN));
-        // Producten: apart laden (uitgesloten uit sbGetAll wegens grootte)
-        {
-          let prods = null;
+        // Producten: laden uit Supabase, fiches via localStorage cache (geen extra query = minder egress)
+        if(sbData["b4_prd"]) {
+          const prods = parse(sbData["b4_prd"], INIT_PRODUCTS);
           try {
-            const prdRow = await Promise.race([sbGet("b4_prd", u.id), new Promise(r=>setTimeout(()=>r(null),6000))]);
-            if(prdRow?.value) prods = parse(prdRow.value, null);
-          } catch(_) {}
-          if(!prods) {
-            // Fallback localStorage
-            try { const v=localStorage.getItem("b4_prd"); if(v) prods=JSON.parse(v); } catch(_){}
-          }
-          if(prods) {
-            try {
-              const fr = await sb.from("product_fiches").select("product_id,fiches").eq("user_id", u.id);
-              if(fr.data && fr.data.length > 0) {
-                const sfc = {};
-                fr.data.forEach(r => { if(r.fiches && r.fiches.some(f=>f.data)) sfc[r.product_id] = r.fiches; });
-                setProducten(restoreFicheCache(prods, sfc));
-                console.log("\u2705 Fiches geladen: " + Object.keys(sfc).length + " producten");
-              } else { setProducten(restoreFicheCache(prods)); }
-            } catch(_) { setProducten(restoreFicheCache(prods)); }
-            console.log("\u2705 Producten geladen: " + prods.length);
-          } else { setProducten(INIT_PRODUCTS); }
+            const fr = await sb.from("product_fiches").select("product_id,fiches").eq("user_id", u.id);
+            if(fr.data && fr.data.length > 0) {
+              const sfc = {};
+              fr.data.forEach(r => { if(r.fiches && r.fiches.some(f=>f.data)) sfc[r.product_id] = r.fiches; });
+              setProducten(restoreFicheCache(prods, sfc));
+              console.log("\u2705 Fiches geladen: " + Object.keys(sfc).length + " producten");
+            } else { setProducten(restoreFicheCache(prods)); }
+          } catch(_) { setProducten(restoreFicheCache(prods)); }
+          console.log("\u2705 Producten geladen: " + prods.length);
         }
         // Per-document laden: elk nummer = eigen rij in user_data
         const offs = await sbLoadOffertes(u.id);
@@ -2031,13 +2019,11 @@ export default function App() {
               const p2 = (k,fb) => { try{return retry[k]?JSON.parse(retry[k]):fb;}catch(_){return fb;} };
               if(retry["b4_set"]) setSettings(p2("b4_set", INIT_SETTINGS));
               if(retry["b4_kln"]) setKlanten(p2("b4_kln", []));
-              const retryOffs = await sbLoadOffertes(u.id);
-              if(retryOffs.length > 0) setOffertes(retryOffs);
-              else if(retry["b4_off"]) { const seen=new Set(); setOffertes(dedupOffertes(p2("b4_off",[]).filter(o=>{ if(!o.id||seen.has(o.id)) return false; seen.add(o.id); return true; }))); }
-              const retryFcts = await sbLoadFacturen(u.id);
-              if(retryFcts.length > 0) setFacturen(retryFcts);
-              else if(retry["b4_fct"]) setFacturen(dedupFacturen(p2("b4_fct",[])));
-              try { const prdR=await sbGet("b4_prd",u.id); if(prdR?.value) setProducten(restoreFicheCache(JSON.parse(prdR.value))); } catch(_){}
+              if(retry["b4_off"]) { const offs=p2("b4_off",[]); const seen=new Set(); setOffertes(dedupOffertes(offs.filter(o=>{ if(!o.id||seen.has(o.id)) return false; seen.add(o.id); return true; }))); }
+              if(retry["b4_fct"]) setFacturen(dedupFacturen(p2("b4_fct",[])));
+              if(retry["b4_prd"]) {
+                setProducten(restoreFicheCache(p2("b4_prd",[])));
+              }
               if(retry["b4_cn"])  setCreditnotas(p2("b4_cn",[]));
               if(retry["b4_ga"])  setGaranties(p2("b4_ga",[]));
               Object.entries(retry).forEach(([k,v])=>{ try{localStorage.setItem(k,v);}catch(_){} });
@@ -2136,10 +2122,8 @@ export default function App() {
   useEffect(() => {
     if(window.emailjs) {
       const pubKey = settings?.email?.emailjsPublicKey;
-      if(pubKey) {
-        window.emailjs.init(pubKey);
-        console.log("✅ EmailJS geïnitialiseerd met key:", pubKey.slice(0,6) + "...");
-      }
+      if(pubKey) window.emailjs.init(pubKey);
+      console.log("✅ EmailJS geïnitialiseerd met key:", pubKey.slice(0,6) + "...");
     }
   }, [settings?.email?.emailjsPublicKey]);
 
@@ -2431,18 +2415,9 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
         console.log("Fiches opslaan: " + toSave.length + " product(en)");
         // Stap 2: sla op in product_fiches tabel (apart van user_data — geen grootteproblemen)
         if(user && toSave.length > 0) {
-          const saveFichesWithRetry = async (rows, attempt=1) => {
-            try {
-              const r = await sb.from('product_fiches').upsert(rows, {onConflict:'user_id,product_id'});
-              if(r.error) {
-                console.warn("product_fiches poging " + attempt + ":", r.error.message);
-                if(attempt < 3) setTimeout(()=>saveFichesWithRetry(rows, attempt+1), attempt*3000);
-              } else { console.log("✅ Fiches opgeslagen:", rows.length, "producten"); }
-            } catch(e) {
-              if(attempt < 3) setTimeout(()=>saveFichesWithRetry(rows, attempt+1), attempt*3000);
-            }
-          };
-          saveFichesWithRetry(toSave);
+          sb.from('product_fiches').upsert(toSave, {onConflict:'user_id,product_id'})
+            .then(r => { if(r.error) console.warn("product_fiches save:", r.error.message); })
+            .catch(e => console.warn("product_fiches save exception:", e.message));
         }
       }
     } catch(_) {}
@@ -8277,21 +8252,7 @@ function InstellingenPage({settings,setSettings,notify,onExportBackup,onImportBa
   const achtergrondRef=useRef();
   const handleLogo=e=>{const file=e.target.files[0];if(!file)return;const reader=new FileReader();reader.onload=ev=>set("bedrijf","logo",ev.target.result);reader.readAsDataURL(file);};
   const handleAchtergrond=e=>{const file=e.target.files[0];if(!file)return;const reader=new FileReader();reader.onload=ev=>set("sjabloon","achtergrondImg",ev.target.result);reader.readAsDataURL(file);};
-  const doSave=()=>{
-    setSettings(form);
-    // Direct naar Supabase schrijven (niet wachten op debounce)
-    // Dit garandeert dat instellingen niet verloren gaan
-    if(sbClient && userId) {
-      const json = JSON.stringify(form);
-      sbClient.from("user_data").upsert(
-        { user_id: userId, key: "b4_set", value: json, updated_at: new Date().toISOString() },
-        { onConflict: "user_id,key" }
-      ).then(r => {
-        if(r.error) console.error("⚠️ Instellingen direct save mislukt:", r.error.message);
-        else console.log("✅ Instellingen direct opgeslagen in Supabase");
-      }).catch(e => console.error("⚠️ Instellingen save exception:", e.message));
-    }
-  };
+  const doSave=()=>setSettings(form);
 
   // ═══ AUTO-SAVE: sla instellingen automatisch op na elke wijziging (debounced) ═══
   const isInitialMount = useRef(true);
@@ -8299,14 +8260,6 @@ function InstellingenPage({settings,setSettings,notify,onExportBackup,onImportBa
     if(isInitialMount.current) { isInitialMount.current = false; return; }
     const timer = setTimeout(() => {
       setSettings(form);
-      // Ook direct naar Supabase bij auto-save
-      if(sbClient && userId && form?.bedrijf?.naam) {
-        const json = JSON.stringify(form);
-        sbClient.from("user_data").upsert(
-          { user_id: userId, key: "b4_set", value: json, updated_at: new Date().toISOString() },
-          { onConflict: "user_id,key" }
-        ).catch(()=>{});
-      }
     }, 1500);
     return () => clearTimeout(timer);
   }, [form]); // eslint-disable-line react-hooks/exhaustive-deps
