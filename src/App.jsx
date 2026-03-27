@@ -302,13 +302,12 @@ function getRecommandCompanyId(settings) {
   return settings?.integraties?.recommandCompanyId || "";
 }
 function getRecommandBase(settings) {
-  // Gebruik lokale Cloudflare proxy om CORS te omzeilen
   return "/api/recommand";
 }
 function getRecommandPath(settings, path) {
-  // Bouw proxy URL: /api/recommand?path=/v1/companies/xxx&sandbox=true
-  const sandbox = settings?.integraties?.recommandSandbox ? "true" : "false";
-  return `/api/recommand?path=${encodeURIComponent(path)}&sandbox=${sandbox}`;
+  // Playground en productie gebruiken DEZELFDE Recommand base URL
+  // Verschil zit enkel in het companyId (playground team vs productie team)
+  return `/api/recommand?path=${encodeURIComponent(path)}`;
 }
 function recommandHeaders(settings) {
   const key = getRecommandKey(settings);
