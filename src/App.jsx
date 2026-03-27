@@ -77,7 +77,7 @@ const sbGetAll = async (userId, excludeKeys) => {
     if(excludeKeys && excludeKeys.length > 0) {
       excludeKeys.forEach(k => { q = q.neq("key", k); });
     }
-    const { data, error } = await q;
+    const { data, error } = await Promise.race([q, new Promise((_,rej)=>setTimeout(()=>rej(new Error("sbGetAll timeout")),9000))]);
     if(error) { console.error("[Supabase] GET ALL failed:", error.message); return {}; }
     if(!data) return {};
     const excl = excludeKeys && excludeKeys.length > 0 ? " (excl. " + excludeKeys.join(",") + ")" : "";
@@ -85,7 +85,7 @@ const sbGetAll = async (userId, excludeKeys) => {
     const result = {};
     data.forEach(r => { result[r.key] = r.value; result[r.key+"__ts"] = r.updated_at; });
     return result;
-  } catch(e) { console.error("[Supabase] GET ALL exception:", e); return {}; }
+  } catch(e) { console.error("[Supabase] GET ALL exception:", e.message); return {}; }
 };
 // Lite versie: ZONDER b4_prd (producten+afbeeldingen = grootste key) voor sync
 const sbGetLite = (userId) => sbGetAll(userId, ["b4_prd"]);
@@ -394,14 +394,8 @@ async function sendViaRecommand(factuur, settings) {
       vat: {
         percentage: cat === "AE" || cat === "Z" ? "0" : String(btw),
         category: cat,
-        ...(cat === "AE" ? {
-          exemptionReasonCode: "VATEX-EU-AE",
-          exemptionReason: "Reverse charge"
-        } : {}),
-        ...(cat === "Z" ? {
-          exemptionReasonCode: "VATEX-EU-O",
-          exemptionReason: "Not subject to VAT"
-        } : {})
+        ...(cat === "AE" ? { exemptionReasonCode: "VATEX-EU-AE", exemptionReason: "Reverse charge" } : {}),
+        ...(cat === "Z" ? { exemptionReasonCode: "VATEX-EU-O", exemptionReason: "Not subject to VAT" } : {})
       }
     };
   });
@@ -1947,14 +1941,18 @@ export default function App() {
         console.log(`☁️ Supabase: ${Object.keys(sbData).length} keys`);
         if(sbData["b4_set"]) setSettings(parse(sbData["b4_set"], INIT_SETTINGS));
         if(sbData["b4_kln"]) setKlanten(parse(sbData["b4_kln"], INIT_KLANTEN));
-        // Producten: apart laden (b4_prd uitgesloten uit sbGetAll wegens grootte)
-        try {
-          const prdRow = await Promise.race([
-            sbGet("b4_prd", u.id),
-            new Promise(r => setTimeout(()=>r(null), 6000))
-          ]);
-          if(prdRow?.value) {
-            const prods = parse(prdRow.value, INIT_PRODUCTS);
+        // Producten: apart laden (uitgesloten uit sbGetAll wegens grootte)
+        {
+          let prods = null;
+          try {
+            const prdRow = await Promise.race([sbGet("b4_prd", u.id), new Promise(r=>setTimeout(()=>r(null),6000))]);
+            if(prdRow?.value) prods = parse(prdRow.value, null);
+          } catch(_) {}
+          if(!prods) {
+            // Fallback localStorage
+            try { const v=localStorage.getItem("b4_prd"); if(v) prods=JSON.parse(v); } catch(_){}
+          }
+          if(prods) {
             try {
               const fr = await sb.from("product_fiches").select("product_id,fiches").eq("user_id", u.id);
               if(fr.data && fr.data.length > 0) {
@@ -1965,15 +1963,7 @@ export default function App() {
               } else { setProducten(restoreFicheCache(prods)); }
             } catch(_) { setProducten(restoreFicheCache(prods)); }
             console.log("\u2705 Producten geladen: " + prods.length);
-          } else {
-            // Fallback: localStorage
-            const lsPrd = (() => { try { const v=localStorage.getItem("b4_prd"); return v?JSON.parse(v):INIT_PRODUCTS; } catch(_){ return INIT_PRODUCTS; } })();
-            setProducten(restoreFicheCache(lsPrd));
-            console.warn("\u26A0\uFE0F b4_prd niet in Supabase — localStorage fallback:", lsPrd.length, "producten");
-          }
-        } catch(_) {
-          const lsPrd = (() => { try { const v=localStorage.getItem("b4_prd"); return v?JSON.parse(v):INIT_PRODUCTS; } catch(_){ return INIT_PRODUCTS; } })();
-          setProducten(restoreFicheCache(lsPrd));
+          } else { setProducten(INIT_PRODUCTS); }
         }
         // Per-document laden: elk nummer = eigen rij in user_data
         const offs = await sbLoadOffertes(u.id);
@@ -2006,48 +1996,6 @@ export default function App() {
         if(sbData["b4_wo"])  setWidgetOrder(parse(sbData["b4_wo"], null));
         if(sbData["b4_todo"]) { try { const td=JSON.parse(sbData["b4_todo"]); localStorage.setItem("b4_todo", sbData["b4_todo"]); if(Array.isArray(td)) setTodos(td); } catch(_){} }
         Object.entries(sbData).forEach(([k,v])=>{ try{localStorage.setItem(k,v);}catch(_){} });
-
-        // ══ SUPABASE REPAIR: keys die in localStorage zitten maar NIET in Supabase → forceer upload ══
-        // Dit herstelt data die verloren ging door vorige bugs (vb. stripBase64 wiste Supabase)
-        const repairKeys = ["b4_set","b4_kln","b4_prd","b4_cn","b4_am","b4_bt","b4_ti","b4_do","b4_ga","b4_at","b4_wo"];
-        setTimeout(async () => {
-          for(const rk of repairKeys) {
-            if(!sbData[rk]) { // Ontbreekt in Supabase
-              try {
-                const lsVal = localStorage.getItem(rk);
-                if(lsVal && lsVal !== "null" && lsVal !== "[]" && lsVal !== "{}") {
-                  // Controleer of het echte data is (niet lege initiële state)
-                  const parsed = JSON.parse(lsVal);
-                  const hasData = Array.isArray(parsed) ? parsed.length > 0 : (parsed && typeof parsed === "object" && Object.keys(parsed).length > 0);
-                  if(hasData) {
-                    await sbSet(rk, lsVal, u.id);
-                    console.log("🔧 Supabase repair: " + rk + " hersteld vanuit localStorage");
-                  }
-                }
-              } catch(_) {}
-            }
-          }
-          // Fiche cache repair: als product_fiches leeg is maar localStorage cache heeft data
-          try {
-            const fcCheck = await sb.from("product_fiches").select("product_id",{count:"exact",head:true}).eq("user_id", u.id);
-            const fcCount = fcCheck.count || 0;
-            if(fcCount === 0) {
-              const lsFiches = localStorage.getItem("billr_fiche_cache");
-              if(lsFiches) {
-                const cache = JSON.parse(lsFiches);
-                const toMig = Object.entries(cache)
-                  .filter(([pid,fiches]) => Array.isArray(fiches) && fiches.some(f=>f.data))
-                  .map(([pid,fiches]) => ({user_id: u.id, product_id: pid, fiches, updated_at: new Date().toISOString()}));
-                if(toMig.length > 0) {
-                  await sb.from("product_fiches").upsert(toMig, {onConflict:"user_id,product_id"});
-                  console.log("🔧 Fiche repair: " + toMig.length + " fiches hersteld vanuit localStorage cache");
-                  localStorage.removeItem("billr_fiche_mig"); // Reset migratie vlag
-                }
-              }
-            }
-          } catch(_) {}
-        }, 1500);
-
         // Initialiseer localTimestamps op basis van Supabase timestamps
         Object.entries(sbData).forEach(([k,v])=>{
           if(k.endsWith("__ts") && v) {
@@ -2074,25 +2022,8 @@ export default function App() {
         setGaranties(ls('b4_ga', []));
         setAcceptTokens(ls('b4_at', {}));
         setWidgetOrder(ls('b4_wo', null));
-        // Na timeout: zodra Supabase wakker is, push localStorage data ernaar toe
-        // Dit zorgt dat andere browsers/devices altijd de juiste data krijgen
-        const repairAfterTimeout = async () => {
-          const repairKs = ["b4_set","b4_kln","b4_cn","b4_am","b4_bt","b4_ti","b4_do","b4_ga"];
-          for(const rk of repairKs) {
-            const lsVal = localStorage.getItem(rk);
-            if(lsVal && lsVal !== "null" && lsVal !== "[]" && lsVal !== "{}") {
-              try {
-                const parsed = JSON.parse(lsVal);
-                const hasData = Array.isArray(parsed) ? parsed.length > 0 : (parsed && typeof parsed === "object" && Object.keys(parsed).length > 0 && (rk !== "b4_set" || parsed.bedrijf?.naam));
-                if(hasData) await sbSet(rk, lsVal, u.id);
-              } catch(_) {}
-            }
-          }
-          console.log("🔧 Timeout repair: essentiële keys naar Supabase gepushed");
-        };
         // Retry Supabase na 4s (wacht op wake-up free tier)
         setTimeout(async () => {
-          await repairAfterTimeout(); // Push localStorage data naar Supabase
           try {
             const retry = await Promise.race([sbGetLite(u.id), new Promise(r=>setTimeout(()=>r(null),8000))]);
             if(retry && Object.keys(retry).length > 0) {
@@ -2100,18 +2031,13 @@ export default function App() {
               const p2 = (k,fb) => { try{return retry[k]?JSON.parse(retry[k]):fb;}catch(_){return fb;} };
               if(retry["b4_set"]) setSettings(p2("b4_set", INIT_SETTINGS));
               if(retry["b4_kln"]) setKlanten(p2("b4_kln", []));
-              // Per-document laden (nieuw formaat)
               const retryOffs = await sbLoadOffertes(u.id);
               if(retryOffs.length > 0) setOffertes(retryOffs);
               else if(retry["b4_off"]) { const seen=new Set(); setOffertes(dedupOffertes(p2("b4_off",[]).filter(o=>{ if(!o.id||seen.has(o.id)) return false; seen.add(o.id); return true; }))); }
               const retryFcts = await sbLoadFacturen(u.id);
               if(retryFcts.length > 0) setFacturen(retryFcts);
               else if(retry["b4_fct"]) setFacturen(dedupFacturen(p2("b4_fct",[])));
-              // b4_prd apart laden (sbGetLite excludeert het ook)
-              try {
-                const prdRetry = await sbGet("b4_prd", u.id);
-                if(prdRetry?.value) setProducten(restoreFicheCache(JSON.parse(prdRetry.value)));
-              } catch(_) {}
+              try { const prdR=await sbGet("b4_prd",u.id); if(prdR?.value) setProducten(restoreFicheCache(JSON.parse(prdR.value))); } catch(_){}
               if(retry["b4_cn"])  setCreditnotas(p2("b4_cn",[]));
               if(retry["b4_ga"])  setGaranties(p2("b4_ga",[]));
               Object.entries(retry).forEach(([k,v])=>{ try{localStorage.setItem(k,v);}catch(_){} });
@@ -2122,19 +2048,8 @@ export default function App() {
 
       // Nu mogen saves plaatsvinden
       dataReady.current = true;
-      // Reset lastSavedJson zodat eerste save na load altijd naar Supabase gaat
-      // Dit is kritiek: als Supabase een key miste (vb. na bug), wordt die nu hersteld
-      // Methode: wis localStorage kopie voor keys die NIET in sbData zaten → changed=true → Supabase save
-      if(sbData && Object.keys(sbData).length > 0) {
-        const criticalKeys = ["b4_set","b4_kln","b4_prd","b4_cn","b4_am","b4_bt","b4_ti","b4_do","b4_ga"];
-        criticalKeys.forEach(ck => {
-          if(!sbData[ck]) {
-            // Key ontbreekt in Supabase → forceer Supabase write door localStorage tijdelijk te wissen
-            // saveKey zal dan changed=true zien en naar Supabase schrijven
-            try { localStorage.removeItem(ck + "__sbsync_ok"); } catch(_) {}
-          }
-        });
-      }
+      // Reset dedup cache zodat eerste save na load altijd doorgaat
+      // (voorkomt dat gewijzigde data niet gesaved wordt na herlaad)
 
 
       // Migratie fiches: eenmalig, enkel als nog niet gedaan deze week
@@ -2451,22 +2366,19 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
     const json = JSON.stringify(stripped);
 
     // Check of data echt veranderd is vs localStorage
+    // Dit voorkomt tientallen onnodige Supabase saves bij elke render
     const prevJson = localStorage.getItem(key);
     const changed = prevJson !== json;
-    // Forceer save als deze key nog niet gesync'd is naar Supabase in deze sessie
-    const syncMarker = "billr_sb_" + key;
-    const notYetSynced = !sessionStorage.getItem(syncMarker);
 
     // localStorage: altijd meteen updaten (snel, lokaal)
     if(changed) {
       try { localStorage.setItem(key, json); } catch(e) { try { localStorage.removeItem(key); } catch(_){} }
-      localTimestamps.current[key] = Date.now() + (key==="b4_off"||key==="b4_fct"?3600000:0);
+      localTimestamps.current[key] = Date.now() + (key==="b4_off"||key==="b4_fct"?3600000:0); // +1 uur voor documenten
       try { localStorage.setItem("billr_ts", JSON.stringify(localTimestamps.current)); } catch(_){}
     }
 
-    // Supabase: als data gewijzigd ÓÓÓF nog niet gesync'd deze sessie
-    if(!changed && !notYetSynced) return;
-    sessionStorage.setItem(syncMarker, "1"); // Markeer als gesync'd
+    // Supabase: alleen als data gewijzigd is
+    if(!changed) return;
     const debounceMs = key === "b4_prd" ? 10000 : 1000;
     pendingSaves.current[key] = json;
     if(saveTimer.current) clearTimeout(saveTimer.current);
@@ -2521,12 +2433,11 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
             try {
               const r = await sb.from('product_fiches').upsert(rows, {onConflict:'user_id,product_id'});
               if(r.error) {
-                console.warn(`product_fiches save (poging ${attempt}):`, r.error.message);
-                if(attempt < 3) setTimeout(() => saveFichesWithRetry(rows, attempt+1), attempt * 3000);
-              }
+                console.warn("product_fiches poging " + attempt + ":", r.error.message);
+                if(attempt < 3) setTimeout(()=>saveFichesWithRetry(rows, attempt+1), attempt*3000);
+              } else { console.log("✅ Fiches opgeslagen:", rows.length, "producten"); }
             } catch(e) {
-              console.warn(`product_fiches exception (poging ${attempt}):`, e.message);
-              if(attempt < 3) setTimeout(() => saveFichesWithRetry(rows, attempt+1), attempt * 3000);
+              if(attempt < 3) setTimeout(()=>saveFichesWithRetry(rows, attempt+1), attempt*3000);
             }
           };
           saveFichesWithRetry(toSave);
@@ -8364,7 +8275,21 @@ function InstellingenPage({settings,setSettings,notify,onExportBackup,onImportBa
   const achtergrondRef=useRef();
   const handleLogo=e=>{const file=e.target.files[0];if(!file)return;const reader=new FileReader();reader.onload=ev=>set("bedrijf","logo",ev.target.result);reader.readAsDataURL(file);};
   const handleAchtergrond=e=>{const file=e.target.files[0];if(!file)return;const reader=new FileReader();reader.onload=ev=>set("sjabloon","achtergrondImg",ev.target.result);reader.readAsDataURL(file);};
-  const doSave=()=>setSettings(form);
+  const doSave=()=>{
+    setSettings(form);
+    // Direct naar Supabase schrijven (niet wachten op debounce)
+    // Dit garandeert dat instellingen niet verloren gaan
+    if(sbClient && userId) {
+      const json = JSON.stringify(form);
+      sbClient.from("user_data").upsert(
+        { user_id: userId, key: "b4_set", value: json, updated_at: new Date().toISOString() },
+        { onConflict: "user_id,key" }
+      ).then(r => {
+        if(r.error) console.error("⚠️ Instellingen direct save mislukt:", r.error.message);
+        else console.log("✅ Instellingen direct opgeslagen in Supabase");
+      }).catch(e => console.error("⚠️ Instellingen save exception:", e.message));
+    }
+  };
 
   // ═══ AUTO-SAVE: sla instellingen automatisch op na elke wijziging (debounced) ═══
   const isInitialMount = useRef(true);
@@ -8372,6 +8297,14 @@ function InstellingenPage({settings,setSettings,notify,onExportBackup,onImportBa
     if(isInitialMount.current) { isInitialMount.current = false; return; }
     const timer = setTimeout(() => {
       setSettings(form);
+      // Ook direct naar Supabase bij auto-save
+      if(sbClient && userId && form?.bedrijf?.naam) {
+        const json = JSON.stringify(form);
+        sbClient.from("user_data").upsert(
+          { user_id: userId, key: "b4_set", value: json, updated_at: new Date().toISOString() },
+          { onConflict: "user_id,key" }
+        ).catch(()=>{});
+      }
     }, 1500);
     return () => clearTimeout(timer);
   }, [form]); // eslint-disable-line react-hooks/exhaustive-deps
