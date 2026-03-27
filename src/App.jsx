@@ -75,7 +75,7 @@ const sbGetAll = async (userId, excludeKeys) => {
       .not("key", "like", "off_%")   // per-doc offertes apart geladen
       .not("key", "like", "fct_%");  // per-doc facturen apart geladen
     if(excludeKeys && excludeKeys.length > 0) {
-      q = q.not("key", "in", "(" + excludeKeys.join(",") + ")");
+      excludeKeys.forEach(k => { q = q.neq("key", k); });
     }
     const { data, error } = await q;
     if(error) { console.error("[Supabase] GET ALL failed:", error.message); return {}; }
@@ -393,7 +393,15 @@ async function sendViaRecommand(factuur, settings) {
       quantity: l.aantal || 1,
       vat: {
         percentage: cat === "AE" || cat === "Z" ? "0" : String(btw),
-        category: cat
+        category: cat,
+        ...(cat === "AE" ? {
+          exemptionReasonCode: "VATEX-EU-AE",
+          exemptionReason: "Reverse charge"
+        } : {}),
+        ...(cat === "Z" ? {
+          exemptionReasonCode: "VATEX-EU-O",
+          exemptionReason: "Not subject to VAT"
+        } : {})
       }
     };
   });
@@ -402,7 +410,7 @@ async function sendViaRecommand(factuur, settings) {
     invoiceNumber: factuur.nummer,
     issueDate: factuur.datum || new Date().toISOString().slice(0,10),
     dueDate: factuur.vervaldatum || factuur.datum,
-    note: factuur.nummer + (isVerlegdBtw ? " — BTW verlegd (medecontractant)" : ""),
+    note: isVerlegdBtw ? "BTW verlegd — medecontractant art. 51§2 W.BTW" : (isVrijgesteld ? "Vrijgesteld van BTW" : factuur.nummer),
     seller: {
       vatNumber: sellerVatFull,
       name: bed.naam || "W-Charge BV",
@@ -1939,19 +1947,33 @@ export default function App() {
         console.log(`☁️ Supabase: ${Object.keys(sbData).length} keys`);
         if(sbData["b4_set"]) setSettings(parse(sbData["b4_set"], INIT_SETTINGS));
         if(sbData["b4_kln"]) setKlanten(parse(sbData["b4_kln"], INIT_KLANTEN));
-        // Producten: laden uit Supabase, fiches via localStorage cache (geen extra query = minder egress)
-        if(sbData["b4_prd"]) {
-          const prods = parse(sbData["b4_prd"], INIT_PRODUCTS);
-          try {
-            const fr = await sb.from("product_fiches").select("product_id,fiches").eq("user_id", u.id);
-            if(fr.data && fr.data.length > 0) {
-              const sfc = {};
-              fr.data.forEach(r => { if(r.fiches && r.fiches.some(f=>f.data)) sfc[r.product_id] = r.fiches; });
-              setProducten(restoreFicheCache(prods, sfc));
-              console.log("\u2705 Fiches geladen: " + Object.keys(sfc).length + " producten");
-            } else { setProducten(restoreFicheCache(prods)); }
-          } catch(_) { setProducten(restoreFicheCache(prods)); }
-          console.log("\u2705 Producten geladen: " + prods.length);
+        // Producten: apart laden (b4_prd uitgesloten uit sbGetAll wegens grootte)
+        try {
+          const prdRow = await Promise.race([
+            sbGet("b4_prd", u.id),
+            new Promise(r => setTimeout(()=>r(null), 6000))
+          ]);
+          if(prdRow?.value) {
+            const prods = parse(prdRow.value, INIT_PRODUCTS);
+            try {
+              const fr = await sb.from("product_fiches").select("product_id,fiches").eq("user_id", u.id);
+              if(fr.data && fr.data.length > 0) {
+                const sfc = {};
+                fr.data.forEach(r => { if(r.fiches && r.fiches.some(f=>f.data)) sfc[r.product_id] = r.fiches; });
+                setProducten(restoreFicheCache(prods, sfc));
+                console.log("\u2705 Fiches geladen: " + Object.keys(sfc).length + " producten");
+              } else { setProducten(restoreFicheCache(prods)); }
+            } catch(_) { setProducten(restoreFicheCache(prods)); }
+            console.log("\u2705 Producten geladen: " + prods.length);
+          } else {
+            // Fallback: localStorage
+            const lsPrd = (() => { try { const v=localStorage.getItem("b4_prd"); return v?JSON.parse(v):INIT_PRODUCTS; } catch(_){ return INIT_PRODUCTS; } })();
+            setProducten(restoreFicheCache(lsPrd));
+            console.warn("\u26A0\uFE0F b4_prd niet in Supabase — localStorage fallback:", lsPrd.length, "producten");
+          }
+        } catch(_) {
+          const lsPrd = (() => { try { const v=localStorage.getItem("b4_prd"); return v?JSON.parse(v):INIT_PRODUCTS; } catch(_){ return INIT_PRODUCTS; } })();
+          setProducten(restoreFicheCache(lsPrd));
         }
         // Per-document laden: elk nummer = eigen rij in user_data
         const offs = await sbLoadOffertes(u.id);
@@ -2019,11 +2041,18 @@ export default function App() {
               const p2 = (k,fb) => { try{return retry[k]?JSON.parse(retry[k]):fb;}catch(_){return fb;} };
               if(retry["b4_set"]) setSettings(p2("b4_set", INIT_SETTINGS));
               if(retry["b4_kln"]) setKlanten(p2("b4_kln", []));
-              if(retry["b4_off"]) { const offs=p2("b4_off",[]); const seen=new Set(); setOffertes(dedupOffertes(offs.filter(o=>{ if(!o.id||seen.has(o.id)) return false; seen.add(o.id); return true; }))); }
-              if(retry["b4_fct"]) setFacturen(dedupFacturen(p2("b4_fct",[])));
-              if(retry["b4_prd"]) {
-                setProducten(restoreFicheCache(p2("b4_prd",[])));
-              }
+              // Per-document laden (nieuw formaat)
+              const retryOffs = await sbLoadOffertes(u.id);
+              if(retryOffs.length > 0) setOffertes(retryOffs);
+              else if(retry["b4_off"]) { const seen=new Set(); setOffertes(dedupOffertes(p2("b4_off",[]).filter(o=>{ if(!o.id||seen.has(o.id)) return false; seen.add(o.id); return true; }))); }
+              const retryFcts = await sbLoadFacturen(u.id);
+              if(retryFcts.length > 0) setFacturen(retryFcts);
+              else if(retry["b4_fct"]) setFacturen(dedupFacturen(p2("b4_fct",[])));
+              // b4_prd apart laden (sbGetLite excludeert het ook)
+              try {
+                const prdRetry = await sbGet("b4_prd", u.id);
+                if(prdRetry?.value) setProducten(restoreFicheCache(JSON.parse(prdRetry.value)));
+              } catch(_) {}
               if(retry["b4_cn"])  setCreditnotas(p2("b4_cn",[]));
               if(retry["b4_ga"])  setGaranties(p2("b4_ga",[]));
               Object.entries(retry).forEach(([k,v])=>{ try{localStorage.setItem(k,v);}catch(_){} });
@@ -2415,9 +2444,19 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
         console.log("Fiches opslaan: " + toSave.length + " product(en)");
         // Stap 2: sla op in product_fiches tabel (apart van user_data — geen grootteproblemen)
         if(user && toSave.length > 0) {
-          sb.from('product_fiches').upsert(toSave, {onConflict:'user_id,product_id'})
-            .then(r => { if(r.error) console.warn("product_fiches save:", r.error.message); })
-            .catch(e => console.warn("product_fiches save exception:", e.message));
+          const saveFichesWithRetry = async (rows, attempt=1) => {
+            try {
+              const r = await sb.from('product_fiches').upsert(rows, {onConflict:'user_id,product_id'});
+              if(r.error) {
+                console.warn(`product_fiches save (poging ${attempt}):`, r.error.message);
+                if(attempt < 3) setTimeout(() => saveFichesWithRetry(rows, attempt+1), attempt * 3000);
+              }
+            } catch(e) {
+              console.warn(`product_fiches exception (poging ${attempt}):`, e.message);
+              if(attempt < 3) setTimeout(() => saveFichesWithRetry(rows, attempt+1), attempt * 3000);
+            }
+          };
+          saveFichesWithRetry(toSave);
         }
       }
     } catch(_) {}
