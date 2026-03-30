@@ -414,7 +414,9 @@ async function sendViaRecommand(factuur, settings) {
   const btw1 = lineItems[0]?.btw ?? 21;
   const exemptCode = cat === "AE" ? "VATEX-EU-AE" : cat === "Z" ? "VATEX-EU-O" : "";
   const exemptReason = cat === "AE" ? "Reverse charge" : cat === "Z" ? "Not subject to VAT" : "";
-  const taxPct = cat === "S" ? btw1 : 0;
+  // Voor AE: stuur nominale rate (btw1) als Percent, TaxAmount blijft 0
+  // Peppol verwacht de "applicable rate" in TaxCategory/Percent
+  const taxPct = btw1 || 21;
 
   const ubl = `<?xml version="1.0" encoding="UTF-8"?>
 <Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2"
@@ -506,7 +508,7 @@ async function sendViaRecommand(factuur, settings) {
       ${li.l.omschr ? `<cbc:Description>${xe(li.l.omschr)}</cbc:Description>` : ""}
       <cac:ClassifiedTaxCategory>
         <cbc:ID>${cat}</cbc:ID>
-        <cbc:Percent>${li.btw}</cbc:Percent>
+        <cbc:Percent>${li.l.btw ?? 21}</cbc:Percent>
         <cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme>
       </cac:ClassifiedTaxCategory>
     </cac:Item>
