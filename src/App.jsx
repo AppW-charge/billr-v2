@@ -2936,6 +2936,8 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
   };
 
   // ═══ OFFERTE SHARING — sla snapshot op voor publieke offerte.html pagina ═══
+  // Fiches worden NIET meer gekopieerd naar offerte_fiches — ze staan in product_fiches
+  // De offerte.html leest fiches rechtstreeks uit product_fiches via productId
   const shareOfferte = async (offerte) => {
     try {
       const bed = settings?.bedrijf || {};
@@ -2943,22 +2945,17 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
       const lyt = settings?.layout || {};
       const dc = sj.accentKleur || settings?.thema?.kleur || bed.kleur || "#1a2e4a";
 
-      // Laad fiches rechtstreeks uit product_fiches tabel (single source of truth)
-      const productIds = [...new Set((offerte.lijnen||[]).map(l=>l.productId).filter(Boolean))];
-      const ficheCache = await loadFichesForProducts(productIds);
-
-      // Bouw lijnen ZONDER base64 voor het hoofdrecord (klein → geen timeout)
+      // Strip alle base64 uit lijnen — fiches worden on-demand geladen via productId
       const cleanLijnen = (offerte.lijnen||[]).map(l => {
         const clean = {...l};
-        const prod = producten.find(p => p.id === l.productId);
-        const fichesInState = prod?.technischeFiches?.filter(f=>f.data) || [];
-        const fichesInCache = ficheCache[l.productId] || ficheCache[prod?.id] || [];
-        const fichesBron = fichesInState.length > 0 ? fichesInState : fichesInCache;
-        // Sla alleen metadata op — geen base64 in het hoofdrecord
-        if(fichesBron.length > 0) {
-          clean.technischeFiches = fichesBron.map(f => ({naam:f.naam||"fiche.pdf",heeftData:true,type:f.type||"application/pdf"}));
-        } else if(clean.technischeFiches) {
-          clean.technischeFiches = clean.technischeFiches.map(f=>({naam:f.naam||"fiche.pdf",heeftData:!!(f.data||f.url),type:f.type||"application/pdf"}));
+        // Bewaar productId — nodig om fiches op te halen in offerte.html
+        // Sla alleen metadata op, geen base64
+        if(clean.technischeFiches) {
+          clean.technischeFiches = clean.technischeFiches.map(f => ({
+            naam: f.naam||"fiche.pdf",
+            heeftData: !!(f.data||f.heeftData),
+            type: f.type||"application/pdf"
+          }));
         }
         clean.technischeFiche = null;
         return clean;
@@ -2975,31 +2972,9 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
         _voorschot: settings?.voorwaarden?.voorschot || "50%"
       };
 
-      // Stap 1: sla het kleine hoofdrecord op (geen fiches → geen timeout)
       await sb.from('offerte_shares').upsert({ id: offerte.id, nummer: offerte.nummer, offerte_data: shareData });
       console.log("✅ Offerte gedeeld:", offerte.nummer);
-
-      // Stap 2: sla fiches apart op (async, niet-blokkerend)
-      const ficheRijen = (offerte.lijnen||[])
-        .filter(l => {
-          const prod = producten.find(p => p.id === l.productId);
-          const inState = prod?.technischeFiches?.filter(f=>f.data) || [];
-          const inCache = ficheCache[l.productId] || ficheCache[prod?.id] || [];
-          return inState.length > 0 || inCache.length > 0;
-        })
-        .map(l => {
-          const prod = producten.find(p => p.id === l.productId);
-          const inState = prod?.technischeFiches?.filter(f=>f.data) || [];
-          const inCache = ficheCache[l.productId] || ficheCache[prod?.id] || [];
-          const fiches = inState.length > 0 ? inState : inCache;
-          return { offerte_id: offerte.id, product_id: l.productId||l.id, fiches };
-        });
-
-      if(ficheRijen.length > 0) {
-        sb.from('offerte_fiches').upsert(ficheRijen, {onConflict:'offerte_id,product_id'})
-          .then(()=>console.log("✅ Fiches opgeslagen:", ficheRijen.length))
-          .catch(e=>console.warn("Fiches opslaan mislukt (niet kritiek):", e.message));
-      }
+      // offerte_fiches wordt NIET meer gevuld — fiches staan in product_fiches tabel
     } catch(e) {
       console.warn("Offerte share failed:", e.message);
     }
