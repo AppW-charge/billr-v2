@@ -479,7 +479,7 @@ async function sendViaRecommand(factuur, settings) {
   <cac:TaxTotal>
     <cbc:TaxAmount currencyID="${cur}">${f2(totaalBtw)}</cbc:TaxAmount>
     <cac:TaxSubtotal>
-      <cbc:TaxableAmount currencyID="${cur}">${f2(totaalExtBtw)}</cbc:TaxableAmount>
+      <cbc:TaxableAmount currencyID="${cur}">${f2(lineItems.reduce((s,li)=>s+li.ext,0))}</cbc:TaxableAmount>
       <cbc:TaxAmount currencyID="${cur}">${f2(totaalBtw)}</cbc:TaxAmount>
       <cac:TaxCategory>
         <cbc:ID>${cat}</cbc:ID>
