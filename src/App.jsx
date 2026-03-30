@@ -2076,6 +2076,23 @@ export default function App() {
         }, 4000);
       }
 
+      // Herstel: als b4_kln ontbreekt in Supabase maar WEL in localStorage zit → push naar Supabase
+      try {
+        const lsKlanten = localStorage.getItem("b4_kln");
+        if(lsKlanten && lsKlanten !== "[]" && lsKlanten !== "null") {
+          const sbHasKlanten = sbData && sbData["b4_kln"] && sbData["b4_kln"] !== "[]" && sbData["b4_kln"] !== "null";
+          if(!sbHasKlanten) {
+            console.log("🔄 b4_kln ontbreekt in Supabase → herstel uit localStorage");
+            const parsed = JSON.parse(lsKlanten);
+            if(Array.isArray(parsed) && parsed.length > 0) {
+              setKlanten(parsed);
+              await sbSet("b4_kln", lsKlanten, u.id);
+              console.log("✅ b4_kln hersteld:", parsed.length, "klanten");
+            }
+          }
+        }
+      } catch(e) { console.warn("Klanten herstel fout:", e); }
+
       // Nu mogen saves plaatsvinden
       dataReady.current = true;
       // Reset dedup cache zodat eerste save na load altijd doorgaat
@@ -2411,7 +2428,8 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
 
     // Supabase: alleen als data gewijzigd is
     if(!changed) return;
-    const debounceMs = key === "b4_prd" ? 10000 : 1000;
+    // b4_kln (klanten) direct na 500ms flushen — kritieke data
+    const debounceMs = key === "b4_prd" ? 10000 : key === "b4_kln" ? 500 : 1000;
     pendingSaves.current[key] = json;
     if(saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(()=>flushSavesRef.current(), debounceMs);
@@ -2419,10 +2437,9 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
 
   // Bij afsluiten én tab wisselen: meteen flushen
   useEffect(()=>{
-    const flush = ()=>{ /* DISABLED: gebruik saveOfferteDirect voor directe saves */ };
+    const flush = ()=>{ flushSavesRef.current(); };
     window.addEventListener('beforeunload', flush);
-    // Ook bij tab hide: meteen flushen zodat andere browser altijd actuele data laadt
-    const onHide = ()=>{ /* DISABLED: slapende tabs schrijven nooit naar Supabase */ };
+    const onHide = ()=>{ if(document.visibilityState === 'hidden') flushSavesRef.current(); };
     document.addEventListener('visibilitychange', onHide);
     return ()=>{ window.removeEventListener('beforeunload', flush); document.removeEventListener('visibilitychange', onHide); };
   }, [flushSaves]);
