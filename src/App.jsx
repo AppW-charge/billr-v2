@@ -432,6 +432,7 @@ async function sendViaRecommand(factuur, settings) {
   <cac:AccountingSupplierParty>
     <cac:Party>
       <cac:PartyIdentification><cbc:ID schemeID="0208">${xe(sellerEntNr)}</cbc:ID></cac:PartyIdentification>
+      <cbc:EndpointID schemeID="0208">${xe(sellerEntNr)}</cbc:EndpointID>
       <cac:PartyName><cbc:Name>${xe(bed.naam||"W-Charge BV")}</cbc:Name></cac:PartyName>
       <cac:PostalAddress>
         <cbc:StreetName>${xe((bedAdres[1]||"")+(bedAdres[2]?" "+bedAdres[2]:""))}</cbc:StreetName>
@@ -452,6 +453,7 @@ async function sendViaRecommand(factuur, settings) {
   <cac:AccountingCustomerParty>
     <cac:Party>
       <cac:PartyIdentification><cbc:ID schemeID="0208">${xe(buyerEntNr)}</cbc:ID></cac:PartyIdentification>
+      <cbc:EndpointID schemeID="0208">${xe(buyerEntNr)}</cbc:EndpointID>
       <cac:PartyName><cbc:Name>${xe(klant.naam||klant.bedrijf||"")}</cbc:Name></cac:PartyName>
       <cac:PostalAddress>
         <cbc:StreetName>${xe((adresParts[1]||"")+(adresParts[2]?" "+adresParts[2]:""))}</cbc:StreetName>
@@ -477,7 +479,7 @@ async function sendViaRecommand(factuur, settings) {
   <cac:TaxTotal>
     <cbc:TaxAmount currencyID="${cur}">${f2(totaalBtw)}</cbc:TaxAmount>
     <cac:TaxSubtotal>
-      <cbc:TaxableAmount currencyID="${cur}">${f2(totaalExtBtw + totaalKorting)}</cbc:TaxableAmount>
+      <cbc:TaxableAmount currencyID="${cur}">${f2(totaalExtBtw)}</cbc:TaxableAmount>
       <cbc:TaxAmount currencyID="${cur}">${f2(totaalBtw)}</cbc:TaxAmount>
       <cac:TaxCategory>
         <cbc:ID>${cat}</cbc:ID>
