@@ -408,34 +408,13 @@ async function sendViaRecommand(factuur, settings) {
       netPriceAmount: String(Math.abs(l.prijs || 0)),
       quantity: l.aantal || 1,
       vat: {
-        percentage: cat === "AE" || cat === "Z" ? "0" : String(btw),
         category: cat,
-        ...(cat === "AE" ? { exemptionReasonCode: "VATEX-EU-AE", exemptionReason: "Reverse charge" } : {}),
-        ...(cat === "Z" ? { exemptionReasonCode: "VATEX-EU-O", exemptionReason: "Not subject to VAT" } : {})
+        percentage: String(btw)
       }
     };
   });
 
-  // Document-niveau VAT subtotals — Recommand vereist dit bij AE/Z categorie
-  const calcSubtotals = () => {
-    const groups = {};
-    positiefLijnen.forEach(l => {
-      const btw = l.btw ?? 21;
-      const cat = vatCategorie(btw);
-      const key = cat + "_" + btw;
-      if(!groups[key]) groups[key] = { cat, btw, taxable: 0 };
-      groups[key].taxable += Math.abs((l.prijs||0) * (l.aantal||1));
-    });
-    return Object.values(groups).map(g => ({
-      taxableAmount: String(g.taxable.toFixed(2)),
-      taxAmount: g.cat === "AE" || g.cat === "Z" ? "0.00" : String((g.taxable * g.btw / 100).toFixed(2)),
-      category: g.cat,
-      percentage: g.cat === "AE" || g.cat === "Z" ? "0" : String(g.btw),
-      ...(g.cat === "AE" ? { exemptionReasonCode: "VATEX-EU-AE", exemptionReason: "Reverse charge" } : {}),
-      ...(g.cat === "Z" ? { exemptionReasonCode: "VATEX-EU-O", exemptionReason: "Not subject to VAT" } : {})
-    }));
-  };
-  const vatSubtotals = calcSubtotals();
+  // Recommand berekent automatisch de document-niveau VAT breakdown vanuit de lijnen
 
   const doc = {
     invoiceNumber: factuur.nummer,
@@ -461,7 +440,7 @@ async function sendViaRecommand(factuur, settings) {
       postalZone: gemParts[1] || "",
       country: "BE"
     },
-    ...(vatSubtotals.length > 0 ? { vat: { subtotals: vatSubtotals } } : {}),
+
     ...(iban ? { paymentMeans: [{ paymentMethod: "credit_transfer", reference: factuur.nummer, iban }] } : {}),
     ...(totaalKorting > 0 ? { allowances: [{ amount: String(totaalKorting.toFixed(2)), reason: "Korting" }] } : {}),
     lines
