@@ -2028,13 +2028,35 @@ export default function App() {
         if(sbData["b4_kln"]) setKlanten(parse(sbData["b4_kln"], INIT_KLANTEN));
         // Producten: laden uit Supabase, fiches via localStorage cache (geen extra query = minder egress)
         if(sbData["b4_prd"]) {
-          const prods = parse(sbData["b4_prd"], INIT_PRODUCTS);
-          try {
-            // Fiches worden NIET geladen bij startup — enkel on-demand (offertewizard/bekijken)
-            // Ze staan in product_fiches tabel en worden gefetched via loadFichesForProducts()
+          const prods = parse(sbData["b4_prd"], []);
+          if(Array.isArray(prods) && prods.length > 0) {
             setProducten(prods);
-          } catch(_) { setProducten(restoreFicheCache(prods)); }
-          console.log("\u2705 Producten geladen: " + prods.length);
+            console.log("\u2705 Producten geladen uit Supabase: " + prods.length);
+          } else {
+            // b4_prd leeg in Supabase - probeer localStorage
+            try {
+              const lsPrd = localStorage.getItem("b4_prd");
+              const lsArr = lsPrd ? JSON.parse(lsPrd) : [];
+              if(Array.isArray(lsArr) && lsArr.length > 0 && lsArr[0].id !== "p1") {
+                setProducten(lsArr);
+                console.log("\u2705 Producten geladen uit localStorage: " + lsArr.length);
+                // Push naar Supabase
+                setTimeout(()=>sbSet("b4_prd", JSON.stringify(lsArr.map(p=>({...p,technischeFiche:null,technischeFiches:(p.technischeFiches||[]).map(f=>({naam:f.naam||"",type:f.type||""}))}))  ), u.id), 2000);
+              } else {
+                console.warn("⚠️ Geen echte producten gevonden - gebruik demo data");
+              }
+            } catch(_) {}
+          }
+        } else {
+          // Geen b4_prd in Supabase - probeer localStorage
+          try {
+            const lsPrd = localStorage.getItem("b4_prd");
+            const lsArr = lsPrd ? JSON.parse(lsPrd) : [];
+            if(Array.isArray(lsArr) && lsArr.length > 0 && lsArr[0]?.id !== "p1") {
+              setProducten(lsArr);
+              console.log("\u2705 Producten uit localStorage (Supabase miste b4_prd): " + lsArr.length);
+            }
+          } catch(_) {}
         }
         // Per-document laden: elk nummer = eigen rij in user_data
         const offs = await sbLoadOffertes(u.id);
@@ -3633,9 +3655,10 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
             {pg==="klanten"&&<KlantenPage klanten={klanten} offertes={offertes} facturen={factMet} view={klantView} onEdit={k=>setKlantModal(k)} onDelete={id=>{setKlanten(p=>p.map(k=>k.id===id?{...k,_verwijderd:true}:k));localTimestamps.current["b4_kln"]=Date.now();try{localStorage.setItem("billr_ts",JSON.stringify(localTimestamps.current));}catch(_){}notify("Klant verwijderd");setTimeout(()=>flushSavesRef.current(),100);}}/>}
             {pg==="producten"&&<ProductenPage producten={producten} settings={settings} onEdit={async p=>{
               if(p?.id) {
-                // Laad fiches on-demand uit product_fiches tabel
-                const { data } = await sb.from("product_fiches").select("fiches").eq("user_id",user.id).eq("product_id",p.id).single().catch(()=>({data:null}));
-                if(data?.fiches?.some(f=>f.data)) { setProdModal({...p, technischeFiches: data.fiches}); return; }
+                try {
+                  const { data } = await sb.from("product_fiches").select("fiches").eq("user_id",user.id).eq("product_id",p.id).single();
+                  if(data?.fiches?.some(f=>f.data)) { setProdModal({...p, technischeFiches: data.fiches}); return; }
+                } catch(_) {}
               }
               setProdModal(p);
             }} onDelete={id=>{setProducten(p=>p.filter(x=>x.id!==id));notify("Verwijderd")}} onToggle={id=>setProducten(p=>p.map(x=>x.id===id?{...x,actief:!x.actief}:x))} onEnrich={upd=>setProducten(p=>p.map(x=>x.id===upd.id?upd:x))} onDuplicate={p=>{const dup={...p,id:uid(),naam:p.naam+" (kopie)",aangemaakt:new Date().toISOString()};setProducten(prev=>[dup,...prev]);notify("Product gedupliceerd ✓");setProdModal(dup);}}/>}
