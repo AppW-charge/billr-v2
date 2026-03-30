@@ -519,18 +519,21 @@ async function sendViaRecommand(factuur, settings) {
   const klantNr = buyerEntNr;
   const recipient = "0208:" + klantNr;
 
+  const xmlPayload = {
+    recipient,
+    documentType: "xml",
+    document: ubl,
+    doctypeId: "urn:oasis:names:specification:ubl:schema:xsd:Invoice-2::Invoice##urn:cen.eu:en16931:2017#compliant#urn:fdc:peppol.eu:2017:poacc:billing:3.0::2.1",
+    processId: "urn:fdc:peppol.eu:2017:poacc:billing:01:1.0"
+  };
+  console.log("[PEPPOL] UBL XML lengte:", ubl.length, "bytes");
+  console.log("[PEPPOL] XML eerste 500 chars:", ubl.substring(0, 500));
   console.log("[PEPPOL] Stuur als raw UBL XML, recipient:", recipient);
 
   const resp = await fetch(getRecommandPath(settings, `/${companyId}/send`), {
     method: "POST",
     headers: recommandHeaders(settings),
-    body: JSON.stringify({
-      recipient,
-      documentType: "xml",
-      document: ubl,
-      doctypeId: "urn:oasis:names:specification:ubl:schema:xsd:Invoice-2::Invoice##urn:cen.eu:en16931:2017#compliant#urn:fdc:peppol.eu:2017:poacc:billing:3.0::2.1",
-      processId: "urn:fdc:peppol.eu:2017:poacc:billing:01:1.0"
-    })
+    body: JSON.stringify(xmlPayload)
   });
 
   if(!resp.ok) {
