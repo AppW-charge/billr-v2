@@ -416,6 +416,27 @@ async function sendViaRecommand(factuur, settings) {
     };
   });
 
+  // Document-niveau VAT subtotals — Recommand vereist dit bij AE/Z categorie
+  const calcSubtotals = () => {
+    const groups = {};
+    positiefLijnen.forEach(l => {
+      const btw = l.btw ?? 21;
+      const cat = vatCategorie(btw);
+      const key = cat + "_" + btw;
+      if(!groups[key]) groups[key] = { cat, btw, taxable: 0 };
+      groups[key].taxable += Math.abs((l.prijs||0) * (l.aantal||1));
+    });
+    return Object.values(groups).map(g => ({
+      taxableAmount: String(g.taxable.toFixed(2)),
+      taxAmount: g.cat === "AE" || g.cat === "Z" ? "0.00" : String((g.taxable * g.btw / 100).toFixed(2)),
+      category: g.cat,
+      percentage: g.cat === "AE" || g.cat === "Z" ? "0" : String(g.btw),
+      ...(g.cat === "AE" ? { exemptionReasonCode: "VATEX-EU-AE", exemptionReason: "Reverse charge" } : {}),
+      ...(g.cat === "Z" ? { exemptionReasonCode: "VATEX-EU-O", exemptionReason: "Not subject to VAT" } : {})
+    }));
+  };
+  const vatSubtotals = calcSubtotals();
+
   const doc = {
     invoiceNumber: factuur.nummer,
     issueDate: factuur.datum || new Date().toISOString().slice(0,10),
@@ -439,6 +460,7 @@ async function sendViaRecommand(factuur, settings) {
       postalZone: gemParts[1] || "",
       country: "BE"
     },
+    vat: { subtotals: vatSubtotals },
     ...(iban ? { paymentMeans: [{ paymentMethod: "credit_transfer", reference: factuur.nummer, iban }] } : {}),
     ...(totaalKorting > 0 ? { allowances: [{ amount: String(totaalKorting.toFixed(2)), reason: "Korting" }] } : {}),
     lines
