@@ -431,8 +431,8 @@ async function sendViaRecommand(factuur, settings) {
   <cbc:BuyerReference>${xe(factuur.nummer)}</cbc:BuyerReference>
   <cac:AccountingSupplierParty>
     <cac:Party>
-      <cac:PartyIdentification><cbc:ID schemeID="0208">${xe(sellerEntNr)}</cbc:ID></cac:PartyIdentification>
       <cbc:EndpointID schemeID="0208">${xe(sellerEntNr)}</cbc:EndpointID>
+      <cac:PartyIdentification><cbc:ID schemeID="0208">${xe(sellerEntNr)}</cbc:ID></cac:PartyIdentification>
       <cac:PartyName><cbc:Name>${xe(bed.naam||"W-Charge BV")}</cbc:Name></cac:PartyName>
       <cac:PostalAddress>
         <cbc:StreetName>${xe((bedAdres[1]||"")+(bedAdres[2]?" "+bedAdres[2]:""))}</cbc:StreetName>
@@ -452,8 +452,8 @@ async function sendViaRecommand(factuur, settings) {
   </cac:AccountingSupplierParty>
   <cac:AccountingCustomerParty>
     <cac:Party>
-      <cac:PartyIdentification><cbc:ID schemeID="0208">${xe(buyerEntNr)}</cbc:ID></cac:PartyIdentification>
       <cbc:EndpointID schemeID="0208">${xe(buyerEntNr)}</cbc:EndpointID>
+      <cac:PartyIdentification><cbc:ID schemeID="0208">${xe(buyerEntNr)}</cbc:ID></cac:PartyIdentification>
       <cac:PartyName><cbc:Name>${xe(klant.naam||klant.bedrijf||"")}</cbc:Name></cac:PartyName>
       <cac:PostalAddress>
         <cbc:StreetName>${xe((adresParts[1]||"")+(adresParts[2]?" "+adresParts[2]:""))}</cbc:StreetName>
@@ -535,10 +535,12 @@ async function sendViaRecommand(factuur, settings) {
 
   if(!resp.ok) {
     const err = await resp.json().catch(()=>({}));
+    // Log volledige fout voor debugging
+    console.error("[PEPPOL] Volledige fout:", JSON.stringify(err, null, 2));
     let errList = err.root || err.errors || err.message || err.error || err;
-    if(Array.isArray(errList)) errList = errList.slice(0,3).join("\n");
+    if(Array.isArray(errList)) errList = errList.join("\n");
     else if(typeof errList === "object") errList = JSON.stringify(errList);
-    throw new Error("Recommand: " + String(errList).slice(0,300));
+    throw new Error("Recommand: " + String(errList).slice(0,500));
   }
   const data = await resp.json();
   return { documentId: data.id || data.documentId, success: true };
