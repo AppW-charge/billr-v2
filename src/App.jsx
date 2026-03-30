@@ -358,107 +358,177 @@ async function checkPeppolRecommand(btwnr, settings) {
   }
 }
 
-// Stuur factuur via Recommand Peppol
+// Stuur factuur via Recommand Peppol — als raw UBL XML voor correcte AE/Z ondersteuning
 async function sendViaRecommand(factuur, settings) {
   const companyId = getRecommandCompanyId(settings);
   if(!companyId) throw new Error("Recommand Company ID niet ingesteld in Instellingen → Integraties");
   const klant = factuur.klant || {};
   const bed = settings?.bedrijf || {};
 
-  // Adres parsing
+  const btwRegime = factuur.btwRegime || klant.btwRegime || "btw21";
+  const isVerlegdBtw = btwRegime === "verlegd" || btwRegime === "medecontractant";
+  const isVrijgesteld = btwRegime === "vrijgesteld" || btwRegime === "btw0";
+
+  const sellerVat = (bed.btwnr||"").replace(/[\s.]/g,"");
+  const sellerVatFull = sellerVat.startsWith("BE") ? sellerVat : "BE" + sellerVat;
+  const sellerEntNr = sellerVatFull.replace(/^BE/i,"");
+
+  const buyerVatRaw = (klant.btwnr||"").replace(/[\s.]/g,"");
+  const buyerVatFull = buyerVatRaw ? (buyerVatRaw.startsWith("BE") ? buyerVatRaw : "BE" + buyerVatRaw) : "";
+  const buyerEntNr = buyerVatFull.replace(/^BE/i,"");
+
+  const iban = (bed.iban||"").replace(/\s/g,"");
+  const issueDate = factuur.datum || new Date().toISOString().slice(0,10);
+  const dueDate = factuur.vervaldatum || issueDate;
+  const cur = "EUR";
+  const f2 = n => Number(n||0).toFixed(2);
+  const xe = v => String(v||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+
+  const positiefLijnen = (factuur.lijnen||[]).filter(l => (l.prijs||0) > 0 && (l.naam||"").trim());
+  const kortingLijnen  = (factuur.lijnen||[]).filter(l => (l.prijs||0) < 0);
+  const totaalKorting  = kortingLijnen.reduce((s,l) => s + Math.abs((l.prijs||0)*(l.aantal||1)), 0);
+
+  const vatCat = () => isVerlegdBtw ? "AE" : isVrijgesteld ? "Z" : "S";
+  const cat = vatCat();
+
+  // Bereken totalen
+  const lineItems = positiefLijnen.map((l,i) => {
+    const prijs = Math.abs(l.prijs||0);
+    const aantal = Number(l.aantal||1);
+    const btw = (cat === "AE" || cat === "Z") ? 0 : Number(l.btw??21);
+    const ext = prijs * aantal;
+    const vatAmt = ext * btw / 100;
+    return {i, l, prijs, aantal, btw, ext, vatAmt, cat};
+  });
+
+  const totaalExtBtw = lineItems.reduce((s,li) => s+li.ext, 0) - totaalKorting;
+  const totaalBtw    = lineItems.reduce((s,li) => s+li.vatAmt, 0);
+  const totaalIncBtw = totaalExtBtw + totaalBtw;
+
+  // Bouw UBL XML
   const adresParts = (klant.adres||"").match(/^(.+?)\s+(\d+\S*)$/) || [null, klant.adres||"", ""];
   const gemParts   = (klant.gemeente||"").match(/^(\d{4})\s+(.+)$/) || [null, "", klant.gemeente||""];
   const bedAdres   = (bed.adres||"").match(/^(.+?)\s+(\d+\S*)$/)    || [null, bed.adres||"", ""];
   const bedGem     = (bed.gemeente||"").match(/^(\d{4})\s+(.+)$/)   || [null, "", bed.gemeente||""];
 
-  // BTW regime - bepaal VAT category
-  const btwRegime = factuur.btwRegime || klant.btwRegime || "btw21";
-  const isVerlegdBtw = btwRegime === "verlegd" || btwRegime === "medecontractant";
-  const isVrijgesteld = btwRegime === "vrijgesteld" || btwRegime === "btw0";
+  const btw1 = lineItems[0]?.btw ?? 21;
+  const exemptCode = cat === "AE" ? "VATEX-EU-AE" : cat === "Z" ? "VATEX-EU-O" : "";
+  const exemptReason = cat === "AE" ? "Reverse charge" : cat === "Z" ? "Not subject to VAT" : "";
+  const taxPct = cat === "S" ? btw1 : 0;
 
-  // Seller BTW met BE prefix (BR-CO-09)
-  const sellerVat = (bed.btwnr||"").replace(/[\s.]/g,"");
-  const sellerVatFull = sellerVat.startsWith("BE") ? sellerVat : "BE" + sellerVat;
+  const ubl = `<?xml version="1.0" encoding="UTF-8"?>
+<Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2"
+         xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2"
+         xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2">
+  <cbc:CustomizationID>urn:cen.eu:en16931:2017#compliant#urn:fdc:peppol.eu:2017:poacc:billing:3.0</cbc:CustomizationID>
+  <cbc:ProfileID>urn:fdc:peppol.eu:2017:poacc:billing:01:1.0</cbc:ProfileID>
+  <cbc:ID>${xe(factuur.nummer)}</cbc:ID>
+  <cbc:IssueDate>${issueDate}</cbc:IssueDate>
+  <cbc:DueDate>${dueDate}</cbc:DueDate>
+  <cbc:InvoiceTypeCode>380</cbc:InvoiceTypeCode>
+  <cbc:Note>${xe(factuur.nummer)}${isVerlegdBtw ? " — BTW verlegd (medecontractant)" : ""}</cbc:Note>
+  <cbc:DocumentCurrencyCode>${cur}</cbc:DocumentCurrencyCode>
+  <cbc:BuyerReference>${xe(factuur.nummer)}</cbc:BuyerReference>
+  <cac:AccountingSupplierParty>
+    <cac:Party>
+      <cac:PartyIdentification><cbc:ID schemeID="0208">${xe(sellerEntNr)}</cbc:ID></cac:PartyIdentification>
+      <cac:PartyName><cbc:Name>${xe(bed.naam||"W-Charge BV")}</cbc:Name></cac:PartyName>
+      <cac:PostalAddress>
+        <cbc:StreetName>${xe((bedAdres[1]||"")+(bedAdres[2]?" "+bedAdres[2]:""))}</cbc:StreetName>
+        <cbc:CityName>${xe(bedGem[2]||bed.gemeente||"")}</cbc:CityName>
+        <cbc:PostalZone>${xe(bedGem[1]||"")}</cbc:PostalZone>
+        <cac:Country><cbc:IdentificationCode>BE</cbc:IdentificationCode></cac:Country>
+      </cac:PostalAddress>
+      <cac:PartyTaxScheme>
+        <cbc:CompanyID>${xe(sellerVatFull)}</cbc:CompanyID>
+        <cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme>
+      </cac:PartyTaxScheme>
+      <cac:PartyLegalEntity>
+        <cbc:RegistrationName>${xe(bed.naam||"W-Charge BV")}</cbc:RegistrationName>
+        <cbc:CompanyID schemeID="0208">${xe(sellerEntNr)}</cbc:CompanyID>
+      </cac:PartyLegalEntity>
+    </cac:Party>
+  </cac:AccountingSupplierParty>
+  <cac:AccountingCustomerParty>
+    <cac:Party>
+      <cac:PartyIdentification><cbc:ID schemeID="0208">${xe(buyerEntNr)}</cbc:ID></cac:PartyIdentification>
+      <cac:PartyName><cbc:Name>${xe(klant.naam||klant.bedrijf||"")}</cbc:Name></cac:PartyName>
+      <cac:PostalAddress>
+        <cbc:StreetName>${xe((adresParts[1]||"")+(adresParts[2]?" "+adresParts[2]:""))}</cbc:StreetName>
+        <cbc:CityName>${xe(gemParts[2]||klant.gemeente||"")}</cbc:CityName>
+        <cbc:PostalZone>${xe(gemParts[1]||"")}</cbc:PostalZone>
+        <cac:Country><cbc:IdentificationCode>BE</cbc:IdentificationCode></cac:Country>
+      </cac:PostalAddress>
+      <cac:PartyTaxScheme>
+        <cbc:CompanyID>${xe(buyerVatFull)}</cbc:CompanyID>
+        <cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme>
+      </cac:PartyTaxScheme>
+      <cac:PartyLegalEntity>
+        <cbc:RegistrationName>${xe(klant.naam||klant.bedrijf||"")}</cbc:RegistrationName>
+        <cbc:CompanyID schemeID="0208">${xe(buyerEntNr)}</cbc:CompanyID>
+      </cac:PartyLegalEntity>
+    </cac:Party>
+  </cac:AccountingCustomerParty>
+  ${iban ? `<cac:PaymentMeans>
+    <cbc:PaymentMeansCode>30</cbc:PaymentMeansCode>
+    <cbc:PaymentID>${xe(factuur.nummer)}</cbc:PaymentID>
+    <cac:PayeeFinancialAccount><cbc:ID>${xe(iban)}</cbc:ID></cac:PayeeFinancialAccount>
+  </cac:PaymentMeans>` : ""}
+  <cac:TaxTotal>
+    <cbc:TaxAmount currencyID="${cur}">${f2(totaalBtw)}</cbc:TaxAmount>
+    <cac:TaxSubtotal>
+      <cbc:TaxableAmount currencyID="${cur}">${f2(totaalExtBtw + totaalKorting)}</cbc:TaxableAmount>
+      <cbc:TaxAmount currencyID="${cur}">${f2(totaalBtw)}</cbc:TaxAmount>
+      <cac:TaxCategory>
+        <cbc:ID>${cat}</cbc:ID>
+        <cbc:Percent>${taxPct}</cbc:Percent>
+        ${exemptCode ? `<cbc:TaxExemptionReasonCode>${exemptCode}</cbc:TaxExemptionReasonCode>` : ""}
+        ${exemptReason ? `<cbc:TaxExemptionReason>${xe(exemptReason)}</cbc:TaxExemptionReason>` : ""}
+        <cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme>
+      </cac:TaxCategory>
+    </cac:TaxSubtotal>
+  </cac:TaxTotal>
+  <cac:LegalMonetaryTotal>
+    <cbc:LineExtensionAmount currencyID="${cur}">${f2(lineItems.reduce((s,li)=>s+li.ext,0))}</cbc:LineExtensionAmount>
+    <cbc:TaxExclusiveAmount currencyID="${cur}">${f2(totaalExtBtw)}</cbc:TaxExclusiveAmount>
+    <cbc:TaxInclusiveAmount currencyID="${cur}">${f2(totaalIncBtw)}</cbc:TaxInclusiveAmount>
+    ${totaalKorting > 0 ? `<cbc:AllowanceTotalAmount currencyID="${cur}">${f2(totaalKorting)}</cbc:AllowanceTotalAmount>` : ""}
+    <cbc:PayableAmount currencyID="${cur}">${f2(totaalIncBtw)}</cbc:PayableAmount>
+  </cac:LegalMonetaryTotal>
+  ${lineItems.map((li,idx) => `<cac:InvoiceLine>
+    <cbc:ID>${idx+1}</cbc:ID>
+    <cbc:InvoicedQuantity unitCode="C62">${li.aantal}</cbc:InvoicedQuantity>
+    <cbc:LineExtensionAmount currencyID="${cur}">${f2(li.ext)}</cbc:LineExtensionAmount>
+    <cac:Item>
+      <cbc:Name>${xe(li.l.naam||"")}</cbc:Name>
+      ${li.l.omschr ? `<cbc:Description>${xe(li.l.omschr)}</cbc:Description>` : ""}
+      <cac:ClassifiedTaxCategory>
+        <cbc:ID>${cat}</cbc:ID>
+        <cbc:Percent>${li.btw}</cbc:Percent>
+        <cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme>
+      </cac:ClassifiedTaxCategory>
+    </cac:Item>
+    <cac:Price>
+      <cbc:PriceAmount currencyID="${cur}">${f2(li.prijs)}</cbc:PriceAmount>
+    </cac:Price>
+  </cac:InvoiceLine>`).join("\n  ")}
+</Invoice>`;
 
-  // Buyer BTW met BE prefix
-  const buyerVatRaw = (klant.btwnr||"").replace(/[\s.]/g,"");
-  const buyerVatFull = buyerVatRaw ? (buyerVatRaw.startsWith("BE") ? buyerVatRaw : "BE" + buyerVatRaw) : undefined;
-
-  // IBAN (BR-50: verplicht bij credit transfer)
-  const iban = (bed.iban||"").replace(/\s/g,"");
-
-  // Factuurlijnen — filter negatieve kortinglijnen uit als aparte discount
-  const positiefLijnen = (factuur.lijnen||[]).filter(l => (l.prijs||0) > 0 && (l.naam||"").trim());
-  const kortingLijnen  = (factuur.lijnen||[]).filter(l => (l.prijs||0) < 0);
-  const totaalKorting  = kortingLijnen.reduce((s,l) => s + Math.abs((l.prijs||0) * (l.aantal||1)), 0);
-
-  // VAT category per lijn
-  const vatCategorie = (btw) => {
-    if(isVerlegdBtw) return "AE"; // VAT reverse charge
-    if(isVrijgesteld || btw === 0) return "Z"; // Zero rated
-    return "S"; // Standard rated
-  };
-
-  const lines = positiefLijnen.map(l => {
-    const btwRaw = l.btw ?? 21;
-    const cat = vatCategorie(btwRaw);
-    // Voor AE (verlegd): stuur de nominale BTW-rate (21), nooit 0
-    // Recommand vereist de eigenlijke rate, niet 0
-    const btwSend = (cat === "AE" && (!btwRaw || btwRaw === 0)) ? 21 : btwRaw;
-    return {
-      name: l.naam || "",
-      description: l.omschr || undefined,
-      netPriceAmount: String(Math.abs(l.prijs || 0)),
-      quantity: l.aantal || 1,
-      vat: {
-        category: cat,
-        percentage: String(btwSend)
-      }
-    };
-  });
-
-  // Recommand berekent automatisch de document-niveau VAT breakdown vanuit de lijnen
-
-  const doc = {
-    invoiceNumber: factuur.nummer,
-    issueDate: factuur.datum || new Date().toISOString().slice(0,10),
-    dueDate: factuur.vervaldatum || factuur.datum,
-    buyerReference: factuur.nummer,
-    note: factuur.nummer + (isVerlegdBtw ? " — BTW verlegd (medecontractant)" : ""),
-    seller: {
-      vatNumber: sellerVatFull,
-      name: bed.naam || "W-Charge BV",
-      street: (bedAdres[1]||"") + (bedAdres[2] ? " " + bedAdres[2] : ""),
-      city: bedGem[2] || bed.gemeente || "",
-      postalZone: bedGem[1] || "",
-      country: "BE",
-      email: bed.email || undefined,
-      phone: bed.tel || undefined
-    },
-    buyer: {
-      vatNumber: buyerVatFull,
-      name: klant.naam || klant.bedrijf || "",
-      street: (adresParts[1]||"") + (adresParts[2] ? " " + adresParts[2] : ""),
-      city: gemParts[2] || klant.gemeente || "",
-      postalZone: gemParts[1] || "",
-      country: "BE"
-    },
-
-    ...(iban ? { paymentMeans: [{ paymentMethod: "credit_transfer", reference: factuur.nummer, iban }] } : {}),
-    ...(totaalKorting > 0 ? { allowances: [{ amount: String(totaalKorting.toFixed(2)), reason: "Korting" }] } : {}),
-    lines
-  };
-
-  const klantNr = buyerVatRaw.replace(/^BE/i,"");
+  const klantNr = buyerEntNr;
   const recipient = "0208:" + klantNr;
 
-  const payload = { recipient, documentType: "invoice", document: doc };
-  console.log("[PEPPOL] Payload:", JSON.stringify(payload, null, 2));
+  console.log("[PEPPOL] Stuur als raw UBL XML, recipient:", recipient);
 
   const resp = await fetch(getRecommandPath(settings, `/${companyId}/send`), {
     method: "POST",
     headers: recommandHeaders(settings),
-    body: JSON.stringify(payload)
+    body: JSON.stringify({
+      recipient,
+      documentType: "xml",
+      document: ubl,
+      doctypeId: "urn:oasis:names:specification:ubl:schema:xsd:Invoice-2::Invoice##urn:cen.eu:en16931:2017#compliant#urn:fdc:peppol.eu:2017:poacc:billing:3.0::2.1",
+      processId: "urn:fdc:peppol.eu:2017:poacc:billing:01:1.0"
+    })
   });
 
   if(!resp.ok) {
