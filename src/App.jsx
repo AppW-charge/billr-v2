@@ -1966,13 +1966,9 @@ export default function App() {
         if(sbData["b4_prd"]) {
           const prods = parse(sbData["b4_prd"], INIT_PRODUCTS);
           try {
-            const fr = await sb.from("product_fiches").select("product_id,fiches").eq("user_id", u.id);
-            if(fr.data && fr.data.length > 0) {
-              const sfc = {};
-              fr.data.forEach(r => { if(r.fiches && r.fiches.some(f=>f.data)) sfc[r.product_id] = r.fiches; });
-              setProducten(restoreFicheCache(prods, sfc));
-              console.log("\u2705 Fiches geladen: " + Object.keys(sfc).length + " producten");
-            } else { setProducten(restoreFicheCache(prods)); }
+            // Fiches worden NIET geladen bij startup — enkel on-demand (offertewizard/bekijken)
+            // Ze staan in product_fiches tabel en worden gefetched via loadFichesForProducts()
+            setProducten(prods);
           } catch(_) { setProducten(restoreFicheCache(prods)); }
           console.log("\u2705 Producten geladen: " + prods.length);
         }
@@ -2078,26 +2074,7 @@ export default function App() {
       // (voorkomt dat gewijzigde data niet gesaved wordt na herlaad)
 
 
-      // Migratie fiches: eenmalig, enkel als nog niet gedaan deze week
-      setTimeout(async () => {
-        try {
-          const lastMig = localStorage.getItem("billr_fiche_mig");
-          const weekAgo = Date.now() - 7*24*3600*1000;
-          if(lastMig && parseInt(lastMig) > weekAgo) return; // max 1x per week
-          const cache = (() => { try { const r = localStorage.getItem("billr_fiche_cache"); return r ? JSON.parse(r) : {}; } catch(_) { return {}; } })();
-          if(Object.keys(cache).length === 0) return;
-          const existing = await sb.from('product_fiches').select('product_id').eq('user_id', u.id);
-          const existingIds = new Set((existing.data||[]).map(r => r.product_id));
-          const toMigrate = Object.entries(cache)
-            .filter(([pid, fiches]) => !existingIds.has(pid) && fiches?.length > 0 && fiches.some(f => f.data))
-            .map(([pid, fiches]) => ({ user_id: u.id, product_id: pid, fiches, updated_at: new Date().toISOString() }));
-          if(toMigrate.length > 0) {
-            await sb.from('product_fiches').upsert(toMigrate, { onConflict: 'user_id,product_id' });
-            console.log("Migratie: " + toMigrate.length + " fiches");
-          }
-          localStorage.setItem("billr_fiche_mig", String(Date.now()));
-        } catch(e) { console.warn("Migratie fiche cache:", e.message); }
-      }, 5000);
+      // Fiche migratie: niet meer nodig, fiches staan in product_fiches tabel
     };
 
     // Sessie check — met timeout zodat Supabase free tier wake-up ons niet uitlogt
@@ -2266,12 +2243,12 @@ export default function App() {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   // Fetch tracking on load AND when offertes_ref gets populated
   useEffect(() => { if(user && offertes.length > 0) { fetchOfferteTracking(); } }, [user, offertes.length > 0]);
-  // Auto-poll tracking: 30s op offertes, 60s op dashboard
+  // Auto-poll tracking: 5 min op offertes, 10 min op dashboard
   useEffect(() => {
     if(!user) return;
     if(pg !== "dashboard" && pg !== "offertes") return;
     fetchOfferteTracking(); // Meteen bij navigatie
-    const interval = pg === "offertes" ? 30000 : 60000;
+    const interval = pg === "offertes" ? 300000 : 600000; // was 30s/60s → nu 5min/10min
     const iv = setInterval(fetchOfferteTracking, interval);
     return () => clearInterval(iv);
   }, [user, pg]);
@@ -2311,10 +2288,10 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
       .subscribe();
     return () => sb.removeChannel(ch);
   }, [user, fetchWebsiteLeads]);
-  // Polling fallback elke 2 min op dashboard
+  // Polling fallback elke 10 min op dashboard
   useEffect(() => {
     if(!user || pg !== "dashboard") return;
-    const iv = setInterval(fetchWebsiteLeads, 120000);
+    const iv = setInterval(fetchWebsiteLeads, 600000); // was 2min → nu 10min
     return () => clearInterval(iv);
   }, [user, pg]);
 
@@ -2336,26 +2313,13 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
     if(!Array.isArray(val)) return val;
     if(key === "b4_prd") {
       // Voor Supabase: strip base64 (te groot)
-      // Maar BEWAAR fiches in billr_fiche_cache zodat localStorage ze wel heeft
-      const ficheUpdate = {};
+      // Strip base64 fiches — fiches staan enkel in product_fiches Supabase tabel
       const stripped = val.map(p => {
         const c = {...p};
-        // Sla fiches op in cache vóór strippen
-        if((c.technischeFiches||[]).some(f=>f.data) || (c.technischeFiche && c.technischeFiche.length > 500)) {
-          ficheUpdate[c.id] = c.technischeFiches?.filter(f=>f.data) || (c.technischeFiche ? [{data:c.technischeFiche, naam:c.fichNaam||"fiche.pdf"}] : []);
-        }
         if(c.technischeFiche && String(c.technischeFiche).length > 500) c.technischeFiche = "[PDF]";
         if(c.technischeFiches) c.technischeFiches = c.technischeFiches.map(f => ({naam:f.naam||"",url:f.url||"",type:f.type||""}));
         return c;
       });
-      // Update billr_fiche_cache met nieuwe fiches
-      if(Object.keys(ficheUpdate).length > 0) {
-        try {
-          const existing = JSON.parse(localStorage.getItem("billr_fiche_cache")||"{}");
-          const merged = {...existing, ...ficheUpdate};
-          localStorage.setItem("billr_fiche_cache", JSON.stringify(merged));
-        } catch(_){}
-      }
       return stripped;
     }
     if(key === "b4_off" || key === "b4_fct") return val.map(doc => {
@@ -2378,7 +2342,14 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
     // Offertes/facturen worden per-document opgeslagen - niet via flushSaves
     for(const [key, json] of Object.entries(batch)) {
       if(key === "b4_off" || key === "b4_fct") continue; // skip - per-document opgeslagen
-      try { await sbSet(key, json, user.id); } catch(_){}
+      // DATABESCHERMING: nooit lege array sturen als Supabase al data heeft
+      try {
+        if(json === "[]" || json === "null") {
+          console.warn(`[flushSaves] GEBLOKKEERD: lege ${key} niet naar Supabase`);
+          continue;
+        }
+        await sbSet(key, json, user.id);
+      } catch(_){}
     }
   }, [user]);
   // Ref zodat callbacks met [] dependency altijd de actuele flushSaves hebben
@@ -2393,119 +2364,126 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
     const stripped = stripBase64(key, val);
     const json = JSON.stringify(stripped);
 
+    // ═══ KRITIEKE DATABESCHERMING ═══
+    // NOOIT lege array opslaan als er al data bestaat (lokaal of in Supabase)
+    // Dit voorkomt dat initiële lege state goede data overschrijft
+    const isArray = Array.isArray(val);
+    const isEmpty = isArray && val.length === 0;
+    if(isEmpty) {
+      const prevJson = localStorage.getItem(key);
+      if(prevJson && prevJson !== "[]" && prevJson !== "null") {
+        // Er zit al data in localStorage — sla lege array NOOIT op
+        console.warn(`[saveKey] GEBLOKKEERD: lege ${key} mag bestaande data niet overschrijven`);
+        return;
+      }
+    }
+
     // Check of data echt veranderd is vs localStorage
-    // Dit voorkomt tientallen onnodige Supabase saves bij elke render
     const prevJson = localStorage.getItem(key);
     const changed = prevJson !== json;
 
     // localStorage: altijd meteen updaten (snel, lokaal)
     if(changed) {
       try { localStorage.setItem(key, json); } catch(e) { try { localStorage.removeItem(key); } catch(_){} }
-      localTimestamps.current[key] = Date.now() + (key==="b4_off"||key==="b4_fct"?3600000:0); // +1 uur voor documenten
+      localTimestamps.current[key] = Date.now() + (key==="b4_off"||key==="b4_fct"?3600000:0);
       try { localStorage.setItem("billr_ts", JSON.stringify(localTimestamps.current)); } catch(_){}
     }
 
     // Supabase: alleen als data gewijzigd is
     if(!changed) return;
-    // b4_kln (klanten) direct na 500ms flushen — kritieke data
-    const debounceMs = key === "b4_prd" ? 10000 : key === "b4_kln" ? 500 : 1000;
+    // b4_kln en b4_prd snel flushen — kritieke data
+    const debounceMs = key === "b4_kln" ? 500 : key === "b4_prd" ? 3000 : 1000;
     pendingSaves.current[key] = json;
     if(saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(()=>flushSavesRef.current(), debounceMs);
   }, [user, flushSaves]);
 
-  // Bij afsluiten én tab wisselen: meteen flushen
+  // Bij afsluiten én tab wisselen: meteen flushen (enkel als er echte data in queue zit)
   useEffect(()=>{
-    const flush = ()=>{ flushSavesRef.current(); };
+    const flush = ()=>{
+      // Enkel flushen als de queue niet-lege waarden bevat
+      const hasRealData = Object.entries(pendingSaves.current).some(([,v]) => v && v !== "[]" && v !== "null");
+      if(hasRealData) flushSavesRef.current();
+    };
     window.addEventListener('beforeunload', flush);
-    const onHide = ()=>{ if(document.visibilityState === 'hidden') flushSavesRef.current(); };
+    const onHide = ()=>{ if(document.visibilityState === 'hidden') flush(); };
     document.addEventListener('visibilitychange', onHide);
     return ()=>{ window.removeEventListener('beforeunload', flush); document.removeEventListener('visibilitychange', onHide); };
   }, [flushSaves]);
   // Track welke fiche-hashes al naar Supabase zijn gestuurd
   const savedFicheHashes = useRef({});
 
+  // ═══════════════════════════════════════════════════════════════
+  // FICHE SYSTEEM — VEREENVOUDIGD
+  // Fiches worden EENMALIG opgeslagen in product_fiches Supabase tabel.
+  // Ze worden NOOIT opgeslagen in b4_prd, localStorage of backups.
+  // Ze worden geladen bij: offertewizard openen, offerte bekijken.
+  // ═══════════════════════════════════════════════════════════════
+
+  // Sla fiche op voor 1 product — enkel naar Supabase product_fiches
   const saveFicheCache = useCallback((productenArr) => {
-    try {
-      // Stap 1: update localStorage cache (altijd, onmiddellijk)
-      let existing = {};
-      try { const r = localStorage.getItem("billr_fiche_cache"); if(r) existing = JSON.parse(r); } catch(_){}
-      const cache = {...existing};
-      const toSave = []; // ALLEEN fiches die nieuw/gewijzigd zijn
-
-      productenArr.forEach(p => {
-        let fiches = null;
-        if(p.technischeFiches?.some(f => f.data)) {
-          fiches = p.technischeFiches.filter(f => f.data);
-        } else if(p.technischeFiche && p.technischeFiche !== "[PDF]" && p.technischeFiche.length > 100) {
-          fiches = [{data: p.technischeFiche, naam: p.fichNaam||"fiche.pdf"}];
-        }
-        if(fiches) {
-          // Hash = naam + datalengte per fiche - snel, geen crypto
-          const hash = fiches.map(f => (f.naam||"") + String((f.data||"").length)).join("|");
-          const alreadySaved = savedFicheHashes.current[p.id] === hash;
-          cache[p.id] = fiches;
-          if(!alreadySaved && user) {
-            toSave.push({user_id: user.id, product_id: p.id, fiches, updated_at: new Date().toISOString()});
-            savedFicheHashes.current[p.id] = hash;
-          }
-        }
-      });
-
-      try { localStorage.setItem("billr_fiche_cache", JSON.stringify(cache)); } catch(_){}
-      if(toSave.length > 0) {
-        console.log("Fiches opslaan: " + toSave.length + " product(en)");
-        // Stap 2: sla op in product_fiches tabel (apart van user_data — geen grootteproblemen)
-        if(user && toSave.length > 0) {
-          sb.from('product_fiches').upsert(toSave, {onConflict:'user_id,product_id'})
-            .then(r => { if(r.error) console.warn("product_fiches save:", r.error.message); })
-            .catch(e => console.warn("product_fiches save exception:", e.message));
+    if(!user) return;
+    const toSave = [];
+    productenArr.forEach(p => {
+      let fiches = null;
+      if(p.technischeFiches?.some(f => f.data)) {
+        fiches = p.technischeFiches.filter(f => f.data);
+      } else if(p.technischeFiche && p.technischeFiche !== "[PDF]" && p.technischeFiche.length > 100) {
+        fiches = [{data: p.technischeFiche, naam: p.fichNaam||"fiche.pdf"}];
+      }
+      if(fiches) {
+        const hash = fiches.map(f => (f.naam||"") + String((f.data||"").length)).join("|");
+        if(savedFicheHashes.current[p.id] !== hash) {
+          toSave.push({user_id: user.id, product_id: p.id, fiches, updated_at: new Date().toISOString()});
+          savedFicheHashes.current[p.id] = hash;
+          console.log("📎 Fiche opgeslagen voor:", p.naam||p.id);
         }
       }
-    } catch(_) {}
+    });
+    if(toSave.length > 0) {
+      sb.from('product_fiches').upsert(toSave, {onConflict:'user_id,product_id'})
+        .then(r => { if(r.error) console.warn("product_fiches save:", r.error.message); })
+        .catch(e => console.warn("product_fiches save:", e.message));
+    }
   }, [user]);
 
-  const restoreFicheCache = useCallback((productenArr, sbFicheCache=null) => {
+  // Laad fiches voor een lijst van product-IDs — rechtstreeks uit Supabase
+  const loadFichesForProducts = useCallback(async (productIds) => {
+    if(!user || !productIds?.length) return {};
     try {
-      // sbFicheCache: geladen vanuit product_fiches tabel {productId: [fiches...]}
-      // localStorage: fallback als Supabase niet beschikbaar
-      let cache = sbFicheCache || null;
-      if(!cache) {
-        const raw = localStorage.getItem("billr_fiche_cache");
-        if(raw) cache = JSON.parse(raw);
-      } else {
-        // Merge met bestaande localStorage cache
-        try {
-          const raw = localStorage.getItem("billr_fiche_cache");
-          const existing = raw ? JSON.parse(raw) : {};
-          const merged = {...existing, ...cache};
-          localStorage.setItem("billr_fiche_cache", JSON.stringify(merged));
-          cache = merged;
-        } catch(_){}
-      }
-      if(!cache) return productenArr;
+      const { data, error } = await sb.from("product_fiches")
+        .select("product_id,fiches")
+        .eq("user_id", user.id)
+        .in("product_id", productIds);
+      if(error || !data) return {};
+      const result = {};
+      data.forEach(r => { result[r.product_id] = r.fiches; });
+      return result;
+    } catch(_) { return {}; }
+  }, [user]);
+
+  // restoreFicheCache: producten krijgen geen fiches — die worden on-demand geladen
+  // (fiches leven enkel in product_fiches tabel, nooit in b4_prd)
+  const restoreFicheCache = useCallback((productenArr, sbFicheCache=null) => {
+    if(sbFicheCache && Object.keys(sbFicheCache).length > 0) {
+      // Alleen bij initial load vanuit Supabase: merge fiches mee
       return productenArr.map(p => {
-        const cached = cache[p.id];
-        // Controleer of cached fiches echte data hebben (niet enkel metadata)
-        const hasRealData = Array.isArray(cached) && cached.some(f => f.data && f.data.length > 100);
-        if(hasRealData && !(p.technischeFiches?.some(f => f.data))) {
+        const cached = sbFicheCache[p.id];
+        if(Array.isArray(cached) && cached.some(f => f.data)) {
           return { ...p, technischeFiches: cached };
         }
         return p;
       });
-    } catch(_) { return productenArr; }
+    }
+    return productenArr;
   }, []);
 
   useEffect(()=>{ saveKey("b4_off", offertes);  },[offertes,   saveKey]);
   useEffect(()=>{ saveKey("b4_fct", facturen);  },[facturen,   saveKey]);
   useEffect(()=>{ saveKey("b4_kln", klanten);   },[klanten,    saveKey]);
   useEffect(()=>{ saveKey("b4_prd", producten); },[producten, saveKey]);
-  // Automatisch fiches naar Supabase product_fiches tabel als producten met data worden geladen
-  useEffect(()=>{
-    if(!user) return;
-    const metFiches = producten.filter(p => p.technischeFiches?.some(f => f.data && f.data.length > 100));
-    if(metFiches.length > 0) saveFicheCache(metFiches);
-  },[producten, user]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Fiches worden NIET automatisch opgeslaan bij elke render van producten
+  // Enkel bij expliciete upload (ProductModal) via saveFicheCache([product])
   useEffect(()=>{ saveKey("b4_set", settings);  },[settings,   saveKey]);
   useEffect(()=>{ saveKey("b4_cn",  creditnotas);},[creditnotas,saveKey]);
   useEffect(()=>{ saveKey("b4_am",  aanmaningen);},[aanmaningen,saveKey]);
@@ -2517,11 +2495,30 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
   useEffect(()=>{ if(widgetOrder) saveKey("b4_wo", widgetOrder);},[widgetOrder,saveKey]);
 
   // ─── BACKUP / EXPORT / IMPORT ────────────────────────────────────
-  const getBackupData = () => ({
-    _meta: { versie: "7.1", datum: new Date().toISOString(), app: "BILLR" },
-    offertes, facturen, klanten, producten, settings,
-    creditnotas, aanmaningen, betalingen, tijdslots, dossiers, garanties,
-  });
+  const getBackupData = () => {
+    // Strip base64 fiches uit producten voor backup — die staan apart in product_fiches tabel
+    const productenStripped = (producten||[]).map(p => {
+      const c = {...p};
+      if(c.technischeFiche && String(c.technischeFiche).length > 500) c.technischeFiche = "[PDF]";
+      if(c.technischeFiches) c.technischeFiches = (c.technischeFiches||[]).map(f => ({naam:f.naam||"",url:f.url||"",type:f.type||""}));
+      return c;
+    });
+    // Strip base64 uit offertelijnfiches
+    const offertesStripped = (offertes||[]).map(o => ({
+      ...o,
+      lijnen: (o.lijnen||[]).map(l => {
+        const ll = {...l};
+        if(ll.technischeFiche && String(ll.technischeFiche).length > 500) ll.technischeFiche = null;
+        if(ll.technischeFiches) ll.technischeFiches = [];
+        return ll;
+      })
+    }));
+    return {
+      _meta: { versie: "7.1", datum: new Date().toISOString(), app: "BILLR" },
+      offertes: offertesStripped, facturen, klanten, producten: productenStripped, settings,
+      creditnotas, aanmaningen, betalingen, tijdslots, dossiers, garanties,
+    };
+  };
 
   // ─── AUTO-BACKUP naar Supabase (elk uur) ────────────────────────
   const saveBackupToSB = async (label) => {
@@ -2535,8 +2532,8 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
       const lbl = label || `Auto ${new Date().toLocaleString("nl-BE",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"})}`;
       await sb.from("billr_backups").insert({ user_id: user.id, label: lbl, data });
       const { data: old } = await sb.from("billr_backups").select("id,created_at").eq("user_id", user.id).order("created_at", {ascending:true});
-      if(old && old.length > 48) {
-        const toDelete = old.slice(0, old.length - 48).map(r => r.id);
+      if(old && old.length > 10) {
+        const toDelete = old.slice(0, old.length - 10).map(r => r.id);
         await sb.from("billr_backups").delete().in("id", toDelete);
       }
       console.log("☁️ Auto-backup opgeslagen:", lbl);
@@ -2548,9 +2545,9 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
   useEffect(()=>{
     if(!user) return;
     // Eerste backup na 2 minuten (na volledig laden)
-    const initial = setTimeout(()=>saveBackupToSB(), 2 * 60 * 1000);
+    const initial = setTimeout(()=>saveBackupToSB(), 10 * 60 * 1000); // na 10 min
     // Dan elk uur
-    const interval = setInterval(()=>saveBackupToSB(), 60 * 60 * 1000);
+    const interval = setInterval(()=>saveBackupToSB(), 4 * 60 * 60 * 1000); // elke 4 uur (was 1 uur)
     return ()=>{ clearTimeout(initial); clearInterval(interval); };
   }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -2619,7 +2616,16 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
         const lcTs = (key) => localTimestamps.current[key] || 0;
         // Settings/klanten: vervang als Supabase nieuwer
         if(allData["b4_set"] && sbTs("b4_set") > lcTs("b4_set")) { const s=p("b4_set",null); if(s?.bedrijf?.naam) setSettings(s); }
-        if(allData["b4_kln"] && sbTs("b4_kln") > lcTs("b4_kln")) setKlanten(p("b4_kln",[]));
+        // Klanten: enkel vervangen als Supabase nieuwer EN niet leeg
+        if(allData["b4_kln"] && sbTs("b4_kln") > lcTs("b4_kln")) {
+          const sbKlanten = p("b4_kln", []);
+          if(Array.isArray(sbKlanten) && sbKlanten.length > 0) setKlanten(sbKlanten);
+        }
+        // Producten: enkel vervangen als Supabase nieuwer EN niet leeg
+        if(allData["b4_prd"] && sbTs("b4_prd") > lcTs("b4_prd")) {
+          const sbProd = p("b4_prd", []);
+          if(Array.isArray(sbProd) && sbProd.length > 0) setProducten(restoreFicheCache(sbProd));
+        }
         // Per-document sync: herlaad alle offertes/facturen van Supabase
         const freshOffs = await sbLoadOffertes(user.id);
         if(freshOffs.length > 0) {
@@ -2937,25 +2943,9 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
       const lyt = settings?.layout || {};
       const dc = sj.accentKleur || settings?.thema?.kleur || bed.kleur || "#1a2e4a";
 
-      // Laad fiche cache: ALTIJD uit product_fiches tabel (authoritative source)
-      // Fiches: combineer localStorage cache + Supabase product_fiches tabel
-      let ficheCache = {};
-      try { const lsRaw = localStorage.getItem("billr_fiche_cache"); if(lsRaw) ficheCache = JSON.parse(lsRaw); } catch(_){}
-      // Haal ook fiches op uit state (producten geladen bij startup)
-      producten.forEach(p => {
-        if(p.technischeFiches && p.technischeFiches.some(f=>f.data) && !ficheCache[p.id]) {
-          ficheCache[p.id] = p.technischeFiches.filter(f=>f.data);
-        }
-      });
-      // Fetch rechtstreeks uit product_fiches als cache leeg is voor producten in offerte
-      try {
-        const productIds = (offerte.lijnen||[]).map(l=>l.productId).filter(Boolean);
-        const missing = productIds.filter(pid => !ficheCache[pid] || ficheCache[pid].length === 0);
-        if(missing.length > 0 && user) {
-          const fr = await sb.from("product_fiches").select("product_id,fiches").eq("user_id",user.id).in("product_id",missing);
-          if(fr.data) fr.data.forEach(r=>{ if(r.fiches && r.fiches.some(f=>f.data)) ficheCache[r.product_id] = r.fiches; });
-        }
-      } catch(_){}
+      // Laad fiches rechtstreeks uit product_fiches tabel (single source of truth)
+      const productIds = [...new Set((offerte.lijnen||[]).map(l=>l.productId).filter(Boolean))];
+      const ficheCache = await loadFichesForProducts(productIds);
 
       // Bouw lijnen ZONDER base64 voor het hoofdrecord (klein → geen timeout)
       const cleanLijnen = (offerte.lijnen||[]).map(l => {
@@ -3602,7 +3592,14 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
             }} onNew={()=>{setEditOff(null);setWizOpen(true)}} onEmail={async d=>{try{await shareOfferte(d);}catch(_){}setEmailModal({doc:d,type:"offerte"});}} onPlan={d=>setPlanningModal(d)} onShare={d=>{shareOfferte(d);notify("🔗 Publieke link vernieuwd ✓");}} settings={settings}/>}
             {pg==="facturen"&&<FacturenPage facturen={factMet} settings={settings} initFilter={pgFilter} onView={d=>setViewDoc({doc:d,type:"factuur"})} onEdit={f=>{setEditFact(f);setFactuurWizOpen(true);}} onStatus={updFact} onBulkStatus={bulkUpdFact} onDelete={id=>{setFacturen(p=>p.filter(f=>f.id!==id));localTimestamps.current["b4_fct"]=Date.now();try{localStorage.setItem("billr_ts",JSON.stringify(localTimestamps.current));}catch(_){}notify("Verwijderd");setTimeout(()=>flushSavesRef.current(),100);}} notify={notify} onEmail={d=>setEmailModal({doc:d,type:"factuur"})} onBetaling={f=>setBetalingModal(f)} onAanmaning={f=>setAanmaningModal(f)} onNew={()=>{setEditFact(null);setFactuurWizOpen(true)}}/>}
             {pg==="klanten"&&<KlantenPage klanten={klanten} offertes={offertes} facturen={factMet} view={klantView} onEdit={k=>setKlantModal(k)} onDelete={id=>{setKlanten(p=>p.map(k=>k.id===id?{...k,_verwijderd:true}:k));localTimestamps.current["b4_kln"]=Date.now();try{localStorage.setItem("billr_ts",JSON.stringify(localTimestamps.current));}catch(_){}notify("Klant verwijderd");setTimeout(()=>flushSavesRef.current(),100);}}/>}
-            {pg==="producten"&&<ProductenPage producten={producten} settings={settings} onEdit={p=>setProdModal(p)} onDelete={id=>{setProducten(p=>p.filter(x=>x.id!==id));notify("Verwijderd")}} onToggle={id=>setProducten(p=>p.map(x=>x.id===id?{...x,actief:!x.actief}:x))} onEnrich={upd=>setProducten(p=>p.map(x=>x.id===upd.id?upd:x))} onDuplicate={p=>{const dup={...p,id:uid(),naam:p.naam+" (kopie)",aangemaakt:new Date().toISOString()};setProducten(prev=>[dup,...prev]);notify("Product gedupliceerd ✓");setProdModal(dup);}}/>}
+            {pg==="producten"&&<ProductenPage producten={producten} settings={settings} onEdit={async p=>{
+              if(p?.id) {
+                // Laad fiches on-demand uit product_fiches tabel
+                const { data } = await sb.from("product_fiches").select("fiches").eq("user_id",user.id).eq("product_id",p.id).single().catch(()=>({data:null}));
+                if(data?.fiches?.some(f=>f.data)) { setProdModal({...p, technischeFiches: data.fiches}); return; }
+              }
+              setProdModal(p);
+            }} onDelete={id=>{setProducten(p=>p.filter(x=>x.id!==id));notify("Verwijderd")}} onToggle={id=>setProducten(p=>p.map(x=>x.id===id?{...x,actief:!x.actief}:x))} onEnrich={upd=>setProducten(p=>p.map(x=>x.id===upd.id?upd:x))} onDuplicate={p=>{const dup={...p,id:uid(),naam:p.naam+" (kopie)",aangemaakt:new Date().toISOString()};setProducten(prev=>[dup,...prev]);notify("Product gedupliceerd ✓");setProdModal(dup);}}/>}
             {pg==="agenda"&&<AgendaPage offertes={offertes} settings={settings} onPlan={o=>setPlanningModal(o)} onPlanDelete={deletePlanning} />}
             {pg==="rapportage"&&<Rapportage offertes={offertes} facturen={factMet}/>}
             {pg==="instellingen"&&<InstellingenPage settings={settings} setSettings={s=>{setSettings(s);notify("Instellingen opgeslagen ✓");}} notify={notify} onExportBackup={doExportBackup} onImportBackup={doImportBackup} onSaveBackupSB={saveBackupToSB} sbClient={sb} userId={user?.id}/>}
@@ -3616,7 +3613,7 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
         </div>
       </div>
 
-      {wizOpen&&<OfferteWizard klanten={klanten} producten={producten} offertes={offertes} editData={editOff} settings={settings} onSave={saveOff} onClose={()=>{setWizOpen(false);setEditOff(null);}} notify={notify}/>}
+      {wizOpen&&<OfferteWizard klanten={klanten} producten={producten} offertes={offertes} editData={editOff} settings={settings} onSave={saveOff} onClose={()=>{setWizOpen(false);setEditOff(null);}} notify={notify} sbClient={sb} userId={user?.id}/>}
       {factuurWizOpen&&<FactuurWizard klanten={klanten} producten={producten} settings={settings} editData={editFact} onSave={f=>{
         // Auto-create products from vrije lijnen
         const newProds = [];
@@ -3644,7 +3641,7 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
         }
         setFactuurWizOpen(false);setEditFact(null);
       }} onClose={()=>{setFactuurWizOpen(false);setEditFact(null);}} notify={notify}/>}
-      {viewDoc&&<DocModal doc={viewDoc.doc} type={viewDoc.type} settings={settings} producten={producten} producten={producten} onClose={()=>setViewDoc(null)} onFactuur={d=>{setFactModal(d);setViewDoc(null);}} onStatusOff={s=>{handleOffStatus(viewDoc.doc.id,{status:s});notify("Status: "+OFF_STATUS[s]?.l);}} onStatusFact={s=>{updFact(viewDoc.doc.id,{status:s});notify("Status: "+FACT_STATUS[s]?.l);}} onEmail={()=>setEmailModal({doc:viewDoc.doc,type:viewDoc.type})} onPeppol={viewDoc.type==="factuur"?()=>sendPeppol(viewDoc.doc):null} onNummer={nr=>{if(viewDoc.type==="offerte"){updOff(viewDoc.doc.id,{nummer:nr});setViewDoc(p=>({...p,doc:{...p.doc,nummer:nr}}));}else{updFact(viewDoc.doc.id,{nummer:nr});setViewDoc(p=>({...p,doc:{...p.doc,nummer:nr}}));}notify("Nummer bijgewerkt ✓");setTimeout(()=>flushSavesRef.current(),100);}}/>}
+      {viewDoc&&<DocModal doc={viewDoc.doc} type={viewDoc.type} settings={settings} producten={producten} sbClient={sb} userId={user?.id} onClose={()=>setViewDoc(null)} onFactuur={d=>{setFactModal(d);setViewDoc(null);}} onStatusOff={s=>{handleOffStatus(viewDoc.doc.id,{status:s});notify("Status: "+OFF_STATUS[s]?.l);}} onStatusFact={s=>{updFact(viewDoc.doc.id,{status:s});notify("Status: "+FACT_STATUS[s]?.l);}} onEmail={()=>setEmailModal({doc:viewDoc.doc,type:viewDoc.type})} onPeppol={viewDoc.type==="factuur"?()=>sendPeppol(viewDoc.doc):null} onNummer={nr=>{if(viewDoc.type==="offerte"){updOff(viewDoc.doc.id,{nummer:nr});setViewDoc(p=>({...p,doc:{...p.doc,nummer:nr}}));}else{updFact(viewDoc.doc.id,{nummer:nr});setViewDoc(p=>({...p,doc:{...p.doc,nummer:nr}}));}notify("Nummer bijgewerkt ✓");setTimeout(()=>flushSavesRef.current(),100);}}/>}
       {factModal&&<FactuurModal off={factModal} settings={settings} onMaak={maakFactuur} onClose={()=>setFactModal(null)}/>}
       {klantModal!==null&&<KlantModal klant={klantModal} onSave={k=>{if(k.id){setKlanten(p=>p.map(x=>x.id===k.id?k:x));notify("Klant opgeslagen");}else{setKlanten(p=>[{...k,id:uid(),aangemaakt:new Date().toISOString()},...p]);notify("Klant toegevoegd ✓");}setKlantModal(null);}} onClose={()=>setKlantModal(null)}/>}
       {prodModal!==null&&<ProductModal prod={prodModal} settings={settings} onSave={p=>{
@@ -6083,7 +6080,34 @@ function FactuurWizard({klanten,producten,settings,editData,onSave,onClose,notif
   );
 }
 
-function OfferteWizard({klanten,producten,offertes,editData,settings,onSave,onClose,notify}) {
+// Wizard preview — laadt fiches on-demand voor stap 5
+function WizardPreview({lijnen,klant,instType,groepen,notities,btwRegime,voorschot,vervaldatum,betalingstermijn,korting,kortingType,settings,producten,sbClient,userId}) {
+  const [fc, setFc] = useState({});
+  useEffect(()=>{
+    if(!sbClient||!userId) return;
+    const ids=[...new Set((lijnen||[]).map(l=>l.productId).filter(Boolean))];
+    if(!ids.length) return;
+    sbClient.from("product_fiches").select("product_id,fiches").eq("user_id",userId).in("product_id",ids)
+      .then(({data})=>{
+        if(!data) return;
+        const c={}; data.forEach(r=>{if(r.fiches?.some(f=>f.data)) c[r.product_id]=r.fiches;}); setFc(c);
+      }).catch(()=>{});
+  },[]);
+  return (
+    <div>
+      <div style={{background:"#eff6ff",border:"1px solid #bfdbfe",borderRadius:8,padding:"8px 12px",marginBottom:10,fontSize:12,color:"#1d4ed8",fontWeight:600}}>
+        👁 Voorontwerp — zo ziet uw offerte eruit (alle pagina's). Scroll om alles te bekijken.
+      </div>
+      <div style={{border:"1px solid #e2e8f0",borderRadius:10,overflow:"hidden",boxShadow:"0 2px 12px rgba(0,0,0,.08)"}}>
+        <OfferteDocument doc={{klant,installatieType:instType,groepen,lijnen,notities,btwRegime,voorschot,vervaldatum,betalingstermijn,korting:Number(korting),kortingType,nummer:"VOORBEELD",aangemaakt:new Date().toISOString()}} settings={settings} producten={producten} ficheCache={fc}/>
+      </div>
+    </div>
+  );
+}
+
+
+function OfferteWizard({klanten,producten,offertes,editData,settings,onSave,onClose,notify,sbClient,userId}) {
+  const [wizFicheCache, setWizFicheCache] = useState({});
   const [stap,setStap]=useState(editData?3:1);
   const [klant,setKlant]=useState(editData?.klant||null);
   const [klantQ,setKlantQ]=useState("");
@@ -6424,14 +6448,7 @@ function OfferteWizard({klanten,producten,offertes,editData,settings,onSave,onCl
         </div>}
 
         {/* STAP 5 — VOORBEELD */}
-        {stap===5&&<div>
-          <div style={{background:"#eff6ff",border:"1px solid #bfdbfe",borderRadius:8,padding:"8px 12px",marginBottom:10,fontSize:12,color:"#1d4ed8",fontWeight:600}}>
-            👁 Voorontwerp — zo ziet uw offerte eruit (alle pagina's). Scroll om alles te bekijken.
-          </div>
-          <div style={{border:"1px solid #e2e8f0",borderRadius:10,overflow:"hidden",boxShadow:"0 2px 12px rgba(0,0,0,.08)"}}>
-            <OfferteDocument doc={{klant,installatieType:instType,groepen,lijnen,notities,btwRegime,voorschot,vervaldatum,betalingstermijn,korting:Number(korting),kortingType,nummer:"VOORBEELD",aangemaakt:new Date().toISOString()}} settings={settings} producten={producten}/>
-          </div>
-        </div>}
+        {stap===5&&<WizardPreview lijnen={lijnen} klant={klant} instType={instType} groepen={groepen} notities={notities} btwRegime={btwRegime} voorschot={voorschot} vervaldatum={vervaldatum} betalingstermijn={betalingstermijn} korting={korting} kortingType={kortingType} settings={settings} producten={producten} sbClient={sbClient} userId={userId}/>}
       </div>
       {/* STICKY FOOTER — navigatie knoppen */}
       <div className="mf">
@@ -6662,16 +6679,8 @@ function FichePages({fiche, naam, fichNaam, omschr, dc, bed, docNummer}) {
 }
 
 function OfferteDocument({doc, settings, ficheCache={}, producten=[]}) {
-  // Bouw fiche cache: producten state + doorgegeven cache + localStorage
-  const _fc = (() => {
-    const c = {...ficheCache};
-    try { const r=localStorage.getItem("billr_fiche_cache"); if(r) { const lc=JSON.parse(r); Object.entries(lc).forEach(([k,v])=>{ if(!c[k]) c[k]=v; }); } } catch(_){}
-    producten.forEach(p => {
-      if(p.technischeFiches?.some(f=>f.data)) c[p.id] = p.technischeFiches.filter(f=>f.data);
-      else if(p.technischeFiche && p.technischeFiche.length>100) c[p.id] = [{data:p.technischeFiche,naam:p.fichNaam||"fiche.pdf"}];
-    });
-    return c;
-  })();
+  // ficheCache wordt doorgegeven vanuit de parent die het laadt uit product_fiches tabel
+  const _fc = ficheCache;
   const bed = settings?.bedrijf || INIT_SETTINGS.bedrijf;
   const sj = settings?.sjabloon || INIT_SETTINGS.sjabloon || {};
   const lyt = settings?.layout || INIT_SETTINGS.layout || {};
@@ -7324,10 +7333,26 @@ ${docWrapHtml}
 }
 
 // ─── DOC MODAL ───────────────────────────────────────────────────
-function DocModal({doc,type,settings,onClose,onFactuur,onStatusOff,onStatusFact,onEmail,onPeppol,onNummer,producten=[]}) {
+function DocModal({doc,type,settings,onClose,onFactuur,onStatusOff,onStatusFact,onEmail,onPeppol,onNummer,producten=[],sbClient,userId}) {
   const sc = type==="offerte" ? (OFF_STATUS[doc.status]||OFF_STATUS.concept) : (FACT_STATUS[doc.status]||FACT_STATUS.concept);
   const [editNummer,setEditNummer] = useState(false);
   const [nummerVal,setNummerVal] = useState(doc.nummer||"");
+  const [ficheCache,setFicheCache] = useState({});
+
+  // Laad fiches voor offerte on-demand uit product_fiches tabel
+  useEffect(()=>{
+    if(type!=="offerte" || !sbClient || !userId) return;
+    const ids = [...new Set((doc.lijnen||[]).map(l=>l.productId).filter(Boolean))];
+    if(!ids.length) return;
+    sbClient.from("product_fiches").select("product_id,fiches")
+      .eq("user_id",userId).in("product_id",ids)
+      .then(({data})=>{
+        if(!data) return;
+        const cache = {};
+        data.forEach(r=>{ if(r.fiches?.some(f=>f.data)) cache[r.product_id]=r.fiches; });
+        setFicheCache(cache);
+      }).catch(()=>{});
+  },[doc.id, type]);
 
   const doPrint = () => {
     // Zoek doc-wrap in de modal
@@ -7421,7 +7446,7 @@ function DocModal({doc,type,settings,onClose,onFactuur,onStatusOff,onStatusFact,
         </div>
       </div>
       <div className="mb-body" style={{padding:0}}>
-        {type==="offerte"?<OfferteDocument doc={doc} settings={settings} producten={producten}/>:<FactuurDocument doc={doc} settings={settings}/>}
+        {type==="offerte"?<OfferteDocument doc={doc} settings={settings} producten={producten} ficheCache={ficheCache}/>:<FactuurDocument doc={doc} settings={settings}/>}
       </div>
     </div></div>
   );
@@ -7645,19 +7670,9 @@ function KlantModal({klant,onSave,onClose}) {
 }
 
 // ─── PRODUCT MODAL ────────────────────────────────────────────────
+// prod kan fiches bevatten als die al in state zitten (geladen vanuit product_fiches bij openen)
 function ProductModal({prod,onSave,onClose,settings}) {
-  // Herstel fiches uit cache als het product gestripte fiches heeft
-  const prodMetFiches = (() => {
-    if(!prod?.id) return prod;
-    if(prod.technischeFiches?.some(f => f.data)) return prod;
-    try {
-      const raw = localStorage.getItem("billr_fiche_cache");
-      if(!raw) return prod;
-      const cache = JSON.parse(raw);
-      if(cache[prod.id]) return {...prod, technischeFiches: cache[prod.id]};
-    } catch(_){}
-    return prod;
-  })();
+  const prodMetFiches = prod || {};
   const [form,setForm]=useState({naam:"",cat:"Laadstation",merk:"",omschr:"",prijs:0,btw:21,eenheid:"stuk",imageUrl:"",specs:[],technischeFiches:[],technischeFiche:null,fichNaam:"",...prodMetFiches,technischeFiches:prodMetFiches?.technischeFiches||((prodMetFiches?.technischeFiche)?[{data:prodMetFiches.technischeFiche,naam:prodMetFiches.fichNaam||"fiche.pdf"}]:[])}); 
   const [specsStr,setSpecsStr]=useState((prod?.specs||[]).join("\n"));
   const [ficheLoad,setFicheLoad]=useState(false);
