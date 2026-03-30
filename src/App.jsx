@@ -314,18 +314,34 @@ function getRecommandPath(settings, path) {
 function recommandHeaders(settings) {
   const key = getRecommandKey(settings);
   const secret = getRecommandSecret(settings);
-  const creds = btoa(key + ":" + secret);
+  // JWT Bearer token: secret begint met "eyJ" (JWT formaat)
+  if (secret && secret.startsWith("eyJ")) {
+    return {
+      "Authorization": "Bearer " + secret,
+      "Content-Type": "application/json"
+    };
+  }
+  // Basic auth: key:secret (of key: als geen secret)
+  const creds = btoa(key + ":" + (secret || ""));
   return {
     "Authorization": "Basic " + creds,
     "Content-Type": "application/json"
   };
+}
+function hasRecommandAuth(settings) {
+  const key = getRecommandKey(settings);
+  const secret = getRecommandSecret(settings);
+  // JWT: alleen secret (startend met eyJ) nodig
+  if (secret && secret.startsWith("eyJ")) return true;
+  // Basic: key vereist
+  return !!key;
 }
 
 // Controleer of klant geregistreerd staat op Peppol via Recommand
 async function checkPeppolRecommand(btwnr, settings) {
   const key = getRecommandKey(settings);
   const secret = getRecommandSecret(settings);
-  if(!key || !secret) return { registered: false, reason: "Geen Recommand API key" };
+  if(!hasRecommandAuth(settings)) return { registered: false, reason: "Geen Recommand API key" };
   const nr = String(btwnr||"").replace(/[\s.]/g,"").replace(/^BE/i,"");
   const peppolId = "0208:" + nr;
   try {
@@ -2636,8 +2652,8 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
 
   // ═══ PEPPOL VERZENDING VIA RECOMMAND ═══
   const sendPeppol = async (factuur) => {
-    if(!getRecommandKey(settings) || !getRecommandSecret(settings)) {
-      notify("Recommand API key/secret niet ingesteld. Ga naar Instellingen → Integraties.", "er"); return;
+    if(!hasRecommandAuth(settings)) {
+      notify("Recommand API key niet ingesteld. Ga naar Instellingen → Integraties.", "er"); return;
     }
     if(!getRecommandCompanyId(settings)) {
       notify("Recommand Company ID niet ingesteld. Ga naar Instellingen → Integraties.", "er"); return;
@@ -8470,7 +8486,7 @@ function InstellingenPage({settings,setSettings,notify,onExportBackup,onImportBa
                 </div>
               </div>
               <div style={{fontSize:11,color:"#15803d",padding:"8px 10px",background:"rgba(34,197,94,.1)",borderRadius:6,marginTop:8}}>
-                <strong>Recommand Status:</strong> {form.integraties?.recommandKey ? "✓ Configuratie ingevuld" : "⚠ API key + secret + company ID vereist"} · 
+                <strong>Recommand Status:</strong> {form.integraties?.recommandKey || (form.integraties?.recommandSecret?.startsWith?.("eyJ")) ? "✓ Configuratie ingevuld" : "⚠ API key of JWT token vereist"} · 
                 {form.integraties?.recommandSandbox ? "🟡 Playground (geen echte facturen)" : "🟢 Productie"}
               </div>
               <div style={{fontSize:10.5,color:"#059669",marginTop:6,lineHeight:1.5}}>
