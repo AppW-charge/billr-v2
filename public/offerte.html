@@ -1456,11 +1456,15 @@ function Bevestiging({offerteId, status, klantAkkoord, toonBevestigingslink}) {
               {datum && (
                 <div style={{marginTop:8,fontSize:11,color:"#059669",textAlign:"center"}}>
                   📅 Voorkeur: {new Date(datum+"T12:00:00").toLocaleDateString("nl-BE",{weekday:"long",day:"numeric",month:"long",year:"numeric"})}
-                      </div>{/* inner padding */}
-            </div>{/* modal */}
-          </div>{/* overlay */}
-        )}
-      </>
+                </div>
+              )}
+            </>
+          )}
+            </div>{/* inner padding */}
+          </div>{/* modal */}
+        </div>{/* overlay */}
+      )}
+    </>
   );
 }
 
