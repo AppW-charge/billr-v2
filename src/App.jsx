@@ -441,6 +441,7 @@ async function sendViaRecommand(factuur, settings) {
     invoiceNumber: factuur.nummer,
     issueDate: factuur.datum || new Date().toISOString().slice(0,10),
     dueDate: factuur.vervaldatum || factuur.datum,
+    buyerReference: factuur.nummer,
     note: factuur.nummer + (isVerlegdBtw ? " — BTW verlegd (medecontractant)" : ""),
     seller: {
       vatNumber: sellerVatFull,
@@ -460,7 +461,7 @@ async function sendViaRecommand(factuur, settings) {
       postalZone: gemParts[1] || "",
       country: "BE"
     },
-    vat: { subtotals: vatSubtotals },
+    ...(vatSubtotals.length > 0 ? { vat: { subtotals: vatSubtotals } } : {}),
     ...(iban ? { paymentMeans: [{ paymentMethod: "credit_transfer", reference: factuur.nummer, iban }] } : {}),
     ...(totaalKorting > 0 ? { allowances: [{ amount: String(totaalKorting.toFixed(2)), reason: "Korting" }] } : {}),
     lines
@@ -469,10 +470,13 @@ async function sendViaRecommand(factuur, settings) {
   const klantNr = buyerVatRaw.replace(/^BE/i,"");
   const recipient = "0208:" + klantNr;
 
+  const payload = { recipient, documentType: "invoice", document: doc };
+  console.log("[PEPPOL] Payload:", JSON.stringify(payload, null, 2));
+
   const resp = await fetch(getRecommandPath(settings, `/${companyId}/send`), {
     method: "POST",
     headers: recommandHeaders(settings),
-    body: JSON.stringify({ recipient, documentType: "invoice", document: doc })
+    body: JSON.stringify(payload)
   });
 
   if(!resp.ok) {
