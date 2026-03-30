@@ -427,6 +427,19 @@ async function sendViaRecommand(factuur, settings) {
     },
     ...(iban ? { paymentMeans: [{ paymentMethod: "credit_transfer", reference: factuur.nummer, iban }] } : {}),
     ...(totaalKorting > 0 ? { allowances: [{ amount: String(totaalKorting.toFixed(2)), reason: "Korting" }] } : {}),
+    // Document-niveau VAT breakdown — vereist door Peppol BIS 3.0 voor AE/Z
+    ...(vatCat !== "S" ? {
+      vat: {
+        subtotals: [{
+          taxableAmount: String(positiefLijnen.reduce((s,l)=>s+Math.abs((l.prijs||0))*(l.aantal||1),0).toFixed(2)),
+          taxAmount: "0.00",
+          category: vatCat,
+          percentage: "0",
+          exemptionReasonCode: vatCat === "AE" ? "VATEX-EU-AE" : "VATEX-EU-O",
+          exemptionReason: vatCat === "AE" ? "Reverse charge" : "Not subject to VAT"
+        }]
+      }
+    } : {}),
     lines
   };
 
