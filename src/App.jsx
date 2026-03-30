@@ -400,8 +400,11 @@ async function sendViaRecommand(factuur, settings) {
   };
 
   const lines = positiefLijnen.map(l => {
-    const btw = l.btw ?? 21;
-    const cat = vatCategorie(btw);
+    const btwRaw = l.btw ?? 21;
+    const cat = vatCategorie(btwRaw);
+    // Voor AE (verlegd): stuur de nominale BTW-rate (21), nooit 0
+    // Recommand vereist de eigenlijke rate, niet 0
+    const btwSend = (cat === "AE" && (!btwRaw || btwRaw === 0)) ? 21 : btwRaw;
     return {
       name: l.naam || "",
       description: l.omschr || undefined,
@@ -409,7 +412,7 @@ async function sendViaRecommand(factuur, settings) {
       quantity: l.aantal || 1,
       vat: {
         category: cat,
-        percentage: String(btw)
+        percentage: String(btwSend)
       }
     };
   });
