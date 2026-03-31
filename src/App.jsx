@@ -502,7 +502,7 @@ async function sendViaRecommand(factuur, settings) {
       ${li.l.omschr?`<cbc:Description>${xe(li.l.omschr)}</cbc:Description>`:""}
       <cac:ClassifiedTaxCategory>
         <cbc:ID>${vatCat}</cbc:ID>
-        <cbc:Percent>${li.btwPct}</cbc:Percent>
+        <cbc:Percent>${vatCat === "S" ? li.btwPct : 0}</cbc:Percent>
         <cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme>
       </cac:ClassifiedTaxCategory>
     </cac:Item>
