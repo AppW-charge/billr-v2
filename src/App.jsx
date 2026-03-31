@@ -499,7 +499,7 @@ async function sendViaRecommand(factuur, settings) {
   console.log("[PEPPOL] XML bytes:", ubl.length, "recipient:", recipient);
   console.log("[PEPPOL] XML preview:", ubl.substring(0, 300));
 
-  const resp = await fetch(getRecommandPath(settings, `/\${companyId}/send`), {
+  const resp = await fetch(getRecommandPath(settings, "/" + companyId + "/send"), {
     method: "POST",
     headers: recommandHeaders(settings),
     body: JSON.stringify({ recipient, documentType: "xml", document: ubl })
