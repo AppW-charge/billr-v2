@@ -543,7 +543,7 @@ async function sendViaRecommand(factuur, settings) {
   if(!resp.ok) {
     const err = await resp.json().catch(()=>({}));
     console.error("[PEPPOL] VOLLEDIGE FOUT:", JSON.stringify(err, null, 2));
-    console.error("[PEPPOL] Gestuurde XML (eerste 2000 chars):", ubl.substring(0, 2000));
+    console.error("[PEPPOL] TaxTotal sectie:", ubl.substring(ubl.indexOf("<cac:TaxTotal>"), ubl.indexOf("</cac:TaxTotal>")+15)); console.error("[PEPPOL] PaymentMeans:", ubl.substring(ubl.indexOf("<cac:PaymentMeans>"), ubl.indexOf("</cac:PaymentMeans>")+20));
     let e = err.root || err.errors || err.message || err.error || err;
     if(Array.isArray(e)) e = e.join("\n");
     else if(typeof e === "object") e = JSON.stringify(e);
