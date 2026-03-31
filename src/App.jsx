@@ -409,7 +409,7 @@ async function sendViaRecommand(factuur, settings) {
   const stdPct   = vatCat==="S" ? (lineItems[0]?.btwPct??21) : 0;
 
   // UBL XML - exact zoals @pixeldrive/peppol-toolkit genereert
-  const ubl = \`<?xml version="1.0" encoding="UTF-8"?>
+  const ubl = `<?xml version="1.0" encoding="UTF-8"?>
 <Invoice xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2" xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2" xmlns:cec="urn:oasis:names:specification:ubl:schema:xsd:CommonExtensionComponents-2" xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2">
   <cbc:UBLVersionID>2.1</cbc:UBLVersionID>
   <cbc:CustomizationID>urn:cen.eu:en16931:2017#compliant#urn:fdc:peppol.eu:2017:poacc:billing:3.0</cbc:CustomizationID>
@@ -462,11 +462,11 @@ async function sendViaRecommand(factuur, settings) {
       </cac:PartyLegalEntity>
     </cac:Party>
   </cac:AccountingCustomerParty>
-  \${iban ? \`<cac:PaymentMeans>
+  \${iban ? `<cac:PaymentMeans>
     <cac:PayeeFinancialAccount>
       <cbc:ID>\${xe(iban)}</cbc:ID>
     </cac:PayeeFinancialAccount>
-  </cac:PaymentMeans>\` : ""}
+  </cac:PaymentMeans>` : ""}
   <cac:TaxTotal>
     <cbc:TaxAmount>\${f2(sumVat)}</cbc:TaxAmount>
     <cac:TaxSubtotal>
@@ -475,8 +475,8 @@ async function sendViaRecommand(factuur, settings) {
       <cac:TaxCategory>
         <cbc:ID>\${vatCat}</cbc:ID>
         <cbc:Percent>\${stdPct}.00</cbc:Percent>
-        \${vatCat!=="S" ? \`<cbc:TaxExemptionReasonCode>\${vatCat==="AE"?"VATEX-EU-AE":"VATEX-EU-O"}</cbc:TaxExemptionReasonCode>
-        <cbc:TaxExemptionReason>\${vatCat==="AE"?"Reverse charge":"Not subject to VAT"}</cbc:TaxExemptionReason>\` : ""}
+        \${vatCat!=="S" ? `<cbc:TaxExemptionReasonCode>\${vatCat==="AE"?"VATEX-EU-AE":"VATEX-EU-O"}</cbc:TaxExemptionReasonCode>
+        <cbc:TaxExemptionReason>\${vatCat==="AE"?"Reverse charge":"Not subject to VAT"}</cbc:TaxExemptionReason>` : ""}
         <cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme>
       </cac:TaxCategory>
     </cac:TaxSubtotal>
@@ -485,16 +485,16 @@ async function sendViaRecommand(factuur, settings) {
     <cbc:LineExtensionAmount currencyID="EUR">\${f2(sumLines)}</cbc:LineExtensionAmount>
     <cbc:TaxExclusiveAmount currencyID="EUR">\${f2(sumExcl)}</cbc:TaxExclusiveAmount>
     <cbc:TaxInclusiveAmount currencyID="EUR">\${f2(sumIncl)}</cbc:TaxInclusiveAmount>
-    \${totaalKorting>0?\`<cbc:AllowanceTotalAmount currencyID="EUR">\${f2(totaalKorting)}</cbc:AllowanceTotalAmount>\`:""}
+    \${totaalKorting>0?`<cbc:AllowanceTotalAmount currencyID="EUR">\${f2(totaalKorting)}</cbc:AllowanceTotalAmount>`:""}
     <cbc:PayableAmount currencyID="EUR">\${f2(sumIncl)}</cbc:PayableAmount>
   </cac:LegalMonetaryTotal>
-  \${lineItems.map(li=>\`<cac:InvoiceLine>
+  \${lineItems.map(li=>`<cac:InvoiceLine>
     <cbc:ID>\${li.i+1}</cbc:ID>
     <cbc:InvoicedQuantity unitCode="C62">\${li.aantal}.00</cbc:InvoicedQuantity>
     <cbc:LineExtensionAmount currencyID="EUR">\${f2(li.ext)}</cbc:LineExtensionAmount>
     <cac:Item>
       <cbc:Name>\${xe(li.l.naam||"")}</cbc:Name>
-      \${li.l.omschr?\`<cbc:Description>\${xe(li.l.omschr)}</cbc:Description>\`:""}
+      \${li.l.omschr?`<cbc:Description>\${xe(li.l.omschr)}</cbc:Description>`:""}
       <cac:ClassifiedTaxCategory>
         <cbc:ID>\${vatCat}</cbc:ID>
         <cbc:Percent>0.00</cbc:Percent>
@@ -504,14 +504,14 @@ async function sendViaRecommand(factuur, settings) {
     <cac:Price>
       <cbc:PriceAmount currencyID="EUR">\${f2(li.prijs)}</cbc:PriceAmount>
     </cac:Price>
-  </cac:InvoiceLine>\`).join("\n  ")}
-</Invoice>\`;
+  </cac:InvoiceLine>`).join("\n  ")}
+</Invoice>`;
 
   const recipient = "0208:" + buyerEntNr;
   console.log("[PEPPOL] XML bytes:", ubl.length, "recipient:", recipient);
   console.log("[PEPPOL] XML preview:", ubl.substring(0, 300));
 
-  const resp = await fetch(getRecommandPath(settings, \`/\${companyId}/send\`), {
+  const resp = await fetch(getRecommandPath(settings, `/\${companyId}/send`), {
     method: "POST",
     headers: recommandHeaders(settings),
     body: JSON.stringify({ recipient, documentType: "xml", document: ubl })
