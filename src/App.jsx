@@ -476,6 +476,7 @@ async function sendViaRecommand(factuur, settings) {
     "      <cac:TaxCategory>",
     "        <cbc:ID>" + vatCat + "</cbc:ID>",
     "        <cbc:Percent>" + stdPct + ".00</cbc:Percent>",
+    ...(vatCat !== "S" ? ["        <cbc:TaxExemptionReasonCode>" + (vatCat==="AE" ? "VATEX-EU-AE" : "VATEX-EU-O") + "</cbc:TaxExemptionReasonCode>", "        <cbc:TaxExemptionReason>" + (vatCat==="AE" ? "Reverse charge" : "Not subject to VAT") + "</cbc:TaxExemptionReason>"] : []),
     "        <cac:TaxScheme>",
     "          <cbc:ID>VAT</cbc:ID>",
     "        </cac:TaxScheme>",
