@@ -468,6 +468,22 @@ async function sendViaRecommand(factuur, settings) {
     "  </cac:PaymentMeans>"
   );
 
+  // AllowanceCharge element verplicht als er korting is (Peppol BR-CO-21)
+  if(totaalKorting > 0) xmlLines.push(
+    "  <cac:AllowanceCharge>",
+    "    <cbc:ChargeIndicator>false</cbc:ChargeIndicator>",
+    "    <cbc:AllowanceChargeReason>Korting</cbc:AllowanceChargeReason>",
+    '    <cbc:Amount currencyID="EUR">' + f2(totaalKorting) + "</cbc:Amount>",
+    "    <cac:TaxCategory>",
+    "      <cbc:ID>" + vatCat + "</cbc:ID>",
+    "      <cbc:Percent>0.00</cbc:Percent>",
+    "      <cac:TaxScheme>",
+    "        <cbc:ID>VAT</cbc:ID>",
+    "      </cac:TaxScheme>",
+    "    </cac:TaxCategory>",
+    "  </cac:AllowanceCharge>"
+  );
+
   xmlLines.push(
     "  <cac:TaxTotal>",
     '    <cbc:TaxAmount currencyID="EUR">' + f2(sumVat) + "</cbc:TaxAmount>",
@@ -2075,6 +2091,19 @@ export default function App() {
             if(Array.isArray(lsArr) && lsArr.length > 0 && lsArr[0]?.id !== "p1") {
               setProducten(lsArr);
               console.log("\u2705 Producten uit localStorage (Supabase miste b4_prd): " + lsArr.length);
+              // Push naar Supabase zodat andere apparaten ze ook krijgen
+              setTimeout(()=>sbSet("b4_prd", JSON.stringify(lsArr.map(p=>({...p,technischeFiche:null,technischeFiches:(p.technischeFiches||[]).map(f=>({naam:f.naam||"",type:f.type||""}))}))  ), u.id), 3000);
+            } else {
+              // Probeer nogmaals direct uit Supabase (race condition)
+              setTimeout(async()=>{
+                try {
+                  const {data:sbPrd2} = await sb.from("user_data").select("value").eq("user_id",u.id).eq("key","b4_prd").single();
+                  if(sbPrd2?.value) {
+                    const p2 = JSON.parse(sbPrd2.value);
+                    if(Array.isArray(p2) && p2.length > 0) { setProducten(p2); console.log("\u2705 Producten herlaad uit Supabase:", p2.length); }
+                  }
+                } catch(_){}
+              }, 3000);
             }
           } catch(_) {}
         }
