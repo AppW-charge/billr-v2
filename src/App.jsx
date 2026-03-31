@@ -412,9 +412,8 @@ async function sendViaRecommand(factuur, settings) {
   const ibanXml = iban
     ? "  <cac:PaymentMeans>\n    <cac:PayeeFinancialAccount>\n      <cbc:ID>" + xe(iban) + "</cbc:ID>\n    </cac:PayeeFinancialAccount>\n  </cac:PaymentMeans>"
     : "";
-  const exemptXml = vatCat !== "S"
-    ? "        <cbc:TaxExemptionReasonCode>" + (vatCat === "AE" ? "VATEX-EU-AE" : "VATEX-EU-O") + "</cbc:TaxExemptionReasonCode>\n        <cbc:TaxExemptionReason>" + (vatCat === "AE" ? "Reverse charge" : "Not subject to VAT") + "</cbc:TaxExemptionReason>\n"
-    : "";
+  // Geen TaxExemptionReasonCode - Recommand voegt die intern toe (zoals toolkit ook doet)
+  const exemptXml = "";
   const allowanceXml = totaalKorting > 0
     ? "\n    <cbc:AllowanceTotalAmount currencyID=\"EUR\">" + f2(totaalKorting) + "</cbc:AllowanceTotalAmount>"
     : "";
@@ -502,7 +501,13 @@ async function sendViaRecommand(factuur, settings) {
   const resp = await fetch(getRecommandPath(settings, "/" + companyId + "/send"), {
     method: "POST",
     headers: recommandHeaders(settings),
-    body: JSON.stringify({ recipient, documentType: "xml", document: ubl })
+    body: JSON.stringify({
+      recipient,
+      documentType: "xml",
+      document: ubl,
+      doctypeId: "urn:oasis:names:specification:ubl:schema:xsd:Invoice-2::Invoice##urn:cen.eu:en16931:2017#compliant#urn:fdc:peppol.eu:2017:poacc:billing:3.0::2.1",
+      processId: "urn:fdc:peppol.eu:2017:poacc:billing:01:1.0"
+    })
   });
 
   if(!resp.ok) {
