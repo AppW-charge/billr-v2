@@ -475,22 +475,8 @@ async function sendViaRecommand(factuur, settings) {
     "  </cac:PaymentMeans>"
   );
 
-  // AllowanceCharge element verplicht als er korting is (Peppol BR-CO-21)
-  if(totaalKorting > 0) xmlLines.push(
-    "  <cac:AllowanceCharge>",
-    "    <cbc:ChargeIndicator>false</cbc:ChargeIndicator>",
-    "    <cbc:AllowanceChargeReason>Korting</cbc:AllowanceChargeReason>",
-    '    <cbc:Amount currencyID="EUR">' + f2(totaalKorting) + "</cbc:Amount>",
-    "    <cac:TaxCategory>",
-    "      <cbc:ID>" + vatCat + "</cbc:ID>",
-    "      <cbc:Percent>" + (vatCat === 'S' ? stdPct : 0) + ".00</cbc:Percent>",
-    ...(vatCat !== 'S' ? ["      <cbc:TaxExemptionReason>" + (vatCat === 'AE' ? 'Reverse charge' : 'Not subject to VAT') + "</cbc:TaxExemptionReason>"] : []),
-    "      <cac:TaxScheme>",
-    "        <cbc:ID>VAT</cbc:ID>",
-    "      </cac:TaxScheme>",
-    "    </cac:TaxCategory>",
-    "  </cac:AllowanceCharge>"
-  );
+  // Korting als negatieve InvoiceLine (Recommand ondersteunt geen AllowanceCharge met AE)
+  // Negatieve lijnen worden VOOR de positieve lijnen toegevoegd via kortingLijnen array
 
   xmlLines.push(
     "  <cac:TaxTotal>",
@@ -509,20 +495,44 @@ async function sendViaRecommand(factuur, settings) {
     "    </cac:TaxSubtotal>",
     "  </cac:TaxTotal>",
     "  <cac:LegalMonetaryTotal>",
-    '    <cbc:LineExtensionAmount currencyID="EUR">' + f2(sumLines) + "</cbc:LineExtensionAmount>",
+    '    <cbc:LineExtensionAmount currencyID="EUR">' + f2(sumExcl) + "</cbc:LineExtensionAmount>",
     '    <cbc:TaxExclusiveAmount currencyID="EUR">' + f2(sumExcl) + "</cbc:TaxExclusiveAmount>",
     '    <cbc:TaxInclusiveAmount currencyID="EUR">' + f2(sumIncl) + "</cbc:TaxInclusiveAmount>"
   );
-  if(totaalKorting > 0) xmlLines.push('    <cbc:AllowanceTotalAmount currencyID="EUR">' + f2(totaalKorting) + "</cbc:AllowanceTotalAmount>");
+  // AllowanceTotalAmount NIET sturen (Recommand bug met AE + AllowanceCharge)
   xmlLines.push(
     '    <cbc:PayableAmount currencyID="EUR">' + f2(sumIncl) + "</cbc:PayableAmount>",
     "  </cac:LegalMonetaryTotal>"
   );
 
-  lineItems.forEach(li => {
+  // Voeg kortinglijnen toe als negatieve InvoiceLines
+  let lineIdx = 0;
+  kortingLijnen.forEach(kl => {
+    lineIdx++;
+    const klBedrag = Math.abs((kl.prijs||0) * (kl.aantal||1));
     xmlLines.push(
       "  <cac:InvoiceLine>",
-      "    <cbc:ID>" + (li.i+1) + "</cbc:ID>",
+      "    <cbc:ID>" + lineIdx + "</cbc:ID>",
+      '    <cbc:InvoicedQuantity unitCode="C62">1.00</cbc:InvoicedQuantity>',
+      '    <cbc:LineExtensionAmount currencyID="EUR">-' + f2(klBedrag) + "</cbc:LineExtensionAmount>",
+      "    <cac:Item>",
+      "      <cbc:Name>" + xe(kl.naam||"Korting") + "</cbc:Name>",
+      "      <cac:ClassifiedTaxCategory>",
+      "        <cbc:ID>" + vatCat + "</cbc:ID>",
+      "        <cbc:Percent>0.00</cbc:Percent>",
+      "        <cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme>",
+      "      </cac:ClassifiedTaxCategory>",
+      "    </cac:Item>",
+      '    <cac:Price><cbc:PriceAmount currencyID="EUR">-' + f2(klBedrag) + "</cbc:PriceAmount></cac:Price>",
+      "  </cac:InvoiceLine>"
+    );
+  });
+
+  lineItems.forEach(li => {
+    lineIdx++;
+    xmlLines.push(
+      "  <cac:InvoiceLine>",
+      "    <cbc:ID>" + lineIdx + "</cbc:ID>",
       '    <cbc:InvoicedQuantity unitCode="C62">' + li.aantal + ".00</cbc:InvoicedQuantity>",
       '    <cbc:LineExtensionAmount currencyID="EUR">' + f2(li.ext) + "</cbc:LineExtensionAmount>",
       "    <cac:Item>",
