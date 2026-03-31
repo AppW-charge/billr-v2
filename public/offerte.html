@@ -1494,15 +1494,22 @@ function App() {
       setData(d);
       // Register view
       try { sbPost("/rest/v1/offerte_views",{offerte_id:OID,user_agent:navigator.userAgent,viewed_at:new Date().toISOString()}); } catch(_){}
-      // Load fiches
+      // Load fiches: eerst uit offerte_fiches, dan fallback naar product_fiches
       try {
         const fr = await sbGet("/rest/v1/offerte_fiches?offerte_id=eq."+encodeURIComponent(OID)+"&select=product_id,fiches");
-        if(fr&&fr.length>0) {
+        if(fr&&fr.length>0 && fr.some(r=>r.fiches&&r.fiches.some(f=>f.data))) {
           const cache = {};
           fr.forEach(r => { if(r.fiches&&r.fiches.some(f=>f.data)) cache[r.product_id]=r.fiches; });
           setFicheCache(cache);
-        }
-      } catch(_){}
+        } else {
+          // Fallback: product_fiches tabel
+          const pIds = [...new Set((d.lijnen||[]).map(function(l){return l.productId;}).filter(Boolean))];
+          if(pIds.length > 0) {
+            sbGet("/rest/v1/product_fiches?product_id=in.("+pIds.join(",")+")&select=product_id,fiches").then(function(pf){
+              if(pf&&pf.length>0){const c={};pf.forEach(function(r){if(r.fiches&&r.fiches.some(function(f){return f.data;}))c[r.product_id]=r.fiches;});setFicheCache(c);}
+            }).catch(function(){});
+          }
+        }      } catch(e){ console.warn("Fiches laden mislukt:", e.message); }
     })();
   }, []);
 
