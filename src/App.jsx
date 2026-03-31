@@ -358,7 +358,7 @@ async function checkPeppolRecommand(btwnr, settings) {
   }
 }
 
-// Stuur factuur via Recommand Peppol — raw UBL XML
+// Stuur factuur via Recommand Peppol — raw UBL XML (peppol-toolkit structuur)
 async function sendViaRecommand(factuur, settings) {
   const companyId = getRecommandCompanyId(settings);
   if(!companyId) throw new Error("Recommand Company ID niet ingesteld");
@@ -378,13 +378,13 @@ async function sendViaRecommand(factuur, settings) {
   const buyerEntNr = buyerVatFull.replace(/^BE/i,"");
   const iban = (bed.iban||"").replace(/\s/g,"");
 
-  const ra = (s) => (s||"").match(/^(.+?)\s+(\d+\S*)$/) || [null,s||"",""];
-  const rg = (s) => (s||"").match(/^(\d{4})\s+(.+)$/) || [null,"",s||""];
+  const ra = s => (s||"").match(/^(.+?)\s+(\d+\S*)$/) || [null,s||"",""];
+  const rg = s => (s||"").match(/^(\d{4})\s+(.+)$/) || [null,"",s||""];
   const xe = v => String(v||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
   const f2 = n => Number(n||0).toFixed(2);
 
-  const bAdrs=ra(bed.adres); const bGem=rg(bed.gemeente);
-  const kAdrs=ra(klant.adres); const kGem=rg(klant.gemeente);
+  const bA=ra(bed.adres), bG=rg(bed.gemeente);
+  const kA=ra(klant.adres), kG=rg(klant.gemeente);
 
   const positiefLijnen=(factuur.lijnen||[]).filter(l=>(l.prijs||0)>0&&(l.naam||"").trim());
   const kortingLijnen=(factuur.lijnen||[]).filter(l=>(l.prijs||0)<0);
@@ -401,14 +401,14 @@ async function sendViaRecommand(factuur, settings) {
   const sumVat=lineItems.reduce((s,li)=>s+li.vatAmt,0);
   const sumExcl=sumLines-totaalKorting;
   const sumIncl=sumExcl+sumVat;
-  const linePct=vatCat==="S"?(lineItems[0]?.btwPct??21):0;
+  const stdPct=vatCat==="S"?(lineItems[0]?.btwPct??21):0;
 
   const issueDate=factuur.datum||new Date().toISOString().slice(0,10);
   const dueDate=factuur.vervaldatum||issueDate;
 
-  // UBL gebaseerd op @pixeldrive/peppol-toolkit output structuur
+  // XML exact gebaseerd op @pixeldrive/peppol-toolkit output (Belgisch Peppol BIS 3.0)
   const ubl=`<?xml version="1.0" encoding="UTF-8"?>
-<Invoice xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2" xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2" xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2">
+<Invoice xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2" xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2" xmlns:cec="urn:oasis:names:specification:ubl:schema:xsd:CommonExtensionComponents-2" xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2">
   <cbc:UBLVersionID>2.1</cbc:UBLVersionID>
   <cbc:CustomizationID>urn:cen.eu:en16931:2017#compliant#urn:fdc:peppol.eu:2017:poacc:billing:3.0</cbc:CustomizationID>
   <cbc:ProfileID>urn:fdc:peppol.eu:2017:poacc:billing:01:1.0</cbc:ProfileID>
@@ -418,48 +418,52 @@ async function sendViaRecommand(factuur, settings) {
   <cbc:InvoiceTypeCode>380</cbc:InvoiceTypeCode>
   <cbc:DocumentCurrencyCode>EUR</cbc:DocumentCurrencyCode>
   <cbc:BuyerReference>${xe(factuur.nummer)}</cbc:BuyerReference>
-  <cac:AccountingSupplierParty><cac:Party>
-    <cbc:EndpointID schemeID="0208">${xe(sellerEntNr)}</cbc:EndpointID>
-    <cac:PartyIdentification><cbc:ID>${xe(sellerEntNr)}</cbc:ID></cac:PartyIdentification>
-    <cac:PartyName><cbc:Name>${xe(bed.naam||"W-Charge BV")}</cbc:Name></cac:PartyName>
-    <cac:PostalAddress>
-      <cbc:StreetName>${xe((bAdrs[1]||"")+(bAdrs[2]?" "+bAdrs[2]:""))}</cbc:StreetName>
-      <cbc:CityName>${xe(bGem[2]||"")}</cbc:CityName>
-      <cbc:PostalZone>${xe(bGem[1]||"")}</cbc:PostalZone>
-      <cac:Country><cbc:IdentificationCode>BE</cbc:IdentificationCode></cac:Country>
-    </cac:PostalAddress>
-    <cac:PartyTaxScheme>
-      <cbc:CompanyID>${xe(sellerVatFull)}</cbc:CompanyID>
-      <cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme>
-    </cac:PartyTaxScheme>
-    <cac:PartyLegalEntity>
-      <cbc:RegistrationName>${xe(bed.naam||"W-Charge BV")}</cbc:RegistrationName>
-      <cbc:CompanyID>${xe(sellerEntNr)}</cbc:CompanyID>
-    </cac:PartyLegalEntity>
-  </cac:Party></cac:AccountingSupplierParty>
-  <cac:AccountingCustomerParty><cac:Party>
-    <cbc:EndpointID schemeID="0208">${xe(buyerEntNr)}</cbc:EndpointID>
-    <cac:PartyIdentification><cbc:ID>${xe(buyerEntNr)}</cbc:ID></cac:PartyIdentification>
-    <cac:PartyName><cbc:Name>${xe(klant.naam||klant.bedrijf||"")}</cbc:Name></cac:PartyName>
-    <cac:PostalAddress>
-      <cbc:StreetName>${xe((kAdrs[1]||"")+(kAdrs[2]?" "+kAdrs[2]:""))}</cbc:StreetName>
-      <cbc:CityName>${xe(kGem[2]||"")}</cbc:CityName>
-      <cbc:PostalZone>${xe(kGem[1]||"")}</cbc:PostalZone>
-      <cac:Country><cbc:IdentificationCode>BE</cbc:IdentificationCode></cac:Country>
-    </cac:PostalAddress>
-    <cac:PartyTaxScheme>
-      <cbc:CompanyID>${xe(buyerVatFull)}</cbc:CompanyID>
-      <cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme>
-    </cac:PartyTaxScheme>
-    <cac:PartyLegalEntity>
-      <cbc:RegistrationName>${xe(klant.naam||klant.bedrijf||"")}</cbc:RegistrationName>
-      <cbc:CompanyID>${xe(buyerEntNr)}</cbc:CompanyID>
-    </cac:PartyLegalEntity>
-  </cac:Party></cac:AccountingCustomerParty>
+  <cac:AccountingSupplierParty>
+    <cac:Party>
+      <cbc:EndpointID schemeID="0208">${xe(sellerEntNr)}</cbc:EndpointID>
+      <cac:PartyIdentification><cbc:ID>${xe(sellerEntNr)}</cbc:ID></cac:PartyIdentification>
+      <cac:PartyName><cbc:Name>${xe(bed.naam||"W-Charge BV")}</cbc:Name></cac:PartyName>
+      <cac:PostalAddress>
+        <cbc:StreetName>${xe((bA[1]||"")+(bA[2]?" "+bA[2]:""))}</cbc:StreetName>
+        <cbc:CityName>${xe(bG[2]||"")}</cbc:CityName>
+        <cbc:PostalZone>${xe(bG[1]||"")}</cbc:PostalZone>
+        <cac:Country><cbc:IdentificationCode>BE</cbc:IdentificationCode></cac:Country>
+      </cac:PostalAddress>
+      <cac:PartyTaxScheme>
+        <cbc:CompanyID>${xe(sellerVatFull)}</cbc:CompanyID>
+        <cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme>
+      </cac:PartyTaxScheme>
+      <cac:PartyLegalEntity>
+        <cbc:RegistrationName>${xe(bed.naam||"W-Charge BV")}</cbc:RegistrationName>
+        <cbc:CompanyID>${xe(sellerEntNr)}</cbc:CompanyID>
+      </cac:PartyLegalEntity>
+    </cac:Party>
+  </cac:AccountingSupplierParty>
+  <cac:AccountingCustomerParty>
+    <cac:Party>
+      <cbc:EndpointID schemeID="0208">${xe(buyerEntNr)}</cbc:EndpointID>
+      <cac:PartyIdentification><cbc:ID>${xe(buyerEntNr)}</cbc:ID></cac:PartyIdentification>
+      <cac:PartyName><cbc:Name>${xe(klant.naam||klant.bedrijf||"")}</cbc:Name></cac:PartyName>
+      <cac:PostalAddress>
+        <cbc:StreetName>${xe((kA[1]||"")+(kA[2]?" "+kA[2]:""))}</cbc:StreetName>
+        <cbc:CityName>${xe(kG[2]||"")}</cbc:CityName>
+        <cbc:PostalZone>${xe(kG[1]||"")}</cbc:PostalZone>
+        <cac:Country><cbc:IdentificationCode>BE</cbc:IdentificationCode></cac:Country>
+      </cac:PostalAddress>
+      <cac:PartyTaxScheme>
+        <cbc:CompanyID>${xe(buyerVatFull)}</cbc:CompanyID>
+        <cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme>
+      </cac:PartyTaxScheme>
+      <cac:PartyLegalEntity>
+        <cbc:RegistrationName>${xe(klant.naam||klant.bedrijf||"")}</cbc:RegistrationName>
+        <cbc:CompanyID>${xe(buyerEntNr)}</cbc:CompanyID>
+      </cac:PartyLegalEntity>
+    </cac:Party>
+  </cac:AccountingCustomerParty>
   ${iban?`<cac:PaymentMeans>
-    <cbc:PaymentMeansCode>30</cbc:PaymentMeansCode>
-    <cbc:PaymentID>${xe(factuur.nummer)}</cbc:PaymentID>
-    <cac:PayeeFinancialAccount><cbc:ID>${xe(iban)}</cbc:ID></cac:PayeeFinancialAccount>
+    <cac:PayeeFinancialAccount>
+      <cbc:ID>${xe(iban)}</cbc:ID>
+    </cac:PayeeFinancialAccount>
   </cac:PaymentMeans>`:""}
   <cac:TaxTotal>
     <cbc:TaxAmount>${f2(sumVat)}</cbc:TaxAmount>
@@ -468,11 +472,7 @@ async function sendViaRecommand(factuur, settings) {
       <cbc:TaxAmount>${f2(sumVat)}</cbc:TaxAmount>
       <cac:TaxCategory>
         <cbc:ID>${vatCat}</cbc:ID>
-        <cbc:Percent>${linePct}.00</cbc:Percent>
-        ${vatCat==="AE"?`<cbc:TaxExemptionReasonCode>VATEX-EU-AE</cbc:TaxExemptionReasonCode>
-        <cbc:TaxExemptionReason>Reverse charge</cbc:TaxExemptionReason>`:""}
-        ${vatCat==="Z"?`<cbc:TaxExemptionReasonCode>VATEX-EU-O</cbc:TaxExemptionReasonCode>
-        <cbc:TaxExemptionReason>Not subject to VAT</cbc:TaxExemptionReason>`:""}
+        <cbc:Percent>${stdPct}.00</cbc:Percent>
         <cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme>
       </cac:TaxCategory>
     </cac:TaxSubtotal>
