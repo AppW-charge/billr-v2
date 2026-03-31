@@ -1,252 +1,46 @@
 <!DOCTYPE html>
 <html>
-<head><title>Recommand XML Test</title>
+<head><title>Recommand - Test met/zonder korting</title>
 <style>body{font-family:monospace;padding:20px;max-width:900px}
-button{padding:10px 20px;background:#1a2e4a;color:white;border:none;cursor:pointer;font-size:14px}
-input{width:400px;padding:6px;margin:4px 0;font-family:monospace}
-pre{background:#f5f5f5;padding:10px;overflow:auto;max-height:300px;font-size:12px}
-.ok{color:green}.err{color:red}label{display:block;margin:6px 0}</style>
+button{padding:10px 20px;background:#1a2e4a;color:white;border:none;cursor:pointer;font-size:14px;margin:5px}
+input{width:400px;padding:6px;margin:4px 0}
+pre{background:#f5f5f5;padding:10px;overflow:auto;max-height:200px;font-size:11px}
+.ok{color:green;background:#f0fff0;padding:10px}.err{color:red;background:#fff0f0;padding:10px}
+label{display:block;margin:6px 0}</style>
 </head>
 <body>
-<h2>Recommand Peppol XML Test</h2>
-<p>Voer je Recommand credentials in (zelfde als in BILLR Instellingen):</p>
-<label>API Key: <input id="key" type="text" placeholder="key_01KN..."/></label>
-<label>API Secret: <input id="secret" type="password" placeholder="secret_xxx..."/></label>
-<label>Company ID: <input id="company" type="text" placeholder="c_01KN10VXPX7GJXZEZKZQX66D42" value="c_01KN10VXPX7GJXZEZKZQX66D42"/></label>
+<h2>Recommand Peppol - Test met/zonder korting</h2>
+<label>API Key: <input id="key" value="key_01KN2GP6WXHJWF451BQTGMP5KP"/></label>
+<label>Secret: <input id="secret" type="password"/></label>
+<label>Company ID: <input id="company" value="c_01KN10VXPX7GJXZEZKZQX66D42"/></label>
 <br>
-<button onclick="testXML()">🚀 Test met Recommand's gecorrigeerde XML</button>
-<h3>Auth header (voor debug):</h3>
-<pre id="auth">-</pre>
+<button onclick="test(1)">🚀 Test ZONDER korting (1955.00)</button>
+<button onclick="test(2)">🧪 Test MET korting (49.50 korting)</button>
 <h3>Result:</h3>
-<pre id="result">Nog niet getest...</pre>
+<pre id="result">Klik een knop...</pre>
 
 <script>
-const XML = `<?xml version="1.0" encoding="UTF-8"?>
-<Invoice xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2" xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2" xmlns:cec="urn:oasis:names:specification:ubl:schema:xsd:CommonExtensionComponents-2" xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2">
-  <cbc:UBLVersionID>2.1</cbc:UBLVersionID>
-  <cbc:CustomizationID>urn:cen.eu:en16931:2017#compliant#urn:fdc:peppol.eu:2017:poacc:billing:3.0</cbc:CustomizationID>
-  <cbc:ProfileID>urn:fdc:peppol.eu:2017:poacc:billing:01:1.0</cbc:ProfileID>
-  <cbc:ID>FACT-2025-033</cbc:ID>
-  <cbc:IssueDate>2026-03-25</cbc:IssueDate>
-  <cbc:DueDate>2026-03-31</cbc:DueDate>
-  <cbc:InvoiceTypeCode>380</cbc:InvoiceTypeCode>
-  <cbc:DocumentCurrencyCode>EUR</cbc:DocumentCurrencyCode>
-  <cbc:BuyerReference>FACT-2025-033</cbc:BuyerReference>
-  <cac:AccountingSupplierParty>
-    <cac:Party>
-      <cbc:EndpointID schemeID="0208">0779945326</cbc:EndpointID>
-      <cac:PartyIdentification>
-        <cbc:ID>0779945326</cbc:ID>
-      </cac:PartyIdentification>
-      <cac:PartyName>
-        <cbc:Name>W-charge BV</cbc:Name>
-      </cac:PartyName>
-      <cac:PostalAddress>
-        <cbc:StreetName>Groenstraat 270</cbc:StreetName>
-        <cbc:CityName>Oostakker</cbc:CityName>
-        <cbc:PostalZone>9041</cbc:PostalZone>
-        <cac:Country>
-          <cbc:IdentificationCode>BE</cbc:IdentificationCode>
-        </cac:Country>
-      </cac:PostalAddress>
-      <cac:PartyTaxScheme>
-        <cbc:CompanyID>BE0779945326</cbc:CompanyID>
-        <cac:TaxScheme>
-          <cbc:ID>VAT</cbc:ID>
-        </cac:TaxScheme>
-      </cac:PartyTaxScheme>
-      <cac:PartyLegalEntity>
-        <cbc:RegistrationName>W-charge BV</cbc:RegistrationName>
-        <cbc:CompanyID>0779945326</cbc:CompanyID>
-      </cac:PartyLegalEntity>
-    </cac:Party>
-  </cac:AccountingSupplierParty>
-  <cac:AccountingCustomerParty>
-    <cac:Party>
-      <cbc:EndpointID schemeID="0208">1007676679</cbc:EndpointID>
-      <cac:PartyIdentification>
-        <cbc:ID>1007676679</cbc:ID>
-      </cac:PartyIdentification>
-      <cac:PartyName>
-        <cbc:Name>Elias De Witte</cbc:Name>
-      </cac:PartyName>
-      <cac:PostalAddress>
-        <cbc:StreetName>Teststraat 1</cbc:StreetName>
-        <cbc:CityName>Gent</cbc:CityName>
-        <cbc:PostalZone>9000</cbc:PostalZone>
-        <cac:Country>
-          <cbc:IdentificationCode>BE</cbc:IdentificationCode>
-        </cac:Country>
-      </cac:PostalAddress>
-      <cac:PartyTaxScheme>
-        <cbc:CompanyID>BE1007676679</cbc:CompanyID>
-        <cac:TaxScheme>
-          <cbc:ID>VAT</cbc:ID>
-        </cac:TaxScheme>
-      </cac:PartyTaxScheme>
-      <cac:PartyLegalEntity>
-        <cbc:RegistrationName>Elias De Witte</cbc:RegistrationName>
-        <cbc:CompanyID>1007676679</cbc:CompanyID>
-      </cac:PartyLegalEntity>
-    </cac:Party>
-  </cac:AccountingCustomerParty>
-  <cac:PaymentMeans>
-    <cbc:PaymentMeansCode>30</cbc:PaymentMeansCode>
-    <cac:PayeeFinancialAccount>
-      <cbc:ID>BE83363218286315</cbc:ID>
-    </cac:PayeeFinancialAccount>
-  </cac:PaymentMeans>
-  <cac:TaxTotal>
-    <cbc:TaxAmount currencyID="EUR">0.00</cbc:TaxAmount>
-    <cac:TaxSubtotal>
-      <cbc:TaxableAmount currencyID="EUR">1905.50</cbc:TaxableAmount>
-      <cbc:TaxAmount currencyID="EUR">0.00</cbc:TaxAmount>
-      <cac:TaxCategory>
-        <cbc:ID>AE</cbc:ID>
-        <cbc:Percent>0.00</cbc:Percent>
-        <cbc:TaxExemptionReason>Reverse charge</cbc:TaxExemptionReason>
-        <cac:TaxScheme>
-          <cbc:ID>VAT</cbc:ID>
-        </cac:TaxScheme>
-      </cac:TaxCategory>
-    </cac:TaxSubtotal>
-  </cac:TaxTotal>
-  <cac:LegalMonetaryTotal>
-    <cbc:LineExtensionAmount currencyID="EUR">1905.50</cbc:LineExtensionAmount>
-    <cbc:TaxExclusiveAmount currencyID="EUR">1905.50</cbc:TaxExclusiveAmount>
-    <cbc:TaxInclusiveAmount currencyID="EUR">1905.50</cbc:TaxInclusiveAmount>
-    <cbc:PayableAmount currencyID="EUR">1905.50</cbc:PayableAmount>
-  </cac:LegalMonetaryTotal>
-  <cac:InvoiceLine>
-    <cbc:ID>1</cbc:ID>
-    <cbc:InvoicedQuantity unitCode="C62">1.00</cbc:InvoicedQuantity>
-    <cbc:LineExtensionAmount currencyID="EUR">180.00</cbc:LineExtensionAmount>
-    <cac:Item>
-      <cbc:Name>SMAPPEE P1 MODULE</cbc:Name>
-      <cac:ClassifiedTaxCategory>
-        <cbc:ID>AE</cbc:ID>
-        <cbc:Percent>0.00</cbc:Percent>
-        <cac:TaxScheme>
-          <cbc:ID>VAT</cbc:ID>
-        </cac:TaxScheme>
-      </cac:ClassifiedTaxCategory>
-    </cac:Item>
-    <cac:Price>
-      <cbc:PriceAmount currencyID="EUR">180.00</cbc:PriceAmount>
-    </cac:Price>
-  </cac:InvoiceLine>
-  <cac:InvoiceLine>
-    <cbc:ID>2</cbc:ID>
-    <cbc:InvoicedQuantity unitCode="C62">1.00</cbc:InvoicedQuantity>
-    <cbc:LineExtensionAmount currencyID="EUR">495.00</cbc:LineExtensionAmount>
-    <cac:Item>
-      <cbc:Name>Montage</cbc:Name>
-      <cac:ClassifiedTaxCategory>
-        <cbc:ID>AE</cbc:ID>
-        <cbc:Percent>0.00</cbc:Percent>
-        <cac:TaxScheme>
-          <cbc:ID>VAT</cbc:ID>
-        </cac:TaxScheme>
-      </cac:ClassifiedTaxCategory>
-    </cac:Item>
-    <cac:Price>
-      <cbc:PriceAmount currencyID="EUR">495.00</cbc:PriceAmount>
-    </cac:Price>
-  </cac:InvoiceLine>
-  <cac:InvoiceLine>
-    <cbc:ID>3</cbc:ID>
-    <cbc:InvoicedQuantity unitCode="C62">1.00</cbc:InvoicedQuantity>
-    <cbc:LineExtensionAmount currencyID="EUR">175.00</cbc:LineExtensionAmount>
-    <cac:Item>
-      <cbc:Name>Keuring</cbc:Name>
-      <cac:ClassifiedTaxCategory>
-        <cbc:ID>AE</cbc:ID>
-        <cbc:Percent>0.00</cbc:Percent>
-        <cac:TaxScheme>
-          <cbc:ID>VAT</cbc:ID>
-        </cac:TaxScheme>
-      </cac:ClassifiedTaxCategory>
-    </cac:Item>
-    <cac:Price>
-      <cbc:PriceAmount currencyID="EUR">175.00</cbc:PriceAmount>
-    </cac:Price>
-  </cac:InvoiceLine>
-  <cac:InvoiceLine>
-    <cbc:ID>4</cbc:ID>
-    <cbc:InvoicedQuantity unitCode="C62">1.00</cbc:InvoicedQuantity>
-    <cbc:LineExtensionAmount currencyID="EUR">995.00</cbc:LineExtensionAmount>
-    <cac:Item>
-      <cbc:Name>EV Wall Charger</cbc:Name>
-      <cac:ClassifiedTaxCategory>
-        <cbc:ID>AE</cbc:ID>
-        <cbc:Percent>0.00</cbc:Percent>
-        <cac:TaxScheme>
-          <cbc:ID>VAT</cbc:ID>
-        </cac:TaxScheme>
-      </cac:ClassifiedTaxCategory>
-    </cac:Item>
-    <cac:Price>
-      <cbc:PriceAmount currencyID="EUR">995.00</cbc:PriceAmount>
-    </cac:Price>
-  </cac:InvoiceLine>
-  <cac:InvoiceLine>
-    <cbc:ID>5</cbc:ID>
-    <cbc:InvoicedQuantity unitCode="C62">1.00</cbc:InvoicedQuantity>
-    <cbc:LineExtensionAmount currencyID="EUR">60.50</cbc:LineExtensionAmount>
-    <cac:Item>
-      <cbc:Name>Extra materiaal</cbc:Name>
-      <cac:ClassifiedTaxCategory>
-        <cbc:ID>AE</cbc:ID>
-        <cbc:Percent>0.00</cbc:Percent>
-        <cac:TaxScheme>
-          <cbc:ID>VAT</cbc:ID>
-        </cac:TaxScheme>
-      </cac:ClassifiedTaxCategory>
-    </cac:Item>
-    <cac:Price>
-      <cbc:PriceAmount currencyID="EUR">60.50</cbc:PriceAmount>
-    </cac:Price>
-  </cac:InvoiceLine>
-</Invoice>
-`;
+const XML1 = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<Invoice xmlns:cac=\"urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2\" xmlns:cbc=\"urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2\" xmlns:cec=\"urn:oasis:names:specification:ubl:schema:xsd:CommonExtensionComponents-2\" xmlns=\"urn:oasis:names:specification:ubl:schema:xsd:Invoice-2\">\n  <cbc:UBLVersionID>2.1</cbc:UBLVersionID>\n  <cbc:CustomizationID>urn:cen.eu:en16931:2017#compliant#urn:fdc:peppol.eu:2017:poacc:billing:3.0</cbc:CustomizationID>\n  <cbc:ProfileID>urn:fdc:peppol.eu:2017:poacc:billing:01:1.0</cbc:ProfileID>\n  <cbc:ID>FACT-2025-033</cbc:ID>\n  <cbc:IssueDate>2026-03-25</cbc:IssueDate>\n  <cbc:DueDate>2026-03-31</cbc:DueDate>\n  <cbc:InvoiceTypeCode>380</cbc:InvoiceTypeCode>\n  <cbc:DocumentCurrencyCode>EUR</cbc:DocumentCurrencyCode>\n  <cbc:BuyerReference>FACT-2025-033</cbc:BuyerReference>\n  <cac:AccountingSupplierParty>\n    <cac:Party>\n      <cbc:EndpointID schemeID=\"0208\">0779945326</cbc:EndpointID>\n      <cac:PartyIdentification><cbc:ID>0779945326</cbc:ID></cac:PartyIdentification>\n      <cac:PartyName><cbc:Name>W-charge BV</cbc:Name></cac:PartyName>\n      <cac:PostalAddress>\n        <cbc:StreetName>Groenstraat 270</cbc:StreetName>\n        <cbc:CityName>Oostakker</cbc:CityName>\n        <cbc:PostalZone>9041</cbc:PostalZone>\n        <cac:Country><cbc:IdentificationCode>BE</cbc:IdentificationCode></cac:Country>\n      </cac:PostalAddress>\n      <cac:PartyTaxScheme>\n        <cbc:CompanyID>BE0779945326</cbc:CompanyID>\n        <cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme>\n      </cac:PartyTaxScheme>\n      <cac:PartyLegalEntity>\n        <cbc:RegistrationName>W-charge BV</cbc:RegistrationName>\n        <cbc:CompanyID>0779945326</cbc:CompanyID>\n      </cac:PartyLegalEntity>\n    </cac:Party>\n  </cac:AccountingSupplierParty>\n  <cac:AccountingCustomerParty>\n    <cac:Party>\n      <cbc:EndpointID schemeID=\"0208\">1007676679</cbc:EndpointID>\n      <cac:PartyIdentification><cbc:ID>1007676679</cbc:ID></cac:PartyIdentification>\n      <cac:PartyName><cbc:Name>Elias De Witte</cbc:Name></cac:PartyName>\n      <cac:PostalAddress>\n        <cbc:StreetName>Pontweg 26</cbc:StreetName>\n        <cbc:CityName>Lokeren</cbc:CityName>\n        <cbc:PostalZone>9160</cbc:PostalZone>\n        <cac:Country><cbc:IdentificationCode>BE</cbc:IdentificationCode></cac:Country>\n      </cac:PostalAddress>\n      <cac:PartyTaxScheme>\n        <cbc:CompanyID>BE1007676679</cbc:CompanyID>\n        <cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme>\n      </cac:PartyTaxScheme>\n      <cac:PartyLegalEntity>\n        <cbc:RegistrationName>Elias De Witte</cbc:RegistrationName>\n        <cbc:CompanyID>1007676679</cbc:CompanyID>\n      </cac:PartyLegalEntity>\n    </cac:Party>\n  </cac:AccountingCustomerParty>\n  <cac:PaymentMeans>\n    <cbc:PaymentMeansCode>30</cbc:PaymentMeansCode>\n    <cac:PayeeFinancialAccount>\n      <cbc:ID>BE83363218286315</cbc:ID>\n    </cac:PayeeFinancialAccount>\n  </cac:PaymentMeans>\n  <cac:TaxTotal>\n    <cbc:TaxAmount currencyID=\"EUR\">0.00</cbc:TaxAmount>\n    <cac:TaxSubtotal>\n      <cbc:TaxableAmount currencyID=\"EUR\">1955.00</cbc:TaxableAmount>\n      <cbc:TaxAmount currencyID=\"EUR\">0.00</cbc:TaxAmount>\n      <cac:TaxCategory>\n        <cbc:ID>AE</cbc:ID>\n        <cbc:Percent>0.00</cbc:Percent>\n        <cbc:TaxExemptionReason>Reverse charge</cbc:TaxExemptionReason>\n        <cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme>\n      </cac:TaxCategory>\n    </cac:TaxSubtotal>\n  </cac:TaxTotal>\n  <cac:LegalMonetaryTotal>\n    <cbc:LineExtensionAmount currencyID=\"EUR\">1955.00</cbc:LineExtensionAmount>\n    <cbc:TaxExclusiveAmount currencyID=\"EUR\">1955.00</cbc:TaxExclusiveAmount>\n    <cbc:TaxInclusiveAmount currencyID=\"EUR\">1955.00</cbc:TaxInclusiveAmount>\n    <cbc:PayableAmount currencyID=\"EUR\">1955.00</cbc:PayableAmount>\n  </cac:LegalMonetaryTotal>\n  <cac:InvoiceLine>\n    <cbc:ID>1</cbc:ID>\n    <cbc:InvoicedQuantity unitCode=\"C62\">1.00</cbc:InvoicedQuantity>\n    <cbc:LineExtensionAmount currencyID=\"EUR\">1105.00</cbc:LineExtensionAmount>\n    <cac:Item>\n      <cbc:Name>EV WALL BLACK MOUNTED CHARGER</cbc:Name>\n      <cac:ClassifiedTaxCategory>\n        <cbc:ID>AE</cbc:ID><cbc:Percent>0.00</cbc:Percent>\n        <cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme>\n      </cac:ClassifiedTaxCategory>\n    </cac:Item>\n    <cac:Price><cbc:PriceAmount currencyID=\"EUR\">1105.00</cbc:PriceAmount></cac:Price>\n  </cac:InvoiceLine>\n  <cac:InvoiceLine>\n    <cbc:ID>2</cbc:ID>\n    <cbc:InvoicedQuantity unitCode=\"C62\">1.00</cbc:InvoicedQuantity>\n    <cbc:LineExtensionAmount currencyID=\"EUR\">180.00</cbc:LineExtensionAmount>\n    <cac:Item>\n      <cbc:Name>SMAPPEE P1 MODULE</cbc:Name>\n      <cac:ClassifiedTaxCategory>\n        <cbc:ID>AE</cbc:ID><cbc:Percent>0.00</cbc:Percent>\n        <cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme>\n      </cac:ClassifiedTaxCategory>\n    </cac:Item>\n    <cac:Price><cbc:PriceAmount currencyID=\"EUR\">180.00</cbc:PriceAmount></cac:Price>\n  </cac:InvoiceLine>\n  <cac:InvoiceLine>\n    <cbc:ID>3</cbc:ID>\n    <cbc:InvoicedQuantity unitCode=\"C62\">1.00</cbc:InvoicedQuantity>\n    <cbc:LineExtensionAmount currencyID=\"EUR\">495.00</cbc:LineExtensionAmount>\n    <cac:Item>\n      <cbc:Name>Montage binnen 5m verdeelkast</cbc:Name>\n      <cac:ClassifiedTaxCategory>\n        <cbc:ID>AE</cbc:ID><cbc:Percent>0.00</cbc:Percent>\n        <cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme>\n      </cac:ClassifiedTaxCategory>\n    </cac:Item>\n    <cac:Price><cbc:PriceAmount currencyID=\"EUR\">495.00</cbc:PriceAmount></cac:Price>\n  </cac:InvoiceLine>\n  <cac:InvoiceLine>\n    <cbc:ID>4</cbc:ID>\n    <cbc:InvoicedQuantity unitCode=\"C62\">1.00</cbc:InvoicedQuantity>\n    <cbc:LineExtensionAmount currencyID=\"EUR\">175.00</cbc:LineExtensionAmount>\n    <cac:Item>\n      <cbc:Name>Keuring laadstation + schema</cbc:Name>\n      <cac:ClassifiedTaxCategory>\n        <cbc:ID>AE</cbc:ID><cbc:Percent>0.00</cbc:Percent>\n        <cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme>\n      </cac:ClassifiedTaxCategory>\n    </cac:Item>\n    <cac:Price><cbc:PriceAmount currencyID=\"EUR\">175.00</cbc:PriceAmount></cac:Price>\n  </cac:InvoiceLine>\n</Invoice>";const XML2 = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<Invoice xmlns:cac=\"urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2\" xmlns:cbc=\"urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2\" xmlns:cec=\"urn:oasis:names:specification:ubl:schema:xsd:CommonExtensionComponents-2\" xmlns=\"urn:oasis:names:specification:ubl:schema:xsd:Invoice-2\">\n  <cbc:UBLVersionID>2.1</cbc:UBLVersionID>\n  <cbc:CustomizationID>urn:cen.eu:en16931:2017#compliant#urn:fdc:peppol.eu:2017:poacc:billing:3.0</cbc:CustomizationID>\n  <cbc:ProfileID>urn:fdc:peppol.eu:2017:poacc:billing:01:1.0</cbc:ProfileID>\n  <cbc:ID>FACT-2025-033</cbc:ID>\n  <cbc:IssueDate>2026-03-25</cbc:IssueDate>\n  <cbc:DueDate>2026-03-31</cbc:DueDate>\n  <cbc:InvoiceTypeCode>380</cbc:InvoiceTypeCode>\n  <cbc:DocumentCurrencyCode>EUR</cbc:DocumentCurrencyCode>\n  <cbc:BuyerReference>FACT-2025-033</cbc:BuyerReference>\n  <cac:AccountingSupplierParty>\n    <cac:Party>\n      <cbc:EndpointID schemeID=\"0208\">0779945326</cbc:EndpointID>\n      <cac:PartyIdentification><cbc:ID>0779945326</cbc:ID></cac:PartyIdentification>\n      <cac:PartyName><cbc:Name>W-charge BV</cbc:Name></cac:PartyName>\n      <cac:PostalAddress>\n        <cbc:StreetName>Groenstraat 270</cbc:StreetName>\n        <cbc:CityName>Oostakker</cbc:CityName>\n        <cbc:PostalZone>9041</cbc:PostalZone>\n        <cac:Country><cbc:IdentificationCode>BE</cbc:IdentificationCode></cac:Country>\n      </cac:PostalAddress>\n      <cac:PartyTaxScheme>\n        <cbc:CompanyID>BE0779945326</cbc:CompanyID>\n        <cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme>\n      </cac:PartyTaxScheme>\n      <cac:PartyLegalEntity>\n        <cbc:RegistrationName>W-charge BV</cbc:RegistrationName>\n        <cbc:CompanyID>0779945326</cbc:CompanyID>\n      </cac:PartyLegalEntity>\n    </cac:Party>\n  </cac:AccountingSupplierParty>\n  <cac:AccountingCustomerParty>\n    <cac:Party>\n      <cbc:EndpointID schemeID=\"0208\">1007676679</cbc:EndpointID>\n      <cac:PartyIdentification><cbc:ID>1007676679</cbc:ID></cac:PartyIdentification>\n      <cac:PartyName><cbc:Name>Elias De Witte</cbc:Name></cac:PartyName>\n      <cac:PostalAddress>\n        <cbc:StreetName>Pontweg 26</cbc:StreetName>\n        <cbc:CityName>Lokeren</cbc:CityName>\n        <cbc:PostalZone>9160</cbc:PostalZone>\n        <cac:Country><cbc:IdentificationCode>BE</cbc:IdentificationCode></cac:Country>\n      </cac:PostalAddress>\n      <cac:PartyTaxScheme>\n        <cbc:CompanyID>BE1007676679</cbc:CompanyID>\n        <cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme>\n      </cac:PartyTaxScheme>\n      <cac:PartyLegalEntity>\n        <cbc:RegistrationName>Elias De Witte</cbc:RegistrationName>\n        <cbc:CompanyID>1007676679</cbc:CompanyID>\n      </cac:PartyLegalEntity>\n    </cac:Party>\n  </cac:AccountingCustomerParty>\n  <cac:PaymentMeans>\n    <cbc:PaymentMeansCode>30</cbc:PaymentMeansCode>\n    <cac:PayeeFinancialAccount>\n      <cbc:ID>BE83363218286315</cbc:ID>\n    </cac:PayeeFinancialAccount>\n  </cac:PaymentMeans>\n  <cac:AllowanceCharge>\n    <cbc:ChargeIndicator>false</cbc:ChargeIndicator>\n    <cbc:AllowanceChargeReason>Korting</cbc:AllowanceChargeReason>\n    <cbc:Amount currencyID=\"EUR\">49.50</cbc:Amount>\n    <cac:TaxCategory>\n      <cbc:ID>AE</cbc:ID>\n      <cbc:Percent>0.00</cbc:Percent>\n      <cbc:TaxExemptionReason>Reverse charge</cbc:TaxExemptionReason>\n      <cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme>\n    </cac:TaxCategory>\n  </cac:AllowanceCharge>\n  <cac:TaxTotal>\n    <cbc:TaxAmount currencyID=\"EUR\">0.00</cbc:TaxAmount>\n    <cac:TaxSubtotal>\n      <cbc:TaxableAmount currencyID=\"EUR\">1905.50</cbc:TaxableAmount>\n      <cbc:TaxAmount currencyID=\"EUR\">0.00</cbc:TaxAmount>\n      <cac:TaxCategory>\n        <cbc:ID>AE</cbc:ID>\n        <cbc:Percent>0.00</cbc:Percent>\n        <cbc:TaxExemptionReason>Reverse charge</cbc:TaxExemptionReason>\n        <cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme>\n      </cac:TaxCategory>\n    </cac:TaxSubtotal>\n  </cac:TaxTotal>\n  <cac:LegalMonetaryTotal>\n    <cbc:LineExtensionAmount currencyID=\"EUR\">1955.00</cbc:LineExtensionAmount>\n    <cbc:TaxExclusiveAmount currencyID=\"EUR\">1905.50</cbc:TaxExclusiveAmount>\n    <cbc:TaxInclusiveAmount currencyID=\"EUR\">1905.50</cbc:TaxInclusiveAmount>\n    <cbc:AllowanceTotalAmount currencyID=\"EUR\">49.50</cbc:AllowanceTotalAmount>\n    <cbc:PayableAmount currencyID=\"EUR\">1905.50</cbc:PayableAmount>\n  </cac:LegalMonetaryTotal>\n  <cac:InvoiceLine>\n    <cbc:ID>1</cbc:ID>\n    <cbc:InvoicedQuantity unitCode=\"C62\">1.00</cbc:InvoicedQuantity>\n    <cbc:LineExtensionAmount currencyID=\"EUR\">1105.00</cbc:LineExtensionAmount>\n    <cac:Item>\n      <cbc:Name>EV WALL BLACK MOUNTED CHARGER</cbc:Name>\n      <cbc:Description>SMPEVWC332C8REB</cbc:Description>\n      <cac:ClassifiedTaxCategory>\n        <cbc:ID>AE</cbc:ID><cbc:Percent>0.00</cbc:Percent>\n        <cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme>\n      </cac:ClassifiedTaxCategory>\n    </cac:Item>\n    <cac:Price><cbc:PriceAmount currencyID=\"EUR\">1105.00</cbc:PriceAmount></cac:Price>\n  </cac:InvoiceLine>\n  <cac:InvoiceLine>\n    <cbc:ID>2</cbc:ID>\n    <cbc:InvoicedQuantity unitCode=\"C62\">1.00</cbc:InvoicedQuantity>\n    <cbc:LineExtensionAmount currencyID=\"EUR\">180.00</cbc:LineExtensionAmount>\n    <cac:Item>\n      <cbc:Name>SMAPPEE P1 MODULE</cbc:Name>\n      <cbc:Description>SMPI1P11</cbc:Description>\n      <cac:ClassifiedTaxCategory>\n        <cbc:ID>AE</cbc:ID><cbc:Percent>0.00</cbc:Percent>\n        <cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme>\n      </cac:ClassifiedTaxCategory>\n    </cac:Item>\n    <cac:Price><cbc:PriceAmount currencyID=\"EUR\">180.00</cbc:PriceAmount></cac:Price>\n  </cac:InvoiceLine>\n  <cac:InvoiceLine>\n    <cbc:ID>3</cbc:ID>\n    <cbc:InvoicedQuantity unitCode=\"C62\">1.00</cbc:InvoicedQuantity>\n    <cbc:LineExtensionAmount currencyID=\"EUR\">495.00</cbc:LineExtensionAmount>\n    <cac:Item>\n      <cbc:Name>Montage binnen 5m verdeelkast</cbc:Name>\n      <cac:ClassifiedTaxCategory>\n        <cbc:ID>AE</cbc:ID><cbc:Percent>0.00</cbc:Percent>\n        <cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme>\n      </cac:ClassifiedTaxCategory>\n    </cac:Item>\n    <cac:Price><cbc:PriceAmount currencyID=\"EUR\">495.00</cbc:PriceAmount></cac:Price>\n  </cac:InvoiceLine>\n  <cac:InvoiceLine>\n    <cbc:ID>4</cbc:ID>\n    <cbc:InvoicedQuantity unitCode=\"C62\">1.00</cbc:InvoicedQuantity>\n    <cbc:LineExtensionAmount currencyID=\"EUR\">175.00</cbc:LineExtensionAmount>\n    <cac:Item>\n      <cbc:Name>Keuring laadstation + schema</cbc:Name>\n      <cac:ClassifiedTaxCategory>\n        <cbc:ID>AE</cbc:ID><cbc:Percent>0.00</cbc:Percent>\n        <cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme>\n      </cac:ClassifiedTaxCategory>\n    </cac:Item>\n    <cac:Price><cbc:PriceAmount currencyID=\"EUR\">175.00</cbc:PriceAmount></cac:Price>\n  </cac:InvoiceLine>\n</Invoice>\n";
 
-async function testXML() {
+async function test(n) {
   const key = document.getElementById('key').value.trim();
   const secret = document.getElementById('secret').value.trim();
   const company = document.getElementById('company').value.trim();
-  
-  if(!key || !secret) { alert('Vul key en secret in!'); return; }
-  
   const auth = 'Basic ' + btoa(key + ':' + secret);
-  document.getElementById('auth').textContent = 'Authorization: ' + auth.substring(0, 30) + '... (key=' + key.substring(0,20) + '...)';
-  document.getElementById('result').textContent = 'Bezig...';
+  const xml = n === 1 ? XML1 : XML2;
   
+  document.getElementById('result').textContent = 'Bezig...';
   try {
     const resp = await fetch('/api/recommand?path=%2F' + encodeURIComponent(company) + '%2Fsend', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': auth
-      },
-      body: JSON.stringify({
-        recipient: '0208:1007676679',
-        documentType: 'xml',
-        document: XML
-      })
+      headers: {'Content-Type':'application/json','Authorization':auth},
+      body: JSON.stringify({recipient:'0208:1007676679',documentType:'xml',document:xml})
     });
-    
     const data = await resp.json();
     const pre = document.getElementById('result');
-    if(data.success) {
-      pre.className = 'ok';
-      pre.textContent = '✅ SUCCES! ' + JSON.stringify(data, null, 2);
-    } else {
-      pre.className = 'err';
-      pre.textContent = '❌ FOUT HTTP ' + resp.status + ':\n' + JSON.stringify(data, null, 2);
-    }
-  } catch(e) {
-    document.getElementById('result').textContent = 'Error: ' + e.message;
-  }
+    pre.className = data.success ? 'ok' : 'err';
+    pre.textContent = (data.success ? '✅ SUCCES! sentOverPeppol=' + data.sentOverPeppol : '❌ FOUT HTTP ' + resp.status) + '\n' + JSON.stringify(data, null, 2);
+  } catch(e) { document.getElementById('result').textContent = 'Error: ' + e.message; }
 }
 </script>
 </body>
