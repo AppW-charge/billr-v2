@@ -483,7 +483,8 @@ async function sendViaRecommand(factuur, settings) {
     '    <cbc:Amount currencyID="EUR">' + f2(totaalKorting) + "</cbc:Amount>",
     "    <cac:TaxCategory>",
     "      <cbc:ID>" + vatCat + "</cbc:ID>",
-    "      <cbc:Percent>0.00</cbc:Percent>",
+    "      <cbc:Percent>" + (vatCat === 'S' ? stdPct : 0) + ".00</cbc:Percent>",
+    ...(vatCat !== 'S' ? ["      <cbc:TaxExemptionReason>" + (vatCat === 'AE' ? 'Reverse charge' : 'Not subject to VAT') + "</cbc:TaxExemptionReason>"] : []),
     "      <cac:TaxScheme>",
     "        <cbc:ID>VAT</cbc:ID>",
     "      </cac:TaxScheme>",
@@ -3087,19 +3088,31 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
       const lyt = settings?.layout || {};
       const dc = sj.accentKleur || settings?.thema?.kleur || bed.kleur || "#1a2e4a";
 
-      // Strip alle base64 uit lijnen — fiches worden on-demand geladen via productId
+      // Haal fiches op uit product_fiches en embed ze in shareData
+      // Zodat offerte.html ze kan tonen zonder auth
+      const productIds = [...new Set((offerte.lijnen||[]).map(l=>l.productId).filter(Boolean))];
+      let ficheMap = {};
+      if(productIds.length > 0) {
+        try {
+          const {data: pfRows} = await sb.from("product_fiches").select("product_id,fiches").in("product_id", productIds);
+          if(pfRows) pfRows.forEach(r => { if(r.fiches) ficheMap[r.product_id] = r.fiches; });
+        } catch(e) { console.warn("Fiches ophalen mislukt:", e.message); }
+      }
+
       const cleanLijnen = (offerte.lijnen||[]).map(l => {
         const clean = {...l};
-        // Bewaar productId — nodig om fiches op te halen in offerte.html
-        // Sla alleen metadata op, geen base64
-        if(clean.technischeFiches) {
+        clean.technischeFiche = null;
+        // Embed fiche data uit product_fiches tabel
+        if(l.productId && ficheMap[l.productId]) {
+          clean.technischeFiches = ficheMap[l.productId];
+        } else if(clean.technischeFiches) {
+          // Strip base64 als geen product_fiches data gevonden
           clean.technischeFiches = clean.technischeFiches.map(f => ({
             naam: f.naam||"fiche.pdf",
-            heeftData: !!(f.data||f.heeftData),
-            type: f.type||"application/pdf"
+            type: f.type||"application/pdf",
+            data: f.data || null
           }));
         }
-        clean.technischeFiche = null;
         return clean;
       });
 
