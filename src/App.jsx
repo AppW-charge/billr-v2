@@ -408,91 +408,119 @@ async function sendViaRecommand(factuur, settings) {
   const sumIncl  = sumExcl + sumVat;
   const stdPct   = vatCat==="S" ? (lineItems[0]?.btwPct??21) : 0;
 
-  // UBL XML opgebouwd via array join (geen geneste template literals - esbuild compatible)
-  const ibanXml = iban
-    ? "  <cac:PaymentMeans>\n    <cac:PayeeFinancialAccount>\n      <cbc:ID>" + xe(iban) + "</cbc:ID>\n    </cac:PayeeFinancialAccount>\n  </cac:PaymentMeans>"
-    : "";
-  // Geen TaxExemptionReasonCode - Recommand voegt die intern toe (zoals toolkit ook doet)
-  const exemptXml = "";
-  const allowanceXml = totaalKorting > 0
-    ? "\n    <cbc:AllowanceTotalAmount currencyID=\"EUR\">" + f2(totaalKorting) + "</cbc:AllowanceTotalAmount>"
-    : "";
-  const linesXml = lineItems.map(li => {
-    const desc = li.l.omschr ? "\n      <cbc:Description>" + xe(li.l.omschr) + "</cbc:Description>" : "";
-    return "  <cac:InvoiceLine>\n    <cbc:ID>" + (li.i+1) + "</cbc:ID>\n    <cbc:InvoicedQuantity unitCode=\"C62\">" + li.aantal + ".00</cbc:InvoicedQuantity>\n    <cbc:LineExtensionAmount currencyID=\"EUR\">" + f2(li.ext) + "</cbc:LineExtensionAmount>\n    <cac:Item>\n      <cbc:Name>" + xe(li.l.naam||"") + "</cbc:Name>" + desc + "\n      <cac:ClassifiedTaxCategory>\n        <cbc:ID>" + vatCat + "</cbc:ID>\n        <cbc:Percent>0.00</cbc:Percent>\n        <cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme>\n      </cac:ClassifiedTaxCategory>\n    </cac:Item>\n    <cac:Price>\n      <cbc:PriceAmount currencyID=\"EUR\">" + f2(li.prijs) + "</cbc:PriceAmount>\n    </cac:Price>\n  </cac:InvoiceLine>";
-  }).join("\n");
+  // UBL XML - exact toolkit formaat (proper indented XML)
+  const buildParty = (endpointId, partyId, naam, straat, stad, postcode, vatFull, entNr) => [
+    "    <cac:Party>",
+    '      <cbc:EndpointID schemeID="0208">' + xe(endpointId) + "</cbc:EndpointID>",
+    "      <cac:PartyIdentification>",
+    "        <cbc:ID>" + xe(partyId) + "</cbc:ID>",
+    "      </cac:PartyIdentification>",
+    "      <cac:PartyName>",
+    "        <cbc:Name>" + xe(naam) + "</cbc:Name>",
+    "      </cac:PartyName>",
+    "      <cac:PostalAddress>",
+    "        <cbc:StreetName>" + xe(straat) + "</cbc:StreetName>",
+    "        <cbc:CityName>" + xe(stad) + "</cbc:CityName>",
+    "        <cbc:PostalZone>" + xe(postcode) + "</cbc:PostalZone>",
+    "        <cac:Country>",
+    "          <cbc:IdentificationCode>BE</cbc:IdentificationCode>",
+    "        </cac:Country>",
+    "      </cac:PostalAddress>",
+    "      <cac:PartyTaxScheme>",
+    "        <cbc:CompanyID>" + xe(vatFull) + "</cbc:CompanyID>",
+    "        <cac:TaxScheme>",
+    "          <cbc:ID>VAT</cbc:ID>",
+    "        </cac:TaxScheme>",
+    "      </cac:PartyTaxScheme>",
+    "      <cac:PartyLegalEntity>",
+    "        <cbc:RegistrationName>" + xe(naam) + "</cbc:RegistrationName>",
+    "        <cbc:CompanyID>" + xe(entNr) + "</cbc:CompanyID>",
+    "      </cac:PartyLegalEntity>",
+    "    </cac:Party>",
+  ].join("\n");
 
-  const ubl = '<?xml version="1.0" encoding="UTF-8"?>\n'
-    + '<Invoice xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2" xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2" xmlns:cec="urn:oasis:names:specification:ubl:schema:xsd:CommonExtensionComponents-2" xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2">\n'
-    + '  <cbc:UBLVersionID>2.1</cbc:UBLVersionID>\n'
-    + '  <cbc:CustomizationID>urn:cen.eu:en16931:2017#compliant#urn:fdc:peppol.eu:2017:poacc:billing:3.0</cbc:CustomizationID>\n'
-    + '  <cbc:ProfileID>urn:fdc:peppol.eu:2017:poacc:billing:01:1.0</cbc:ProfileID>\n'
-    + '  <cbc:ID>' + xe(factuur.nummer) + '</cbc:ID>\n'
-    + '  <cbc:IssueDate>' + issueDate + '</cbc:IssueDate>\n'
-    + '  <cbc:DueDate>' + dueDate + '</cbc:DueDate>\n'
-    + '  <cbc:InvoiceTypeCode>380</cbc:InvoiceTypeCode>\n'
-    + '  <cbc:DocumentCurrencyCode>EUR</cbc:DocumentCurrencyCode>\n'
-    + '  <cbc:BuyerReference>' + xe(factuur.nummer) + '</cbc:BuyerReference>\n'
-    + '  <cac:AccountingSupplierParty><cac:Party>\n'
-    + '    <cbc:EndpointID schemeID="0208">' + xe(sellerEntNr) + '</cbc:EndpointID>\n'
-    + '    <cac:PartyIdentification><cbc:ID>' + xe(sellerEntNr) + '</cbc:ID></cac:PartyIdentification>\n'
-    + '    <cac:PartyName><cbc:Name>' + xe(bed.naam||"W-Charge BV") + '</cbc:Name></cac:PartyName>\n'
-    + '    <cac:PostalAddress>\n'
-    + '      <cbc:StreetName>' + xe((bA[1]||"")+(bA[2]?" "+bA[2]:"")) + '</cbc:StreetName>\n'
-    + '      <cbc:CityName>' + xe(bG[2]||"") + '</cbc:CityName>\n'
-    + '      <cbc:PostalZone>' + xe(bG[1]||"") + '</cbc:PostalZone>\n'
-    + '      <cac:Country><cbc:IdentificationCode>BE</cbc:IdentificationCode></cac:Country>\n'
-    + '    </cac:PostalAddress>\n'
-    + '    <cac:PartyTaxScheme>\n'
-    + '      <cbc:CompanyID>' + xe(sellerVatFull) + '</cbc:CompanyID>\n'
-    + '      <cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme>\n'
-    + '    </cac:PartyTaxScheme>\n'
-    + '    <cac:PartyLegalEntity>\n'
-    + '      <cbc:RegistrationName>' + xe(bed.naam||"W-Charge BV") + '</cbc:RegistrationName>\n'
-    + '      <cbc:CompanyID>' + xe(sellerEntNr) + '</cbc:CompanyID>\n'
-    + '    </cac:PartyLegalEntity>\n'
-    + '  </cac:Party></cac:AccountingSupplierParty>\n'
-    + '  <cac:AccountingCustomerParty><cac:Party>\n'
-    + '    <cbc:EndpointID schemeID="0208">' + xe(buyerEntNr) + '</cbc:EndpointID>\n'
-    + '    <cac:PartyIdentification><cbc:ID>' + xe(buyerEntNr) + '</cbc:ID></cac:PartyIdentification>\n'
-    + '    <cac:PartyName><cbc:Name>' + xe(klant.naam||klant.bedrijf||"") + '</cbc:Name></cac:PartyName>\n'
-    + '    <cac:PostalAddress>\n'
-    + '      <cbc:StreetName>' + xe((kA[1]||"")+(kA[2]?" "+kA[2]:"")) + '</cbc:StreetName>\n'
-    + '      <cbc:CityName>' + xe(kG[2]||"") + '</cbc:CityName>\n'
-    + '      <cbc:PostalZone>' + xe(kG[1]||"") + '</cbc:PostalZone>\n'
-    + '      <cac:Country><cbc:IdentificationCode>BE</cbc:IdentificationCode></cac:Country>\n'
-    + '    </cac:PostalAddress>\n'
-    + '    <cac:PartyTaxScheme>\n'
-    + '      <cbc:CompanyID>' + xe(buyerVatFull) + '</cbc:CompanyID>\n'
-    + '      <cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme>\n'
-    + '    </cac:PartyTaxScheme>\n'
-    + '    <cac:PartyLegalEntity>\n'
-    + '      <cbc:RegistrationName>' + xe(klant.naam||klant.bedrijf||"") + '</cbc:RegistrationName>\n'
-    + '      <cbc:CompanyID>' + xe(buyerEntNr) + '</cbc:CompanyID>\n'
-    + '    </cac:PartyLegalEntity>\n'
-    + '  </cac:Party></cac:AccountingCustomerParty>\n'
-    + (ibanXml ? ibanXml + "\n" : "")
-    + '  <cac:TaxTotal>\n'
-    + '    <cbc:TaxAmount>' + f2(sumVat) + '</cbc:TaxAmount>\n'
-    + '    <cac:TaxSubtotal>\n'
-    + '      <cbc:TaxableAmount>' + f2(sumExcl) + '</cbc:TaxableAmount>\n'
-    + '      <cbc:TaxAmount>' + f2(sumVat) + '</cbc:TaxAmount>\n'
-    + '      <cac:TaxCategory>\n'
-    + '        <cbc:ID>' + vatCat + '</cbc:ID>\n'
-    + '        <cbc:Percent>' + stdPct + '.00</cbc:Percent>\n'
-    + exemptXml
-    + '        <cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme>\n'
-    + '      </cac:TaxCategory>\n'
-    + '    </cac:TaxSubtotal>\n'
-    + '  </cac:TaxTotal>\n'
-    + '  <cac:LegalMonetaryTotal>\n'
-    + '    <cbc:LineExtensionAmount currencyID="EUR">' + f2(sumLines) + '</cbc:LineExtensionAmount>\n'
-    + '    <cbc:TaxExclusiveAmount currencyID="EUR">' + f2(sumExcl) + '</cbc:TaxExclusiveAmount>\n'
-    + '    <cbc:TaxInclusiveAmount currencyID="EUR">' + f2(sumIncl) + '</cbc:TaxInclusiveAmount>' + allowanceXml + '\n'
-    + '    <cbc:PayableAmount currencyID="EUR">' + f2(sumIncl) + '</cbc:PayableAmount>\n'
-    + '  </cac:LegalMonetaryTotal>\n'
-    + linesXml + "\n"
-    + '</Invoice>';
+  const xmlLines = [
+    "<?xml version=\"1.0\" encoding=\"UTF-8\"?>",
+    '<Invoice xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2" xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2" xmlns:cec="urn:oasis:names:specification:ubl:schema:xsd:CommonExtensionComponents-2" xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2">',
+    "  <cbc:UBLVersionID>2.1</cbc:UBLVersionID>",
+    "  <cbc:CustomizationID>urn:cen.eu:en16931:2017#compliant#urn:fdc:peppol.eu:2017:poacc:billing:3.0</cbc:CustomizationID>",
+    "  <cbc:ProfileID>urn:fdc:peppol.eu:2017:poacc:billing:01:1.0</cbc:ProfileID>",
+    "  <cbc:ID>" + xe(factuur.nummer) + "</cbc:ID>",
+    "  <cbc:IssueDate>" + issueDate + "</cbc:IssueDate>",
+    "  <cbc:DueDate>" + dueDate + "</cbc:DueDate>",
+    "  <cbc:InvoiceTypeCode>380</cbc:InvoiceTypeCode>",
+    "  <cbc:DocumentCurrencyCode>EUR</cbc:DocumentCurrencyCode>",
+    "  <cbc:BuyerReference>" + xe(factuur.nummer) + "</cbc:BuyerReference>",
+    "  <cac:AccountingSupplierParty>",
+    buildParty(sellerEntNr, sellerEntNr, bed.naam||"W-Charge BV", (bA[1]||"")+(bA[2]?" "+bA[2]:""), bG[2]||"", bG[1]||"", sellerVatFull, sellerEntNr),
+    "  </cac:AccountingSupplierParty>",
+    "  <cac:AccountingCustomerParty>",
+    buildParty(buyerEntNr, buyerEntNr, klant.naam||klant.bedrijf||"", (kA[1]||"")+(kA[2]?" "+kA[2]:""), kG[2]||"", kG[1]||"", buyerVatFull, buyerEntNr),
+    "  </cac:AccountingCustomerParty>",
+  ];
+
+  if(iban) xmlLines.push(
+    "  <cac:PaymentMeans>",
+    "    <cac:PayeeFinancialAccount>",
+    "      <cbc:ID>" + xe(iban) + "</cbc:ID>",
+    "    </cac:PayeeFinancialAccount>",
+    "  </cac:PaymentMeans>"
+  );
+
+  xmlLines.push(
+    "  <cac:TaxTotal>",
+    "    <cbc:TaxAmount>" + f2(sumVat) + "</cbc:TaxAmount>",
+    "    <cac:TaxSubtotal>",
+    "      <cbc:TaxableAmount>" + f2(sumExcl) + "</cbc:TaxableAmount>",
+    "      <cbc:TaxAmount>" + f2(sumVat) + "</cbc:TaxAmount>",
+    "      <cac:TaxCategory>",
+    "        <cbc:ID>" + vatCat + "</cbc:ID>",
+    "        <cbc:Percent>" + stdPct + ".00</cbc:Percent>",
+    "        <cac:TaxScheme>",
+    "          <cbc:ID>VAT</cbc:ID>",
+    "        </cac:TaxScheme>",
+    "      </cac:TaxCategory>",
+    "    </cac:TaxSubtotal>",
+    "  </cac:TaxTotal>",
+    "  <cac:LegalMonetaryTotal>",
+    '    <cbc:LineExtensionAmount currencyID="EUR">' + f2(sumLines) + "</cbc:LineExtensionAmount>",
+    '    <cbc:TaxExclusiveAmount currencyID="EUR">' + f2(sumExcl) + "</cbc:TaxExclusiveAmount>",
+    '    <cbc:TaxInclusiveAmount currencyID="EUR">' + f2(sumIncl) + "</cbc:TaxInclusiveAmount>"
+  );
+  if(totaalKorting > 0) xmlLines.push('    <cbc:AllowanceTotalAmount currencyID="EUR">' + f2(totaalKorting) + "</cbc:AllowanceTotalAmount>");
+  xmlLines.push(
+    '    <cbc:PayableAmount currencyID="EUR">' + f2(sumIncl) + "</cbc:PayableAmount>",
+    "  </cac:LegalMonetaryTotal>"
+  );
+
+  lineItems.forEach(li => {
+    xmlLines.push(
+      "  <cac:InvoiceLine>",
+      "    <cbc:ID>" + (li.i+1) + "</cbc:ID>",
+      '    <cbc:InvoicedQuantity unitCode="C62">' + li.aantal + ".00</cbc:InvoicedQuantity>",
+      '    <cbc:LineExtensionAmount currencyID="EUR">' + f2(li.ext) + "</cbc:LineExtensionAmount>",
+      "    <cac:Item>",
+      "      <cbc:Name>" + xe(li.l.naam||"") + "</cbc:Name>"
+    );
+    if(li.l.omschr) xmlLines.push("      <cbc:Description>" + xe(li.l.omschr) + "</cbc:Description>");
+    xmlLines.push(
+      "      <cac:ClassifiedTaxCategory>",
+      "        <cbc:ID>" + vatCat + "</cbc:ID>",
+      "        <cbc:Percent>0.00</cbc:Percent>",
+      "        <cac:TaxScheme>",
+      "          <cbc:ID>VAT</cbc:ID>",
+      "        </cac:TaxScheme>",
+      "      </cac:ClassifiedTaxCategory>",
+      "    </cac:Item>",
+      "    <cac:Price>",
+      '      <cbc:PriceAmount currencyID="EUR">' + f2(li.prijs) + "</cbc:PriceAmount>",
+      "    </cac:Price>",
+      "  </cac:InvoiceLine>"
+    );
+  });
+
+  xmlLines.push("</Invoice>");
+  const ubl = xmlLines.join("\n");
 
   const recipient = "0208:" + buyerEntNr;
   console.log("[PEPPOL] XML bytes:", ubl.length, "recipient:", recipient);
