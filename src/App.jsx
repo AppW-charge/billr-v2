@@ -391,7 +391,14 @@ async function sendViaRecommand(factuur, settings) {
 
   const positiefLijnen = (factuur.lijnen||[]).filter(l=>(l.prijs||0)>0 && (l.naam||"").trim());
   const kortingLijnen  = (factuur.lijnen||[]).filter(l=>(l.prijs||0)<0);
-  const totaalKorting  = kortingLijnen.reduce((s,l)=>s+Math.abs((l.prijs||0)*(l.aantal||1)),0);
+  const kortingUitLijnen = kortingLijnen.reduce((s,l)=>s+Math.abs((l.prijs||0)*(l.aantal||1)),0);
+  // Ook document-level korting (factuur.korting veld) meenemen
+  const kortingUitDoc = (() => {
+    if(!(factuur.korting>0)) return 0;
+    const sub = positiefLijnen.reduce((s,l)=>s+Math.abs((l.prijs||0))*(l.aantal||1),0);
+    return factuur.kortingType==="pct" ? sub*(factuur.korting/100) : Number(factuur.korting||0);
+  })();
+  const totaalKorting = kortingUitLijnen + kortingUitDoc;
 
   const lineItems = positiefLijnen.map((l,i)=>({
     i, l,
