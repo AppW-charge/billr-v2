@@ -18,7 +18,7 @@
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
 <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 <style>
-/* OFFERTE.HTML — IDENTIEK AAN BILLR PREVIEW */
+/* OFFERTE.HTML - IDENTIEK AAN BILLR PREVIEW */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{font-family:'Inter',system-ui,Arial,sans-serif;background:#f1f5f9;color:#1e293b;-webkit-font-smoothing:antialiased}
@@ -65,7 +65,7 @@ html,body{font-family:'Inter',system-ui,Arial,sans-serif;background:#f1f5f9;colo
 }
 body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--txt);font-size:13.5px;line-height:1.5}
 
-/* ── LOGIN ── */
+/* -- LOGIN -- */
 .login-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,var(--p) 0%,var(--p)cc 60%,#0f172a 100%);padding:20px}
 .login-card{background:#fff;border-radius:16px;padding:40px 36px;width:100%;max-width:400px;box-shadow:0 24px 64px rgba(0,0,0,.3)}
 .login-logo{text-align:center;margin-bottom:28px}
@@ -78,13 +78,13 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--txt);font-s
 .login-ok{background:#f0fdf4;border:1px solid #86efac;color:#065f46;border-radius:7px;padding:9px 12px;font-size:12.5px;margin-bottom:12px}
 .forgot-link{font-size:12px;color:var(--p2);cursor:pointer;text-decoration:underline;text-align:right;display:block;margin-top:-6px;margin-bottom:10px}
 
-/* ── LAYOUT ── */
+/* -- LAYOUT -- */
 .app{display:flex;height:100vh;height:100dvh;overflow:hidden}
 .sb{width:var(--sb-w,220px);min-width:var(--sb-w,220px);background:var(--p);display:flex;flex-direction:column;overflow-y:auto;transition:background .3s,transform .25s;z-index:100}
 
-/* ═══════════════════════════════════════════════════════
-   MOBILE — iPhone first, safe-area, 44px touch targets
-   ═══════════════════════════════════════════════════════ */
+/* -------------------------------------------------------
+   MOBILE - iPhone first, safe-area, 44px touch targets
+   ------------------------------------------------------- */
 
 
 /* Bottom Navigation Bar */
@@ -131,12 +131,12 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--txt);font-s
 .tb-btn-icon{display:none}
 .content{flex:1;overflow-y:auto;padding:22px}
 
-/* ── CARDS ── */
+/* -- CARDS -- */
 .card{background:var(--card);border:1px solid var(--bdr);border-radius:var(--r);padding:18px;box-shadow:var(--sh)}
 .card-h{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
 .card-t{font-weight:700;font-size:15px;color:var(--txt)}
 
-/* ── STATS ── */
+/* -- STATS -- */
 .sg{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px}
 .g2{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:4px}
 .sc{background:var(--card);border:1px solid var(--bdr);border-radius:var(--r);padding:14px 16px;position:relative;overflow:hidden;border-top:3px solid var(--sc,#2563eb);cursor:pointer;transition:all .12s}
@@ -147,7 +147,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--txt);font-s
 .si{position:absolute;right:14px;top:12px;font-size:28px;opacity:.1}
 .sc-arrow{position:absolute;right:12px;bottom:12px;font-size:12px;color:var(--mut);opacity:.5}
 
-/* ── BUTTONS ── */
+/* -- BUTTONS -- */
 .btn{display:inline-flex;align-items:center;gap:5px;padding:8px 14px;border-radius:7px;font-size:13px;font-weight:600;cursor:pointer;border:none;transition:all .1s;font-family:'Inter',sans-serif;white-space:nowrap;line-height:1}
 .bp{background:var(--p);color:#fff}.bp:hover{opacity:.9}
 .b2{background:#2563eb;color:#fff}.b2:hover{background:#1d4ed8}
@@ -161,7 +161,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--txt);font-s
 .btn-lg{padding:11px 22px;font-size:14px;font-weight:700}
 .btn:disabled{opacity:.45;cursor:not-allowed}
 
-/* ── BULK ACTION BAR ── */
+/* -- BULK ACTION BAR -- */
 .bulk-bar{position:sticky;top:0;z-index:50;background:var(--p);color:#fff;padding:10px 16px;border-radius:8px;margin-bottom:12px;display:flex;align-items:center;gap:10px;box-shadow:0 4px 16px rgba(0,0,0,.2);animation:slideDown .15s ease}
 @keyframes slideDown{from{transform:translateY(-8px);opacity:0}to{transform:translateY(0);opacity:1}}
 .bulk-cnt{font-weight:700;font-size:13.5px;min-width:100px}
@@ -169,11 +169,11 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--txt);font-s
 .bulk-act-btn{padding:6px 12px;border-radius:6px;border:1.5px solid rgba(255,255,255,.3);background:rgba(255,255,255,.1);color:#fff;font-size:12.5px;font-weight:600;cursor:pointer;transition:all .1s}
 .bulk-act-btn:hover{background:rgba(255,255,255,.2)}
 
-/* ── STATUS BADGE ── */
+/* -- STATUS BADGE -- */
 .status-badge{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:20px;font-size:11.5px;font-weight:600;white-space:nowrap}
 .status-icon{font-size:12px;line-height:1}
 
-/* ── TABLE ── */
+/* -- TABLE -- */
 .tw{overflow-x:auto;border-radius:var(--r);border:1px solid var(--bdr)}
 table{width:100%;border-collapse:collapse}
 thead th{background:#f8fafc;padding:9px 12px;text-align:left;font-size:10.5px;font-weight:700;color:var(--mut);text-transform:uppercase;letter-spacing:.6px;border-bottom:1px solid var(--bdr);white-space:nowrap}
@@ -184,7 +184,7 @@ tbody tr.selected{background:#eff6ff!important}
 .row-active{background:#f0f7ff!important}
 tr.row-active td{border-top:2px solid #2563eb}
 
-/* ── DOCUMENT ACTION PANEL & LOG ── */
+/* -- DOCUMENT ACTION PANEL & LOG -- */
 .doc-act-row td{background:#f0f7ff;border-bottom:1px solid #dbeafe!important;padding:0!important}
 .doc-act-panel{display:flex;flex-direction:column;gap:0}
 .doc-act-btns{display:flex;gap:7px;flex-wrap:wrap;padding:10px 14px;align-items:center;border-bottom:1px solid #e0eeff}
@@ -197,10 +197,10 @@ tr.row-active td{border-top:2px solid #2563eb}
 .doc-icons{display:flex;gap:2px;align-items:center}
 .doc-icon-tip{font-size:13px;cursor:default}
 
-/* ── BULK PRODUCT ACTIONS ── */
+/* -- BULK PRODUCT ACTIONS -- */
 .prd-bulk-bar{position:sticky;top:0;z-index:50;background:var(--p);color:#fff;padding:9px 14px;border-radius:8px;margin-bottom:10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;box-shadow:0 4px 16px rgba(0,0,0,.2);animation:slideDown .15s ease}
 
-/* ── ONTWERP PREVIEW ── */
+/* -- ONTWERP PREVIEW -- */
 .ontw-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin-top:8px}
 .ontw-card{border:2px solid var(--bdr);border-radius:10px;cursor:pointer;transition:all .12s;overflow:hidden;background:#fff}
 .ontw-card:hover{border-color:#2563eb;box-shadow:0 3px 12px rgba(37,99,235,.15)}
@@ -208,7 +208,7 @@ tr.row-active td{border-top:2px solid #2563eb}
 .ontw-thumb{height:90px;position:relative;overflow:hidden}
 .ontw-label{padding:7px 9px;font-size:11.5px;font-weight:700;color:var(--txt);text-align:center;border-top:1px solid var(--bdr)}
 
-/* ── PRODUCT SUGGESTION COMPARISON ── */
+/* -- PRODUCT SUGGESTION COMPARISON -- */
 .sug-compare{display:flex;gap:8px;align-items:stretch;background:#f0fdf4;border:1.5px solid #86efac;border-radius:9px;padding:8px 10px;margin-top:6px}
 .sug-col{flex:1;min-width:0}
 .sug-col-lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px}
@@ -219,7 +219,7 @@ tr.row-active td{border-top:2px solid #2563eb}
 .sug-product-row.curr-row{background:#eff6ff;border:1px solid #bfdbfe}
 .sug-divider{width:1px;background:#86efac;margin:0 4px}
 
-/* ── TABLET ── */
+/* -- TABLET -- */
 @media(min-width:769px)and(max-width:1100px){
   :root{--sb-w:190px}
   .sg{grid-template-columns:repeat(2,1fr)!important}
@@ -231,7 +231,7 @@ tr.row-active td{border-top:2px solid #2563eb}
 /* Compactere tabel op mobiel - minder kolommen verbergen */
 
 
-/* ── FORMS ── */
+/* -- FORMS -- */
 .fg{margin-bottom:13px}
 .fl{display:block;font-size:12px;font-weight:600;color:var(--txt);margin-bottom:5px}
 .fc{width:100%;padding:8px 11px;border:1.5px solid var(--bdr);border-radius:7px;font-size:13px;font-family:'Inter',sans-serif;color:var(--txt);background:#fff;outline:none;transition:border-color .1s}
@@ -239,7 +239,7 @@ tr.row-active td{border-top:2px solid #2563eb}
 .fr2{display:grid;grid-template-columns:1fr 1fr;gap:13px}
 .fr3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:13px}
 
-/* ── MODAL ── */
+/* -- MODAL -- */
 .mo{position:fixed;inset:0;background:rgba(10,20,35,.75);backdrop-filter:blur(4px);z-index:1000;display:flex;align-items:center;justify-content:center;padding:14px}
 .mdl{background:#fff;border-radius:14px;box-shadow:0 24px 64px rgba(0,0,0,.25);width:100%;max-height:94vh;overflow-y:auto;display:flex;flex-direction:column}
 .msm{max-width:440px}.mmd{max-width:640px}.mlg{max-width:880px}.mxl{max-width:1060px}.mfull{max-width:1200px}
@@ -250,7 +250,7 @@ tr.row-active td{border-top:2px solid #2563eb}
 .xbtn{width:30px;height:30px;border-radius:6px;background:#f1f5f9;border:none;cursor:pointer;font-size:17px;display:flex;align-items:center;justify-content:center;color:var(--mut)}
 .xbtn:hover{background:#e2e8f0}
 
-/* ── WIZARD STEPS ── */
+/* -- WIZARD STEPS -- */
 .wzs{display:flex;gap:0;margin-bottom:20px;background:#f0f4f8;border-radius:8px;padding:3px}
 .wz{flex:1;padding:8px 6px;text-align:center;border-radius:6px;cursor:pointer;transition:all .12s;font-size:11px;font-weight:600;color:var(--mut);display:flex;align-items:center;justify-content:center;gap:5px}
 .wz.on{background:#fff;color:var(--p);box-shadow:0 1px 3px rgba(0,0,0,.1)}
@@ -259,7 +259,7 @@ tr.row-active td{border-top:2px solid #2563eb}
 .wz.on .wzn{background:var(--p);color:#fff}
 .wz.dn .wzn{background:#10b981;color:#fff}
 
-/* ── PRODUCT TILES ── */
+/* -- PRODUCT TILES -- */
 .ptile-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px;max-height:450px;overflow-y:auto;padding:4px}
 .ptile{border:2px solid var(--bdr);border-radius:12px;padding:13px 10px;cursor:pointer;transition:all .12s;background:#fff;display:flex;flex-direction:column;align-items:center;text-align:center;position:relative;user-select:none}
 .ptile:hover{border-color:#2563eb;background:#f0f7ff;box-shadow:0 3px 12px rgba(37,99,235,.15);transform:translateY(-1px)}
@@ -279,7 +279,7 @@ tr.row-active td{border-top:2px solid #2563eb}
 .qb:hover{background:#f1f5f9;border-color:#94a3b8}
 .qb:disabled{opacity:.3;cursor:not-allowed}
 
-/* ── KLANT CARDS (passport) ── */
+/* -- KLANT CARDS (passport) -- */
 .klant-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px}
 .klant-card{background:#fff;border:1px solid var(--bdr);border-radius:12px;padding:16px;box-shadow:var(--sh);transition:all .12s}
 .klant-card:hover{box-shadow:var(--shm)}
@@ -293,7 +293,7 @@ tr.row-active td{border-top:2px solid #2563eb}
 .klant-stat-v{font-weight:800;font-size:15px}
 .klant-stat-l{font-size:10px;color:var(--mut);text-transform:uppercase;letter-spacing:.4px}
 
-/* ── TABS ── */
+/* -- TABS -- */
 .tabs{display:flex;flex-wrap:wrap;gap:4px;padding:4px;background:#f0f4f8;border-radius:10px;margin-bottom:16px}
 .tab{flex:1;min-width:0;padding:8px 4px;text-align:center;border-radius:7px;cursor:pointer;font-size:12px;font-weight:600;color:var(--mut);transition:all .12s;white-space:nowrap;min-height:36px;display:flex;align-items:center;justify-content:center}
 .tab.on{background:#fff;color:var(--p);box-shadow:0 1px 4px rgba(0,0,0,.1);font-weight:700}
@@ -301,11 +301,11 @@ tr.row-active td{border-top:2px solid #2563eb}
 .tab-txt{display:inline}
 
 
-/* ── IMPORT ── */
+/* -- IMPORT -- */
 .import-zone{border:2px dashed #93c5fd;border-radius:10px;padding:32px;text-align:center;cursor:pointer;transition:all .15s;background:#f8fbff}
 .import-zone:hover,.import-zone.drag{border-color:#2563eb;background:#eff6ff}
 
-/* ── MISC ── */
+/* -- MISC -- */
 .g2{display:grid;grid-template-columns:1fr 1fr;gap:20px}
 .flex{display:flex}.fca{align-items:center}.gap2{gap:8px}.gap3{gap:12px}.mla{margin-left:auto}
 .mb4{margin-bottom:16px}.mb5{margin-bottom:20px}
@@ -328,20 +328,20 @@ tr.row-active td{border-top:2px solid #2563eb}
 .notif.in{background:#1e3a5f;color:#fff;border-left:4px solid #2563eb}
 @keyframes su{from{transform:translateY(14px);opacity:0}to{transform:translateY(0);opacity:1}}
 
-/* ── ADDR DROPDOWN ── */
+/* -- ADDR DROPDOWN -- */
 .addr-wrap{position:relative}
 .addr-drop{position:absolute;top:100%;left:0;right:0;background:#fff;border:1.5px solid #2563eb;border-radius:7px;box-shadow:0 4px 16px rgba(0,0,0,.12);z-index:100;max-height:200px;overflow-y:auto;margin-top:2px}
 .addr-item{padding:9px 12px;cursor:pointer;font-size:12.5px}
 .addr-item:hover{background:#eff6ff}
 
-/* ── THEMA PICKER ── */
+/* -- THEMA PICKER -- */
 .thema-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-top:10px}
 .thema-item{border-radius:8px;padding:10px 6px;cursor:pointer;text-align:center;transition:all .1s;border:2px solid transparent}
 .thema-item.on{border-color:#1e293b;transform:scale(1.05)}
 .thema-swatch{width:36px;height:36px;border-radius:8px;margin:0 auto 4px}
 .thema-name{font-size:10px;font-weight:600;color:var(--mut)}
 
-/* ─── PRINT / DOCUMENT STYLES ─── */
+/* --- PRINT / DOCUMENT STYLES --- */
 .doc-wrap{background:#f0f4f8;padding:16px}
 .doc-page{background:#fff;max-width:820px;width:100%;margin:0 auto 20px;box-shadow:0 2px 12px rgba(0,0,0,.1);border-radius:4px;overflow:visible;box-sizing:border-box;display:flex;flex-direction:column;position:relative}
 .doc-page:first-child{page-break-before:avoid}
@@ -443,7 +443,7 @@ tr.row-active td{border-top:2px solid #2563eb}
 .fct-pg2-title{font-weight:900;font-size:16px;margin-bottom:14px;color:#1e293b}
 .legal-txt{font-size:11px;color:#475569;line-height:1.9;white-space:pre-wrap}
 
-/* ── GARANTIE / DOSSIER CARDS ── */
+/* -- GARANTIE / DOSSIER CARDS -- */
 .info-card{background:#fff;border:1px solid var(--bdr);border-radius:10px;padding:14px;box-shadow:var(--sh)}
 .info-card-header{display:flex;align-items:center;gap:10px;margin-bottom:10px}
 .info-badge{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:5px;font-size:11px;font-weight:700}
@@ -453,13 +453,13 @@ tr.row-active td{border-top:2px solid #2563eb}
 .btw-code{font-family:'JetBrains Mono',monospace;font-weight:800;font-size:16px;color:var(--p);background:#f0f4f8;border-radius:5px;padding:2px 6px;text-align:center}
 .export-btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:7px;border:1.5px solid var(--bdr);background:#fff;font-size:13px;font-weight:600;cursor:pointer;transition:all .1s}
 .export-btn:hover{background:#f0f4f8}
-/* ── PRINT: verwijder browser-header (URL, datum, paginanr) ── */
+/* -- PRINT: verwijder browser-header (URL, datum, paginanr) -- */
 @page{
   size:A4 portrait;
   margin:0;  /* margin:0 verwijdert de browser-header en -footer volledig */
 }
 @media print{
-  /* ═══ KRITIEK: margin:0 verwijdert browser URL + paginanummering ═══ */
+  /* --- KRITIEK: margin:0 verwijdert browser URL + paginanummering --- */
   @page{size:A4 portrait;margin:0}
   
   /* Kleur behouden */
@@ -475,7 +475,7 @@ tr.row-active td{border-top:2px solid #2563eb}
   .print-only{display:block!important}
   .no-print{display:none!important}
   
-  /* ═══ Elke doc-page = exacte A4 pagina (210×297mm) ═══ */
+  /* --- Elke doc-page = exacte A4 pagina (210×297mm) --- */
   .doc-page{
     box-shadow:none!important;border-radius:0!important;
     margin:0!important;max-width:100%!important;width:210mm!important;
@@ -539,7 +539,7 @@ tr.row-active td{border-top:2px solid #2563eb}
   .mb-body{padding:0!important;overflow:visible!important;max-height:none!important;height:auto!important}
 }
 
-/* ─── INSTELLINGEN PREVIEW RESPONSIVE ─── */
+/* --- INSTELLINGEN PREVIEW RESPONSIVE --- */
 
 
 @media print{.screen-only{display:none!important}.print-only{display:block!important}.no-print{display:none!important}#root{padding:0;max-width:100%}.doc-page{box-shadow:none!important;margin:0!important;border-radius:0!important}}
@@ -567,26 +567,27 @@ async function sbPost(p,b){var r=await fetch(SB+p,{method:"POST",headers:{"apike
 
 const { useState, useEffect, useRef, useCallback } = React;
 
-// ─── HELPERS ─────────────────────────────────────────────────────
-const fmtDate = d => d ? new Date(d).toLocaleDateString("nl-BE",{day:"2-digit",month:"2-digit",year:"numeric"}) : "—";
+// --- HELPERS -----------------------------------------------------
+const fmtDate = d => d ? new Date(d).toLocaleDateString("nl-BE",{day:"2-digit",month:"2-digit",year:"numeric"}) : "-";
 const fmtEuro = n => "€\u00A0" + Number(n||0).toFixed(2).replace(".",",").replace(/\B(?=(\d{3})+(?!\d))/g,".");
 const addDays = (d,n) => { const r=new Date(d); r.setDate(r.getDate()+n); return r.toISOString().split("T")[0]; };
 const today = () => new Date().toISOString().split("T")[0];
 const stripBe = s => (s||"").replace(/[^0-9]/g,"");
 const fmtBtwnr = n => { const c=stripBe(n); return c.length>=9?"BE "+c.slice(0,4)+"."+c.slice(4,7)+"."+c.slice(7):(n||""); };
 
-const BEBAT_TARIEF = 2.89; // Standaard — overschrijfbaar via settings.voorwaarden.bebatTarief
+const BEBAT_TARIEF = 2.89; // Standaard - overschrijfbaar via settings.voorwaarden.bebatTarief
 const getBebatTarief = (settings) => Number(settings?.voorwaarden?.bebatTarief) || BEBAT_TARIEF;
 const BEBAT_BTW = 21;
 
 // Bepaal of een product BEBAT-plichtig is
 // Batterij-onderdelen zijn dat: naam bevat "batter" maar NIET "bms"
-const isBebatProduct = (naam="",cat="") => {
+function isBebatProduct(naam, cat) {
+  naam = naam||""; cat = cat||"";
   const n = naam.toLowerCase();
   const c = cat.toLowerCase();
   if(n.includes("bms") || n.includes("battery management")) return false;
   return n.includes("batter") || c.includes("batter");
-};
+}
 
 function calcTotals(lijnen=[], bebatTarief=BEBAT_TARIEF) {
   // BTW komt van de lijn (bepaald door klantregime bij aanmaken offerte)
@@ -596,7 +597,7 @@ function calcTotals(lijnen=[], bebatTarief=BEBAT_TARIEF) {
   lijnen.forEach(l=>{
     const r=l.btw||0; // 0 als verlegd, 6 of 21 anders
     if(r>0){if(!gr[r])gr[r]=0;gr[r]+=l.prijs*l.aantal*(r/100);}
-    // BEBAT toeslag — altijd 21% BTW
+    // BEBAT toeslag - altijd 21% BTW
     if(l.bebatKg && l.bebatKg>0 && isBebatProduct(l.naam,l.cat||"")) {
       const bebatEx = l.bebatKg * l.aantal * bebatTarief;
       if(!gr[BEBAT_BTW])gr[BEBAT_BTW]=0;
@@ -615,8 +616,8 @@ function calcTotals(lijnen=[], bebatTarief=BEBAT_TARIEF) {
 
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,6);
 const BTW_REGIMES = {
-  btw6:    {l:"6% — Woning > 10 jaar (renovatie)", pct:6},
-  btw21:   {l:"21% — Standaard / Nieuwe woning",   pct:21},
+  btw6:    {l:"6% - Woning > 10 jaar (renovatie)", pct:6},
+  btw21:   {l:"21% - Standaard / Nieuwe woning",   pct:21},
   verlegd: {l:"BTW verlegd (medecontractant B2B)",  pct:0},
 };
 
@@ -714,7 +715,7 @@ const INIT_SETTINGS = {
     voorbladTitel:"",
     voorbladOndertitel:"",
     voorbladIntro:"",
-    handtekeningTekst:"Geldig voor akkoord — datum, handtekening & naam",
+    handtekeningTekst:"Geldig voor akkoord - datum, handtekening & naam",
     footerTekst:"",
     accentKleur:"",
     paginaformaat:"A4",
@@ -744,7 +745,7 @@ function FichePages({fiche, naam, fichNaam, omschr, dc, bed, docNummer}) {
       try {
         let pdfDoc;
         if(fiche.startsWith('data:') || fiche.startsWith('http')) {
-          // Use fetch to convert data URI or URL to ArrayBuffer — avoids atob issues
+          // Use fetch to convert data URI or URL to ArrayBuffer - avoids atob issues
           const resp = await fetch(fiche);
           const buf = await resp.arrayBuffer();
           pdfDoc = await window.pdfjsLib.getDocument({data: buf}).promise;
@@ -767,7 +768,7 @@ function FichePages({fiche, naam, fichNaam, omschr, dc, bed, docNummer}) {
           await page.render({canvasContext: canvas.getContext('2d'), viewport}).promise;
           imgs.push(canvas.toDataURL('image/png'));
         }
-        console.log(`✅ Fiche gerenderd: ${fichNaam||naam} — ${imgs.length} pagina's`);
+        console.log(`✅ Fiche gerenderd: ${fichNaam||naam} - ${imgs.length} pagina's`);
         setPageImages(imgs);
       } catch(e) { console.error("Fiche render error:", fichNaam||naam, e.message); }
       setLoading(false);
@@ -784,12 +785,12 @@ function FichePages({fiche, naam, fichNaam, omschr, dc, bed, docNummer}) {
     </div>
   );
 
-  // No images rendered — show download fallback
+  // No images rendered - show download fallback
   if(pageImages.length === 0) {
     const pdfSrc = fiche.startsWith('data:') ? fiche : `data:application/pdf;base64,${fiche}`;
     return (
       <div>
-        <div className="doc-page-lbl">Technische fiche — {naam}</div>
+        <div className="doc-page-lbl">Technische fiche - {naam}</div>
         <div className="doc-page" style={{pageBreakBefore:"always"}}>
           <div style={{height:5,background:dc,flexShrink:0}}/>
           <div style={{padding:"30mm 20mm",textAlign:"center"}}>
@@ -815,8 +816,8 @@ function FichePages({fiche, naam, fichNaam, omschr, dc, bed, docNummer}) {
   return (
     <div>
       {pageImages.map((img, i) => (
-        <div key={`fp-${i}`}>
-          <div className="doc-page-lbl">Technische fiche — {naam} (pagina {i+1}/{pageImages.length})</div>
+        <div key={"fp-"+i}>
+          <div className="doc-page-lbl">Technische fiche - {naam} (pagina {i+1}/{pageImages.length})</div>
           <div className="doc-page fiche-print-page" style={{pageBreakBefore:"always",breakBefore:"page"}}>
             <div style={{height:5,background:dc,flexShrink:0}}/>
             {i === 0 && (
@@ -901,15 +902,15 @@ function OfferteDocument({doc, settings, ficheCache={}, producten=[]}) {
   const groepen = doc.groepen||[];
   const lijnenPerGroep = [...groepen.map(g=>({...g,items:(doc.lijnen||[]).filter(l=>l.groepId===g.id)})).filter(g=>g.items.length>0), {id:"rest",naam:"Producten",items:(doc.lijnen||[]).filter(l=>!l.groepId||!groepen.find(g=>g.id===l.groepId))}.items.length>0?{id:"rest",naam:"Producten",items:(doc.lijnen||[]).filter(l=>!l.groepId||!groepen.find(g=>g.id===l.groepId))}:null].filter(Boolean);
   const uniqueProds = [...new Map((doc.lijnen||[]).filter(l=>l.naam).map(l=>[l.productId||l.id,l])).values()];
-  const confirmLink = `mailto:?subject=Akkoord offerte ${doc.nummer||""}%20—%20${encodeURIComponent(bed.naam)}&body=Geachte%20${encodeURIComponent(bed.naam)}%2C%0A%0AHierbij%20bevestig%20ik%20mijn%20akkoord%20met%20offerte%20${doc.nummer||""}%20d.d.%20${fmtDate(doc.aangemaakt)}%20voor%20een%20totaalbedrag%20van%20${encodeURIComponent(fmtEuro(eindTot))}.%0A%0AMet%20vriendelijke%20groeten%2C%0A${encodeURIComponent(doc.klant?.naam||"")}`;
+  const confirmLink = `mailto:?subject=Akkoord offerte ${doc.nummer||""}%20-%20${encodeURIComponent(bed.naam)}&body=Geachte%20${encodeURIComponent(bed.naam)}%2C%0A%0AHierbij%20bevestig%20ik%20mijn%20akkoord%20met%20offerte%20${doc.nummer||""}%20d.d.%20${fmtDate(doc.aangemaakt)}%20voor%20een%20totaalbedrag%20van%20${encodeURIComponent(fmtEuro(eindTot))}.%0A%0AMet%20vriendelijke%20groeten%2C%0A${encodeURIComponent(doc.klant?.naam||"")}`;
 
   const ontwerp = sj.ontwerpOfferte || "kl_split";
 
-  // ── Voorblad helpers
+  // -- Voorblad helpers
   const CovKlantInfo = () => (
     <div style={{fontFamily:docFont}}>
       <div style={{fontSize:10,fontWeight:700,letterSpacing:1,textTransform:"uppercase",color:"#94a3b8",marginBottom:4}}>Opgemaakt voor</div>
-      {klantVelden.naam!==false&&<div style={{fontWeight:800,fontSize:20,color:txtKleur,lineHeight:1.2}}>{doc.klant?.naam||"—"}</div>}
+      {klantVelden.naam!==false&&<div style={{fontWeight:800,fontSize:20,color:txtKleur,lineHeight:1.2}}>{doc.klant?.naam||"-"}</div>}
       {klantVelden.bedrijf!==false&&doc.klant?.bedrijf&&<div style={{fontWeight:600,fontSize:14,color:"#475569",marginTop:2}}>{doc.klant.bedrijf}</div>}
       <div style={{fontSize:lyt.klant?.fontSize||12,color:"#64748b",marginTop:6}}>
         {klantVelden.adres!==false&&doc.klant?.adres&&<div>{doc.klant.adres}</div>}
@@ -948,7 +949,7 @@ function OfferteDocument({doc, settings, ficheCache={}, producten=[]}) {
     <div className="doc-wrap">
       {/* PAGE 1: VOORBLAD */}
       {sj.toonVoorblad!==false&&<>
-      <div className="doc-page-lbl">Pagina 1 — Voorblad</div>
+      <div className="doc-page-lbl">Pagina 1 - Voorblad</div>
       <div className="doc-page">
 
         {/* ONTWERP 1: Klassiek gesplitst */}
@@ -1055,7 +1056,7 @@ function OfferteDocument({doc, settings, ficheCache={}, producten=[]}) {
       </>}
       {/* PAGE 2: PRODUCTINFO + TECHNISCHE FICHES */}
       {sj.toonProductpagina!==false&&uniqueProds.length>0&&<>
-        <div className="doc-page-lbl">Pagina 2 — Productinformatie & Technische fiches</div>
+        <div className="doc-page-lbl">Pagina 2 - Productinformatie & Technische fiches</div>
         <div className="doc-page">
           <div style={{height:6,background:dc,borderRadius:"4px 4px 0 0",flexShrink:0}}/>
           <div className="prod-page">
@@ -1118,7 +1119,7 @@ function OfferteDocument({doc, settings, ficheCache={}, producten=[]}) {
                     </div>
                   )}
                   {i<uniqueProds.length-1&&<div style={{height:1,background:"#e2e8f0",marginTop:20}}/>}
-                  {/* Technische fiches — download links */}
+                  {/* Technische fiches - download links */}
                   {((l.technischeFiches||[]).some(f=>f.data||f.url)||l.technischeFiche)&&<div style={{marginTop:8,display:"flex",flexWrap:"wrap",gap:4}}>
                     {(l.technischeFiches||[]).filter(f=>f.data||f.url).map((f,fi)=>(
                       <a key={fi} href={f.data||f.url} download={f.naam||"fiche.pdf"} style={{display:"inline-flex",alignItems:"center",gap:5,background:"#eff6ff",border:"1px solid #bfdbfe",borderRadius:6,padding:"5px 12px",fontSize:11.5,color:"#2563eb",textDecoration:"none",fontWeight:600}}>📎 {f.naam||"Technische fiche"}</a>
@@ -1126,7 +1127,7 @@ function OfferteDocument({doc, settings, ficheCache={}, producten=[]}) {
                     {l.technischeFiche&&l.technischeFiche!=="[PDF]"&&!(l.technischeFiches||[]).length&&(
                       <a href={l.technischeFiche} download={l.fichNaam||"fiche.pdf"} style={{display:"inline-flex",alignItems:"center",gap:5,background:"#eff6ff",border:"1px solid #bfdbfe",borderRadius:6,padding:"5px 12px",fontSize:11.5,color:"#2563eb",textDecoration:"none",fontWeight:600}}>📎 {l.fichNaam||"Technische fiche"}</a>
                     )}
-                    {/* Fiches zonder data — toon als label (cache nog niet geladen) */}
+                    {/* Fiches zonder data - toon als label (cache nog niet geladen) */}
                     {(l.technischeFiches||[]).filter(f=>!f.data&&!f.url).map((f,fi)=>(
                       <span key={"lbl"+fi} style={{display:"inline-flex",alignItems:"center",gap:4,background:"#f1f5f9",border:"1px solid #e2e8f0",borderRadius:5,padding:"3px 10px",fontSize:11,color:"#64748b"}}>📎 {f.naam||"Fiche "+(fi+1)}</span>
                     ))}
@@ -1140,7 +1141,7 @@ function OfferteDocument({doc, settings, ficheCache={}, producten=[]}) {
       </>}
 
       {/* PAGE 3: OFFERTEDETAIL */}
-      <div className="doc-page-lbl">Pagina 3 — Offertedetail</div>
+      <div className="doc-page-lbl">Pagina 3 - Offertedetail</div>
       <div className="doc-page">
         <div style={{height:5,background:dc,flexShrink:0}}/>
         <div className="qt-pg">
@@ -1157,7 +1158,7 @@ function OfferteDocument({doc, settings, ficheCache={}, producten=[]}) {
           <div className="qt-meta-bar">
             {metaBar.toonDatum!==false&&<div className="qt-meta-item"><div className="qt-meta-lbl">Datum</div><div className="qt-meta-val">{fmtDate(doc.aangemaakt)}</div></div>}
             {metaBar.toonGeldig!==false&&<div className="qt-meta-item"><div className="qt-meta-lbl">Geldig tot</div><div className="qt-meta-val">{fmtDate(doc.vervaldatum)}</div></div>}
-            {metaBar.toonBtw!==false&&<div className="qt-meta-item"><div className="qt-meta-lbl">BTW-regime</div><div className="qt-meta-val">{BTW_REGIMES[doc.btwRegime]?.l?.split("—")[0]?.trim()||"—"}</div></div>}
+            {metaBar.toonBtw!==false&&<div className="qt-meta-item"><div className="qt-meta-lbl">BTW-regime</div><div className="qt-meta-val">{BTW_REGIMES[doc.btwRegime]?.l?.split("-")[0]?.trim()||"-"}</div></div>}
             {metaBar.toonBetaling!==false&&<div className="qt-meta-item"><div className="qt-meta-lbl">Betaling</div><div className="qt-meta-val">{doc.betalingstermijn} dagen</div></div>}
           </div>
           <div className="qt-parties">
@@ -1175,7 +1176,7 @@ function OfferteDocument({doc, settings, ficheCache={}, producten=[]}) {
                     <tr key={i} style={{background:"#f8fafc"}}>
                       <td colSpan={6} style={{padding:"6px 10px",fontSize:12,color:"#475569",fontStyle:"italic",borderBottom:"1px solid #e2e8f0"}}>
                         <span style={{fontWeight:600,color:"#64748b"}}>ℹ️ {l.naam}</span>
-                        {l.omschr&&<span style={{marginLeft:6,color:"#94a3b8"}}> — {l.omschr}</span>}
+                        {l.omschr&&<span style={{marginLeft:6,color:"#94a3b8"}}> - {l.omschr}</span>}
                       </td>
                     </tr>
                   );
@@ -1207,7 +1208,7 @@ function OfferteDocument({doc, settings, ficheCache={}, producten=[]}) {
           {doc.notities&&<div className="qt-notes"><strong>Opmerking:</strong> {doc.notities}</div>}
           <div className="qt-sign">
             <div className="qt-sign-box">
-              <div className="qt-sign-lbl">{sj.handtekeningTekst||"Akkoord klant — datum, handtekening & naam"}</div>
+              <div className="qt-sign-lbl">{sj.handtekeningTekst||"Akkoord klant - datum, handtekening & naam"}</div>
               <div style={{fontSize:12,color:"#94a3b8",marginTop:8}}>Gelieve ondertekend terug te bezorgen of digitaal te bevestigen via onderstaande link.</div>
             </div>
           </div>
@@ -1219,7 +1220,7 @@ function OfferteDocument({doc, settings, ficheCache={}, producten=[]}) {
       </div>
 
       {/* PAGE 4: VOORWAARDEN */}
-      <div className="doc-page-lbl">Pagina 4 — Voorwaarden</div>
+      <div className="doc-page-lbl">Pagina 4 - Voorwaarden</div>
       <div className="doc-page">
         <div style={{height:5,background:dc,flexShrink:0}}/>
         <div style={{padding:"30px 36px",flex:1,overflow:"hidden"}}>
@@ -1229,41 +1230,41 @@ function OfferteDocument({doc, settings, ficheCache={}, producten=[]}) {
         <div className="qt-footer" style={{background:dc}}><div className="qt-footer-txt"><strong>{bed.naam}</strong> · {bed.adres}, {bed.gemeente}</div><div className="qt-footer-txt">BTW: <strong>{fmtBtwnr(bed.btwnr)}</strong> · {bed.website}</div></div>
       </div>
 
-      {/* TECHNISCHE FICHES — AAN HET EINDE, elke PDF-pagina = eigen A4 */}
+      {/* TECHNISCHE FICHES - AAN HET EINDE, elke PDF-pagina = eigen A4 */}
       {uniqueProds.filter(l=>(l.technischeFiche&&l.technischeFiche!=="[PDF]")||(l.technischeFiches||[]).length>0).map((l,fi)=>{
         console.log(`📎 Fiche sectie voor ${l.naam}:`, 
           'technischeFiche:', l.technischeFiche ? (l.technischeFiche.length>100?l.technischeFiche.slice(0,50)+'...':l.technischeFiche) : 'null',
           'technischeFiches:', (l.technischeFiches||[]).map(f=>({naam:f.naam, hasData:!!f.data, dataLen:f.data?.length||0, url:f.url||''}))
         );
         return(
-        <div key={`fiche-grp-${fi}`}>
-          {/* Legacy: single technischeFiche — alleen als GEEN array */}
+        <div key={"fiche-grp-"+fi}>
+          {/* Legacy: single technischeFiche - alleen als GEEN array */}
           {l.technischeFiche&&l.technischeFiche!=="[PDF]"&&l.technischeFiche.length>100&&!(l.technischeFiches||[]).length&&
             <FichePages fiche={l.technischeFiche} naam={l.naam} fichNaam={l.fichNaam} omschr={l.omschr} dc={dc} bed={bed} docNummer={doc.nummer}/>}
-          {/* Nieuw: array technischeFiches — render ALLE met data */}
+          {/* Nieuw: array technischeFiches - render ALLE met data */}
           {(l.technischeFiches||[]).map((f,ffi)=>{
             // Haal data op: eerst van lijn zelf, dan uit _fc (realtime cache met producten state)
             const cachedFiches = _fc[l.productId] || _fc[l.id] || [];
             const cached = cachedFiches.find(cf => cf.naam === f.naam) || cachedFiches[0] || null;
             const ficheData = f.data || f.url || cached?.data || null;
             if(!ficheData || ficheData.length < 100) {
-              // Geen base64 data — toon placeholder
+              // Geen base64 data - toon placeholder
               return(
-                <div key={`fiche-ph-${fi}-${ffi}`}>
-                  <div className="doc-page-lbl">Technische fiche — {f.naam||l.naam}</div>
+                <div key={"fiche-ph-"+fi+"-"+ffi}>
+                  <div className="doc-page-lbl">Technische fiche - {f.naam||l.naam}</div>
                   <div className="doc-page" style={{pageBreakBefore:"always"}}>
                     <div style={{height:5,background:dc,flexShrink:0}}/>
                     <div style={{padding:"30mm 20mm",textAlign:"center"}}>
                       <div style={{fontSize:36,marginBottom:16}}>📋</div>
                       <div style={{fontWeight:800,fontSize:20,color:"#1e293b",marginBottom:8}}>{l.naam}</div>
                       <div style={{fontSize:14,color:"#94a3b8",marginBottom:8}}>{f.naam||"Technische fiche"}</div>
-                      <div style={{fontSize:12,color:"#f59e0b",padding:"8px 16px",background:"#fffbeb",borderRadius:8,display:"inline-block"}}>⚠ PDF data niet beschikbaar — product opnieuw opslaan om fiches te herstellen</div>
+                      <div style={{fontSize:12,color:"#f59e0b",padding:"8px 16px",background:"#fffbeb",borderRadius:8,display:"inline-block"}}>⚠ PDF data niet beschikbaar - product opnieuw opslaan om fiches te herstellen</div>
                     </div>
                   </div>
                 </div>
               );
             }
-            return <FichePages key={`fiche-${fi}-${ffi}`} fiche={ficheData} naam={l.naam} fichNaam={f.naam} omschr={l.omschr} dc={dc} bed={bed} docNummer={doc.nummer}/>;
+            return <FichePages key={"fiche-"+fi+"-"+ffi} fiche={ficheData} naam={l.naam} fichNaam={f.naam} omschr={l.omschr} dc={dc} bed={bed} docNummer={doc.nummer}/>;
           })}
         </div>
       );})}
@@ -1455,20 +1456,20 @@ function Bevestiging({offerteId, status, klantAkkoord, toonBevestigingslink}) {
               </div>
               {datum && (
                 <div style={{marginTop:8,fontSize:11,color:"#059669",textAlign:"center"}}>
-                  📅 Voorkeur: {new Date(datum+"T12:00:00").toLocaleDateString("nl-BE",{weekday:"long",day:"numeric",month:"long",year:"numeric"})}
+                  Voorkeur: {new Date(datum+"T12:00:00").toLocaleDateString("nl-BE",{weekday:"long",day:"numeric",month:"long",year:"numeric"})}
                 </div>
               )}
             </>
           )}
-            </div>{/* inner padding */}
-          </div>{/* modal */}
-        </div>{/* overlay */}
+            </div>
+          </div>
+        </div>
       )}
     </>
   );
 }
 
-// ─── HOOFD APP ───────────────────────────────────────────────────
+// --- HOOFD APP ---------------------------------------------------
 
 function App() {
   const [data, setData] = useState(null);
@@ -1516,7 +1517,7 @@ function App() {
   document.getElementById("loader").style.display="none";
   const dc = data._dc || "#1a2e4a";
   document.documentElement.style.setProperty("--dc", dc);
-  document.title = "Offerte "+(data.nummer||"")+" — "+(data._bed?.naam||"");
+  document.title = "Offerte "+(data.nummer||"")+" - "+(data._bed?.naam||"");
 
   // Build settings from stored data
   const settings = {
