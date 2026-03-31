@@ -389,25 +389,47 @@ async function sendViaRecommand(factuur, settings) {
   const issueDate = factuur.datum || new Date().toISOString().slice(0,10);
   const dueDate   = factuur.vervaldatum || issueDate;
 
-  const positiefLijnen = (factuur.lijnen||[]).filter(l=>(l.prijs||0)>0 && (l.naam||"").trim());
-  const kortingLijnen  = (factuur.lijnen||[]).filter(l=>(l.prijs||0)<0);
-  const kortingUitLijnen = kortingLijnen.reduce((s,l)=>s+Math.abs((l.prijs||0)*(l.aantal||1)),0);
-  // Ook document-level korting (factuur.korting veld) meenemen
+  // Kortinglijnen samenvoegen met voorgaande positieve lijn
+  // Zo vermijden we AllowanceCharge/negatieve lijnen die Recommand niet ondersteunt met AE
+  const allLijnen = factuur.lijnen || [];
+  const mergedLijnen = [];
+  allLijnen.forEach(l => {
+    if((l.prijs||0) >= 0 && (l.naam||"").trim()) {
+      mergedLijnen.push({ ...l, _kortingen: [] });
+    } else if((l.prijs||0) < 0 && mergedLijnen.length > 0) {
+      // Voeg korting toe aan voorgaande lijn
+      mergedLijnen[mergedLijnen.length-1]._kortingen.push(l);
+    }
+  });
+
+  // Document-level korting verdelen over eerste lijn
   const kortingUitDoc = (() => {
     if(!(factuur.korting>0)) return 0;
-    const sub = positiefLijnen.reduce((s,l)=>s+Math.abs((l.prijs||0))*(l.aantal||1),0);
+    const sub = mergedLijnen.reduce((s,l)=>s+Math.abs((l.prijs||0))*(l.aantal||1),0);
     return factuur.kortingType==="pct" ? sub*(factuur.korting/100) : Number(factuur.korting||0);
   })();
-  const totaalKorting = kortingUitLijnen + kortingUitDoc;
+  if(kortingUitDoc > 0 && mergedLijnen.length > 0) {
+    mergedLijnen[0]._kortingen.push({ prijs: -kortingUitDoc, aantal: 1, naam: "Korting" });
+  }
 
-  const lineItems = positiefLijnen.map((l,i)=>({
-    i, l,
-    prijs: Math.abs(l.prijs||0),
-    aantal: Number(l.aantal||1),
-    ext: Math.abs(l.prijs||0)*Number(l.aantal||1),
-    btwPct: Number(l.btw??21),
-    vatAmt: vatCat==="S" ? Math.abs(l.prijs||0)*Number(l.aantal||1)*(Number(l.btw??21)/100) : 0
-  }));
+  const kortingLijnen = allLijnen.filter(l=>(l.prijs||0)<0);
+  const totaalKorting = mergedLijnen.reduce((s,l)=>s+l._kortingen.reduce((ks,k)=>ks+Math.abs((k.prijs||0)*(k.aantal||1)),0),0);
+
+  const lineItems = mergedLijnen.map((l,i)=>{
+    const kortingBedrag = l._kortingen.reduce((s,k)=>s+Math.abs((k.prijs||0)*(k.aantal||1)),0);
+    const brutoPrijs = Math.abs(l.prijs||0);
+    const nettoExt = brutoPrijs * Number(l.aantal||1) - kortingBedrag;
+    const nettoPrijs = l.aantal ? nettoExt / Number(l.aantal) : nettoExt;
+    return {
+      i, l,
+      prijs: nettoPrijs,
+      aantal: Number(l.aantal||1),
+      ext: nettoExt,
+      btwPct: Number(l.btw??21),
+      vatAmt: vatCat==="S" ? nettoExt*(Number(l.btw??21)/100) : 0
+    };
+  });
+
 
   const sumLines = lineItems.reduce((s,li)=>s+li.ext,0);
   const sumVat   = lineItems.reduce((s,li)=>s+li.vatAmt,0);
@@ -505,28 +527,32 @@ async function sendViaRecommand(factuur, settings) {
     "  </cac:LegalMonetaryTotal>"
   );
 
-  // Voeg kortinglijnen toe als negatieve InvoiceLines
   let lineIdx = 0;
-  kortingLijnen.forEach(kl => {
+  lineItems.forEach(li => {
     lineIdx++;
-    const klBedrag = Math.abs((kl.prijs||0) * (kl.aantal||1));
+    const aangepastExt = li.ext;
+    const aangepastPrijs = li.prijs;
+    const desc = li.l.omschr ? "\n      <cbc:Description>" + xe(li.l.omschr) + "</cbc:Description>" : "";
     xmlLines.push(
       "  <cac:InvoiceLine>",
       "    <cbc:ID>" + lineIdx + "</cbc:ID>",
-      '    <cbc:InvoicedQuantity unitCode="C62">1.00</cbc:InvoicedQuantity>',
-      '    <cbc:LineExtensionAmount currencyID="EUR">-' + f2(klBedrag) + "</cbc:LineExtensionAmount>",
+      '    <cbc:InvoicedQuantity unitCode="C62">' + li.aantal + ".00</cbc:InvoicedQuantity>",
+      '    <cbc:LineExtensionAmount currencyID="EUR">' + f2(aangepastExt) + "</cbc:LineExtensionAmount>",
       "    <cac:Item>",
-      "      <cbc:Name>" + xe(kl.naam||"Korting") + "</cbc:Name>",
+      "      <cbc:Name>" + xe(li.l.naam||"") + "</cbc:Name>" + desc,
       "      <cac:ClassifiedTaxCategory>",
       "        <cbc:ID>" + vatCat + "</cbc:ID>",
       "        <cbc:Percent>0.00</cbc:Percent>",
       "        <cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme>",
       "      </cac:ClassifiedTaxCategory>",
       "    </cac:Item>",
-      '    <cac:Price><cbc:PriceAmount currencyID="EUR">-' + f2(klBedrag) + "</cbc:PriceAmount></cac:Price>",
+      "    <cac:Price>",
+      '      <cbc:PriceAmount currencyID="EUR">' + f2(aangepastPrijs) + "</cbc:PriceAmount>",
+      "    </cac:Price>",
       "  </cac:InvoiceLine>"
     );
   });
+
 
   lineItems.forEach(li => {
     lineIdx++;
