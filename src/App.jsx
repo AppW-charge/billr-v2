@@ -358,24 +358,25 @@ async function checkPeppolRecommand(btwnr, settings) {
   }
 }
 
-// Stuur factuur via Recommand Peppol — raw UBL XML (peppol-toolkit structuur)
+// Stuur factuur via Recommand Peppol
 async function sendViaRecommand(factuur, settings) {
   const companyId = getRecommandCompanyId(settings);
-  if(!companyId) throw new Error("Recommand Company ID niet ingesteld");
-  const klant = factuur.klant || {};
-  const bed = settings?.bedrijf || {};
+  if(!companyId) throw new Error("Recommand Company ID niet ingesteld in Instellingen");
 
-  const btwRegime = factuur.btwRegime || klant.btwRegime || "btw21";
+  const klant = factuur.klant || {};
+  const bed   = settings?.bedrijf || {};
+  const btwRegime   = factuur.btwRegime || klant.btwRegime || "btw21";
   const isVerlegdBtw = btwRegime === "verlegd" || btwRegime === "medecontractant";
   const isVrijgesteld = btwRegime === "vrijgesteld" || btwRegime === "btw0";
   const vatCat = isVerlegdBtw ? "AE" : isVrijgesteld ? "Z" : "S";
 
-  const sellerVat = (bed.btwnr||"").replace(/[\s.]/g,"");
+  const cleanVat = s => (s||"").replace(/[\s.]/g,"");
+  const sellerVat = cleanVat(bed.btwnr);
   const sellerVatFull = sellerVat.startsWith("BE") ? sellerVat : "BE"+sellerVat;
-  const sellerEntNr = sellerVatFull.replace(/^BE/i,"");
-  const buyerVatRaw = (klant.btwnr||"").replace(/[\s.]/g,"");
-  const buyerVatFull = buyerVatRaw ? (buyerVatRaw.startsWith("BE") ? buyerVatRaw : "BE"+buyerVatRaw) : "";
-  const buyerEntNr = buyerVatFull.replace(/^BE/i,"");
+  const sellerEntNr   = sellerVatFull.replace(/^BE/i,"");
+  const buyerVatRaw   = cleanVat(klant.btwnr);
+  const buyerVatFull  = buyerVatRaw ? (buyerVatRaw.startsWith("BE") ? buyerVatRaw : "BE"+buyerVatRaw) : "";
+  const buyerEntNr    = buyerVatFull.replace(/^BE/i,"");
   const iban = (bed.iban||"").replace(/\s/g,"");
 
   const ra = s => (s||"").match(/^(.+?)\s+(\d+\S*)$/) || [null,s||"",""];
@@ -385,143 +386,148 @@ async function sendViaRecommand(factuur, settings) {
 
   const bA=ra(bed.adres), bG=rg(bed.gemeente);
   const kA=ra(klant.adres), kG=rg(klant.gemeente);
+  const issueDate = factuur.datum || new Date().toISOString().slice(0,10);
+  const dueDate   = factuur.vervaldatum || issueDate;
 
-  const positiefLijnen=(factuur.lijnen||[]).filter(l=>(l.prijs||0)>0&&(l.naam||"").trim());
-  const kortingLijnen=(factuur.lijnen||[]).filter(l=>(l.prijs||0)<0);
-  const totaalKorting=kortingLijnen.reduce((s,l)=>s+Math.abs((l.prijs||0)*(l.aantal||1)),0);
+  const positiefLijnen = (factuur.lijnen||[]).filter(l=>(l.prijs||0)>0 && (l.naam||"").trim());
+  const kortingLijnen  = (factuur.lijnen||[]).filter(l=>(l.prijs||0)<0);
+  const totaalKorting  = kortingLijnen.reduce((s,l)=>s+Math.abs((l.prijs||0)*(l.aantal||1)),0);
 
-  const lineItems=positiefLijnen.map((l,i)=>{
-    const prijs=Math.abs(l.prijs||0), aantal=Number(l.aantal||1), ext=prijs*aantal;
-    const btwPct=Number(l.btw??21);
-    const vatAmt=vatCat==="S"?ext*btwPct/100:0;
-    return {i,l,prijs,aantal,ext,btwPct,vatAmt};
-  });
+  const lineItems = positiefLijnen.map((l,i)=>({
+    i, l,
+    prijs: Math.abs(l.prijs||0),
+    aantal: Number(l.aantal||1),
+    ext: Math.abs(l.prijs||0)*Number(l.aantal||1),
+    btwPct: Number(l.btw??21),
+    vatAmt: vatCat==="S" ? Math.abs(l.prijs||0)*Number(l.aantal||1)*(Number(l.btw??21)/100) : 0
+  }));
 
-  const sumLines=lineItems.reduce((s,li)=>s+li.ext,0);
-  const sumVat=lineItems.reduce((s,li)=>s+li.vatAmt,0);
-  const sumExcl=sumLines-totaalKorting;
-  const sumIncl=sumExcl+sumVat;
-  const stdPct=vatCat==="S"?(lineItems[0]?.btwPct??21):0;
+  const sumLines = lineItems.reduce((s,li)=>s+li.ext,0);
+  const sumVat   = lineItems.reduce((s,li)=>s+li.vatAmt,0);
+  const sumExcl  = sumLines - totaalKorting;
+  const sumIncl  = sumExcl + sumVat;
+  const stdPct   = vatCat==="S" ? (lineItems[0]?.btwPct??21) : 0;
 
-  const issueDate=factuur.datum||new Date().toISOString().slice(0,10);
-  const dueDate=factuur.vervaldatum||issueDate;
-
-  // XML exact gebaseerd op @pixeldrive/peppol-toolkit output (Belgisch Peppol BIS 3.0)
-  const ubl=`<?xml version="1.0" encoding="UTF-8"?>
+  // UBL XML - exact zoals @pixeldrive/peppol-toolkit genereert
+  const ubl = \`<?xml version="1.0" encoding="UTF-8"?>
 <Invoice xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2" xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2" xmlns:cec="urn:oasis:names:specification:ubl:schema:xsd:CommonExtensionComponents-2" xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2">
   <cbc:UBLVersionID>2.1</cbc:UBLVersionID>
   <cbc:CustomizationID>urn:cen.eu:en16931:2017#compliant#urn:fdc:peppol.eu:2017:poacc:billing:3.0</cbc:CustomizationID>
   <cbc:ProfileID>urn:fdc:peppol.eu:2017:poacc:billing:01:1.0</cbc:ProfileID>
-  <cbc:ID>${xe(factuur.nummer)}</cbc:ID>
-  <cbc:IssueDate>${issueDate}</cbc:IssueDate>
-  <cbc:DueDate>${dueDate}</cbc:DueDate>
+  <cbc:ID>\${xe(factuur.nummer)}</cbc:ID>
+  <cbc:IssueDate>\${issueDate}</cbc:IssueDate>
+  <cbc:DueDate>\${dueDate}</cbc:DueDate>
   <cbc:InvoiceTypeCode>380</cbc:InvoiceTypeCode>
   <cbc:DocumentCurrencyCode>EUR</cbc:DocumentCurrencyCode>
-  <cbc:BuyerReference>${xe(factuur.nummer)}</cbc:BuyerReference>
+  <cbc:BuyerReference>\${xe(factuur.nummer)}</cbc:BuyerReference>
   <cac:AccountingSupplierParty>
     <cac:Party>
-      <cbc:EndpointID schemeID="0208">${xe(sellerEntNr)}</cbc:EndpointID>
-      <cac:PartyIdentification><cbc:ID>${xe(sellerEntNr)}</cbc:ID></cac:PartyIdentification>
-      <cac:PartyName><cbc:Name>${xe(bed.naam||"W-Charge BV")}</cbc:Name></cac:PartyName>
+      <cbc:EndpointID schemeID="0208">\${xe(sellerEntNr)}</cbc:EndpointID>
+      <cac:PartyIdentification><cbc:ID>\${xe(sellerEntNr)}</cbc:ID></cac:PartyIdentification>
+      <cac:PartyName><cbc:Name>\${xe(bed.naam||"W-Charge BV")}</cbc:Name></cac:PartyName>
       <cac:PostalAddress>
-        <cbc:StreetName>${xe((bA[1]||"")+(bA[2]?" "+bA[2]:""))}</cbc:StreetName>
-        <cbc:CityName>${xe(bG[2]||"")}</cbc:CityName>
-        <cbc:PostalZone>${xe(bG[1]||"")}</cbc:PostalZone>
+        <cbc:StreetName>\${xe((bA[1]||"")+(bA[2]?" "+bA[2]:""))}</cbc:StreetName>
+        <cbc:CityName>\${xe(bG[2]||"")}</cbc:CityName>
+        <cbc:PostalZone>\${xe(bG[1]||"")}</cbc:PostalZone>
         <cac:Country><cbc:IdentificationCode>BE</cbc:IdentificationCode></cac:Country>
       </cac:PostalAddress>
       <cac:PartyTaxScheme>
-        <cbc:CompanyID>${xe(sellerVatFull)}</cbc:CompanyID>
+        <cbc:CompanyID>\${xe(sellerVatFull)}</cbc:CompanyID>
         <cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme>
       </cac:PartyTaxScheme>
       <cac:PartyLegalEntity>
-        <cbc:RegistrationName>${xe(bed.naam||"W-Charge BV")}</cbc:RegistrationName>
-        <cbc:CompanyID>${xe(sellerEntNr)}</cbc:CompanyID>
+        <cbc:RegistrationName>\${xe(bed.naam||"W-Charge BV")}</cbc:RegistrationName>
+        <cbc:CompanyID>\${xe(sellerEntNr)}</cbc:CompanyID>
       </cac:PartyLegalEntity>
     </cac:Party>
   </cac:AccountingSupplierParty>
   <cac:AccountingCustomerParty>
     <cac:Party>
-      <cbc:EndpointID schemeID="0208">${xe(buyerEntNr)}</cbc:EndpointID>
-      <cac:PartyIdentification><cbc:ID>${xe(buyerEntNr)}</cbc:ID></cac:PartyIdentification>
-      <cac:PartyName><cbc:Name>${xe(klant.naam||klant.bedrijf||"")}</cbc:Name></cac:PartyName>
+      <cbc:EndpointID schemeID="0208">\${xe(buyerEntNr)}</cbc:EndpointID>
+      <cac:PartyIdentification><cbc:ID>\${xe(buyerEntNr)}</cbc:ID></cac:PartyIdentification>
+      <cac:PartyName><cbc:Name>\${xe(klant.naam||klant.bedrijf||"")}</cbc:Name></cac:PartyName>
       <cac:PostalAddress>
-        <cbc:StreetName>${xe((kA[1]||"")+(kA[2]?" "+kA[2]:""))}</cbc:StreetName>
-        <cbc:CityName>${xe(kG[2]||"")}</cbc:CityName>
-        <cbc:PostalZone>${xe(kG[1]||"")}</cbc:PostalZone>
+        <cbc:StreetName>\${xe((kA[1]||"")+(kA[2]?" "+kA[2]:""))}</cbc:StreetName>
+        <cbc:CityName>\${xe(kG[2]||"")}</cbc:CityName>
+        <cbc:PostalZone>\${xe(kG[1]||"")}</cbc:PostalZone>
         <cac:Country><cbc:IdentificationCode>BE</cbc:IdentificationCode></cac:Country>
       </cac:PostalAddress>
       <cac:PartyTaxScheme>
-        <cbc:CompanyID>${xe(buyerVatFull)}</cbc:CompanyID>
+        <cbc:CompanyID>\${xe(buyerVatFull)}</cbc:CompanyID>
         <cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme>
       </cac:PartyTaxScheme>
       <cac:PartyLegalEntity>
-        <cbc:RegistrationName>${xe(klant.naam||klant.bedrijf||"")}</cbc:RegistrationName>
-        <cbc:CompanyID>${xe(buyerEntNr)}</cbc:CompanyID>
+        <cbc:RegistrationName>\${xe(klant.naam||klant.bedrijf||"")}</cbc:RegistrationName>
+        <cbc:CompanyID>\${xe(buyerEntNr)}</cbc:CompanyID>
       </cac:PartyLegalEntity>
     </cac:Party>
   </cac:AccountingCustomerParty>
-  ${iban?`<cac:PaymentMeans>
+  \${iban ? \`<cac:PaymentMeans>
     <cac:PayeeFinancialAccount>
-      <cbc:ID>${xe(iban)}</cbc:ID>
+      <cbc:ID>\${xe(iban)}</cbc:ID>
     </cac:PayeeFinancialAccount>
-  </cac:PaymentMeans>`:""}
+  </cac:PaymentMeans>\` : ""}
   <cac:TaxTotal>
-    <cbc:TaxAmount>${f2(sumVat)}</cbc:TaxAmount>
+    <cbc:TaxAmount>\${f2(sumVat)}</cbc:TaxAmount>
     <cac:TaxSubtotal>
-      <cbc:TaxableAmount>${f2(sumExcl)}</cbc:TaxableAmount>
-      <cbc:TaxAmount>${f2(sumVat)}</cbc:TaxAmount>
+      <cbc:TaxableAmount>\${f2(sumExcl)}</cbc:TaxableAmount>
+      <cbc:TaxAmount>\${f2(sumVat)}</cbc:TaxAmount>
       <cac:TaxCategory>
-        <cbc:ID>${vatCat}</cbc:ID>
-        <cbc:Percent>${stdPct}.00</cbc:Percent>
+        <cbc:ID>\${vatCat}</cbc:ID>
+        <cbc:Percent>\${stdPct}.00</cbc:Percent>
+        \${vatCat!=="S" ? \`<cbc:TaxExemptionReasonCode>\${vatCat==="AE"?"VATEX-EU-AE":"VATEX-EU-O"}</cbc:TaxExemptionReasonCode>
+        <cbc:TaxExemptionReason>\${vatCat==="AE"?"Reverse charge":"Not subject to VAT"}</cbc:TaxExemptionReason>\` : ""}
         <cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme>
       </cac:TaxCategory>
     </cac:TaxSubtotal>
   </cac:TaxTotal>
   <cac:LegalMonetaryTotal>
-    <cbc:LineExtensionAmount currencyID="EUR">${f2(sumLines)}</cbc:LineExtensionAmount>
-    <cbc:TaxExclusiveAmount currencyID="EUR">${f2(sumExcl)}</cbc:TaxExclusiveAmount>
-    <cbc:TaxInclusiveAmount currencyID="EUR">${f2(sumIncl)}</cbc:TaxInclusiveAmount>
-    ${totaalKorting>0?`<cbc:AllowanceTotalAmount currencyID="EUR">${f2(totaalKorting)}</cbc:AllowanceTotalAmount>`:""}
-    <cbc:PayableAmount currencyID="EUR">${f2(sumIncl)}</cbc:PayableAmount>
+    <cbc:LineExtensionAmount currencyID="EUR">\${f2(sumLines)}</cbc:LineExtensionAmount>
+    <cbc:TaxExclusiveAmount currencyID="EUR">\${f2(sumExcl)}</cbc:TaxExclusiveAmount>
+    <cbc:TaxInclusiveAmount currencyID="EUR">\${f2(sumIncl)}</cbc:TaxInclusiveAmount>
+    \${totaalKorting>0?\`<cbc:AllowanceTotalAmount currencyID="EUR">\${f2(totaalKorting)}</cbc:AllowanceTotalAmount>\`:""}
+    <cbc:PayableAmount currencyID="EUR">\${f2(sumIncl)}</cbc:PayableAmount>
   </cac:LegalMonetaryTotal>
-  ${lineItems.map(li=>`<cac:InvoiceLine>
-    <cbc:ID>${li.i+1}</cbc:ID>
-    <cbc:InvoicedQuantity unitCode="C62">${li.aantal}.00</cbc:InvoicedQuantity>
-    <cbc:LineExtensionAmount currencyID="EUR">${f2(li.ext)}</cbc:LineExtensionAmount>
+  \${lineItems.map(li=>\`<cac:InvoiceLine>
+    <cbc:ID>\${li.i+1}</cbc:ID>
+    <cbc:InvoicedQuantity unitCode="C62">\${li.aantal}.00</cbc:InvoicedQuantity>
+    <cbc:LineExtensionAmount currencyID="EUR">\${f2(li.ext)}</cbc:LineExtensionAmount>
     <cac:Item>
-      <cbc:Name>${xe(li.l.naam||"")}</cbc:Name>
-      ${li.l.omschr?`<cbc:Description>${xe(li.l.omschr)}</cbc:Description>`:""}
+      <cbc:Name>\${xe(li.l.naam||"")}</cbc:Name>
+      \${li.l.omschr?\`<cbc:Description>\${xe(li.l.omschr)}</cbc:Description>\`:""}
       <cac:ClassifiedTaxCategory>
-        <cbc:ID>${vatCat}</cbc:ID>
+        <cbc:ID>\${vatCat}</cbc:ID>
         <cbc:Percent>0.00</cbc:Percent>
         <cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme>
       </cac:ClassifiedTaxCategory>
     </cac:Item>
     <cac:Price>
-      <cbc:PriceAmount currencyID="EUR">${f2(li.prijs)}</cbc:PriceAmount>
+      <cbc:PriceAmount currencyID="EUR">\${f2(li.prijs)}</cbc:PriceAmount>
     </cac:Price>
-  </cac:InvoiceLine>`).join("\n  ")}
-</Invoice>`;
+  </cac:InvoiceLine>\`).join("\n  ")}
+</Invoice>\`;
 
-  const recipient="0208:"+buyerEntNr;
-  console.log("[PEPPOL] XML bytes:",ubl.length,"recipient:",recipient);
+  const recipient = "0208:" + buyerEntNr;
+  console.log("[PEPPOL] XML bytes:", ubl.length, "recipient:", recipient);
+  console.log("[PEPPOL] XML preview:", ubl.substring(0, 300));
 
-  const resp=await fetch(getRecommandPath(settings,`/${companyId}/send`),{
-    method:"POST",
-    headers:recommandHeaders(settings),
-    body:JSON.stringify({recipient,documentType:"xml",document:ubl})
+  const resp = await fetch(getRecommandPath(settings, \`/\${companyId}/send\`), {
+    method: "POST",
+    headers: recommandHeaders(settings),
+    body: JSON.stringify({ recipient, documentType: "xml", document: ubl })
   });
 
-  if(!resp.ok){
-    const err=await resp.json().catch(()=>({}));
-    console.error("[PEPPOL] Fout:",JSON.stringify(err));
-    let e=err.root||err.errors||err.message||err.error||err;
-    if(Array.isArray(e)) e=e.join("\n");
-    else if(typeof e==="object") e=JSON.stringify(e);
-    throw new Error("Recommand: "+String(e).slice(0,500));
+  if(!resp.ok) {
+    const err = await resp.json().catch(()=>({}));
+    console.error("[PEPPOL] VOLLEDIGE FOUT:", JSON.stringify(err, null, 2));
+    console.error("[PEPPOL] Gestuurde XML (eerste 2000 chars):", ubl.substring(0, 2000));
+    let e = err.root || err.errors || err.message || err.error || err;
+    if(Array.isArray(e)) e = e.join("\n");
+    else if(typeof e === "object") e = JSON.stringify(e);
+    throw new Error("Recommand: " + String(e).slice(0, 500));
   }
-  const data=await resp.json();
-  return {documentId:data.id||data.documentId,success:true};
+  const data = await resp.json();
+  return { documentId: data.id || data.documentId, success: true };
 }
 
 
