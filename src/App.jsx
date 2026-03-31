@@ -461,6 +461,7 @@ async function sendViaRecommand(factuur, settings) {
 
   if(iban) xmlLines.push(
     "  <cac:PaymentMeans>",
+    "    <cbc:PaymentMeansCode>30</cbc:PaymentMeansCode>",
     "    <cac:PayeeFinancialAccount>",
     "      <cbc:ID>" + xe(iban) + "</cbc:ID>",
     "    </cac:PayeeFinancialAccount>",
@@ -469,14 +470,14 @@ async function sendViaRecommand(factuur, settings) {
 
   xmlLines.push(
     "  <cac:TaxTotal>",
-    "    <cbc:TaxAmount>" + f2(sumVat) + "</cbc:TaxAmount>",
+    '    <cbc:TaxAmount currencyID="EUR">' + f2(sumVat) + "</cbc:TaxAmount>",
     "    <cac:TaxSubtotal>",
-    "      <cbc:TaxableAmount>" + f2(sumExcl) + "</cbc:TaxableAmount>",
-    "      <cbc:TaxAmount>" + f2(sumVat) + "</cbc:TaxAmount>",
+    '      <cbc:TaxableAmount currencyID="EUR">' + f2(sumExcl) + "</cbc:TaxableAmount>",
+    '      <cbc:TaxAmount currencyID="EUR">' + f2(sumVat) + "</cbc:TaxAmount>",
     "      <cac:TaxCategory>",
     "        <cbc:ID>" + vatCat + "</cbc:ID>",
     "        <cbc:Percent>" + stdPct + ".00</cbc:Percent>",
-    ...(vatCat !== "S" ? ["        <cbc:TaxExemptionReasonCode>" + (vatCat==="AE" ? "VATEX-EU-AE" : "VATEX-EU-O") + "</cbc:TaxExemptionReasonCode>", "        <cbc:TaxExemptionReason>" + (vatCat==="AE" ? "Reverse charge" : "Not subject to VAT") + "</cbc:TaxExemptionReason>"] : []),
+    ...(vatCat !== "S" ? ["        <cbc:TaxExemptionReason>" + (vatCat==="AE" ? "Reverse charge" : "Not subject to VAT") + "</cbc:TaxExemptionReason>"] : []),
     "        <cac:TaxScheme>",
     "          <cbc:ID>VAT</cbc:ID>",
     "        </cac:TaxScheme>",
