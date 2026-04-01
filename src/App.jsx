@@ -530,7 +530,7 @@ async function sendViaRecommand(factuur, settings) {
       "    <cac:Item>",
       "      <cbc:Name>" + xe(li.l.naam||"") + "</cbc:Name>"
     );
-    if(li.l.omschr) xmlLines.push("      <cbc:Description>" + xe(li.l.omschr) + "</cbc:Description>");
+    // Description weglaten (Recommand valideert dit niet in XML modus)
     xmlLines.push(
       "      <cac:ClassifiedTaxCategory>",
       "        <cbc:ID>" + vatCat + "</cbc:ID>",
