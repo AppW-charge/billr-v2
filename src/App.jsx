@@ -3237,6 +3237,19 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
       html_body: type === "offerte"
         ? (emailCfg.templateOfferte||"").replace("{naam}",klantData?.naam||doc.klant?.naam||"Klant").replace("{nummer}",doc.nummer).replace("{datum}",fmtDate(doc.aangemaakt)).replace("{vervaldatum}",fmtDate(doc.vervaldatum)).replace("{bedrijf}",bed.naam||"").replace("{tel}",bed.tel||"").replace("{totaal}",fmtEuro(totals.totaal)).replace("{iban}",bed.iban||"").replace("{technische_info}","")
         : (emailCfg.templateFactuur||"").replace("{naam}",klantData?.naam||doc.klant?.naam||"Klant").replace("{nummer}",doc.nummer).replace("{datum}",fmtDate(doc.aangemaakt)).replace("{vervaldatum}",fmtDate(doc.vervaldatum)).replace("{bedrijf}",bed.naam||"").replace("{totaal}",fmtEuro(totals.totaal)).replace("{iban}",bed.iban||""),
+      // Volledige factuur HTML voor in email (gebruik {{html_invoice}} in EmailJS template)
+      html_invoice: (()=>{
+        try {
+          const docWrap = document.querySelector(".mb-body .doc-wrap");
+          if(!docWrap) return "";
+          // Strip scripts en interactieve elementen
+          const clone = docWrap.cloneNode(true);
+          clone.querySelectorAll("button,input,select,textarea,script").forEach(el=>el.remove());
+          // Inline de CSS voor email compatibility
+          const styles = Array.from(document.styleSheets).map(s=>{try{return Array.from(s.cssRules).map(r=>r.cssText).join(" ");}catch(_){return "";}}).join(" ");
+          return `<html><head><meta charset="utf-8"><style>${styles.substring(0,50000)}</style></head><body style="margin:0;padding:20px;background:#f8fafc;">${clone.outerHTML}</body></html>`;
+        } catch(e) { return ""; }
+      })(),
     };
     
     console.log(`📧 Sending ${type} via EmailJS: service=${serviceId}, template=${templateId}, to=${recipientEmail}`);
