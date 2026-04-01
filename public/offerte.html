@@ -1274,25 +1274,29 @@ function OfferteDocument({doc, settings, ficheCache={}, producten=[]}) {
 
 
 function Bevestiging({offerteId, status, klantAkkoord, toonBevestigingslink}) {
-  const [fase, setFase] = useState("start");
-  const [datum, setDatum] = useState("");
-  const [notitie, setNotitie] = useState("");
-  const [sending, setSending] = useState(false);
+  const [fase, setFase] = React.useState("start");
+  const [datum, setDatum] = React.useState("");
+  const [notitie, setNotitie] = React.useState("");
+  const [sending, setSending] = React.useState(false);
+  const [open, setOpen] = React.useState(false);
 
   if(toonBevestigingslink===false) return null;
   const isOK = status==="goedgekeurd" || klantAkkoord;
   const isNOK = status==="afgewezen";
 
   if(isOK || fase==="ok") return (
-    <div style={{position:"fixed",bottom:24,right:24,zIndex:9999,maxWidth:380,background:"#d1fae5",border:"2px solid #10b981",borderRadius:14,padding:"18px 22px",boxShadow:"0 8px 32px rgba(0,0,0,.18)"}}>
-      <div style={{fontWeight:800,fontSize:16,color:"#065f46",marginBottom:4}}>✅ Offerte goedgekeurd</div>
-      <div style={{fontSize:13,color:"#059669"}}>Bedankt! We nemen spoedig contact op.</div>
+    <div style={{position:"fixed",bottom:0,left:0,right:0,zIndex:9999,background:"#d1fae5",borderTop:"3px solid #10b981",padding:"20px 24px",textAlign:"center",boxShadow:"0 -4px 20px rgba(0,0,0,.15)"}}>
+      <div style={{fontSize:48,marginBottom:8}}>✅</div>
+      <div style={{fontWeight:800,fontSize:22,color:"#065f46",marginBottom:6}}>Offerte goedgekeurd!</div>
+      <div style={{fontSize:16,color:"#059669"}}>Bedankt! We nemen spoedig contact op.</div>
     </div>
   );
+
   if(isNOK || fase==="nok") return (
-    <div style={{position:"fixed",bottom:24,right:24,zIndex:9999,maxWidth:380,background:"#fef2f2",border:"2px solid #ef4444",borderRadius:14,padding:"18px 22px",boxShadow:"0 8px 32px rgba(0,0,0,.18)"}}>
-      <div style={{fontWeight:800,fontSize:16,color:"#991b1b",marginBottom:4}}>Offerte afgewezen</div>
-      <div style={{fontSize:13,color:"#b91c1c"}}>Bedankt voor uw reactie.</div>
+    <div style={{position:"fixed",bottom:0,left:0,right:0,zIndex:9999,background:"#fef2f2",borderTop:"3px solid #ef4444",padding:"20px 24px",textAlign:"center",boxShadow:"0 -4px 20px rgba(0,0,0,.15)"}}>
+      <div style={{fontSize:48,marginBottom:8}}>❌</div>
+      <div style={{fontWeight:800,fontSize:20,color:"#991b1b",marginBottom:6}}>Offerte afgewezen</div>
+      <div style={{fontSize:15,color:"#b91c1c"}}>Bedankt voor uw reactie.</div>
     </div>
   );
 
@@ -1323,93 +1327,112 @@ function Bevestiging({offerteId, status, klantAkkoord, toonBevestigingslink}) {
     } catch(e) { alert("Er ging iets mis."); }
   };
 
-  // Minimum datum = vandaag
   const today = new Date().toISOString().split("T")[0];
+  const dc = "var(--dc,#1a2e4a)";
 
-  const [open, setOpen] = React.useState(false);
+  // Modal overlay - fullscreen op mobiel
+  const Modal = ({children}) => (
+    <div style={{
+      position:"fixed", inset:0, zIndex:9999,
+      background:"rgba(0,0,0,.6)",
+      display:"flex", alignItems:"flex-end",
+    }} onClick={e=>{if(e.target===e.currentTarget){setOpen(false);setFase("start");}}}>
+      <div style={{
+        background:"#fff",
+        width:"100%",
+        borderRadius:"20px 20px 0 0",
+        boxShadow:"0 -8px 40px rgba(0,0,0,.3)",
+        maxHeight:"92vh",
+        overflowY:"auto",
+        paddingBottom:"env(safe-area-inset-bottom,16px)"
+      }}>
+        {/* Handle */}
+        <div style={{display:"flex",justifyContent:"center",padding:"12px 0 4px"}}>
+          <div style={{width:44,height:5,background:"#e2e8f0",borderRadius:3}}/>
+        </div>
+        {/* Header */}
+        <div style={{
+          background:dc, color:"#fff",
+          padding:"16px 22px",
+          display:"flex", justifyContent:"space-between", alignItems:"center"
+        }}>
+          <span style={{fontWeight:800,fontSize:18}}>📋 Reageer op offerte</span>
+          <button onClick={()=>{setOpen(false);setFase("start");}} style={{
+            background:"rgba(255,255,255,.2)", border:"none", color:"#fff",
+            borderRadius:10, width:36, height:36, cursor:"pointer",
+            fontSize:20, display:"flex", alignItems:"center", justifyContent:"center"
+          }}>✕</button>
+        </div>
+        <div style={{padding:"24px 22px 32px"}}>
+          {children}
+        </div>
+      </div>
+    </div>
+  );
 
   return (
     <>
-      {/* Floating knop rechtsonder */}
+      {/* Vaste balk onderaan - altijd zichtbaar */}
       <div style={{
-        position:"fixed", bottom:20, right:20, zIndex:9998,
-        display:"flex", flexDirection:"column", alignItems:"flex-end", gap:8
+        position:"fixed", bottom:0, left:0, right:0,
+        zIndex:9998,
+        background:"#fff",
+        borderTop:"2px solid #e2e8f0",
+        padding:"12px 16px",
+        paddingBottom:"calc(12px + env(safe-area-inset-bottom,0px))",
+        boxShadow:"0 -4px 20px rgba(0,0,0,.12)",
+        display:"flex", gap:10
       }}>
         <button
-          onClick={()=>setOpen(true)}
+          onClick={()=>{setOpen(true);setFase("start");}}
           style={{
-            background:"var(--dc,#1a2e4a)", color:"#fff",
+            flex:1, background:dc, color:"#fff",
             border:"none", borderRadius:12,
-            padding:"14px 22px",
-            fontSize:15, fontWeight:800,
-            boxShadow:"0 4px 20px rgba(0,0,0,.3)",
-            cursor:"pointer", display:"flex", alignItems:"center", gap:10,
-            whiteSpace:"nowrap"
+            padding:"16px 20px",
+            fontSize:17, fontWeight:800,
+            cursor:"pointer",
+            boxShadow:"0 4px 14px rgba(0,0,0,.2)"
           }}>
           📋 Reageer op offerte
         </button>
       </div>
+      {/* Spacer zodat inhoud niet achter balk schuilt */}
+      <div style={{height:80}}/>
 
-      {/* Popup modal */}
       {open && (
-        <div style={{
-          position:"fixed", inset:0, zIndex:9999,
-          background:"rgba(0,0,0,.55)",
-          display:"flex", alignItems:"center", justifyContent:"center",
-          padding:16
-        }} onClick={e=>{if(e.target===e.currentTarget)setOpen(false);}}>
-          <div style={{
-            background:"#fff", borderRadius:16,
-            width:"100%", maxWidth:460,
-            boxShadow:"0 12px 48px rgba(0,0,0,.3)",
-            overflow:"hidden",
-            maxHeight:"90vh", overflowY:"auto"
-          }}>
-            {/* Modal header */}
-            <div style={{
-              background:"var(--dc,#1a2e4a)", color:"#fff",
-              padding:"18px 22px",
-              display:"flex", justifyContent:"space-between", alignItems:"center"
-            }}>
-              <span style={{fontWeight:800,fontSize:17}}>📋 Uw reactie op de offerte</span>
-              <button onClick={()=>setOpen(false)} style={{
-                background:"rgba(255,255,255,.2)", border:"none", color:"#fff",
-                borderRadius:8, width:32, height:32, cursor:"pointer",
-                fontSize:18, display:"flex", alignItems:"center", justifyContent:"center"
-              }}>✕</button>
-            </div>
-            <div style={{padding:"22px"}}>
+        <Modal>
           {fase === "start" && (
-            <>
-              <p style={{fontSize:13,color:"#475569",marginBottom:16,lineHeight:1.5}}>
-                Gaat u akkoord met deze offerte? U kunt ook een voorkeursdatum meegeven.
+            <div>
+              <p style={{fontSize:16,color:"#475569",marginBottom:24,lineHeight:1.6,textAlign:"center"}}>
+                Gaat u akkoord met deze offerte?
               </p>
-              <div style={{display:"flex",gap:10}}>
-                <button style={{
-                  flex:2, background:"var(--dc,#1a2e4a)", color:"#fff",
-                  border:"none", padding:"12px", borderRadius:8,
-                  fontSize:14, fontWeight:700, cursor:"pointer"
-                }} onClick={()=>setFase("pform")}>
-                  ✅ Akkoord
-                </button>
-                <button style={{
-                  flex:1, background:"#fef2f2", color:"#ef4444",
-                  border:"1px solid #fecaca", padding:"12px", borderRadius:8,
-                  fontSize:13, fontWeight:600, cursor:"pointer"
-                }} onClick={doAfwijzen}>
-                  ❌ Afwijzen
-                </button>
-              </div>
-            </>
+              <button style={{
+                width:"100%", background:"#059669", color:"#fff",
+                border:"none", padding:"18px", borderRadius:12,
+                fontSize:18, fontWeight:800, cursor:"pointer",
+                marginBottom:12, boxShadow:"0 4px 14px rgba(5,150,105,.3)"
+              }} onClick={()=>setFase("pform")}>
+                ✅ Ja, ik ga akkoord
+              </button>
+              <button style={{
+                width:"100%", background:"#fef2f2", color:"#ef4444",
+                border:"2px solid #fecaca", padding:"14px", borderRadius:12,
+                fontSize:16, fontWeight:700, cursor:"pointer"
+              }} onClick={doAfwijzen}>
+                ❌ Neen, ik wens af te wijzen
+              </button>
+            </div>
           )}
 
           {fase === "pform" && (
-            <>
-              <p style={{fontSize:13,color:"#475569",marginBottom:12}}>
-                Optioneel: kies een voorkeursdatum voor de installatie.
+            <div>
+              <h3 style={{fontSize:18,fontWeight:800,marginBottom:6,color:"#1e293b"}}>✅ Bevestig uw akkoord</h3>
+              <p style={{fontSize:14,color:"#64748b",marginBottom:20,lineHeight:1.5}}>
+                Optioneel: geef een voorkeursdatum mee voor de installatie.
               </p>
-              <label style={{fontSize:11,fontWeight:700,color:"#64748b",display:"block",marginBottom:4}}>
-                📅 Gewenste datum (optioneel)
+
+              <label style={{fontSize:14,fontWeight:700,color:"#374151",display:"block",marginBottom:8}}>
+                📅 Gewenste installatiedatum (optioneel)
               </label>
               <input
                 type="date"
@@ -1417,53 +1440,53 @@ function Bevestiging({offerteId, status, klantAkkoord, toonBevestigingslink}) {
                 value={datum}
                 onChange={e=>setDatum(e.target.value)}
                 style={{
-                  width:"100%", border:"1.5px solid var(--dc,#1a2e4a)",
-                  borderRadius:7, padding:"9px 11px", fontSize:14,
-                  marginBottom:10, color:"#1e293b", fontFamily:"inherit",
-                  cursor:"pointer"
+                  width:"100%", border:"2px solid #d1d5db",
+                  borderRadius:10, padding:"14px 16px", fontSize:16,
+                  marginBottom:6, color:"#1e293b", fontFamily:"inherit",
+                  cursor:"pointer", WebkitAppearance:"none"
                 }}
               />
-              <label style={{fontSize:11,fontWeight:700,color:"#64748b",display:"block",marginBottom:4}}>
+              {datum && (
+                <div style={{fontSize:14,color:"#059669",marginBottom:16,fontWeight:600,padding:"8px 12px",background:"#f0fdf4",borderRadius:8}}>
+                  📅 {new Date(datum+"T12:00:00").toLocaleDateString("nl-BE",{weekday:"long",day:"numeric",month:"long",year:"numeric"})}
+                </div>
+              )}
+
+              <label style={{fontSize:14,fontWeight:700,color:"#374151",display:"block",marginBottom:8,marginTop:datum?0:16}}>
                 💬 Opmerkingen (optioneel)
               </label>
               <textarea
                 value={notitie}
                 onChange={e=>setNotitie(e.target.value)}
-                placeholder="Bijv. toegang, speciale instructies..."
-                rows={2}
+                placeholder="Bijv. toegang, speciale instructies, voorkeur tijdstip..."
+                rows={3}
                 style={{
-                  width:"100%", border:"1px solid #e2e8f0", borderRadius:7,
-                  padding:"8px 10px", fontSize:13, fontFamily:"inherit",
-                  resize:"none", marginBottom:12
+                  width:"100%", border:"2px solid #d1d5db", borderRadius:10,
+                  padding:"12px 14px", fontSize:15, fontFamily:"inherit",
+                  resize:"none", marginBottom:20, lineHeight:1.5
                 }}
               />
-              <div style={{display:"flex",gap:8}}>
-                <button style={{
-                  flex:1, background:"#f1f5f9", color:"#475569",
-                  border:"1px solid #e2e8f0", padding:"10px", borderRadius:7,
-                  fontSize:12, cursor:"pointer"
-                }} onClick={()=>setFase("start")}>
-                  ← Terug
-                </button>
-                <button style={{
-                  flex:2, background:"var(--dc,#1a2e4a)", color:"#fff",
-                  border:"none", padding:"10px", borderRadius:7,
-                  fontSize:14, fontWeight:700, cursor:"pointer",
-                  opacity: sending ? 0.7 : 1
-                }} onClick={doAkkoord} disabled={sending}>
-                  {sending ? "⏳ Verzenden..." : "✅ Bevestigen"}
-                </button>
-              </div>
-              {datum && (
-                <div style={{marginTop:8,fontSize:11,color:"#059669",textAlign:"center"}}>
-                  Voorkeur: {new Date(datum+"T12:00:00").toLocaleDateString("nl-BE",{weekday:"long",day:"numeric",month:"long",year:"numeric"})}
-                </div>
-              )}
-            </>
-          )}
+
+              <button style={{
+                width:"100%", background:"#059669", color:"#fff",
+                border:"none", padding:"18px", borderRadius:12,
+                fontSize:18, fontWeight:800, cursor:"pointer",
+                opacity:sending?0.7:1,
+                marginBottom:10,
+                boxShadow:"0 4px 14px rgba(5,150,105,.3)"
+              }} onClick={doAkkoord} disabled={sending}>
+                {sending ? "⏳ Bezig met verzenden..." : "✅ Bevestig mijn akkoord"}
+              </button>
+              <button style={{
+                width:"100%", background:"#f8fafc", color:"#64748b",
+                border:"2px solid #e2e8f0", padding:"14px", borderRadius:10,
+                fontSize:15, cursor:"pointer", fontWeight:600
+              }} onClick={()=>setFase("start")}>
+                ← Terug
+              </button>
             </div>
-          </div>
-        </div>
+          )}
+        </Modal>
       )}
     </>
   );
