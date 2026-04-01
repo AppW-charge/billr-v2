@@ -1975,6 +1975,8 @@ export default function App() {
   useEffect(()=>{ try { sessionStorage.setItem("billr_pg", pg); } catch(_){} },[pg]);
   const [klanten, setKlanten] = useState(INIT_KLANTEN);
   const [producten, setProducten] = useState(INIT_PRODUCTS);
+  const [sbWidth, setSbWidth] = useState(()=>{try{const w=parseInt(localStorage.getItem("billr_sb_w"));return(!isNaN(w)&&w>=60&&w<=360)?w:220;}catch(_){return 220;}});
+  useEffect(()=>{document.documentElement.style.setProperty("--sb-w",sbWidth+"px");},[sbWidth]);
   const [offertes, _setOffertes] = useState([]);
   const setOffertes = useCallback((valOrFn) => {
     _setOffertes(prev => {
@@ -3728,18 +3730,42 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
       <style>{CSS}</style>
       <div className="app" onClick={e=>{if(mobMenu&&!e.target.closest(".sb"))setMobMenu(false)}}>
         {mobMenu&&<div className="sb-overlay on" onClick={()=>setMobMenu(false)}/>}
-        <nav className={`sb${mobMenu?" mobile-open":""}`} style={{position:"relative"}}>
-          <div className="sb-logo">
-            <div className="sb-logo-mark">{settings.bedrijf.logo?<img src={settings.bedrijf.logo} alt=""/>:"⚡"}</div>
-            <div><div className="sb-brand">BILLR</div><div className="sb-brand-sub">Offerte & Factuur</div></div>
+        <nav className={`sb${mobMenu?" mobile-open":""}`} style={{position:"relative",width:`var(--sb-w,${sbWidth}px)`,minWidth:`${sbWidth}px`}}>
+          <div className="sb-logo" style={{cursor:"default"}}>
+            <div className="sb-logo-mark" style={{width:sbWidth<160?30:36,height:sbWidth<160?30:36,fontSize:sbWidth<160?14:18}}>{settings.bedrijf.logo?<img src={settings.bedrijf.logo} alt=""/>:"⚡"}</div>
+            {sbWidth>=140&&<div><div className="sb-brand" style={{fontSize:Math.max(14,Math.min(20,sbWidth/11))+"px"}}>BILLR</div><div className="sb-brand-sub">Offerte & Factuur</div></div>}
           </div>
           <div className="sb-nav">
-            <div className="sb-sec">Menu</div>
+            {sbWidth>=140&&<div className="sb-sec">Menu</div>}
             {navItems.map(([v,ic,l,b])=>(
-              <div key={v} className={`ni${pg===v?" on":""}`} onClick={()=>{setPg(v);setPgFilter(null);setMobMenu(false);}}>
-                <span className="ni-ic">{ic}</span>{l}{b&&<span className="nb">{b}</span>}
+              <div key={v} className={`ni${pg===v?" on":""}`} onClick={()=>{setPg(v);setPgFilter(null);setMobMenu(false);}}
+                style={{justifyContent:sbWidth<120?"center":"flex-start",padding:sbWidth<120?"10px 6px":"8px 10px"}}
+                title={sbWidth<120?l:""}>
+                <span className="ni-ic" style={{fontSize:sbWidth<120?20:16}}>{ic}</span>
+                {sbWidth>=120&&<span>{l}</span>}
+                {sbWidth>=120&&b&&<span className="nb">{b}</span>}
               </div>
             ))}
+          </div>
+          {/* Resize handle */}
+          <div
+            style={{position:"absolute",top:0,right:-4,width:8,height:"100%",cursor:"ew-resize",zIndex:200,userSelect:"none"}}
+            onMouseDown={e=>{
+              e.preventDefault();
+              const startX=e.clientX, startW=sbWidth;
+              const onMove=mv=>{
+                const newW=Math.max(60,Math.min(360,startW+(mv.clientX-startX)));
+                setSbWidth(newW);
+                document.documentElement.style.setProperty("--sb-w",newW+"px");
+                try{localStorage.setItem("billr_sb_w",newW);}catch(_){}
+              };
+              const onUp=()=>{document.removeEventListener("mousemove",onMove);document.removeEventListener("mouseup",onUp);};
+              document.addEventListener("mousemove",onMove);
+              document.addEventListener("mouseup",onUp);
+            }}
+            title="Versleep om breedte aan te passen"
+          >
+            <div style={{position:"absolute",right:0,top:"50%",transform:"translateY(-50%)",width:3,height:40,background:"rgba(255,255,255,.2)",borderRadius:2}}/>
           </div>
           <div className="sb-foot">
             <div className="sb-user">
@@ -3871,7 +3897,24 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
               updOff(emailModal.doc.id, {status:"verstuurd", logActie:`📧 Verzonden naar ${emailModal.doc.klant?.email||"klant"}`});
               await shareOfferte(emailModal.doc); // Sla snapshot op voor publieke offerte.html (await zodat fiches mee zijn)
             } else {
-              updFact(emailModal.doc.id, {status:"verstuurd", logActie:`📧 Verzonden`});
+              updFact(emailModal.doc.id, {status:"verstuurd", logActie:`📧 Verzonden naar ${emailModal.doc.klant?.email||"klant"}`});
+              // Sla factuur snapshot op in offerte_shares zodat de bekijk-link werkt
+              try {
+                const bed2 = settings?.bedrijf || {};
+                const sj2 = settings?.sjabloon || {};
+                const dc2 = sj2.accentKleur || bed2.kleur || "#1a2e4a";
+                await sb.from("offerte_shares").upsert({
+                  id: emailModal.doc.id,
+                  nummer: emailModal.doc.nummer,
+                  offerte_data: {
+                    ...emailModal.doc,
+                    _bed: {naam:bed2.naam,adres:bed2.adres,gemeente:bed2.gemeente,tel:bed2.tel,email:bed2.email,btwnr:bed2.btwnr,iban:bed2.iban,bic:bed2.bic,website:bed2.website,logo:bed2.logo},
+                    _dc: dc2,
+                    _sj: {accentKleur:dc2},
+                    _voorwaarden: settings?.voorwaarden?.tekst || ""
+                  }
+                });
+              } catch(e2) { console.warn("Factuur share opslaan mislukt:", e2.message); }
             }
             notify(`📧 ${emailModal.type==="offerte"?"Offerte":"Factuur"} ${emailModal.doc.nummer} verzonden!`);
             setEmailModal(null);
