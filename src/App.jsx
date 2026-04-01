@@ -72,12 +72,16 @@ const sbGetAll = async (userId, excludeKeys) => {
   if(!userId) return {};
   try {
     let q = sb.from("user_data").select("key,value,updated_at").eq("user_id", userId)
-      .not("key", "like", "off_%")   // per-doc offertes apart geladen
-      .not("key", "like", "fct_%");  // per-doc facturen apart geladen
+      .not("key", "like", "off_%")
+      .not("key", "like", "fct_%")
+      .limit(50);  // Voorkom timeout door te veel rijen
     if(excludeKeys && excludeKeys.length > 0) {
       q = q.not("key", "in", "(" + excludeKeys.join(",") + ")");
     }
-    const { data, error } = await q;
+    const { data, error } = await Promise.race([
+      q,
+      new Promise((_,rej) => setTimeout(()=>rej(new Error("sbGetAll timeout")), 8000))
+    ]);
     if(error) { console.error("[Supabase] GET ALL failed:", error.message); return {}; }
     if(!data) return {};
     const excl = excludeKeys && excludeKeys.length > 0 ? " (excl. " + excludeKeys.join(",") + ")" : "";
@@ -553,13 +557,7 @@ async function sendViaRecommand(factuur, settings) {
   const resp = await fetch(getRecommandPath(settings, "/" + companyId + "/send"), {
     method: "POST",
     headers: recommandHeaders(settings),
-    body: JSON.stringify({
-      recipient,
-      documentType: "xml",
-      document: ubl,
-      doctypeId: "urn:oasis:names:specification:ubl:schema:xsd:Invoice-2::Invoice##urn:cen.eu:en16931:2017#compliant#urn:fdc:peppol.eu:2017:poacc:billing:3.0::2.1",
-      processId: "urn:fdc:peppol.eu:2017:poacc:billing:01:1.0"
-    })
+    body: JSON.stringify({ recipient, documentType: "xml", document: ubl })
   });
 
   if(!resp.ok) {
