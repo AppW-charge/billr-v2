@@ -73,8 +73,7 @@ const sbGetAll = async (userId, excludeKeys) => {
   try {
     let q = sb.from("user_data").select("key,value,updated_at").eq("user_id", userId)
       .not("key", "like", "off_%")
-      .not("key", "like", "fct_%")
-      .limit(50);  // Voorkom timeout door te veel rijen
+      .not("key", "like", "fct_%");
     if(excludeKeys && excludeKeys.length > 0) {
       q = q.not("key", "in", "(" + excludeKeys.join(",") + ")");
     }
@@ -363,7 +362,7 @@ async function checkPeppolRecommand(btwnr, settings) {
 }
 
 // Stuur factuur via Recommand Peppol
-async function sendViaRecommand(factuur, settings) {
+async function sendViaRecommand(factuur, settings, options={}) {
   const companyId = getRecommandCompanyId(settings);
   if(!companyId) throw new Error("Recommand Company ID niet ingesteld in Instellingen");
 
@@ -546,6 +545,19 @@ async function sendViaRecommand(factuur, settings) {
       "  </cac:InvoiceLine>"
     );
   });
+
+  // Voeg PDF bijlage toe als beschikbaar (AdditionalDocumentReference)
+  if(options && options.pdfBase64) {
+    xmlLines.splice(xmlLines.indexOf("  <cac:AccountingSupplierParty>"), 0,
+      "  <cac:AdditionalDocumentReference>",
+      "    <cbc:ID>Invoice-" + xe(factuur.nummer) + "</cbc:ID>",
+      "    <cbc:DocumentTypeCode>130</cbc:DocumentTypeCode>",
+      "    <cac:Attachment>",
+      '      <cbc:EmbeddedDocumentBinaryObject mimeCode="application/pdf" filename="' + xe(factuur.nummer) + '.pdf">' + options.pdfBase64 + "</cbc:EmbeddedDocumentBinaryObject>",
+      "    </cac:Attachment>",
+      "  </cac:AdditionalDocumentReference>"
+    );
+  }
 
   xmlLines.push("</Invoice>");
   const ubl = xmlLines.join("\n");
@@ -2160,6 +2172,15 @@ export default function App() {
         setProducten(restoreFicheCache(ls('b4_prd', INIT_PRODUCTS)));
         setOffertes(dedupOffertes(ls('b4_off', [])));
         setFacturen(ls('b4_fct', []));
+        // Laad ook per-document facturen/offertes na timeout
+        setTimeout(async()=>{
+          try {
+            const fcts = await sbLoadFacturen(u.id);
+            if(fcts.length > 0) { setFacturen(fcts); console.log("✅ Facturen na timeout geladen:", fcts.length); }
+            const offs = await sbLoadOffertes(u.id);
+            if(offs.length > 0) { setOffertes(offs); console.log("✅ Offertes na timeout geladen:", offs.length); }
+          } catch(_) {}
+        }, 5000);
         setCreditnotas(ls('b4_cn', []));
         setAanmaningen(ls('b4_am', []));
         setBetalingen(ls('b4_bt', []));
@@ -2179,6 +2200,9 @@ export default function App() {
               if(retry["b4_kln"]) setKlanten(p2("b4_kln", []));
               if(retry["b4_off"]) { const offs=p2("b4_off",[]); const seen=new Set(); setOffertes(dedupOffertes(offs.filter(o=>{ if(!o.id||seen.has(o.id)) return false; seen.add(o.id); return true; }))); }
               if(retry["b4_fct"]) setFacturen(dedupFacturen(p2("b4_fct",[])));
+              // Laad ook per-document facturen/offertes na retry
+              sbLoadFacturen(u.id).then(fcts=>{ if(fcts.length>0) setFacturen(fcts); }).catch(()=>{});
+              sbLoadOffertes(u.id).then(offs=>{ if(offs.length>0) setOffertes(offs); }).catch(()=>{});
               if(retry["b4_prd"]) {
                 setProducten(restoreFicheCache(p2("b4_prd",[])));
               }
@@ -2827,6 +2851,15 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
     if(!getRecommandCompanyId(settings)) {
       notify("Recommand Company ID niet ingesteld. Ga naar Instellingen → Integraties.", "er"); return;
     }
+    // Blokkeer opnieuw verzenden via Peppol
+    if(factuur.peppolVerstuurd && factuur.peppolId) {
+      const opnieuw = window.confirm(
+        `⚠️ Factuur ${factuur.nummer} werd al via Peppol verzonden (ID: ${factuur.peppolId}).\n\n` +
+        `Peppol facturen zijn juridisch bindend en mogen niet dubbel verstuurd worden.\n\n` +
+        `Toch opnieuw versturen? (Alleen voor testdoeleinden)`
+      );
+      if(!opnieuw) return;
+    }
     const klant = factuur.klant || {};
     if(!klant.btwnr) { notify("Klant heeft geen BTW-nummer — Peppol vereist een BTW-nummer.", "er"); return; }
     
@@ -2840,16 +2873,37 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
       if(!go) return;
     }
     
+    notify("📨 Factuur voorbereiden voor Peppol...", "in");
+
+    // Genereer PDF als base64 via de browser print API
+    let pdfBase64 = null;
+    try {
+      const docWrap = document.querySelector(".mb-body .doc-wrap");
+      if(docWrap) {
+        // Gebruik html2canvas als beschikbaar, anders geen PDF bijlage
+        if(typeof html2canvas !== "undefined" && typeof jspdf !== "undefined") {
+          const canvas = await html2canvas(docWrap, {scale:2, useCORS:true});
+          const pdfDoc = new jspdf.jsPDF({orientation:"portrait",unit:"px",format:"a4"});
+          const imgData = canvas.toDataURL("image/jpeg", 0.85);
+          pdfDoc.addImage(imgData, "JPEG", 0, 0, pdfDoc.internal.pageSize.getWidth(), pdfDoc.internal.pageSize.getHeight());
+          pdfBase64 = pdfDoc.output("datauristring").split(",")[1];
+        }
+      }
+    } catch(e) { console.warn("PDF generatie mislukt:", e); }
+
     notify("📨 Factuur versturen via Recommand Peppol...", "in");
     try {
-      const result = await sendViaRecommand(factuur, settings);
-      updFact(factuur.id, { 
+      const result = await sendViaRecommand(factuur, settings, pdfBase64 ? {pdfBase64} : {});
+      const peppolUpd = { 
         status: "verstuurd", 
         peppolVerstuurd: true, 
         peppolId: result.documentId,
         logActie: `📨 Verzonden via Peppol/Recommand (ID: ${result.documentId})`
-      });
-      notify(`✅ Factuur ${factuur.nummer} verzonden via Peppol!`, "ok");
+      };
+      updFact(factuur.id, peppolUpd);
+      // Update ook de viewDoc zodat UI meteen toont dat het verstuurd is
+      setViewDoc(prev => prev ? {...prev, doc: {...prev.doc, ...peppolUpd}} : prev);
+      notify(`✅ Factuur ${factuur.nummer} verzonden via Peppol! 📨`, "ok");
     } catch(err) {
       console.error("Peppol send error:", err);
       notify(`❌ Peppol verzending mislukt: ${err.message}`, "er");
@@ -7558,7 +7612,11 @@ function DocModal({doc,type,settings,onClose,onFactuur,onStatusOff,onStatusFact,
           )}
           {type==="offerte"&&doc.status==="goedgekeurd"&&!doc.factuurId&&<button className="btn bg btn-sm" onClick={()=>onFactuur(doc)}>🧾 Factuur</button>}
           <button className="btn bs btn-sm" onClick={onEmail}>📧 Verzenden</button>
-          {type==="factuur"&&onPeppol&&settings?.integraties?.peppolEnabled&&<button className="btn btn-sm" style={{background:"#7c3aed",color:"#fff",fontWeight:700}} onClick={onPeppol} title="Verstuur via Peppol/Billit">{doc.peppolVerstuurd?"✅ Peppol ✓":"📨 Peppol"}</button>}
+          {type==="factuur"&&onPeppol&&settings?.integraties?.peppolEnabled&&(
+  doc.peppolVerstuurd
+    ? <button className="btn btn-sm" style={{background:"#10b981",color:"#fff",fontWeight:700,cursor:"default"}} title={"Peppol ID: "+(doc.peppolId||"")} onClick={onPeppol}>✅ Via Peppol verzonden</button>
+    : <button className="btn btn-sm" style={{background:"#7c3aed",color:"#fff",fontWeight:700}} onClick={onPeppol} title="Verstuur via Peppol">🇧🇪 Verzenden via PEPPOL</button>
+)}
           <button id="doc-print-btn" className="btn bs btn-sm" title="Afdrukken — kies in printerinstellingen: Koptekst en voettekst UIT" onClick={doPrint}>🖨 Afdrukken</button>
           <button className="btn bs btn-sm" title="Download als HTML (open in browser → Afdrukken → PDF)" onClick={()=>{
             const docWrap=document.querySelector(".mb-body .doc-wrap");
