@@ -1030,7 +1030,7 @@ const INIT_KLANTEN = [];
 
 const INIT_SETTINGS = {
   bedrijf:{naam:"",tagline:"",adres:"",gemeente:"",tel:"",email:"",btwnr:"",iban:"",bic:"",website:"",kleur:"#1a2e4a",logo:""},
-  email:{eigen:"info@wcharge.be",boekhouder1:"",boekhouder2:"",cc:"",emailjsServiceId:"",emailjsTemplateOfferte:"",emailjsTemplateFactuur:"",emailjsPublicKey:"",templateOfferte:"Beste {naam},\n\nIn bijlage vindt u onze offerte {nummer} d.d. {datum}, geldig tot {vervaldatum}.\n\nWat mag u verwachten?\n{technische_info}\n\nBij akkoord kunt u de offerte bevestigen via onderstaande link.\nBij vragen staan we steeds voor u klaar.\n\nMet vriendelijke groeten,\n{bedrijf}\n{tel}",templateFactuur:"Beste {naam},\n\nIn bijlage vindt u factuur {nummer} d.d. {datum}.\nGelieve te betalen vóór {vervaldatum}.\n\nBedrag: {totaal}\nIBAN: {iban} · Mededeling: {nummer}\n\nMet vriendelijke groeten,\n{bedrijf}"},
+  email:{eigen:"info@wcharge.be",boekhouder1:"",boekhouder2:"",cc:"",emailjsServiceId:"",emailjsTemplateOfferte:"",emailjsTemplateFactuur:"",emailjsPublicKey:"",templateOfferte:"Beste {naam},\n\nIn bijlage vindt u onze offerte {nummer} d.d. {datum}, geldig tot {vervaldatum}.\n\nWat mag u verwachten?\n{technische_info}\n\nBij akkoord kunt u de offerte bevestigen via onderstaande link.\nBij vragen staan we steeds voor u klaar.\n\nMet vriendelijke groeten,\n{bedrijf}\n{tel}",templateFactuur:"Beste {naam},\n\nIn bijlage vindt u factuur {nummer} d.d. {datum}.\nGelieve te betalen vóór {vervaldatum}.\n\nBedrag: {totaal}\nIBAN: {iban} · Mededeling: {nummer}\n\nU kunt uw factuur online bekijken via:\n{link}\n\nMet vriendelijke groeten,\n{bedrijf}"},
   integraties:{kboEnabled:true,peppolEnabled:true,recommandKey:"",recommandSecret:"",recommandCompanyId:"",recommandSandbox:true,cbeApiKey:"OqzgVJ8I5wqgA8QjB0Aotu446pn7xqVI"},
   dashboardWidgets:{omzetGrafiek:true,recenteOffertes:true,openFacturen:true,goedgekeurdeOffertes:true,snelleActies:true,statistieken:true,agenda:true,offerteLogboek:true,afspraken:true,widgetOrder:["todoLijst","statistieken","recenteOffertes","openFacturen","goedgekeurdeOffertes","offerteLogboek","afspraken","snelleActies","agenda"]},
   voorwaarden:{betalingstermijn:14,voorschot:"50%",boekjaarStart:"01-01",nummerPrefix_off:"OFF",nummerPrefix_fct:"FACT",tegenNummer_off:null,tegenNummer_fct:null,bebatTarief:2.89,tekst:`1. Al onze facturen zijn contant betaalbaar op de bankrekening vermeld op de factuur en zullen na verloop van 14 dagen van rechtswege een intrest van 1% per maand meebrengen, zonder aangetekende ingebrekestelling of dagvaarding te noodzaken.\n\n2. Op onze facturen dienen binnen de 8 dagen na ontvangst eventuele opmerkingen te geschieden.\n\n3. Het bedrag van de onbetaald gebleven facturen zal ten titel van schadevergoeding, van rechtswege verhoogd worden met 15% met een minimum van €65,00 vanaf de dag volgend op de vervaldag.\n\n4. Onze facturen zijn betaalbaar te Lochristi, zodat in geval van betwisting enkel de Rechtbanken van het arrondissement Gent bevoegd zijn.\n\nBTW 6% verklaring: Bij gebrek aan schriftelijke betwisting binnen een termijn van één maand vanaf de ontvangst van de factuur, wordt de klant geacht te erkennen dat (1) de werken worden verricht aan een woning waarvan de eerste ingebruikneming heeft plaatsgevonden in een kalenderjaar dat ten minste tien jaar voorafgaat aan de datum van de eerste factuur, (2) de woning na uitvoering uitsluitend of hoofdzakelijk als privéwoning wordt gebruikt en (3) de werken worden gefactureerd aan een eindverbruiker.\n\nBTW verlegd: Verlegging van heffing. Bij gebrek aan schriftelijke betwisting binnen één maand na ontvangst wordt de afnemer geacht te erkennen dat hij een belastingplichtige is gehouden tot periodieke BTW-aangiften.`},
@@ -3233,10 +3233,21 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
       [type === "offerte" ? "valid_until" : "due_date"]: fmtDate(doc.vervaldatum),
       total_amount: fmtEuro(totals.totaal),
       message: doc.notities || "",
+      // Bekijk-link voor offerte/factuur
+      view_link: type === "offerte"
+        ? `${window.location.origin}/offerte.html?id=${doc.id}&nr=${encodeURIComponent(doc.nummer||"")}`
+        : "",
+      offerte_link: type === "offerte"
+        ? `${window.location.origin}/offerte.html?id=${doc.id}&nr=${encodeURIComponent(doc.nummer||"")}`
+        : "",
+      factuur_link: type === "factuur"
+        ? `${window.location.origin}/offerte.html?id=${doc.id}&nr=${encodeURIComponent(doc.nummer||"")}`
+        : "",
+      document_link: `${window.location.origin}/offerte.html?id=${doc.id}&nr=${encodeURIComponent(doc.nummer||"")}`,
       // Extra variabelen voor flexibele templates
       html_body: type === "offerte"
-        ? (emailCfg.templateOfferte||"").replace("{naam}",klantData?.naam||doc.klant?.naam||"Klant").replace("{nummer}",doc.nummer).replace("{datum}",fmtDate(doc.aangemaakt)).replace("{vervaldatum}",fmtDate(doc.vervaldatum)).replace("{bedrijf}",bed.naam||"").replace("{tel}",bed.tel||"").replace("{totaal}",fmtEuro(totals.totaal)).replace("{iban}",bed.iban||"").replace("{technische_info}","")
-        : (emailCfg.templateFactuur||"").replace("{naam}",klantData?.naam||doc.klant?.naam||"Klant").replace("{nummer}",doc.nummer).replace("{datum}",fmtDate(doc.aangemaakt)).replace("{vervaldatum}",fmtDate(doc.vervaldatum)).replace("{bedrijf}",bed.naam||"").replace("{totaal}",fmtEuro(totals.totaal)).replace("{iban}",bed.iban||""),
+        ? (emailCfg.templateOfferte||"").replace("{naam}",klantData?.naam||doc.klant?.naam||"Klant").replace("{nummer}",doc.nummer).replace("{datum}",fmtDate(doc.aangemaakt)).replace("{vervaldatum}",fmtDate(doc.vervaldatum)).replace("{bedrijf}",bed.naam||"").replace("{tel}",bed.tel||"").replace("{totaal}",fmtEuro(totals.totaal)).replace("{iban}",bed.iban||"").replace("{technische_info}","").replace("{link}",`${window.location.origin}/offerte.html?id=${doc.id}&nr=${encodeURIComponent(doc.nummer||"")}`)
+        : (emailCfg.templateFactuur||"").replace("{naam}",klantData?.naam||doc.klant?.naam||"Klant").replace("{nummer}",doc.nummer).replace("{datum}",fmtDate(doc.aangemaakt)).replace("{vervaldatum}",fmtDate(doc.vervaldatum)).replace("{bedrijf}",bed.naam||"").replace("{totaal}",fmtEuro(totals.totaal)).replace("{iban}",bed.iban||"").replace("{link}",`${window.location.origin}/offerte.html?id=${doc.id}&nr=${encodeURIComponent(doc.nummer||"")}`),
       // Volledige factuur HTML voor in email (gebruik {{html_invoice}} in EmailJS template)
       html_invoice: (()=>{
         try {
@@ -8056,6 +8067,7 @@ function buildFactuurHtml(doc, bed, tot, customHtml, extraVars={}) {
     <p style="margin:4px 0 0;color:#475569">BIC: ${bed.bic||''}</p>
     <p style="margin:4px 0 0;color:#475569">Mededeling: <strong>${doc.nummer||''}</strong></p>
   </div>
+  ${extraVars.viewUrl ? `<div style="text-align:center;margin:20px 0"><a href="${extraVars.viewUrl}" style="background:${dc};color:#fff;padding:12px 28px;border-radius:6px;text-decoration:none;display:inline-block;font-weight:700;font-size:14px">📄 Factuur online bekijken</a></div>` : ""}
   <div style="margin-top:24px;padding-top:16px;border-top:1px solid #e2e8f0;font-size:13px;color:#64748b;line-height:1.6">
     <p style="margin:0"><strong>${bed.naam}</strong> · ${bed.adres||''} · ${bed.gemeente||''}</p>
     <p style="margin:4px 0">${bed.tel||''} · ${bed.email||''} · BTW: ${fmtBtwnr(bed.btwnr||'')}</p>
@@ -8098,7 +8110,7 @@ function EmailModal({doc,type,settings,onClose,onSend,onAcceptToken}) {
 
   const defaultHtml = type==="offerte"
     ? buildOfferteHtml(doc, bed, tot, acceptUrl, rejectUrl, null, {dc})
-    : buildFactuurHtml(doc, bed, tot, null, {dc});
+    : buildFactuurHtml(doc, bed, tot, null, {dc, viewUrl: `${window.location.origin}/offerte.html?id=${doc.id}&nr=${encodeURIComponent(doc.nummer||'')}`});
 
   const [to, setTo] = useState(doc.klant?.email||"");
   const [subject, setSubject] = useState(`${type==="offerte"?"Offerte":"Factuur"} ${doc.nummer} — ${bed.naam}`);
