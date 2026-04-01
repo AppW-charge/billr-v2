@@ -1,148 +1,232 @@
 <!DOCTYPE html>
 <html lang="nl">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Planning bevestigen</title>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Installatieafspraak bevestigen</title>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 <style>
-*{margin:0;padding:0;box-sizing:border-box}
-body{font-family:'Inter',Arial,sans-serif;background:#f0f4f8;color:#1e293b;min-height:100vh}
-.wrap{max-width:600px;margin:0 auto;padding:24px 16px 120px}
-.card{background:#fff;border-radius:14px;box-shadow:0 2px 12px rgba(0,0,0,.06);overflow:hidden;margin-bottom:16px}
-.header{padding:32px;text-align:center;color:#fff}
-.header h1{font-size:24px;font-weight:900;letter-spacing:-.5px;margin-bottom:4px}
-.header p{opacity:.8;font-size:13px}
-.body{padding:28px}
-.info-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:20px}
-.info-item{background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:12px 14px}
-.info-lbl{font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.5px}
-.info-val{font-size:15px;font-weight:700;color:#1e293b;margin-top:2px}
-.plan-box{background:linear-gradient(135deg,#eff6ff,#dbeafe);border:2px solid #93c5fd;border-radius:12px;padding:20px;margin:20px 0;text-align:center}
-.plan-date{font-size:28px;font-weight:900;color:#1e40af;letter-spacing:-1px}
-.plan-time{font-size:20px;font-weight:700;color:#3b82f6;margin-top:4px}
-.plan-note{font-size:13px;color:#64748b;margin-top:10px;font-style:italic}
-.klant-info{display:flex;gap:12px;align-items:center;padding:14px;background:#f8fafc;border-radius:8px;border:1px solid #e2e8f0;margin-bottom:16px}
-.klant-avatar{width:44px;height:44px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:800;color:#fff;flex-shrink:0}
-.footer-info{text-align:center;padding:20px;font-size:12px;color:#94a3b8;line-height:1.6}
-/* Floating action */
-.fab{position:fixed;bottom:0;left:0;right:0;z-index:100;background:#fff;border-top:2px solid #e2e8f0;padding:14px 20px;box-shadow:0 -4px 20px rgba(0,0,0,.1)}
-.fab-inner{max-width:600px;margin:0 auto;display:flex;gap:10px}
-.fab-btn{flex:1;padding:14px;border:none;border-radius:10px;font-weight:800;font-size:15px;cursor:pointer;transition:all .2s;text-align:center}
-.fab-accept{background:#10b981;color:#fff}.fab-accept:hover{background:#059669}
-.fab-alt{background:#f59e0b;color:#fff}.fab-alt:hover{background:#d97706}
-.fab-reject{background:#f1f5f9;color:#64748b;border:1px solid #e2e8f0}.fab-reject:hover{background:#fef2f2;color:#ef4444}
-/* Modal */
-.modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:200;align-items:center;justify-content:center}
-.modal-bg.active{display:flex}
-.modal{background:#fff;border-radius:16px;max-width:480px;width:95%;padding:28px;max-height:90vh;overflow-y:auto}
-.fg{margin-bottom:14px}.fl{display:block;font-weight:600;font-size:13px;margin-bottom:6px}
-.fc{width:100%;padding:10px 14px;border:2px solid #e2e8f0;border-radius:8px;font-size:14px;font-family:inherit}.fc:focus{outline:none;border-color:#2563eb}
-.status-msg{text-align:center;padding:60px 20px}.status-msg .icon{font-size:64px;margin-bottom:16px}
-@media(max-width:500px){.info-grid{grid-template-columns:1fr}.plan-date{font-size:22px}.fab-btn{padding:12px;font-size:13px}}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Inter',system-ui,Arial,sans-serif;background:#f1f5f9;color:#1e293b;min-height:100vh}
+.spin{width:44px;height:44px;border:4px solid #e2e8f0;border-top-color:#1a2e4a;border-radius:50%;animation:spin .8s linear infinite;margin:0 auto}
+@keyframes spin{to{transform:rotate(360deg)}}
+#loader{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;gap:16px;font-size:15px;color:#64748b}
 </style>
 </head>
 <body>
-<div id="app"><div class="status-msg"><div class="icon">⏳</div><h2>Planning laden...</h2></div></div>
-<script>
-const SB_URL="https://qxnxbqkdvvblfkihmjxy.supabase.co";
-const SB_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF4bnhicWtkdnZibGZraWhtanh5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMzNTI3MTMsImV4cCI6MjA4ODkyODcxM30.1JDvrHgxLpU1GZqSjDVGtfnFJg8PHuD-aFpHOxAY1To";
-const pid=new URLSearchParams(window.location.search).get('id');
-const fmtDate=function(d){return d?new Date(d).toLocaleDateString("nl-BE",{weekday:"long",day:"numeric",month:"long",year:"numeric"}):"—"};
-const fmtTime=function(t){return t||"—"};
+<div id="loader"><div class="spin"></div><div>Afspraak laden...</div></div>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect } = React;
+const SB_URL = 'https://qxnxbqkdvvblfkihmjxy.supabase.co';
+const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF4bnhicWtkdnZibGZraWhtanh5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3MDg4NzMxNzQsImV4cCI6MjAyNDQ0OTE3NH0.lsf7dJQL5tMKcGCBkxZ7OGJQ0a1n_kkWIiVU3Eym4k4';
 
-// ── AGENDA HELPERS ──────────────────────────────────────────────
-function buildICS(title,date,time,location,description){
-  var p=date.split('-');var t=(time||'09:00').split(':');
-  var h=parseInt(t[0]);var m=t[1]||'00';
-  var y=p[0];var mo=p[1];var d=p[2];
-  var startDt=y+mo+d+'T'+String(h).padStart(2,'0')+m+'00';
-  var endDt=y+mo+d+'T'+String(h+2<24?h+2:h+1).padStart(2,'0')+m+'00';
-  return['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//W-Charge//BILLR//NL','CALSCALE:GREGORIAN',
-    'BEGIN:VEVENT','DTSTART:'+startDt,'DTEND:'+endDt,'SUMMARY:'+title,
-    'LOCATION:'+(location||''),'DESCRIPTION:'+(description||''),
-    'UID:'+date+'-'+time.replace(':','')+'@w-charge.be',
-    'END:VEVENT','END:VCALENDAR'].join('\r\n');
+async function sbGet(table, filter) {
+  const r = await fetch(`${SB_URL}/rest/v1/${table}?${filter}`, {
+    headers: {'apikey': SB_KEY, 'Authorization': `Bearer ${SB_KEY}`, 'Content-Type': 'application/json'}
+  });
+  return r.json();
 }
-function buildGoogleUrl(title,date,time,location,description){
-  var p=date.split('-');var t=(time||'09:00').split(':');
-  var h=parseInt(t[0]);var m=t[1]||'00';
-  var startDt=p[0]+p[1]+p[2]+'T'+String(h).padStart(2,'0')+m+'00';
-  var endDt=p[0]+p[1]+p[2]+'T'+String(h+2<24?h+2:h+1).padStart(2,'0')+m+'00';
-  return'https://calendar.google.com/calendar/render?action=TEMPLATE'+
-    '&text='+encodeURIComponent(title)+'&dates='+startDt+'/'+endDt+
-    '&location='+encodeURIComponent(location||'')+'&details='+encodeURIComponent(description||'');
+async function sbPost(table, body) {
+  const r = await fetch(`${SB_URL}/rest/v1/${table}`, {
+    method: 'POST',
+    headers: {'apikey': SB_KEY, 'Authorization': `Bearer ${SB_KEY}`, 'Content-Type': 'application/json', 'Prefer': 'return=minimal'},
+    body: JSON.stringify(body)
+  });
+  return r.ok;
 }
-function buildCalendarButtons(pd,klant,bed){
-  if(!pd||!pd.planDatum)return'';
-  var title='Installatie '+(bed.naam||'W-Charge')+' — '+(klant.naam||'');
-  var date=pd.planDatum;
-  var time=pd.planTijd||'09:00';
-  var location=(klant.adres||'')+', '+(klant.gemeente||'');
-  var desc='Installatie door '+(bed.naam||'W-Charge')+'. Offerte: '+(pd.offerteNummer||'')+'. Tel: '+(bed.tel||'');
-  var ics=buildICS(title,date,time,location,desc);
-  var icsUrl='data:text/calendar;charset=utf-8,'+encodeURIComponent(ics);
-  var googleUrl=buildGoogleUrl(title,date,time,location,desc);
-  var isApple=/iPhone|iPad|iPod/i.test(navigator.userAgent)||(/Mac/i.test(navigator.userAgent)&&!(/Windows/i.test(navigator.userAgent)));
-  var isAndroid=/Android/i.test(navigator.userAgent);
-  var appleBtn='<a href="'+icsUrl+'" download="w-charge-installatie.ics" style="display:inline-flex;align-items:center;gap:8px;background:#000;color:#fff;padding:13px 22px;border-radius:10px;text-decoration:none;font-weight:700;font-size:14px;margin:4px">🍎 Apple Agenda</a>';
-  var googleBtn='<a href="'+googleUrl+'" target="_blank" style="display:inline-flex;align-items:center;gap:8px;background:#4285f4;color:#fff;padding:13px 22px;border-radius:10px;text-decoration:none;font-weight:700;font-size:14px;margin:4px">📅 Google Agenda</a>';
-  var icsBtn='<a href="'+icsUrl+'" download="w-charge-installatie.ics" style="display:inline-flex;align-items:center;gap:8px;background:#374151;color:#fff;padding:13px 22px;border-radius:10px;text-decoration:none;font-weight:700;font-size:14px;margin:4px">📂 Andere agenda (.ics)</a>';
-  var buttons=isApple?(appleBtn+googleBtn):isAndroid?(googleBtn+appleBtn):(googleBtn+icsBtn);
-  return'<div style="margin-top:20px;padding:18px 20px;background:#f0f9ff;border:1.5px solid #bae6fd;border-radius:12px;text-align:center"><div style="font-weight:700;font-size:13px;color:#0369a1;margin-bottom:12px">📅 Afspraak toevoegen aan uw agenda</div><div style="display:flex;flex-wrap:wrap;justify-content:center;gap:6px">'+buttons+'</div></div>';
+async function sbPatch(table, filter, body) {
+  const r = await fetch(`${SB_URL}/rest/v1/${table}?${filter}`, {
+    method: 'PATCH',
+    headers: {'apikey': SB_KEY, 'Authorization': `Bearer ${SB_KEY}`, 'Content-Type': 'application/json', 'Prefer': 'return=minimal'},
+    body: JSON.stringify(body)
+  });
+  return r.ok;
 }
 
-async function respond(id,status,data){
-  var pd=window._planData||{};var bed=window._bed||{};var klant=window._klant||{};
-  try{
-    var s=window.supabase.createClient(SB_URL,SB_KEY);
-    await s.from('planning_proposals').update({status:status,client_response:{...data,responded_at:new Date().toISOString()}}).eq('id',id);
-  }catch(e){console.error(e)}
-  var ok=status==='akkoord';
-  var datumStr=pd.planDatum?new Date(pd.planDatum+'T12:00:00').toLocaleDateString('nl-BE',{weekday:'long',day:'numeric',month:'long',year:'numeric'}):'—';
-  var calBtns=ok?buildCalendarButtons(pd,klant,bed):'';
-  document.getElementById('app').innerHTML=ok?
-    '<div class="status-msg"><div class="icon">✅</div><h2 style="color:#059669;font-size:22px;margin-bottom:10px">Afspraak bevestigd!</h2><p style="font-size:14px;color:#475569;max-width:400px;margin:0 auto 20px">U ontvangt binnenkort een bevestigingsmail met alle details.</p><div style="background:linear-gradient(135deg,#f0fdf4,#dcfce7);border:2px solid #86efac;border-radius:14px;padding:20px 24px;display:inline-block;text-align:left;min-width:280px;margin-bottom:16px"><div style="font-weight:800;color:#065f46;font-size:14px;margin-bottom:12px">📅 Bevestigde afspraak</div><div style="font-size:14px;color:#047857;font-weight:700;margin-bottom:6px">'+datumStr+'</div><div style="font-size:15px;color:#059669;font-weight:800">⏰ '+(pd.planTijd||'Tijdstip volgt')+'</div><div style="font-size:12px;color:#64748b;margin-top:10px">📍 '+(klant.adres||'')+', '+(klant.gemeente||'')+'</div></div>'+calBtns+(bed.naam?'<div style="font-size:13px;color:#94a3b8;margin-top:16px"><strong>'+bed.naam+'</strong>'+(bed.tel?' · <a href="tel:'+bed.tel+'" style="color:#2563eb;text-decoration:none">'+bed.tel+'</a>':'')+'</div>':'')+'</div>'
-    :'<div class="status-msg"><div class="icon">📅</div><h2 style="color:#f59e0b;font-size:22px;margin-bottom:10px">Alternatief voorstel verstuurd</h2><p style="font-size:14px;color:#475569;max-width:400px;margin:0 auto 20px">Uw voorkeur is doorgegeven.'+(data.datum?' (<strong>'+new Date(data.datum+'T12:00:00').toLocaleDateString('nl-BE',{weekday:'long',day:'numeric',month:'long'})+'</strong>)':'')+'</p><div style="background:#fffbeb;border:2px solid #fde68a;border-radius:14px;padding:20px;display:inline-block;text-align:left;max-width:340px;margin-bottom:20px"><div style="font-weight:700;color:#92400e;font-size:13px;margin-bottom:6px">Wat gebeurt er nu?</div><div style="font-size:12px;color:#a16207;line-height:1.8">✓ Uw voorkeur is doorgegeven aan '+(bed.naam||'ons')+'<br>✓ We nemen zo snel mogelijk contact op<br>✓ Een nieuw voorstel volgt per email</div></div>'+(bed.tel||bed.email?'<div style="font-size:13px;color:#64748b">Vragen? '+(bed.tel?'<a href="tel:'+bed.tel+'" style="color:#2563eb;font-weight:600">'+bed.tel+'</a>':'')+(bed.email?' · <a href="mailto:'+bed.email+'" style="color:#2563eb;font-weight:600">'+bed.email+'</a>':'')+'</div>':'')+'</div>';
+function fmtDate(d) {
+  if(!d) return '-';
+  try { return new Date(d+'T12:00:00').toLocaleDateString('nl-BE',{weekday:'long',day:'numeric',month:'long',year:'numeric'}); }
+  catch(_){ return d; }
 }
 
-function render(p){
-  var d=p.plan_data;var bed=d._bed||{};var klant=d.klant||{};var dc=d._dc||'#1a2e4a';
-  window._pid=p.id;window._planData=d;window._bed=bed;window._klant=klant;
-  document.getElementById('app').innerHTML=
-  '<div class="fab"><div class="fab-inner"><button class="fab-btn fab-accept" onclick="doAccept()">✅ Akkoord</button><button class="fab-btn fab-alt" onclick="showAltModal()">📅 Ander moment</button></div></div>'+
-  '<div class="wrap">'+
-  '<div class="card"><div class="header" style="background:linear-gradient(135deg,'+dc+','+dc+'cc)"><h1>📅 Installatieafspraak</h1><p>'+(bed.naam||'')+'</p></div>'+
-  '<div class="body">'+
-  '<div class="klant-info"><div class="klant-avatar" style="background:'+dc+'">'+(klant.naam||'K').slice(0,2).toUpperCase()+'</div><div><div style="font-weight:700;font-size:15px">'+(klant.naam||'')+'</div><div style="font-size:12px;color:#64748b">'+(klant.adres||'')+', '+(klant.gemeente||'')+'</div></div></div>'+
-  '<div class="plan-box"><div style="font-size:12px;font-weight:700;color:#3b82f6;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Voorgestelde datum</div><div class="plan-date">'+fmtDate(d.planDatum)+'</div><div class="plan-time">⏰ '+fmtTime(d.planTijd)+'</div>'+(d.planNotities?'<div class="plan-note">💬 '+d.planNotities+'</div>':'')+'</div>'+
-  '<div class="info-grid"><div class="info-item"><div class="info-lbl">Offerte</div><div class="info-val">'+(d.offerteNummer||'')+'</div></div><div class="info-item"><div class="info-lbl">Type</div><div class="info-val">'+(d.installatieType||'Installatie')+'</div></div><div class="info-item"><div class="info-lbl">Totaal</div><div class="info-val" style="color:'+dc+'">'+(d.totaal||'')+'</div></div><div class="info-item"><div class="info-lbl">Status</div><div class="info-val" style="color:#f59e0b">⏳ Wacht op uw akkoord</div></div></div>'+
-  '<div style="background:#fffbeb;border:1.5px solid #fde68a;border-radius:10px;padding:16px;margin-top:16px"><div style="font-weight:700;font-size:13px;color:#92400e;margin-bottom:6px">📋 Wat kunt u verwachten?</div><div style="font-size:12px;color:#a16207;line-height:1.6">• Onze monteur komt op het afgesproken tijdstip<br>• De installatie duurt gemiddeld een halve tot volledige dag<br>• Zorg voor vrije toegang tot de meterkast en installatielocatie<br>• Na afloop ontvangt u een werkbon ter bevestiging</div></div>'+
-  '</div></div>'+
-  '<div class="footer-info"><strong>'+(bed.naam||'')+'</strong><br>'+(bed.adres||'')+' · '+(bed.gemeente||'')+'<br>'+(bed.tel||'')+' · '+(bed.email||'')+'</div>'+
-  '</div>'+
-  '<div class="modal-bg" id="altModal"><div class="modal"><h2 style="margin-bottom:16px;color:#f59e0b">📅 Ander moment voorstellen</h2><p style="font-size:13px;color:#64748b;margin-bottom:16px">Laat ons weten wanneer het u beter past.</p><div class="fg"><label class="fl">Voorkeursdatum</label><input class="fc" type="date" id="altDate"></div><div class="fg"><label class="fl">Voorkeurstijdstip</label><select class="fc" id="altTime"><option value="">— Kies —</option><option>Ochtend (8:00-12:00)</option><option>Namiddag (13:00-17:00)</option><option>Hele dag</option><option>Na 17:00</option></select></div><div class="fg"><label class="fl">Opmerking</label><textarea class="fc" id="altNote" rows="2" placeholder="Extra info..."></textarea></div><div style="display:flex;gap:10px"><button class="fab-btn fab-reject" style="flex:1;font-size:14px;padding:12px" onclick="closeAlt()">Annuleren</button><button class="fab-btn fab-alt" style="flex:1;font-size:14px;padding:12px" onclick="doAlt()">📅 Verstuur voorstel</button></div></div></div>';
+function App() {
+  const [data, setData] = useState(null);
+  const [fase, setFase] = useState('laden'); // laden | bevestigen | alternatief | bevestigd | afgewezen | error
+  const [altDatum, setAltDatum] = useState('');
+  const [altTijd, setAltTijd] = useState('');
+  const [altOpmerking, setAltOpmerking] = useState('');
+  const [error, setError] = useState('');
+
+  const params = new URLSearchParams(location.search);
+  const proposalId = params.get('id');
+
+  useEffect(() => {
+    if(!proposalId) { setFase('error'); setError('Geen afspraak-ID gevonden.'); return; }
+    (async () => {
+      try {
+        const rows = await sbGet('planning_proposals', `id=eq.${proposalId}&select=*`);
+        if(!rows || !rows[0]) { setFase('error'); setError('Afspraak niet gevonden.'); return; }
+        const row = rows[0];
+        if(row.status === 'bevestigd') { setFase('bevestigd'); setData(row.plan_data); return; }
+        if(row.status === 'alternatief') { setFase('alternatief_gewacht'); setData(row.plan_data); return; }
+        setData(row.plan_data);
+        document.getElementById('loader').style.display = 'none';
+        setFase('keuze');
+      } catch(e) {
+        setFase('error'); setError('Technische fout: ' + e.message);
+      }
+      document.getElementById('loader').style.display = 'none';
+    })();
+  }, []);
+
+  const dc = data?._dc || '#1a2e4a';
+
+  const doBevestig = async () => {
+    setFase('bezig');
+    const ok = await sbPatch('planning_proposals', `id=eq.${proposalId}`, {status: 'bevestigd', updated_at: new Date().toISOString()});
+    if(ok) setFase('bevestigd');
+    else { setFase('keuze'); setError('Bevestiging mislukt, probeer opnieuw.'); }
+  };
+
+  const doAlternatief = async () => {
+    if(!altDatum) { setError('Kies een datum.'); return; }
+    setFase('bezig');
+    const ok = await sbPatch('planning_proposals', `id=eq.${proposalId}`, {
+      status: 'alternatief',
+      alternatief: { datum: altDatum, tijd: altTijd, opmerking: altOpmerking },
+      updated_at: new Date().toISOString()
+    });
+    if(ok) setFase('alternatief_ok');
+    else { setFase('alternatief'); setError('Versturen mislukt, probeer opnieuw.'); }
+  };
+
+  if(fase === 'error') return (
+    <div style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',minHeight:'100vh',padding:24,textAlign:'center'}}>
+      <div style={{fontSize:48,marginBottom:16}}>😕</div>
+      <h2 style={{color:'#ef4444',marginBottom:8}}>Afspraak niet gevonden</h2>
+      <p style={{color:'#64748b',maxWidth:400}}>{error || 'Deze link is ongeldig of verlopen.'}</p>
+    </div>
+  );
+
+  if(!data || fase === 'laden') return null;
+
+  const card = (children) => (
+    <div style={{minHeight:'100vh',background:'#f1f5f9',display:'flex',alignItems:'center',justifyContent:'center',padding:16}}>
+      <div style={{maxWidth:520,width:'100%',background:'#fff',borderRadius:16,boxShadow:'0 4px 24px rgba(0,0,0,.1)',overflow:'hidden'}}>
+        <div style={{background:dc,padding:'28px 32px',textAlign:'center'}}>
+          <div style={{fontSize:36,marginBottom:8}}>📅</div>
+          <h1 style={{color:'#fff',fontSize:22,fontWeight:900,margin:0}}>{data._bed?.naam || 'W-charge BV'}</h1>
+          <p style={{color:'rgba(255,255,255,.8)',fontSize:13,marginTop:4}}>Installatieafspraak · {data.offerteNummer}</p>
+        </div>
+        <div style={{padding:'28px 32px'}}>
+          {children}
+        </div>
+      </div>
+    </div>
+  );
+
+  if(fase === 'bevestigd') return card(
+    <div style={{textAlign:'center'}}>
+      <div style={{fontSize:64,marginBottom:16}}>✅</div>
+      <h2 style={{color:'#059669',fontSize:22,fontWeight:800,marginBottom:8}}>Afspraak bevestigd!</h2>
+      <p style={{color:'#475569',marginBottom:20}}>Bedankt! We zien u op:</p>
+      <div style={{background:'#f0fdf4',border:'2px solid #86efac',borderRadius:12,padding:20,marginBottom:20}}>
+        <div style={{fontSize:20,fontWeight:800,color:'#166534'}}>{fmtDate(data.planDatum)}</div>
+        <div style={{fontSize:16,color:'#15803d',marginTop:4}}>⏰ {data.planTijd || 'Tijdstip nog te bevestigen'}</div>
+        <div style={{fontSize:13,color:'#64748b',marginTop:8}}>📍 {data.klant?.adres}, {data.klant?.gemeente}</div>
+      </div>
+      <p style={{color:'#64748b',fontSize:13}}>U ontvangt een bevestigingsemail. Bij vragen: <strong>{data._bed?.tel}</strong></p>
+    </div>
+  );
+
+  if(fase === 'alternatief_ok') return card(
+    <div style={{textAlign:'center'}}>
+      <div style={{fontSize:64,marginBottom:16}}>📨</div>
+      <h2 style={{color:'#2563eb',fontSize:22,fontWeight:800,marginBottom:8}}>Voorstel ontvangen!</h2>
+      <p style={{color:'#475569'}}>Uw alternatief voorstel werd doorgestuurd. We nemen zo snel mogelijk contact op.</p>
+    </div>
+  );
+
+  if(fase === 'bevestigd_gewacht') return card(
+    <div style={{textAlign:'center'}}>
+      <div style={{fontSize:64,marginBottom:16}}>✅</div>
+      <h2 style={{color:'#059669'}}>Al bevestigd</h2>
+      <p style={{color:'#475569'}}>Deze afspraak werd al eerder bevestigd op {fmtDate(data.planDatum)}.</p>
+    </div>
+  );
+
+  if(fase === 'alternatief') return card(
+    <div>
+      <h2 style={{fontSize:18,fontWeight:800,marginBottom:4}}>Ander moment voorstellen</h2>
+      <p style={{color:'#64748b',fontSize:13,marginBottom:20}}>Kies een datum die u beter past:</p>
+      {error && <div style={{background:'#fef2f2',border:'1px solid #fca5a5',borderRadius:8,padding:12,marginBottom:16,color:'#dc2626',fontSize:13}}>{error}</div>}
+      <label style={{display:'block',fontSize:13,fontWeight:600,marginBottom:4}}>Datum *</label>
+      <input type="date" value={altDatum} onChange={e=>setAltDatum(e.target.value)} min={new Date().toISOString().split('T')[0]}
+        style={{width:'100%',padding:'10px 12px',border:'2px solid #e2e8f0',borderRadius:8,fontSize:14,marginBottom:12}}/>
+      <label style={{display:'block',fontSize:13,fontWeight:600,marginBottom:4}}>Voorkeur tijdstip</label>
+      <input type="time" value={altTijd} onChange={e=>setAltTijd(e.target.value)}
+        style={{width:'100%',padding:'10px 12px',border:'2px solid #e2e8f0',borderRadius:8,fontSize:14,marginBottom:12}}/>
+      <label style={{display:'block',fontSize:13,fontWeight:600,marginBottom:4}}>Opmerking (optioneel)</label>
+      <textarea value={altOpmerking} onChange={e=>setAltOpmerking(e.target.value)} rows={3}
+        style={{width:'100%',padding:'10px 12px',border:'2px solid #e2e8f0',borderRadius:8,fontSize:14,resize:'vertical',marginBottom:20}}/>
+      <div style={{display:'flex',gap:12}}>
+        <button onClick={()=>{setFase('keuze');setError('');}} style={{flex:1,padding:'12px',border:'2px solid #e2e8f0',borderRadius:8,background:'#fff',cursor:'pointer',fontWeight:600}}>← Terug</button>
+        <button onClick={doAlternatief} style={{flex:2,padding:'12px',background:dc,color:'#fff',border:'none',borderRadius:8,cursor:'pointer',fontWeight:700,fontSize:15}}>📨 Verstuur voorstel</button>
+      </div>
+    </div>
+  );
+
+  if(fase === 'bezig') return card(
+    <div style={{textAlign:'center',padding:'40px 0'}}>
+      <div className="spin" style={{borderTopColor:dc}}></div>
+      <p style={{color:'#64748b',marginTop:16}}>Even geduld...</p>
+    </div>
+  );
+
+  // Standaard: keuze scherm
+  return card(
+    <div>
+      <h2 style={{fontSize:18,fontWeight:800,marginBottom:4}}>Bevestig uw installatieafspraak</h2>
+      <p style={{color:'#64748b',fontSize:13,marginBottom:20}}>Beste {data.klant?.naam}, wij stellen de volgende afspraak voor:</p>
+      
+      <div style={{background:'linear-gradient(135deg,#eff6ff,#dbeafe)',border:'2px solid #93c5fd',borderRadius:12,padding:24,textAlign:'center',marginBottom:20}}>
+        <div style={{fontSize:11,fontWeight:700,color:'#3b82f6',textTransform:'uppercase',letterSpacing:1,marginBottom:8}}>Voorgestelde datum</div>
+        <div style={{fontSize:22,fontWeight:900,color:'#1e40af'}}>{fmtDate(data.planDatum)}</div>
+        <div style={{fontSize:17,fontWeight:700,color:'#3b82f6',marginTop:4}}>⏰ {data.planTijd || 'Tijdstip nog te bepalen'}</div>
+        {data.planNotities && <div style={{fontSize:13,color:'#64748b',marginTop:10,fontStyle:'italic'}}>💬 {data.planNotities}</div>}
+      </div>
+      
+      <table style={{width:'100%',borderCollapse:'collapse',fontSize:13,marginBottom:24}}>
+        <tr style={{background:'#f1f5f9'}}>
+          <td style={{padding:'8px 12px',border:'1px solid #e2e8f0',fontWeight:600}}>📍 Adres</td>
+          <td style={{padding:'8px 12px',border:'1px solid #e2e8f0'}}>{data.klant?.adres}, {data.klant?.gemeente}</td>
+        </tr>
+        {data.totaal && <tr>
+          <td style={{padding:'8px 12px',border:'1px solid #e2e8f0',fontWeight:600}}>💰 Totaal</td>
+          <td style={{padding:'8px 12px',border:'1px solid #e2e8f0',fontWeight:700}}>{data.totaal}</td>
+        </tr>}
+      </table>
+      
+      {error && <div style={{background:'#fef2f2',border:'1px solid #fca5a5',borderRadius:8,padding:12,marginBottom:16,color:'#dc2626',fontSize:13}}>{error}</div>}
+      
+      <button onClick={doBevestig} style={{width:'100%',padding:'16px',background:'#059669',color:'#fff',border:'none',borderRadius:10,cursor:'pointer',fontWeight:800,fontSize:17,marginBottom:12}}>
+        ✅ Akkoord — afspraak bevestigen
+      </button>
+      <button onClick={()=>setFase('alternatief')} style={{width:'100%',padding:'12px',background:'#f1f5f9',color:'#475569',border:'2px solid #e2e8f0',borderRadius:8,cursor:'pointer',fontWeight:600,fontSize:14}}>
+        📅 Ander moment voorstellen
+      </button>
+      
+      <p style={{textAlign:'center',fontSize:11,color:'#94a3b8',marginTop:16}}>
+        {data._bed?.naam} · {data._bed?.tel} · {data._bed?.email}
+      </p>
+    </div>
+  );
 }
 
-window.doAccept=function(){respond(window._pid,'akkoord',{})};
-window.showAltModal=function(){document.getElementById('altModal').classList.add('active')};
-window.closeAlt=function(){document.getElementById('altModal').classList.remove('active')};
-window.doAlt=function(){respond(window._pid,'alternatief',{datum:document.getElementById('altDate')?.value||'',tijd:document.getElementById('altTime')?.value||'',opmerking:document.getElementById('altNote')?.value||''})};
-
-async function load(){
-  if(!pid){document.getElementById('app').innerHTML='<div class="status-msg"><div class="icon">📅</div><h2>Geen planning</h2><p>Gebruik de link uit uw email.</p></div>';return;}
-  try{
-    var s=window.supabase.createClient(SB_URL,SB_KEY);
-    var r=await s.from('planning_proposals').select('*').eq('id',pid).single();
-    if(r.data){
-      if(r.data.status==='akkoord'){document.getElementById('app').innerHTML='<div class="status-msg"><div class="icon">✅</div><h2 style="color:#059669">Afspraak bevestigd</h2><p>Deze afspraak is al bevestigd.</p></div>';return;}
-      render(r.data);return;
-    }
-  }catch(e){console.warn(e)}
-  document.getElementById('app').innerHTML='<div class="status-msg"><div class="icon">❌</div><h2>Planning niet gevonden</h2><p>Neem contact op.</p></div>';
-}
-load();
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
 </script>
 </body>
 </html>
