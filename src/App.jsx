@@ -389,30 +389,27 @@ async function sendViaRecommand(factuur, settings) {
   const issueDate = factuur.datum || new Date().toISOString().slice(0,10);
   const dueDate   = factuur.vervaldatum || issueDate;
 
-  // Bouw netto lijnen: elke negatieve lijn wordt afgetrokken van de VOORGAANDE positieve lijn
-  // Dit vermijdt AllowanceCharge/negatieve lijnen die Recommand niet ondersteunt met AE
-  const nettoLijnen = [];
-  (factuur.lijnen||[]).forEach(l => {
-    if((l.prijs||0) > 0 && (l.naam||"").trim()) {
-      nettoLijnen.push({ ...l, _korting: 0 });
-    } else if((l.prijs||0) < 0 && nettoLijnen.length > 0) {
-      nettoLijnen[nettoLijnen.length-1]._korting += Math.abs((l.prijs||0) * (l.aantal||1));
-    }
-  });
-  // Document-level korting op eerste lijn
-  if(factuur.korting > 0 && nettoLijnen.length > 0) {
-    const sub = nettoLijnen.reduce((s,l)=>s+(l.prijs||0)*(l.aantal||1),0);
-    const docK = factuur.kortingType==="pct" ? sub*(factuur.korting/100) : Number(factuur.korting||0);
-    nettoLijnen[0]._korting += docK;
-  }
-  const totaalKorting = nettoLijnen.reduce((s,l)=>s+l._korting,0);
+  // Peppol lijn logica: positieve lijnen + korting verwerkt in eerste lijn
+  // (Recommand ondersteunt geen AllowanceCharge/negatieve lijnen met AE categorie)
+  const _positiefLijnen = (factuur.lijnen||[]).filter(l=>(l.prijs||0)>0 && (l.naam||"").trim());
+  const _kortingUitLijnen = (factuur.lijnen||[])
+    .filter(l=>(l.prijs||0)<0)
+    .reduce((s,l)=>s+Math.abs((l.prijs||0)*(l.aantal||1)),0);
+  const _kortingUitDoc = factuur.korting>0 ? (()=>{
+    const sub = _positiefLijnen.reduce((s,l)=>s+(l.prijs||0)*(l.aantal||1),0);
+    return factuur.kortingType==="pct" ? sub*(factuur.korting/100) : Number(factuur.korting||0);
+  })() : 0;
+  const totaalKorting = _kortingUitLijnen + _kortingUitDoc;
   const kortingLijnen = (factuur.lijnen||[]).filter(l=>(l.prijs||0)<0);
 
-  const lineItems = nettoLijnen.map((l,i)=>{
+  // Alle korting op EERSTE positieve lijn (ongeacht positie in de lijst)
+  const lineItems = _positiefLijnen.map((l,i)=>{
     const brutoPrijs = Math.abs(l.prijs||0);
     const aantal = Number(l.aantal||1);
-    const nettoExt = brutoPrijs * aantal - l._korting;
-    const nettoPrijs = nettoExt / aantal;
+    const brutoExt = brutoPrijs*aantal;
+    const k = i===0 ? totaalKorting : 0;
+    const nettoExt = brutoExt - k;
+    const nettoPrijs = nettoExt/aantal;
     return { i, l, prijs: nettoPrijs, aantal, ext: nettoExt,
       btwPct: Number(l.btw??21),
       vatAmt: vatCat==="S" ? nettoExt*(Number(l.btw??21)/100) : 0 };
@@ -420,8 +417,9 @@ async function sendViaRecommand(factuur, settings) {
 
   const sumLines = lineItems.reduce((s,li)=>s+li.ext,0);
   const sumVat   = lineItems.reduce((s,li)=>s+li.vatAmt,0);
-  const sumExcl  = sumLines - totaalKorting;
-  const sumIncl  = sumExcl + sumVat;
+  // Korting is al verwerkt in lineItems -> sumLines = nettobedrag
+  const sumExcl  = sumLines;
+  const sumIncl  = sumLines + sumVat;
   const stdPct   = vatCat==="S" ? (lineItems[0]?.btwPct??21) : 0;
 
   // UBL XML - exact toolkit formaat (proper indented XML)
@@ -491,7 +489,7 @@ async function sendViaRecommand(factuur, settings) {
     "  <cac:TaxTotal>",
     '    <cbc:TaxAmount currencyID="EUR">' + f2(sumVat) + "</cbc:TaxAmount>",
     "    <cac:TaxSubtotal>",
-    '      <cbc:TaxableAmount currencyID="EUR">' + f2(sumExcl) + "</cbc:TaxableAmount>",
+    '      <cbc:TaxableAmount currencyID="EUR">' + f2(sumLines) + "</cbc:TaxableAmount>",
     '      <cbc:TaxAmount currencyID="EUR">' + f2(sumVat) + "</cbc:TaxAmount>",
     "      <cac:TaxCategory>",
     "        <cbc:ID>" + vatCat + "</cbc:ID>",
@@ -504,8 +502,8 @@ async function sendViaRecommand(factuur, settings) {
     "    </cac:TaxSubtotal>",
     "  </cac:TaxTotal>",
     "  <cac:LegalMonetaryTotal>",
-    '    <cbc:LineExtensionAmount currencyID="EUR">' + f2(sumExcl) + "</cbc:LineExtensionAmount>",
-    '    <cbc:TaxExclusiveAmount currencyID="EUR">' + f2(sumExcl) + "</cbc:TaxExclusiveAmount>",
+    '    <cbc:LineExtensionAmount currencyID="EUR">' + f2(sumLines) + "</cbc:LineExtensionAmount>",
+    '    <cbc:TaxExclusiveAmount currencyID="EUR">' + f2(sumLines) + "</cbc:TaxExclusiveAmount>",
     '    <cbc:TaxInclusiveAmount currencyID="EUR">' + f2(sumIncl) + "</cbc:TaxInclusiveAmount>"
   );
   // AllowanceTotalAmount NIET sturen (Recommand bug met AE + AllowanceCharge)
@@ -2455,15 +2453,17 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
   const stripBase64 = (key, val) => {
     if(!Array.isArray(val)) return val;
     if(key === "b4_prd") {
-      // Voor Supabase: strip base64 (te groot)
-      // Strip base64 fiches — fiches staan enkel in product_fiches Supabase tabel
-      const stripped = val.map(p => {
-        const c = {...p};
+      // Bewaar ALLE producteigenschappen: cat, merk, imageUrl, specs, eenheid, etc.
+      // Strip ENKEL base64 PDF data (te groot voor Supabase/localStorage)
+      return val.map(p => {
+        const c = {...p};  // Alle velden behouden (cat, merk, imageUrl, specs, eenheid, ...)
         if(c.technischeFiche && String(c.technischeFiche).length > 500) c.technischeFiche = "[PDF]";
-        if(c.technischeFiches) c.technischeFiches = c.technischeFiches.map(f => ({naam:f.naam||"",url:f.url||"",type:f.type||""}));
+        if(c.technischeFiches) c.technischeFiches = c.technischeFiches.map(f => ({
+          naam: f.naam||"", url: f.url||"", type: f.type||""
+          // data wordt NIET meegenomen - staat in product_fiches tabel
+        }));
         return c;
       });
-      return stripped;
     }
     if(key === "b4_off" || key === "b4_fct") return val.map(doc => {
       const cl = {...doc};
