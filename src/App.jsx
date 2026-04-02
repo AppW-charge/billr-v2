@@ -1974,6 +1974,17 @@ export default function App() {
   // Persist current page to sessionStorage
   useEffect(()=>{ try { sessionStorage.setItem("billr_pg", pg); } catch(_){} },[pg]);
   const [klanten, setKlanten] = useState(INIT_KLANTEN);
+  const [todos, setTodos] = useState([]);
+  const saveTodos = (lijst) => {
+    setTodos(lijst);
+    try { localStorage.setItem("b4_todo", JSON.stringify(lijst)); } catch(_){}
+    if(!userRef.current?.id) return;
+    const json = JSON.stringify(lijst);
+    sb.from("user_data").upsert(
+      {user_id: userRef.current.id, key:"b4_todo", value: json, updated_at: new Date().toISOString()},
+      {onConflict:"user_id,key"}
+    ).catch(e => console.warn("Todo save:", e.message));
+  };
   const [producten, setProducten] = useState(INIT_PRODUCTS);
   const [sbWidth, setSbWidth] = useState(()=>{try{const w=parseInt(localStorage.getItem("billr_sb_w"));return(!isNaN(w)&&w>=60&&w<=360)?w:220;}catch(_){return 220;}});
   useEffect(()=>{document.documentElement.style.setProperty("--sb-w",sbWidth+"px");},[sbWidth]);
@@ -3731,6 +3742,7 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
     ["facturen","🧾","Facturen",factOpen||null],
     ["creditnotas","📑","Creditnota's",null],
     ["aanmaningen","🔔","Aanmaningen",aanmaningen.filter(a=>a.status==="openstaand").length||null],
+    ["aanvragen","📥","Aanvragen",null],
     ["klanten","👥","Klanten",null],
     ["producten","📦","Producten",null],
     ["agenda","📅","Agenda",null],
@@ -3832,7 +3844,7 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
           </div>
 
           <div className="content">
-            {pg==="dashboard"&&<Dashboard offertes={offertes} facturen={factMet} onGoto={gotoFiltered} onNew={()=>{setEditOff(null);setWizOpen(true)}} onFactuur={d=>setFactModal(d)} settings={settings} offerteViews={offerteViews} offerteResponses={offerteResponses} planningProposals={planningProposals} onLogboek={o=>setLogboekModal(o)} onPlan={o=>setPlanningModal(o)} onPlanDelete={deletePlanning} widgetOrder={widgetOrder} setWidgetOrder={setWidgetOrder} onRefreshTracking={fetchOfferteTracking} websiteLeads={websiteLeads} onLeadRefresh={fetchWebsiteLeads} onLeadStatus={async(id,status)=>{try{await sb.from("website_leads").update({status}).eq("id",id);fetchWebsiteLeads();}catch(_){}}} onLeadToOfferte={(lead)=>{setEditOff(null);setWizOpen(true);notify("Aanvraag: "+lead.naam);}} userId={user?.id}/>}
+            {pg==="dashboard"&&<Dashboard offertes={offertes} facturen={factMet} onGoto={gotoFiltered} onNew={()=>{setEditOff(null);setWizOpen(true)}} onFactuur={d=>setFactModal(d)} settings={settings} offerteViews={offerteViews} offerteResponses={offerteResponses} planningProposals={planningProposals} onLogboek={o=>setLogboekModal(o)} onPlan={o=>setPlanningModal(o)} onPlanDelete={deletePlanning} widgetOrder={widgetOrder} setWidgetOrder={setWidgetOrder} onRefreshTracking={fetchOfferteTracking} websiteLeads={websiteLeads} onLeadRefresh={fetchWebsiteLeads} onLeadStatus={async(id,status)=>{try{await sb.from("website_leads").update({status}).eq("id",id);fetchWebsiteLeads();}catch(_){}}} onLeadToOfferte={(lead)=>{setEditOff(null);setWizOpen(true);notify("Aanvraag: "+lead.naam);}} userId={user?.id} todos={todos} saveTodos={saveTodos}/>}
             {pg==="offertes"&&<OffertesPage offertes={offertes} initFilter={pgFilter} onView={d=>setViewDoc({doc:d,type:"offerte"})} onEdit={d=>{setEditOff(d);setWizOpen(true)}} onStatus={handleOffStatus} onBulkStatus={bulkUpdOff} onFactuur={d=>setFactModal(d)} onDelete={id=>{
               const toDelete = offertes.find(o=>o.id===id);
               const next = offertes.filter(o=>o.id!==id);
@@ -3842,7 +3854,8 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
               notify("Verwijderd");
             }} onNew={()=>{setEditOff(null);setWizOpen(true)}} onEmail={async d=>{try{await shareOfferte(d);}catch(_){}setEmailModal({doc:d,type:"offerte"});}} onPlan={d=>setPlanningModal(d)} onShare={d=>{shareOfferte(d);notify("🔗 Publieke link vernieuwd ✓");}} settings={settings}/>}
             {pg==="facturen"&&<FacturenPage facturen={factMet} settings={settings} initFilter={pgFilter} onView={d=>setViewDoc({doc:d,type:"factuur"})} onEdit={f=>{setEditFact(f);setFactuurWizOpen(true);}} onStatus={updFact} onBulkStatus={bulkUpdFact} onDelete={id=>{setFacturen(p=>p.filter(f=>f.id!==id));localTimestamps.current["b4_fct"]=Date.now();try{localStorage.setItem("billr_ts",JSON.stringify(localTimestamps.current));}catch(_){}notify("Verwijderd");setTimeout(()=>flushSavesRef.current(),100);}} notify={notify} onEmail={d=>setEmailModal({doc:d,type:"factuur"})} onBetaling={f=>setBetalingModal(f)} onAanmaning={f=>setAanmaningModal(f)} onNew={()=>{setEditFact(null);setFactuurWizOpen(true)}}/>}
-            {pg==="klanten"&&<KlantenPage klanten={klanten} offertes={offertes} facturen={factMet} view={klantView} onEdit={k=>setKlantModal(k)} onDelete={id=>{setKlanten(p=>p.map(k=>k.id===id?{...k,_verwijderd:true}:k));localTimestamps.current["b4_kln"]=Date.now();try{localStorage.setItem("billr_ts",JSON.stringify(localTimestamps.current));}catch(_){}notify("Klant verwijderd");setTimeout(()=>flushSavesRef.current(),100);}}/>}
+            {pg==="aanvragen"&&<AanvragenPage leads={websiteLeads} onRefresh={fetchWebsiteLeads} onStatus={async(id,s)=>{try{await sb.from("website_leads").update({status:s}).eq("id",id);fetchWebsiteLeads();}catch(_){}}} onToKlant={async(lead)=>{const k={id:uid(),naam:lead.naam||"",bedrijf:lead.bedrijf||"",email:lead.email||"",tel:lead.tel||"",adres:lead.adres||"",gemeente:`${lead.postcode||""} ${lead.gemeente||""}`.trim(),btwnr:lead.btwnr||"",type:lead.klantType||"particulier",notities:`Aanvraag: ${lead.service||""} - ${lead.opmerking||""}`,aangemaakt:new Date().toISOString()};setKlanten(p=>[k,...p]);notify("✅ Klant toegevoegd: "+k.naam);}} onToOfferte={(lead,klantId)=>{setEditOff(null);setWizOpen(true);notify("Aanvraag geladen voor offerte");}} notify={notify} sbClient={sb}/>}
+{pg==="klanten"&&<KlantenPage klanten={klanten} offertes={offertes} facturen={factMet} view={klantView} onEdit={k=>setKlantModal(k)} onDelete={id=>{setKlanten(p=>p.map(k=>k.id===id?{...k,_verwijderd:true}:k));localTimestamps.current["b4_kln"]=Date.now();try{localStorage.setItem("billr_ts",JSON.stringify(localTimestamps.current));}catch(_){}notify("Klant verwijderd");setTimeout(()=>flushSavesRef.current(),100);}}/>}
             {pg==="producten"&&<ProductenPage producten={producten} settings={settings} onEdit={async p=>{
               if(p?.id) {
                 try {
@@ -4202,7 +4215,7 @@ function AgendaPage({offertes, settings, onPlan, onPlanDelete}) {
 }
 
 
-function Dashboard({offertes, facturen, onGoto, onNew, onFactuur, settings, offerteViews, offerteResponses, planningProposals, onLogboek, onPlan, onPlanDelete, widgetOrder, setWidgetOrder, onRefreshTracking, websiteLeads=[], onLeadRefresh, onLeadStatus, onLeadToOfferte, userId}) {
+function Dashboard({offertes, facturen, onGoto, onNew, onFactuur, settings, offerteViews, offerteResponses, planningProposals, onLogboek, onPlan, onPlanDelete, widgetOrder, setWidgetOrder, onRefreshTracking, websiteLeads=[], onLeadRefresh, onLeadStatus, onLeadToOfferte, userId, todos=[], saveTodos, setTodos: setTodosExt}) {
   const instTypesSetting = settings;
   const openOff = offertes.filter(o=>o.status==="verstuurd");
   const openFact = facturen.filter(f=>f.status!=="betaald"&&f.status!=="concept");
@@ -4242,19 +4255,9 @@ function Dashboard({offertes, facturen, onGoto, onNew, onFactuur, settings, offe
   // Sla kolomConfig op bij wijziging
   useEffect(()=>{ try{localStorage.setItem("b4_kolom",JSON.stringify(kolomConfig));}catch(_){} },[kolomConfig]);
   // TODO lijst: lokaal in Supabase opgeslagen via saveKey b4_todo
-  const [todos, setTodos] = useState(() => { try { return JSON.parse(localStorage.getItem("b4_todo")||"[]"); } catch(_){ return []; } });
+  // Todos komen als prop van App (opgeslagen in Supabase via App state)
   const [todoInput, setTodoInput] = useState("");
-  const saveTodos = (lijst) => {
-    setTodos(lijst);
-    if(!userId) return;
-    try { localStorage.setItem("b4_todo", JSON.stringify(lijst)); } catch(_){}
-    const json = JSON.stringify(lijst);
-    sb.from("user_data").upsert(
-      {user_id: userId, key:"b4_todo", value: json, updated_at: new Date().toISOString()},
-      {onConflict:"user_id,key"}
-    ).then(r => { if(r.error) console.warn("Todo save:", r.error.message); })
-    .catch(e => console.warn("Todo save:", e.message));
-  };
+  // saveTodos = prop van App component (slaat op in Supabase + localStorage)
   const addTodo = () => {
     const t = todoInput.trim(); if(!t) return;
     saveTodos([{id:Date.now().toString(36),tekst:t,gedaan:false,aangemaakt:new Date().toISOString()}, ...todos]);
@@ -10181,6 +10184,189 @@ function EmailJSTestBtn({settings, notify}) {
         </div>
       )}
       <div style={{fontSize:10,color:"#94a3b8",marginTop:4}}>Test-email gaat naar het afzender e-mailadres</div>
+    </div>
+  );
+}
+// ═══════════════════════════════════════════════════════════════════════
+// AANVRAGEN PAGE — Website leads + aanvraag beheer
+// ═══════════════════════════════════════════════════════════════════════
+function AanvragenPage({leads=[], onRefresh, onStatus, onToKlant, onToOfferte, notify, sbClient}) {
+  const [filter, setFilter] = useState("nieuw");
+  const [selected, setSelected] = useState(null);
+  const [toKlantDone, setToKlantDone] = useState(new Set());
+
+  const statussen = ["nieuw","in behandeling","behandeld","afgewezen"];
+  const stIco = {nieuw:"🔵",["in behandeling"]:"🟡",behandeld:"🟢",afgewezen:"🔴"};
+  const stKleur = {nieuw:"#3b82f6",["in behandeling"]:"#f59e0b",behandeld:"#10b981",afgewezen:"#ef4444"};
+
+  const gefilterd = filter === "alle" ? leads : leads.filter(l=>l.status===filter);
+  const aantalNieuw = leads.filter(l=>l.status==="nieuw").length;
+
+  const fmtDt = ts => { try { return new Date(ts).toLocaleString("nl-BE",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"}); } catch(_){return ts||"";} };
+
+  return (
+    <div className="page-wrap">
+      <div className="ph">
+        <div>
+          <h1 className="pt">📥 Aanvragen</h1>
+          <p className="ps">Klantaanvragen via de website</p>
+        </div>
+        <div style={{display:"flex",gap:8,alignItems:"center"}}>
+          {aantalNieuw>0&&<span style={{background:"#ef4444",color:"#fff",borderRadius:20,padding:"4px 12px",fontWeight:700,fontSize:13}}>{aantalNieuw} nieuw</span>}
+          <button className="btn bs" onClick={onRefresh}>🔄 Vernieuwen</button>
+          <a href="/aanvraag.html" target="_blank" className="btn b2">🔗 Aanvraagpagina</a>
+        </div>
+      </div>
+
+      {/* Filter tabs */}
+      <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:16,padding:"0 4px"}}>
+        {["alle","nieuw","in behandeling","behandeld","afgewezen"].map(s=>(
+          <button key={s} onClick={()=>setFilter(s)} style={{
+            padding:"6px 14px",borderRadius:20,border:"2px solid",cursor:"pointer",fontWeight:600,fontSize:13,
+            borderColor:filter===s?(stKleur[s]||"#1a2e4a"):"#e2e8f0",
+            background:filter===s?(stKleur[s]||"#1a2e4a"):"#fff",
+            color:filter===s?"#fff":(stKleur[s]||"#64748b")
+          }}>
+            {stIco[s]||"📋"} {s==="alle"?"Alle":s} {s==="nieuw"&&aantalNieuw?`(${aantalNieuw})`:""}
+          </button>
+        ))}
+      </div>
+
+      <div style={{display:"grid",gridTemplateColumns:selected?"1fr 1fr":"1fr",gap:16}}>
+        {/* Lijst */}
+        <div>
+          {gefilterd.length===0
+            ? <div style={{textAlign:"center",padding:"60px 20px",color:"#94a3b8"}}>
+                <div style={{fontSize:48,marginBottom:12}}>📭</div>
+                <div style={{fontSize:16,fontWeight:600}}>Geen aanvragen</div>
+                <div style={{fontSize:13,marginTop:4}}>
+                  <a href="/aanvraag.html" target="_blank" style={{color:"#2563eb"}}>Deel de aanvraaglink</a> met klanten
+                </div>
+              </div>
+            : gefilterd.map(lead=>(
+            <div key={lead.id} onClick={()=>setSelected(lead)} style={{
+              background:selected?.id===lead.id?"#eff6ff":"#fff",
+              border:`2px solid ${selected?.id===lead.id?"#3b82f6":"#e2e8f0"}`,
+              borderRadius:12,padding:"14px 16px",marginBottom:10,cursor:"pointer",
+              transition:"all .15s"
+            }}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8}}>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{fontWeight:700,fontSize:15,color:"#1e293b"}}>{lead.naam||"Onbekend"}</div>
+                  <div style={{fontSize:12,color:"#64748b",marginTop:2}}>
+                    {lead.service||lead.type||"Aanvraag"} · {fmtDt(lead.created_at)}
+                  </div>
+                  {lead.email&&<div style={{fontSize:12,color:"#475569",marginTop:2}}>✉ {lead.email}</div>}
+                </div>
+                <span style={{
+                  background:stKleur[lead.status]+"22",color:stKleur[lead.status],
+                  border:`1px solid ${stKleur[lead.status]}`,
+                  borderRadius:8,padding:"3px 8px",fontSize:11,fontWeight:700,whiteSpace:"nowrap",flexShrink:0
+                }}>{stIco[lead.status]} {lead.status}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Detail panel */}
+        {selected&&(
+          <div style={{background:"#fff",border:"2px solid #e2e8f0",borderRadius:14,overflow:"hidden",position:"sticky",top:80,maxHeight:"calc(100vh - 120px)",overflowY:"auto"}}>
+            {/* Header */}
+            <div style={{background:"#1a2e4a",padding:"16px 20px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <div>
+                <div style={{color:"#fff",fontWeight:800,fontSize:17}}>{selected.naam}</div>
+                <div style={{color:"rgba(255,255,255,.6)",fontSize:12,marginTop:2}}>{fmtDt(selected.created_at)}</div>
+              </div>
+              <button onClick={()=>setSelected(null)} style={{background:"rgba(255,255,255,.2)",border:"none",color:"#fff",borderRadius:8,width:32,height:32,cursor:"pointer",fontSize:18}}>✕</button>
+            </div>
+
+            <div style={{padding:"20px"}}>
+              {/* Status wijzigen */}
+              <div style={{marginBottom:16}}>
+                <label style={{fontSize:12,fontWeight:700,color:"#64748b",display:"block",marginBottom:6}}>STATUS</label>
+                <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                  {statussen.map(s=>(
+                    <button key={s} onClick={()=>{onStatus(selected.id,s);setSelected({...selected,status:s});}}
+                      style={{padding:"6px 12px",borderRadius:8,border:`2px solid ${stKleur[s]}`,
+                        background:selected.status===s?stKleur[s]:"#fff",
+                        color:selected.status===s?"#fff":stKleur[s],
+                        fontWeight:600,fontSize:12,cursor:"pointer"}}>
+                      {stIco[s]} {s}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Klantgegevens */}
+              <div style={{background:"#f8fafc",borderRadius:10,padding:"14px",marginBottom:14}}>
+                <div style={{fontWeight:700,fontSize:13,color:"#1e293b",marginBottom:10}}>👤 Klantgegevens</div>
+                {[
+                  ["Naam",selected.naam],["Email",selected.email],["Tel",selected.tel],
+                  ["Type",selected.klantType],["Bedrijf",selected.bedrijf],["BTW nr",selected.btwnr],
+                  ["Adres",selected.adres],["Gemeente",[selected.postcode,selected.gemeente].filter(Boolean).join(" ")],
+                ].filter(([,v])=>v).map(([l,v])=>(
+                  <div key={l} style={{display:"flex",gap:8,marginBottom:6,fontSize:13}}>
+                    <span style={{color:"#64748b",minWidth:70,flexShrink:0}}>{l}</span>
+                    <span style={{fontWeight:600,color:"#1e293b"}}>{v}</span>
+                  </div>
+                ))}
+              </div>
+
+              {/* Aanvraagdetails */}
+              <div style={{background:"#f8fafc",borderRadius:10,padding:"14px",marginBottom:14}}>
+                <div style={{fontWeight:700,fontSize:13,color:"#1e293b",marginBottom:10}}>⚡ Aanvraagdetails</div>
+                {[
+                  ["Service",selected.service],["Omschrijving",selected.opmerking||selected.bericht],
+                  ["Installatietype",selected.installatieType],["Voertuig",selected.voertuig],
+                  ["Stroom",selected.stroom],["Netbeheerder",selected.netbeheerder],
+                ].filter(([,v])=>v).map(([l,v])=>(
+                  <div key={l} style={{display:"flex",gap:8,marginBottom:6,fontSize:13}}>
+                    <span style={{color:"#64748b",minWidth:100,flexShrink:0}}>{l}</span>
+                    <span style={{fontWeight:600,color:"#1e293b",wordBreak:"break-word"}}>{v}</span>
+                  </div>
+                ))}
+              </div>
+
+              {/* Foto's */}
+              {selected.fotos && selected.fotos.length > 0 && (
+                <div style={{marginBottom:14}}>
+                  <div style={{fontWeight:700,fontSize:13,color:"#1e293b",marginBottom:10}}>📸 Foto's ({selected.fotos.length})</div>
+                  <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(120px,1fr))",gap:8}}>
+                    {selected.fotos.map((foto,i)=>(
+                      <a key={i} href={foto.url||foto} target="_blank" style={{display:"block"}}>
+                        <img src={foto.url||foto} alt={foto.label||`Foto ${i+1}`}
+                          style={{width:"100%",aspectRatio:"1",objectFit:"cover",borderRadius:8,border:"1px solid #e2e8f0"}}
+                          onError={e=>{e.target.style.display="none";}}/>
+                        {foto.label&&<div style={{fontSize:10,color:"#64748b",textAlign:"center",marginTop:4}}>{foto.label}</div>}
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Acties */}
+              <div style={{display:"flex",flexDirection:"column",gap:10,marginTop:20}}>
+                <button onClick={()=>{onToKlant(selected);setToKlantDone(p=>new Set(p).add(selected.id));}}
+                  style={{width:"100%",padding:"14px",background:toKlantDone.has(selected.id)?"#10b981":"#1a2e4a",
+                    color:"#fff",border:"none",borderRadius:10,fontWeight:700,fontSize:15,cursor:"pointer"}}>
+                  {toKlantDone.has(selected.id)?"✅ Klant toegevoegd":"👤 Toevoegen als klant"}
+                </button>
+                <button onClick={()=>{onToOfferte(selected);}}
+                  style={{width:"100%",padding:"14px",background:"#2563eb",
+                    color:"#fff",border:"none",borderRadius:10,fontWeight:700,fontSize:15,cursor:"pointer"}}>
+                  📋 Offerte aanmaken
+                </button>
+                <a href={`mailto:${selected.email}?subject=Uw aanvraag bij W-charge BV`}
+                  style={{display:"block",width:"100%",padding:"12px",background:"#f1f5f9",
+                    color:"#475569",border:"2px solid #e2e8f0",borderRadius:10,fontWeight:600,
+                    fontSize:14,textAlign:"center",textDecoration:"none"}}>
+                  ✉ Email versturen
+                </a>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
