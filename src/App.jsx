@@ -8205,57 +8205,25 @@ function EmailModal({doc,type,settings,onClose,onSend,onAcceptToken}) {
   const [subject, setSubject] = useState(`${type==="offerte"?"Offerte":"Factuur"} ${doc.nummer} — ${bed.naam}`);
   const [bodyMode] = useState("html");
 
-  // Haal de ECHTE gerenderde preview HTML op uit de DocModal
-  // Dit is IDENTIEK aan wat de klant in de preview ziet
-  const getCapturedHtml = useCallback(() => {
-    const docWrap = document.querySelector(".mb-body .doc-wrap");
-    if(!docWrap) return null;
-    // Verwijder interactieve elementen
-    const clone = docWrap.cloneNode(true);
-    clone.querySelectorAll("button,input,select,textarea,script,.doc-page-lbl,[data-noprint]").forEach(el=>el.remove());
-    // Haal alle inline stijlen op van de pagina
-    const styles = Array.from(document.styleSheets).map(s=>{
-      try{return Array.from(s.cssRules).map(r=>r.cssText).join("\n");}catch(_){return "";}
-    }).join("\n");
-    // Bouw volledige HTML document
-    return `<!DOCTYPE html><html lang="nl"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<style>
-*{box-sizing:border-box;margin:0;padding:0}
-body{font-family:'Inter',Arial,sans-serif;background:#f1f5f9;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-.doc-wrap{max-width:210mm;margin:0 auto}
-${styles.substring(0,80000)}
-</style>
-</head><body>${clone.outerHTML}</body></html>`;
-  }, []);
+  const viewUrl = `${window.location.origin}/offerte.html?id=${doc.id}&nr=${encodeURIComponent(doc.nummer||"")}`;
 
-  const [htmlBody, setHtmlBody] = useState(() => {
-    // Probeer preview HTML te capturen, anders fallback
-    const captured = getCapturedHtml();
-    if(captured) return captured;
-    return buildFactuurHtml(doc, bed, tot, null, {dc,
-      viewUrl: `${window.location.origin}/offerte.html?id=${doc.id}&nr=${encodeURIComponent(doc.nummer||'')}`
-    });
-  });
+  // Bouw nette email HTML - identiek aan preview layout
+  const buildEmailHtml = () => {
+    if(type==="offerte") return buildOfferteHtml(doc, bed, tot, acceptUrl, rejectUrl, null, {dc});
+    return buildFactuurHtml(doc, bed, tot, null, {dc, viewUrl});
+  };
 
-  // Herlaad preview HTML als doc verandert
-  useEffect(()=>{
-    const t = setTimeout(()=>{
-      const captured = getCapturedHtml();
-      if(captured) setHtmlBody(captured);
-    }, 200);
-    return ()=>clearTimeout(t);
-  }, [doc.id]);
+  const [htmlBody, setHtmlBody] = useState(buildEmailHtml);
 
   const txtBody = rawTmpl
-    .replace(/{naam}/g,doc.klant?.naam||"")
-    .replace(/{nummer}/g,doc.nummer||"")
-    .replace(/{datum}/g,fmtDate(doc.datum||doc.aangemaakt))
-    .replace(/{vervaldatum}/g,fmtDate(doc.vervaldatum))
-    .replace(/{bedrijf}/g,bed.naam||"")
-    .replace(/{totaal}/g,fmtEuro(tot.totaal))
-    .replace(/{iban}/g,bed.iban||"")
-    .replace(/{link}/g,`${window.location.origin}/offerte.html?id=${doc.id}&nr=${encodeURIComponent(doc.nummer||"")}`);
+    .replace(/{naam}/g, doc.klant?.naam||"")
+    .replace(/{nummer}/g, doc.nummer||"")
+    .replace(/{datum}/g, fmtDate(doc.datum||doc.aangemaakt))
+    .replace(/{vervaldatum}/g, fmtDate(doc.vervaldatum))
+    .replace(/{bedrijf}/g, bed.naam||"")
+    .replace(/{totaal}/g, fmtEuro(tot.totaal))
+    .replace(/{iban}/g, bed.iban||"")
+    .replace(/{link}/g, viewUrl);
 
   const doAutoSend = async () => {
     if(!to) return setError("Voer een e-mailadres in");
@@ -8271,28 +8239,9 @@ ${styles.substring(0,80000)}
       window.emailjs.init(pubKey);
       
       // Strip base64 images uit HTML (anders overschrijdt het de 50KB EmailJS limiet)
-      // Gebruik de ECHTE preview HTML, strip enkel base64 afbeeldingen (te groot voor EmailJS)
-      let capturedHtml = getCapturedHtml() || htmlBody;
-      // Strip base64 data-urls maar bewaar alle styling
-      capturedHtml = capturedHtml
-        .replace(/src="data:image\/[^"]{0,500000}"/g, `src="${window.location.origin}/logo-placeholder.png"`)
-        .replace(/url\(data:image\/[^)]{0,500000}\)/g, 'url()');
-      
-      // EmailJS limiet: 50KB — check en trim indien nodig
-      let cleanHtml = capturedHtml;
-      const sizeKB = Math.round(new Blob([cleanHtml]).size / 1024);
-      console.log(`📧 Email HTML grootte: ${sizeKB}KB`);
-      
-      if(new Blob([cleanHtml]).size > 45000) {
-        // Te groot: gebruik vereenvoudigde maar correcte HTML
-        console.warn(`Email te groot (${sizeKB}KB), gebruik compacte versie`);
-        cleanHtml = buildFactuurHtml(doc, bed, tot, null, {dc,
-          viewUrl: `${window.location.origin}/offerte.html?id=${doc.id}&nr=${encodeURIComponent(doc.nummer||"")}`
-        });
-        if(type==="offerte") {
-          cleanHtml = buildOfferteHtml(doc, bed, tot, acceptUrl, rejectUrl, null, {dc});
-        }
-      }
+      let cleanHtml = htmlBody || buildEmailHtml();
+      // Strip base64 afbeeldingen (te groot voor EmailJS 50KB limiet)
+      cleanHtml = cleanHtml.replace(/src="data:image\/[^"]+"/g, 'src=""').replace(/url\(data:image\/[^)]+\)/g, 'url()');
       
       const emailParams = {
         to_email: to,
