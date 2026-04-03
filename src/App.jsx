@@ -7652,24 +7652,42 @@ function DocModal({doc,type,settings,onClose,onFactuur,onStatusOff,onStatusFact,
   const doPrint = () => {
     const docWrap = document.querySelector(".mb-body .doc-wrap");
     if(!docWrap){ alert("Kan document niet vinden. Sluit en open het document opnieuw."); return; }
-
-    // Gebruik #print-root — CSS verbergt alles behalve dit element bij afdrukken
-    let pr = document.getElementById("print-root");
-    if(!pr){ pr = document.createElement("div"); pr.id = "print-root"; document.body.appendChild(pr); }
-
-    // Kopieer document HTML naar print-root
-    pr.innerHTML = docWrap.outerHTML;
-
-    const prev = document.title;
-    document.title = doc.nummer || "document";
-
-    requestAnimationFrame(()=>{
-      setTimeout(()=>{
-        window.print();
-        setTimeout(()=>{ pr.innerHTML = ""; document.title = prev; }, 1500);
-      }, 200);
-    });
-
+    // Kopieer DOM en strip interactieve elementen
+    const clone = docWrap.cloneNode(true);
+    clone.querySelectorAll("button,input,select,textarea,script,.doc-page-lbl").forEach(el=>el.remove());
+    // Haal alle CSS op uit de pagina (incl. alle klassen en print-regels)
+    const styles = Array.from(document.styleSheets).map(s=>{
+      try{return Array.from(s.cssRules).map(r=>r.cssText).join("
+");}catch(_){return "";}
+    }).join("
+");
+    // Bouw standalone HTML met alle inline styles
+    const html = `<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="utf-8"/>
+<title>${doc.nummer||"document"}</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{font-family:'Inter',Arial,sans-serif;background:#f1f5f9;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+@media print{
+  html,body{background:#fff!important}
+  .doc-page{box-shadow:none!important;border-radius:0!important;margin:0!important;page-break-after:always}
+  .doc-page:last-child{page-break-after:auto}
+  .doc-page-lbl{display:none!important}
+}
+${styles.substring(0,80000)}
+</style>
+</head>
+<body>
+${clone.outerHTML}
+<script>window.onload=function(){setTimeout(function(){window.print();},300);}<\/script>
+</body>
+</html>`;
+    const blob = new Blob([html],{type:"text/html"});
+    const url = URL.createObjectURL(blob);
+    window.open(url,"_blank");
+    setTimeout(()=>URL.revokeObjectURL(url), 60000);
     if(type==="offerte") onStatusOff("afgedrukt");
     else onStatusFact("afgedrukt");
   };
