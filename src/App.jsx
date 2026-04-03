@@ -7176,7 +7176,7 @@ function OfferteDocument({doc, settings, ficheCache={}, producten=[]}) {
 
       </>}
       {/* PAGE 2: PRODUCTINFO + TECHNISCHE FICHES */}
-      {type==="offerte"&&sj.toonProductpagina!==false&&uniqueProds.length>0&&<>
+      {sj.toonProductpagina!==false&&uniqueProds.length>0&&<>
         <div className="doc-page-lbl">Pagina 2 — Productinformatie & Technische fiches</div>
         <div className="doc-page">
           <div style={{height:6,background:dc,borderRadius:"4px 4px 0 0",flexShrink:0}}/>
@@ -7520,7 +7520,7 @@ function FactuurDocument({doc, settings}) {
       </div>
 
       {/* PAGINA PRODUCTINFO — enkel bij offertes, NOOIT bij facturen */}
-      {type==="offerte"&&(()=>{
+      {(()=>{
         const fctProds = [...new Map((doc.lijnen||[]).filter(l=>l.naam&&(l.imageUrl||l.omschr||(l.specs||[]).length||(l.technischeFiches||[]).length)).map(l=>[l.productId||l.id,l])).values()];
         return fctProds.length>0?(<>
           <div className="doc-page-lbl">Pagina {overvloeit?"3":"2"} — Productinformatie & Technische Fiches</div>
