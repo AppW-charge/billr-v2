@@ -7651,41 +7651,29 @@ function DocModal({doc,type,settings,onClose,onFactuur,onStatusOff,onStatusFact,
 
   const doPrint = () => {
     const docWrap = document.querySelector(".mb-body .doc-wrap");
-    if(!docWrap){ alert("Kan document niet vinden."); return; }
-    
-    // CSS variabelen van :root ophalen zodat kleuren correct zijn in blob
+    if(!docWrap){ alert("Kan document niet vinden. Sluit en open het document opnieuw."); return; }
+
+    // Gebruik print-root - CSS verbergt alles behalve dit bij afdrukken
+    let pr = document.getElementById("print-root");
+    if(!pr){ pr = document.createElement("div"); pr.id = "print-root"; document.body.appendChild(pr); }
+
+    // Kopieer de gerenderde DOM naar print-root
+    pr.innerHTML = docWrap.outerHTML;
+
+    // Zet CSS variabelen op print-root zodat kleuren correct zijn
     const rootStyle = getComputedStyle(document.documentElement);
-    const cssVars = ["--theme","--p","--p2","--sb-txt-rgb","--bdr","--bg","--txt"]
-      .map(v=>{ const val=rootStyle.getPropertyValue(v).trim(); return val?`${v}:${val}`:null; })
-      .filter(Boolean).join(";");
-    
-    // Alle CSS uit de pagina ophalen
-    const styles = Array.from(document.styleSheets).map(s=>{
-      try{return Array.from(s.cssRules).map(r=>r.cssText).join(" ");}catch(_){return "";}
-    }).join(" ");
-    
-    // DOM klonen zonder interactieve elementen
-    const clone = docWrap.cloneNode(true);
-    clone.querySelectorAll("button,input,select,textarea,script,.doc-page-lbl").forEach(el=>el.remove());
-    
-    const html = `<!DOCTYPE html><html lang="nl"><head><meta charset="utf-8"/>
-<title>${doc.nummer||"document"}</title>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet"/>
-<style>
-:root{${cssVars}}
-*{box-sizing:border-box;margin:0;padding:0}
-html,body{font-family:"Inter",system-ui,Arial,sans-serif;background:#f1f5f9;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-${styles.substring(0,100000)}
-@media print{html,body{background:#fff!important}.doc-page{box-shadow:none!important;border-radius:0!important;margin:0!important;break-after:page}.doc-page:last-child{break-after:auto!important}.doc-page-lbl{display:none!important}}
-</style></head>
-<body>${clone.outerHTML}
-<script>document.fonts.ready.then(function(){setTimeout(function(){window.print();},600);});<\/script>
-</body></html>`;
-    
-    const blob = new Blob([html],{type:"text/html"});
-    const url = URL.createObjectURL(blob);
-    window.open(url,"_blank");
-    setTimeout(()=>URL.revokeObjectURL(url), 120000);
+    ["--theme","--p","--p2","--sb-txt-rgb","--bdr"].forEach(v => {
+      const val = rootStyle.getPropertyValue(v).trim();
+      if(val) pr.style.setProperty(v, val);
+    });
+
+    const prev = document.title;
+    document.title = doc.nummer || "document";
+    requestAnimationFrame(()=>{ setTimeout(()=>{
+      window.print();
+      setTimeout(()=>{ pr.innerHTML = ""; document.title = prev; }, 2000);
+    }, 300); });
+
     if(type==="offerte") onStatusOff("afgedrukt");
     else onStatusFact("afgedrukt");
   };
