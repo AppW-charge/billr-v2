@@ -7651,25 +7651,14 @@ function DocModal({doc,type,settings,onClose,onFactuur,onStatusOff,onStatusFact,
 
   const doPrint = () => {
     const docWrap = document.querySelector(".mb-body .doc-wrap");
-    if(!docWrap){ alert("Kan document niet vinden."); return; }
+    if(!docWrap){ alert("Kan document niet vinden. Sluit en open het document opnieuw."); return; }
 
-    // Methode: voeg tijdelijke print-stijl toe die ALLES verbergt behalve doc-wrap
-    // Dit behoudt de echte DOM (met base64 afbeeldingen correct geladen)
-    const styleEl = document.createElement("style");
-    styleEl.id = "billr-print-override";
-    styleEl.innerHTML = `
-      @media print {
-        body > * { display: none !important; }
-        .mo { display: block !important; position: static !important; background: white !important; }
-        .mdl { display: block !important; box-shadow: none !important; max-width: 100% !important; border-radius: 0 !important; }
-        .mh, .mf { display: none !important; }
-        .mb-body { overflow: visible !important; max-height: none !important; padding: 0 !important; }
-        .doc-wrap { display: block !important; }
-        .doc-page-lbl { display: none !important; }
-        * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-      }
-    `;
-    document.head.appendChild(styleEl);
+    // Gebruik #print-root — CSS verbergt alles behalve dit element bij afdrukken
+    let pr = document.getElementById("print-root");
+    if(!pr){ pr = document.createElement("div"); pr.id = "print-root"; document.body.appendChild(pr); }
+
+    // Kopieer document HTML naar print-root
+    pr.innerHTML = docWrap.outerHTML;
 
     const prev = document.title;
     document.title = doc.nummer || "document";
@@ -7677,11 +7666,8 @@ function DocModal({doc,type,settings,onClose,onFactuur,onStatusOff,onStatusFact,
     requestAnimationFrame(()=>{
       setTimeout(()=>{
         window.print();
-        setTimeout(()=>{
-          document.head.removeChild(styleEl);
-          document.title = prev;
-        }, 1500);
-      }, 300);
+        setTimeout(()=>{ pr.innerHTML = ""; document.title = prev; }, 1500);
+      }, 200);
     });
 
     if(type==="offerte") onStatusOff("afgedrukt");
