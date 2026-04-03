@@ -3938,19 +3938,21 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
               // Sla factuur snapshot op in offerte_shares zodat de bekijk-link werkt
               try {
                 const bed2 = settings?.bedrijf || {};
-                const sj2 = settings?.sjabloon || {};
-                const dc2 = sj2.accentKleur || bed2.kleur || "#1a2e4a";
+                const dc2 = settings?.sjabloon?.accentKleur || bed2.kleur || "#1a2e4a";
+                // Strip logo base64 om database klein te houden
+                const bed2Stripped = {...bed2, logo: bed2.logo?.startsWith('data:') ? '' : (bed2.logo||'')};
                 await sb.from("offerte_shares").upsert({
                   id: emailModal.doc.id,
                   nummer: emailModal.doc.nummer,
                   offerte_data: {
                     ...emailModal.doc,
-                    _bed: {naam:bed2.naam,adres:bed2.adres,gemeente:bed2.gemeente,tel:bed2.tel,email:bed2.email,btwnr:bed2.btwnr,iban:bed2.iban,bic:bed2.bic,website:bed2.website,logo:bed2.logo},
+                    _bed: bed2Stripped,
                     _dc: dc2,
                     _sj: {accentKleur:dc2},
                     _voorwaarden: settings?.voorwaarden?.tekst || ""
                   }
                 });
+                console.log("✅ Factuur share opgeslagen voor publieke link");
               } catch(e2) { console.warn("Factuur share opslaan mislukt:", e2.message); }
             }
             notify(`📧 ${emailModal.type==="offerte"?"Offerte":"Factuur"} ${emailModal.doc.nummer} verzonden!`);
@@ -7174,7 +7176,7 @@ function OfferteDocument({doc, settings, ficheCache={}, producten=[]}) {
 
       </>}
       {/* PAGE 2: PRODUCTINFO + TECHNISCHE FICHES */}
-      {sj.toonProductpagina!==false&&uniqueProds.length>0&&<>
+      {type==="offerte"&&sj.toonProductpagina!==false&&uniqueProds.length>0&&<>
         <div className="doc-page-lbl">Pagina 2 — Productinformatie & Technische fiches</div>
         <div className="doc-page">
           <div style={{height:6,background:dc,borderRadius:"4px 4px 0 0",flexShrink:0}}/>
@@ -7517,8 +7519,8 @@ function FactuurDocument({doc, settings}) {
         <div className="qt-footer" style={{background:dc}}><div className="qt-footer-txt"><strong>{bed.naam}</strong> · {bed.adres}, {bed.gemeente}</div><div className="qt-footer-txt">BTW: <strong>{fmtBtwnr(bed.btwnr)}</strong></div><div className="qt-footer-txt">IBAN: <strong>{bed.iban}</strong></div></div>
       </div>
 
-      {/* PAGINA VOORWAARDEN — pagina 2 of 3 afhankelijk van inhoud */}
-      {(()=>{
+      {/* PAGINA PRODUCTINFO — enkel bij offertes, NOOIT bij facturen */}
+      {type==="offerte"&&(()=>{
         const fctProds = [...new Map((doc.lijnen||[]).filter(l=>l.naam&&(l.imageUrl||l.omschr||(l.specs||[]).length||(l.technischeFiches||[]).length)).map(l=>[l.productId||l.id,l])).values()];
         return fctProds.length>0?(<>
           <div className="doc-page-lbl">Pagina {overvloeit?"3":"2"} — Productinformatie & Technische Fiches</div>
@@ -7648,34 +7650,38 @@ function DocModal({doc,type,settings,onClose,onFactuur,onStatusOff,onStatusFact,
   },[doc.id, type]);
 
   const doPrint = () => {
-    // Zoek doc-wrap in de modal
     const docWrap = document.querySelector(".mb-body .doc-wrap");
-    if(!docWrap){ alert("Kan document niet vinden. Sluit en open het document opnieuw."); return; }
+    if(!docWrap){ alert("Kan document niet vinden."); return; }
 
-    // Gebruik #print-root — bestaande CSS verbergt al alles behalve dit element bij afdrukken
-    let pr = document.getElementById("print-root");
-    if(!pr){
-      pr = document.createElement("div");
-      pr.id = "print-root";
-      document.body.appendChild(pr);
-    }
+    // Methode: voeg tijdelijke print-stijl toe die ALLES verbergt behalve doc-wrap
+    // Dit behoudt de echte DOM (met base64 afbeeldingen correct geladen)
+    const styleEl = document.createElement("style");
+    styleEl.id = "billr-print-override";
+    styleEl.innerHTML = `
+      @media print {
+        body > * { display: none !important; }
+        .mo { display: block !important; position: static !important; background: white !important; }
+        .mdl { display: block !important; box-shadow: none !important; max-width: 100% !important; border-radius: 0 !important; }
+        .mh, .mf { display: none !important; }
+        .mb-body { overflow: visible !important; max-height: none !important; padding: 0 !important; }
+        .doc-wrap { display: block !important; }
+        .doc-page-lbl { display: none !important; }
+        * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+      }
+    `;
+    document.head.appendChild(styleEl);
 
-    // Kopieer document HTML
-    pr.innerHTML = docWrap.outerHTML;
-
-    // Titel aanpassen voor PDF-bestandsnaam
     const prev = document.title;
     document.title = doc.nummer || "document";
 
-    // Print na DOM settle
     requestAnimationFrame(()=>{
       setTimeout(()=>{
         window.print();
         setTimeout(()=>{
-          pr.innerHTML = "";
+          document.head.removeChild(styleEl);
           document.title = prev;
         }, 1500);
-      }, 200);
+      }, 300);
     });
 
     if(type==="offerte") onStatusOff("afgedrukt");
@@ -8194,15 +8200,62 @@ function EmailModal({doc,type,settings,onClose,onSend,onAcceptToken}) {
     ? !!ejCfg.htmlTemplateOfferte
     : !!ejCfg.htmlTemplateFactuur;
 
-  const defaultHtml = type==="offerte"
-    ? buildOfferteHtml(doc, bed, tot, acceptUrl, rejectUrl, null, {dc})
-    : buildFactuurHtml(doc, bed, tot, null, {dc, viewUrl: `${window.location.origin}/offerte.html?id=${doc.id}&nr=${encodeURIComponent(doc.nummer||'')}`});
-
   const [to, setTo] = useState(doc.klant?.email||"");
+  const [ccZelf, setCcZelf] = useState(true);
   const [subject, setSubject] = useState(`${type==="offerte"?"Offerte":"Factuur"} ${doc.nummer} — ${bed.naam}`);
-  const [htmlBody, setHtmlBody] = useState(isHtml ? buildOfferteHtml(doc,bed,tot,acceptUrl,rejectUrl,rawTmpl,{dc}) : defaultHtml);
-  const [txtBody, setTxtBody] = useState(!isHtml ? rawTmpl.replace(/{naam}/g,doc.klant?.naam||"").replace(/{nummer}/g,doc.nummer||"").replace(/{datum}/g,fmtDate(doc.datum||doc.aangemaakt)).replace(/{vervaldatum}/g,fmtDate(doc.vervaldatum)).replace(/{bedrijf}/g,bed.naam||"").replace(/{totaal}/g,fmtEuro(tot.totaal)).replace(/{iban}/g,bed.iban||"").replace(/{tel}/g,bed.tel||"") : "");
-  const [bodyMode, setBodyMode] = useState("html"); // Altijd HTML als standaard
+  const [bodyMode] = useState("html");
+
+  // Haal de ECHTE gerenderde preview HTML op uit de DocModal
+  // Dit is IDENTIEK aan wat de klant in de preview ziet
+  const getCapturedHtml = useCallback(() => {
+    const docWrap = document.querySelector(".mb-body .doc-wrap");
+    if(!docWrap) return null;
+    // Verwijder interactieve elementen
+    const clone = docWrap.cloneNode(true);
+    clone.querySelectorAll("button,input,select,textarea,script,.doc-page-lbl,[data-noprint]").forEach(el=>el.remove());
+    // Haal alle inline stijlen op van de pagina
+    const styles = Array.from(document.styleSheets).map(s=>{
+      try{return Array.from(s.cssRules).map(r=>r.cssText).join("\n");}catch(_){return "";}
+    }).join("\n");
+    // Bouw volledige HTML document
+    return `<!DOCTYPE html><html lang="nl"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Inter',Arial,sans-serif;background:#f1f5f9;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.doc-wrap{max-width:210mm;margin:0 auto}
+${styles.substring(0,80000)}
+</style>
+</head><body>${clone.outerHTML}</body></html>`;
+  }, []);
+
+  const [htmlBody, setHtmlBody] = useState(() => {
+    // Probeer preview HTML te capturen, anders fallback
+    const captured = getCapturedHtml();
+    if(captured) return captured;
+    return buildFactuurHtml(doc, bed, tot, null, {dc,
+      viewUrl: `${window.location.origin}/offerte.html?id=${doc.id}&nr=${encodeURIComponent(doc.nummer||'')}`
+    });
+  });
+
+  // Herlaad preview HTML als doc verandert
+  useEffect(()=>{
+    const t = setTimeout(()=>{
+      const captured = getCapturedHtml();
+      if(captured) setHtmlBody(captured);
+    }, 200);
+    return ()=>clearTimeout(t);
+  }, [doc.id]);
+
+  const txtBody = rawTmpl
+    .replace(/{naam}/g,doc.klant?.naam||"")
+    .replace(/{nummer}/g,doc.nummer||"")
+    .replace(/{datum}/g,fmtDate(doc.datum||doc.aangemaakt))
+    .replace(/{vervaldatum}/g,fmtDate(doc.vervaldatum))
+    .replace(/{bedrijf}/g,bed.naam||"")
+    .replace(/{totaal}/g,fmtEuro(tot.totaal))
+    .replace(/{iban}/g,bed.iban||"")
+    .replace(/{link}/g,`${window.location.origin}/offerte.html?id=${doc.id}&nr=${encodeURIComponent(doc.nummer||"")}`);
 
   const doAutoSend = async () => {
     if(!to) return setError("Voer een e-mailadres in");
@@ -8218,40 +8271,30 @@ function EmailModal({doc,type,settings,onClose,onSend,onAcceptToken}) {
       window.emailjs.init(pubKey);
       
       // Strip base64 images uit HTML (anders overschrijdt het de 50KB EmailJS limiet)
-      let cleanHtml = bodyMode==="html" ? htmlBody : `<pre style="font-family:Arial">${txtBody}</pre>`;
-      cleanHtml = cleanHtml.replace(/src="data:image\/[^"]+"/g, 'src=""');
-      // Also strip very long inline styles with base64 backgrounds
-      cleanHtml = cleanHtml.replace(/url\(data:image\/[^)]+\)/g, 'url()');
+      // Gebruik de ECHTE preview HTML, strip enkel base64 afbeeldingen (te groot voor EmailJS)
+      let capturedHtml = getCapturedHtml() || htmlBody;
+      // Strip base64 data-urls maar bewaar alle styling
+      capturedHtml = capturedHtml
+        .replace(/src="data:image\/[^"]{0,500000}"/g, `src="${window.location.origin}/logo-placeholder.png"`)
+        .replace(/url\(data:image\/[^)]{0,500000}\)/g, 'url()');
       
-      // Check size - EmailJS limit is 50KB total for all variables
-      const totalSize = new Blob([JSON.stringify({
-        to_email: to, to_name: doc.klant?.naam||"", subject, 
-        html_body: cleanHtml, text_body: txtBody||"",
-        from_name: bed.naam||"", reply_to: ejCfg.eigen||bed.email||""
-      })]).size;
+      // EmailJS limiet: 50KB — check en trim indien nodig
+      let cleanHtml = capturedHtml;
+      const sizeKB = Math.round(new Blob([cleanHtml]).size / 1024);
+      console.log(`📧 Email HTML grootte: ${sizeKB}KB`);
       
-      if(totalSize > 48000) {
-        // Nog steeds te groot - gebruik simpele tekst versie
-        console.warn(`Email body te groot (${Math.round(totalSize/1024)}KB), fallback naar tekst`);
-        cleanHtml = `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px">
-          <div style="background:${dc};color:#fff;padding:20px;text-align:center;border-radius:8px 8px 0 0">
-            <h2 style="margin:0">${bed.naam||"BILLR"}</h2>
-          </div>
-          <div style="padding:20px;background:#fff;border:1px solid #e2e8f0">
-            <p>Beste <strong>${doc.klant?.naam||""}</strong>,</p>
-            <p>${type==="offerte"?"In bijlage vindt u onze offerte":"Hierbij uw factuur"} <strong>${doc.nummer||""}</strong> d.d. ${fmtDate(doc.datum||doc.aangemaakt)}.</p>
-            <table style="width:100%;border-collapse:collapse;margin:16px 0">
-              <tr><td style="padding:8px;border:1px solid #e2e8f0;font-weight:600">${type==="offerte"?"Offerte":"Factuur"} nr</td><td style="padding:8px;border:1px solid #e2e8f0">${doc.nummer||""}</td></tr>
-              <tr><td style="padding:8px;border:1px solid #e2e8f0;font-weight:600">${type==="offerte"?"Geldig tot":"Vervaldatum"}</td><td style="padding:8px;border:1px solid #e2e8f0">${fmtDate(doc.vervaldatum)}</td></tr>
-              <tr><td style="padding:8px;border:1px solid #e2e8f0;font-weight:600">Totaal incl. BTW</td><td style="padding:8px;border:1px solid #e2e8f0"><strong>${fmtEuro(tot.totaal)}</strong></td></tr>
-            </table>
-            ${type==="offerte"&&acceptUrl?`<p><a href="${acceptUrl}" style="background:${dc};color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;display:inline-block;font-weight:600">📋 Offerte bekijken</a></p>`:""}
-            <p>Met vriendelijke groeten,<br/><strong>${bed.naam||""}</strong><br/>${bed.tel||""} · ${bed.email||""}</p>
-          </div>
-        </div>`;
+      if(new Blob([cleanHtml]).size > 45000) {
+        // Te groot: gebruik vereenvoudigde maar correcte HTML
+        console.warn(`Email te groot (${sizeKB}KB), gebruik compacte versie`);
+        cleanHtml = buildFactuurHtml(doc, bed, tot, null, {dc,
+          viewUrl: `${window.location.origin}/offerte.html?id=${doc.id}&nr=${encodeURIComponent(doc.nummer||"")}`
+        });
+        if(type==="offerte") {
+          cleanHtml = buildOfferteHtml(doc, bed, tot, acceptUrl, rejectUrl, null, {dc});
+        }
       }
       
-      await window.emailjs.send(svcId, tmplId, {
+      const emailParams = {
         to_email: to,
         to_name: doc.klant?.naam||"",
         subject: subject,
@@ -8259,12 +8302,30 @@ function EmailModal({doc,type,settings,onClose,onSend,onAcceptToken}) {
         text_body: txtBody||"",
         from_name: bed.naam||"",
         reply_to: ejCfg.eigen||bed.email||"",
-      });
+        from_email: ejCfg.eigen||bed.email||"",
+        // Extra aliases die sommige templates gebruiken
+        name: doc.klant?.naam||"",
+        message: cleanHtml,
+        email: to,
+      };
+      console.log("📧 EmailJS versturen naar:", to, "| service:", svcId, "| template:", tmplId);
+      const resp = await window.emailjs.send(svcId, tmplId, emailParams);
+      console.log("✅ EmailJS response:", resp.status, resp.text);
       setSent(true);
+      // Stuur kopie naar eigen email
+      const ccEmail = ccZelf ? (ejCfg.eigen||ejCfg.cc||"") : (ejCfg.cc||"");
+      if(ccEmail && ccEmail !== to) {
+        try {
+          await window.emailjs.send(svcId, tmplId, {...emailParams, to_email: ccEmail, to_name: bed.naam||""});
+          console.log("📧 Kopie verstuurd naar:", ccEmail);
+        } catch(ce){ console.warn("Kopie mislukt:", ce); }
+      }
       if(type==="offerte" && onAcceptToken) onAcceptToken(doc.id, token.current);
       onSend(true);
     } catch(e) {
-      setError("Verzending mislukt: " + (e?.text||e?.message||JSON.stringify(e)));
+      console.error("❌ EmailJS fout:", e);
+      const msg = e?.text || e?.message || JSON.stringify(e);
+      setError("Verzending mislukt: " + msg + ". Controleer Instellingen → Email (Service ID, Template ID, Public Key).");
     }
     setSending(false);
   };
@@ -8340,6 +8401,10 @@ function EmailModal({doc,type,settings,onClose,onSend,onAcceptToken}) {
                       background: to ? "#fff" : "#fef2f2"}}
               placeholder="klant@email.be"/>
             {to&&<div style={{fontSize:10,color:"#059669",marginTop:2}}>📧 Email wordt verstuurd naar: <strong>{to}</strong></div>}
+            {ejCfg.eigen&&<label style={{display:'flex',alignItems:'center',gap:8,marginTop:8,fontSize:13,cursor:'pointer'}}>
+              <input type='checkbox' checked={ccZelf} onChange={e=>setCcZelf(e.target.checked)} style={{width:16,height:16,cursor:'pointer'}}/>
+              <span style={{color:'#374151'}}>Stuur kopie naar <strong>{ejCfg.eigen}</strong></span>
+            </label>}
           </div>
           <div className="fg"><label className="fl">Onderwerp</label><input className="fc" value={subject} onChange={e=>setSubject(e.target.value)}/></div>
         </div>
@@ -8374,7 +8439,7 @@ function EmailModal({doc,type,settings,onClose,onSend,onAcceptToken}) {
         {tab==="preview"&&(
           <div style={{border:"1px solid #e2e8f0",borderRadius:8,overflow:"hidden",maxHeight:420,overflowY:"auto"}}>
             {bodyMode==="html"
-              ? <iframe srcDoc={htmlBody} style={{width:"100%",height:380,border:"none"}} title="Email preview"/>
+              ? <iframe srcDoc={htmlBody} style={{width:"100%",height:480,border:"none",borderRadius:4}} title="Email preview" sandbox="allow-same-origin"/>
               : <pre style={{padding:16,fontSize:12.5,fontFamily:"Arial",margin:0,whiteSpace:"pre-wrap"}}>{txtBody}</pre>
             }
           </div>
