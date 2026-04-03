@@ -394,9 +394,9 @@ async function sendViaRecommand(factuur, settings, options={}) {
 
   // Peppol lijn logica: positieve lijnen + korting verwerkt in eerste lijn
   // (Recommand ondersteunt geen AllowanceCharge/negatieve lijnen met AE categorie)
-  const _positiefLijnen = (factuur.lijnen||[]).filter(l=>(l.prijs||0)>0 && (l.naam||"").trim());
+  const _positiefLijnen = (factuur.lijnen||[]).filter(l=>(l.prijs||0)*(l.aantal||1)>0 && (l.naam||"").trim());
   const _kortingUitLijnen = (factuur.lijnen||[])
-    .filter(l=>(l.prijs||0)<0)
+    .filter(l=>(l.prijs||0)*(l.aantal||1)<0)
     .reduce((s,l)=>s+Math.abs((l.prijs||0)*(l.aantal||1)),0);
   const _kortingUitDoc = factuur.korting>0 ? (()=>{
     const sub = _positiefLijnen.reduce((s,l)=>s+(l.prijs||0)*(l.aantal||1),0);
@@ -7651,41 +7651,41 @@ function DocModal({doc,type,settings,onClose,onFactuur,onStatusOff,onStatusFact,
 
   const doPrint = () => {
     const docWrap = document.querySelector(".mb-body .doc-wrap");
-    if(!docWrap){ alert("Kan document niet vinden. Sluit en open het document opnieuw."); return; }
-    // Kopieer DOM en strip interactieve elementen
+    if(!docWrap){ alert("Kan document niet vinden."); return; }
+    
+    // CSS variabelen van :root ophalen zodat kleuren correct zijn in blob
+    const rootStyle = getComputedStyle(document.documentElement);
+    const cssVars = ["--theme","--p","--p2","--sb-txt-rgb","--bdr","--bg","--txt"]
+      .map(v=>{ const val=rootStyle.getPropertyValue(v).trim(); return val?`${v}:${val}`:null; })
+      .filter(Boolean).join(";");
+    
+    // Alle CSS uit de pagina ophalen
+    const styles = Array.from(document.styleSheets).map(s=>{
+      try{return Array.from(s.cssRules).map(r=>r.cssText).join(" ");}catch(_){return "";}
+    }).join(" ");
+    
+    // DOM klonen zonder interactieve elementen
     const clone = docWrap.cloneNode(true);
     clone.querySelectorAll("button,input,select,textarea,script,.doc-page-lbl").forEach(el=>el.remove());
-    // Haal alle CSS op uit de pagina (incl. alle klassen en print-regels)
-    const styles = Array.from(document.styleSheets).map(s=>{
-      try{return Array.from(s.cssRules).map(r=>r.cssText).join("\n");}catch(_){return "";}
-    }).join("\n");
-    // Bouw standalone HTML met alle inline styles
-    const html = `<!DOCTYPE html>
-<html lang="nl">
-<head>
-<meta charset="utf-8"/>
+    
+    const html = `<!DOCTYPE html><html lang="nl"><head><meta charset="utf-8"/>
 <title>${doc.nummer||"document"}</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet"/>
 <style>
+:root{${cssVars}}
 *{box-sizing:border-box;margin:0;padding:0}
-html,body{font-family:'Inter',Arial,sans-serif;background:#f1f5f9;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-@media print{
-  html,body{background:#fff!important}
-  .doc-page{box-shadow:none!important;border-radius:0!important;margin:0!important;page-break-after:always}
-  .doc-page:last-child{page-break-after:auto}
-  .doc-page-lbl{display:none!important}
-}
-${styles.substring(0,80000)}
-</style>
-</head>
-<body>
-${clone.outerHTML}
-<script>window.onload=function(){setTimeout(function(){window.print();},300);}<\/script>
-</body>
-</html>`;
+html,body{font-family:"Inter",system-ui,Arial,sans-serif;background:#f1f5f9;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+${styles.substring(0,100000)}
+@media print{html,body{background:#fff!important}.doc-page{box-shadow:none!important;border-radius:0!important;margin:0!important;break-after:page}.doc-page:last-child{break-after:auto!important}.doc-page-lbl{display:none!important}}
+</style></head>
+<body>${clone.outerHTML}
+<script>document.fonts.ready.then(function(){setTimeout(function(){window.print();},600);});<\/script>
+</body></html>`;
+    
     const blob = new Blob([html],{type:"text/html"});
     const url = URL.createObjectURL(blob);
     window.open(url,"_blank");
-    setTimeout(()=>URL.revokeObjectURL(url), 60000);
+    setTimeout(()=>URL.revokeObjectURL(url), 120000);
     if(type==="offerte") onStatusOff("afgedrukt");
     else onStatusFact("afgedrukt");
   };
