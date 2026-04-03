@@ -7657,10 +7657,8 @@ function DocModal({doc,type,settings,onClose,onFactuur,onStatusOff,onStatusFact,
     clone.querySelectorAll("button,input,select,textarea,script,.doc-page-lbl").forEach(el=>el.remove());
     // Haal alle CSS op uit de pagina (incl. alle klassen en print-regels)
     const styles = Array.from(document.styleSheets).map(s=>{
-      try{return Array.from(s.cssRules).map(r=>r.cssText).join("
-");}catch(_){return "";}
-    }).join("
-");
+      try{return Array.from(s.cssRules).map(r=>r.cssText).join("\n");}catch(_){return "";}
+    }).join("\n");
     // Bouw standalone HTML met alle inline styles
     const html = `<!DOCTYPE html>
 <html lang="nl">
