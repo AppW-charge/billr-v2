@@ -7733,7 +7733,20 @@ function DocModal({doc,type,settings,onClose,onFactuur,onStatusOff,onStatusFact,
     ? <button className="btn btn-sm" style={{background:"#10b981",color:"#fff",fontWeight:700,cursor:"default"}} title={"Peppol ID: "+(doc.peppolId||"")} onClick={onPeppol}>✅ Via Peppol verzonden</button>
     : <button className="btn btn-sm" style={{background:"#7c3aed",color:"#fff",fontWeight:700}} onClick={onPeppol} title="Verstuur via Peppol">🇧🇪 Verzenden via PEPPOL</button>
 )}
-          <button id="doc-print-btn" className="btn bs btn-sm" title="Afdrukken — kies in printerinstellingen: Koptekst en voettekst UIT" onClick={doPrint}>🖨 Afdrukken</button>
+          <button id="doc-print-btn" className="btn bs btn-sm" title="Afdrukken / Opslaan als PDF" onClick={doPrint}>🖨 Afdrukken / PDF</button>
+          <button className="btn bs btn-sm" style={{background:"#059669",color:"#fff",fontWeight:700}} title="Download factuur als HTML (open → Ctrl+P → Opslaan als PDF)" onClick={()=>{
+            // Genereer standalone HTML voor download
+            const docWrap = document.querySelector(".mb-body .doc-wrap");
+            if(!docWrap) return;
+            const clone = docWrap.cloneNode(true);
+            clone.querySelectorAll("button,input,select,textarea,script,.doc-page-lbl").forEach(el=>el.remove());
+            const styles = Array.from(document.styleSheets).map(s=>{try{return Array.from(s.cssRules).map(r=>r.cssText).join("\n");}catch(_){return "";}}).join("\n");
+            const html = `<!DOCTYPE html><html lang="nl"><head><meta charset="utf-8"><title>${doc.nummer}</title><style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:Inter,Arial,sans-serif;background:#f1f5f9;-webkit-print-color-adjust:exact;print-color-adjust:exact}@media print{body{background:#fff}.doc-page{box-shadow:none!important;border-radius:0!important;margin:0!important}}${styles.substring(0,60000)}</style></head><body>${clone.outerHTML}<script>window.onload=()=>{window.print();}<\/script></body></html>`;
+            const blob = new Blob([html],{type:"text/html"});
+            const url = URL.createObjectURL(blob);
+            const w = window.open(url,"_blank");
+            setTimeout(()=>URL.revokeObjectURL(url),30000);
+          }}>⬇ PDF</button>
           <button className="btn bs btn-sm" title="Download als HTML (open in browser → Afdrukken → PDF)" onClick={()=>{
             const docWrap=document.querySelector(".mb-body .doc-wrap");
             if(!docWrap)return;
