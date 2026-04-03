@@ -3901,8 +3901,13 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
           const nr = ff.nummerOverride || nextNr("FACT",facturen,"nummer");
           const n={...ff,id:uid(),nummer:nr,datum:ff.datum||today(),vervaldatum:ff.vervaldatum||addDays(today(),ff.betalingstermijn||14),status:"concept",aangemaakt:new Date().toISOString()};
           setFacturen(p=>{ const f2=p.filter(f=>f.nummer!==n.nummer); return [n,...f2]; });
+          // Direct opslaan in Supabase (niet wachten op debounce)
+          if(userRef.current?.id) {
+            setTimeout(()=>sbSaveFactuur(n, userRef.current.id), 100);
+          }
           if(settings?.voorwaarden?.tegenNummer_fct) setSettings(s=>({...s,voorwaarden:{...s.voorwaarden,tegenNummer_fct:""}}));
           notify("Factuur aangemaakt ✓");
+          setPg("facturen");
         }
         setFactuurWizOpen(false);setEditFact(null);
       }} onClose={()=>{setFactuurWizOpen(false);setEditFact(null);}} notify={notify}/>}
@@ -6119,6 +6124,15 @@ function FactuurWizard({klanten,producten,settings,editData,onSave,onClose,notif
   const [datum,setDatum] = useState(editData?.datum||today());
   const [betalingstermijn,setBT] = useState(editData?.betalingstermijn||14);
   const [btwRegime,setBtwRegime] = useState(editData?.btwRegime||"btw21");
+
+  // Auto BTW op basis van klant type
+  const setKlantMetBtw = (k) => {
+    setKlant(k);
+    if(!editData) { // Enkel bij nieuwe factuur
+      if(k?.btwnr && k.btwnr.trim()) setBtwRegime("verlegd");
+      else if(k?.type==="particulier") setBtwRegime("btw21");
+    }
+  };
   const [notities,setNotities] = useState(editData?.notities||"");
   const [activeCat,setActiveCat] = useState(null);
   const [invoerModus,setInvoerModus] = useState("prod"); // "prod" | "vrij"
@@ -6144,7 +6158,7 @@ function FactuurWizard({klanten,producten,settings,editData,onSave,onClose,notif
         naam:p.naam,
         omschr:p.omschr||"",
         prijs:p.prijs,
-        btw:btwPct||p.btw||21,
+        btw:btwRegime==="verlegd"?0:btwRegime==="btw6"?6:btwRegime==="btw21"?21:(p.btw||21),
         eenheid:p.eenheid||"stuk",
         aantal:1,
         cat:p.cat,
@@ -6271,7 +6285,11 @@ function FactuurWizard({klanten,producten,settings,editData,onSave,onClose,notif
                   </div>
                   <div style={{flex:"0 0 70px",minWidth:64}}>
                     <div style={{fontSize:10.5,color:"#64748b",marginBottom:2,fontWeight:600}}>Prijs</div>
-                    <input type="number" className="fc" value={l.prijs} onChange={e=>updLijn(l.id,{prijs:+e.target.value})} style={{padding:"5px 7px",textAlign:"right"}}/>
+                    <input type="text" inputMode="decimal" className="fc" value={l.prijs===0&&document.activeElement?.dataset?.lid===l.id?"":l.prijs} data-lid={l.id}
+                      onFocus={e=>{if(l.prijs===0)e.target.value="";}}
+                      onChange={e=>{const v=e.target.value.replace(",",".");if(v===""||v==="-"||/^-?\d*\.?\d*$/.test(v))updLijn(l.id,{prijs:v===""?0:isNaN(parseFloat(v))?0:parseFloat(v)});}}
+                      onBlur={e=>updLijn(l.id,{prijs:parseFloat(e.target.value.replace(",","."))||0})}
+                      style={{padding:"5px 7px",textAlign:"right"}}/>
                   </div>
                   <div style={{flex:"0 0 50px",minWidth:44}}>
                     <div style={{fontSize:10.5,color:"#64748b",marginBottom:2,fontWeight:600}}>Qty</div>
@@ -6705,7 +6723,10 @@ function OfferteWizard({klanten,producten,offertes,editData,settings,onSave,onCl
                 onSelect={p=>setLijnen(prev=>prev.map((x,j)=>j===i?{...x,productId:p.id,naam:p.naam,omschr:p.omschr||"",prijs:p.prijs,btw:btwRegime==="verlegd"?0:btwRegime==="btw6"?6:21,eenheid:p.eenheid||"stuk",imageUrl:p.imageUrl||"",specs:p.specs||[],technischeFiches:p.technischeFiches||[],technischeFiche:p.technischeFiche||null,fichNaam:p.fichNaam||"",bebatKg:p.bebatKg||null,cat:p.cat||""}:x))}
                 placeholder="Typ productnaam…"/>
               <input type="number" className="fc" style={{fontSize:12.5,textAlign:"center"}} value={l.aantal} min={1} onChange={e=>setLijnen(p=>p.map((x,j)=>j===i?{...x,aantal:Number(e.target.value)}:x))}/>
-              <input type="number" className="fc" style={{fontSize:12.5,textAlign:"right"}} value={l.prijs} step="0.01" onChange={e=>setLijnen(p=>p.map((x,j)=>j===i?{...x,prijs:Number(e.target.value)}:x))}/>
+              <input type="text" inputMode="decimal" className="fc" style={{fontSize:12.5,textAlign:"right"}} value={l.prijs===0?"":l.prijs}
+                onFocus={e=>{if(parseFloat(e.target.value)===0)e.target.value="";}}
+                onChange={e=>{const v=e.target.value.replace(",",".");setLijnen(p=>p.map((x,j)=>j===i?{...x,prijs:v===""?0:isNaN(parseFloat(v))?x.prijs:parseFloat(v)}:x));}}
+                onBlur={e=>setLijnen(p=>p.map((x,j)=>j===i?{...x,prijs:parseFloat(e.target.value.replace(",","."))||0}:x))}/>
               <select className="fc" style={{fontSize:11.5,padding:"8px 4px"}} value={l.btw} onChange={e=>setLijnen(p=>p.map((x,j)=>j===i?{...x,btw:Number(e.target.value)}:x))}>
                 <option value={0}>0%</option><option value={6}>6%</option><option value={21}>21%</option>
               </select>
