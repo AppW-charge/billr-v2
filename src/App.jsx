@@ -7519,8 +7519,8 @@ function FactuurDocument({doc, settings}) {
         <div className="qt-footer" style={{background:dc}}><div className="qt-footer-txt"><strong>{bed.naam}</strong> · {bed.adres}, {bed.gemeente}</div><div className="qt-footer-txt">BTW: <strong>{fmtBtwnr(bed.btwnr)}</strong></div><div className="qt-footer-txt">IBAN: <strong>{bed.iban}</strong></div></div>
       </div>
 
-      {/* PAGINA PRODUCTINFO — enkel bij offertes, NOOIT bij facturen */}
-      {(()=>{
+      {/* PAGINA PRODUCTINFO — NIET bij facturen, enkel bij offertes */}
+      {false&&(()=>{
         const fctProds = [...new Map((doc.lijnen||[]).filter(l=>l.naam&&(l.imageUrl||l.omschr||(l.specs||[]).length||(l.technischeFiches||[]).length)).map(l=>[l.productId||l.id,l])).values()];
         return fctProds.length>0?(<>
           <div className="doc-page-lbl">Pagina {overvloeit?"3":"2"} — Productinformatie & Technische Fiches</div>
