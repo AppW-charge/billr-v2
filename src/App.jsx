@@ -927,22 +927,26 @@ Met formele groeten`},
 // ─── STATUS CONFIG WITH ICONS
 // ──────────────────────────────────────
 const OFF_STATUS = {
-  concept:      {l:"Concept",         c:"#64748b",bg:"#f1f5f9",   icon:"📝"},
-  verstuurd:    {l:"Verstuurd",        c:"#3b82f6",bg:"#eff6ff",   icon:"📤"},
-  afgedrukt:    {l:"Afgedrukt",        c:"#8b5cf6",bg:"#f5f3ff",   icon:"🖨️"},
-  goedgekeurd:  {l:"Goedgekeurd",      c:"#10b981",bg:"#f0fdf4",   icon:"✅"},
-  afgewezen:    {l:"Afgewezen",        c:"#ef4444",bg:"#fef2f2",   icon:"❌"},
-  gefactureerd: {l:"Gefactureerd",     c:"#f59e0b",bg:"#fffbeb",   icon:"🧾"},
+  concept:        {l:"Concept",              c:"#64748b",bg:"#f1f5f9",   icon:"📝"},
+  verstuurd:      {l:"Verstuurd",            c:"#3b82f6",bg:"#eff6ff",   icon:"📤"},
+  verstuurd_mail: {l:"Verstuurd via email",  c:"#3b82f6",bg:"#eff6ff",   icon:"📧"},
+  afgedrukt:      {l:"Afgedrukt",            c:"#8b5cf6",bg:"#f5f3ff",   icon:"🖨️"},
+  goedgekeurd:    {l:"Goedgekeurd",          c:"#10b981",bg:"#f0fdf4",   icon:"✅"},
+  afgewezen:      {l:"Afgewezen",            c:"#ef4444",bg:"#fef2f2",   icon:"❌"},
+  gefactureerd:   {l:"Gefactureerd",         c:"#f59e0b",bg:"#fffbeb",   icon:"🧾"},
+  ingepland:      {l:"Ingepland",            c:"#0ea5e9",bg:"#f0f9ff",   icon:"📅"},
 };
 const FACT_STATUS = {
-  concept:      {l:"Concept",          c:"#64748b",bg:"#f1f5f9",   icon:"📝"},
-  verstuurd:    {l:"Verstuurd",         c:"#3b82f6",bg:"#eff6ff",   icon:"📤"},
-  afgedrukt:    {l:"Afgedrukt",         c:"#8b5cf6",bg:"#f5f3ff",   icon:"🖨️"},
-  boekhouding:  {l:"→ Boekhouder",     c:"#f97316",bg:"#fff7ed",   icon:"📊"},
-  onbetaald:    {l:"Niet betaald",      c:"#ef4444",bg:"#fef2f2",   icon:"⏳"},
-  gedeeltelijk: {l:"Gedeeltelijk",      c:"#f59e0b",bg:"#fffbeb",   icon:"💰"},
-  betaald:      {l:"Betaald",           c:"#10b981",bg:"#f0fdf4",   icon:"✅"},
-  vervallen:    {l:"Vervallen",         c:"#dc2626",bg:"#fef2f2",   icon:"🔴"},
+  concept:        {l:"Concept",              c:"#64748b",bg:"#f1f5f9",   icon:"📝"},
+  verstuurd:      {l:"Verstuurd",            c:"#3b82f6",bg:"#eff6ff",   icon:"📤"},
+  verstuurd_mail: {l:"Verstuurd via email",  c:"#3b82f6",bg:"#eff6ff",   icon:"📧"},
+  verstuurd_peppol:{l:"Verstuurd via Peppol",c:"#7c3aed",bg:"#f5f3ff",  icon:"🇧🇪"},
+  afgedrukt:      {l:"Afgedrukt",            c:"#8b5cf6",bg:"#f5f3ff",   icon:"🖨️"},
+  boekhouding:    {l:"→ Boekhouder",         c:"#f97316",bg:"#fff7ed",   icon:"📊"},
+  onbetaald:      {l:"Niet betaald",         c:"#ef4444",bg:"#fef2f2",   icon:"⏳"},
+  gedeeltelijk:   {l:"Gedeeltelijk",         c:"#f59e0b",bg:"#fffbeb",   icon:"💰"},
+  betaald:        {l:"Betaald",              c:"#10b981",bg:"#f0fdf4",   icon:"✅"},
+  vervallen:      {l:"Vervallen",            c:"#dc2626",bg:"#fef2f2",   icon:"🔴"},
 };
 
 const BTW_REGIMES = {
@@ -2927,10 +2931,10 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
     try {
       const result = await sendViaRecommand(factuur, settings, pdfBase64 ? {pdfBase64} : {});
       const peppolUpd = { 
-        status: "verstuurd", 
+        status: "verstuurd_peppol", 
         peppolVerstuurd: true, 
         peppolId: result.documentId,
-        logActie: `📨 Verzonden via Peppol/Recommand (ID: ${result.documentId})`
+        logActie: `🇧🇪 Verstuurd via Peppol (ID: ${result.documentId})`
       };
       updFact(factuur.id, peppolUpd);
       // Update ook de viewDoc zodat UI meteen toont dat het verstuurd is
@@ -3451,10 +3455,13 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
 
   const updatePlanning = (offerteId, planData) => {
     const dtStr = fmtPlanDatum(planData.planDatum, planData.planTijd);
+    // Zet offerte status op ingepland als datum ingesteld
+    const offStatus = planData.planStatus === "ingepland" && planData.planDatum ? "ingepland" : undefined;
     updOff(offerteId, {
       ...planData,
+      ...(offStatus ? {status: offStatus} : {}),
       logActie: planData.planStatus === "ingepland" 
-        ? `📅 Voorstel verstuurd: ${dtStr}`
+        ? `📅 Ingepland: ${dtStr}`
         : planData.planStatus === "uitgevoerd"
         ? "✅ Installatie uitgevoerd"
         : planData.planStatus === "geannuleerd"
@@ -3931,10 +3938,10 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
         onSend={async (success)=>{
           if(success) {
             if(emailModal.type==="offerte") {
-              updOff(emailModal.doc.id, {status:"verstuurd", logActie:`📧 Verzonden naar ${emailModal.doc.klant?.email||"klant"}`});
+              updOff(emailModal.doc.id, {status:"verstuurd_mail", logActie:`📧 Verzonden via email naar ${emailModal.doc.klant?.email||"klant"}`});
               await shareOfferte(emailModal.doc); // Sla snapshot op voor publieke offerte.html (await zodat fiches mee zijn)
             } else {
-              updFact(emailModal.doc.id, {status:"verstuurd", logActie:`📧 Verzonden naar ${emailModal.doc.klant?.email||"klant"}`});
+              updFact(emailModal.doc.id, {status:"verstuurd_mail", logActie:`📧 Verzonden via email naar ${emailModal.doc.klant?.email||"klant"}`});
               // Sla factuur snapshot op in offerte_shares zodat de bekijk-link werkt
               try {
                 const bed2 = settings?.bedrijf || {};
@@ -3966,7 +3973,13 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
       {aanmaningModal&&<AanmaningModal factuur={aanmaningModal} settings={settings} onSend={(am)=>{setAanmaningen(p=>[{...am,id:uid(),aangemaakt:new Date().toISOString(),status:"verzonden",verzonden:today()},...p]);notify("Aanmaning verzonden ✓");setAanmaningModal(null);}} onClose={()=>setAanmaningModal(null)}/>}
       {dossierModal!==null&&<DossierModal dossier={dossierModal} klanten={klanten} offertes={offertes} facturen={facturen} onSave={d=>{if(d.id){setDossiers(p=>p.map(x=>x.id===d.id?d:x));}else{setDossiers(p=>[{...d,id:uid(),aangemaakt:new Date().toISOString()},...p]);}notify("Dossier opgeslagen ✓");setDossierModal(null);}} onClose={()=>setDossierModal(null)} notify={notify}/>}
       {tijdModal!==null&&<TijdModal tijdslot={tijdModal} klanten={klanten} offertes={offertes} onSave={t=>{if(t.id){setTijdslots(p=>p.map(x=>x.id===t.id?t:x));}else{setTijdslots(p=>[{...t,id:uid(),aangemaakt:new Date().toISOString()},...p]);}notify("Tijd opgeslagen ✓");setTijdModal(null);}} onClose={()=>setTijdModal(null)}/>}
-      {planningModal&&<PlanningModal offerte={planningModal} settings={settings} klanten={klanten} planningProposals={planningProposals} onSave={(id,planData)=>{updatePlanning(id,planData);setPlanningModal(null);notify("Planning opgeslagen ✓");}} onEmail={(off,planData,type)=>sendPlanningEmail(off,planData,type)} onConfirm={sendPlanningConfirmation} onPlanDelete={deletePlanning} onClose={()=>setPlanningModal(null)}/>}
+      {planningModal&&<PlanningModal offerte={planningModal} settings={settings} klanten={klanten} planningProposals={planningProposals} onSave={(id,planData)=>{
+              // Zet planStatus altijd op ingepland als datum ingesteld
+              const enriched = planData.planDatum ? {...planData, planStatus:"ingepland"} : planData;
+              updatePlanning(id,enriched);
+              setPlanningModal(null);
+              notify("Planning opgeslagen ✓");
+            }} onEmail={(off,planData,type)=>sendPlanningEmail(off,planData,type)} onConfirm={sendPlanningConfirmation} onPlanDelete={deletePlanning} onClose={()=>setPlanningModal(null)}/>}
       {logboekModal&&<OfferteLogboekModal offerte={logboekModal} views={offerteViews[logboekModal.id]||[]} responses={offerteResponses[logboekModal.id]||[]} onClose={()=>setLogboekModal(null)} onRefresh={fetchOfferteTracking}/>}
       {notif&&<div className={`notif ${notif.type}`}>{notif.type==="ok"?"✓":notif.type==="er"?"✕":"ℹ"} {notif.msg}</div>}
     </>
@@ -7594,11 +7607,17 @@ function buildPrintHtml(docWrapHtml, docNummer) {
   const styles = Array.from(document.styleSheets)
     .flatMap(ss=>{try{return Array.from(ss.cssRules||[]).map(r=>r.cssText);}catch{return [];}})
     .join("\n");
+  // CSS variabelen ophalen van :root - KRITIEK voor kleuren
+  const rs = getComputedStyle(document.documentElement);
+  const vars = ["--theme","--p","--p2","--sb-txt-rgb","--bdr","--bg","--txt","--dc","--sb-w"]
+    .map(v=>{const val=rs.getPropertyValue(v).trim();return val?`${v}:${val}`:null;})
+    .filter(Boolean).join(";");
   return `<!DOCTYPE html><html lang="nl"><head>
 <meta charset="UTF-8"><title>${docNummer||"document"}</title>
 <style>
+:root{${vars}}
 *{box-sizing:border-box;margin:0;padding:0}
-body{margin:0;padding:0;background:#fff;font-family:Inter,Arial,sans-serif;font-size:13px;color:#1e293b}
+body{margin:0;padding:0;background:#f1f5f9;font-family:Inter,Arial,sans-serif;font-size:13px;color:#1e293b}
 ${styles}
 .printbar{padding:8px 12px;background:#f0f4f8;display:flex;gap:10px;align-items:center;font-family:Arial;font-size:12px;border-bottom:1px solid #e2e8f0}
 .doc-wrap{padding:0!important;background:#fff!important}
@@ -7662,9 +7681,14 @@ function DocModal({doc,type,settings,onClose,onFactuur,onStatusOff,onStatusFact,
 
     // Zet CSS variabelen op print-root zodat kleuren correct zijn
     const rootStyle = getComputedStyle(document.documentElement);
-    ["--theme","--p","--p2","--sb-txt-rgb","--bdr"].forEach(v => {
+    ["--theme","--p","--p2","--sb-txt-rgb","--bdr","--bg","--txt"].forEach(v => {
       const val = rootStyle.getPropertyValue(v).trim();
       if(val) pr.style.setProperty(v, val);
+    });
+    // Verwijder lege doc-pages (geen zichtbare content)
+    pr.querySelectorAll(".doc-page").forEach(page => {
+      const txt = page.innerText || page.textContent || "";
+      if(txt.trim().length < 10) page.remove();
     });
 
     const prev = document.title;
