@@ -1638,9 +1638,10 @@ tr.row-active td{border-top:2px solid #2563eb}
 .qt-from-info{font-size:10.5px;color:#64748b;line-height:1.9}
 .qt-dtype{font-weight:900;font-size:28px;letter-spacing:-.8px;text-align:right}
 .qt-dnum{font-family:'JetBrains Mono',monospace;font-size:11.5px;background:#f0f4f8;padding:2px 8px;border-radius:4px;display:inline-block;margin-top:4px}
-.qt-meta-bar{display:flex;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;overflow:hidden;margin-bottom:18px}
-.qt-meta-item{flex:1;padding:9px 14px;border-right:1px solid #e2e8f0}
-.qt-meta-item:last-child{border-right:none}
+.qt-meta-bar{display:grid;grid-template-columns:1fr 1fr;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;overflow:hidden;margin-bottom:18px}
+.qt-meta-item{padding:9px 14px;border-right:1px solid #e2e8f0;border-bottom:1px solid #e2e8f0}
+.qt-meta-item:nth-child(2n){border-right:none}
+.qt-meta-item:nth-last-child(-n+2){border-bottom:none}
 .qt-meta-lbl{font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#94a3b8;margin-bottom:1px}
 .qt-meta-val{font-size:12.5px;font-weight:700}
 .qt-parties{display:grid;grid-template-columns:1fr 1fr;gap:22px;margin-bottom:20px}
