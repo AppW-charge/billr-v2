@@ -1716,17 +1716,23 @@ tr.row-active td{border-top:2px solid #2563eb}
   .print-only{display:block!important}
   .no-print{display:none!important}
   
-  /* ═══ Elke doc-page = exacte A4 pagina (210×297mm) ═══ */
+  /* ═══ Elke doc-page in print: auto hoogte, content vloeit vrij ═══ */
   .doc-page{
     box-shadow:none!important;border-radius:0!important;
     margin:0!important;max-width:100%!important;width:210mm!important;
-    height:297mm!important;max-height:297mm!important;
-    overflow:hidden!important;
+    height:auto!important;min-height:100mm!important;max-height:none!important;
+    overflow:visible!important;
     display:flex!important;flex-direction:column!important;
     break-after:page!important;page-break-after:always!important;
     box-sizing:border-box!important;position:relative!important;
   }
   .doc-page:last-child{break-after:auto!important;page-break-after:auto!important}
+  /* Bewaar flex/grid layout voor partijen en meta */
+  .qt-parties{display:flex!important;flex-direction:row!important;gap:24px!important}
+  .qt-meta-bar{display:flex!important;flex-wrap:wrap!important}
+  /* Laat footer onderaan staan */
+  .qt-footer{margin-top:auto!important}
+  .fct-pg,.fct-pg2,.qt-pg,.prod-page{flex:1!important;overflow:visible!important}
   .doc-page-lbl{display:none!important}
   
   /* Coverpagina */
@@ -7589,6 +7595,7 @@ function FactuurDocument({doc, settings}) {
           </div>
         </>):null;
       })()}
+      {settings?.voorwaarden?.tekst&&<>
       <div className="doc-page-lbl">{overvloeit?"Pagina 3":"Pagina 2"} — Verkoopsvoorwaarden</div>
       <div className="doc-page">
         <div style={{height:5,background:dc,flexShrink:0}}/>
@@ -7598,7 +7605,7 @@ function FactuurDocument({doc, settings}) {
         </div>
         <div className="qt-footer" style={{background:dc}}><div className="qt-footer-txt"><strong>{bed.naam}</strong> · {fmtBtwnr(bed.btwnr)}</div></div>
       </div>
-    </div>
+    </>}
   );
 }
 
