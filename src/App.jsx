@@ -1727,12 +1727,16 @@ tr.row-active td{border-top:2px solid #2563eb}
     box-sizing:border-box!important;position:relative!important;
   }
   .doc-page:last-child{break-after:auto!important;page-break-after:auto!important}
-  /* Bewaar flex/grid layout voor partijen en meta */
-  .qt-parties{display:flex!important;flex-direction:row!important;gap:24px!important}
+  /* Herstel 2-kolom layout - override mobile CSS */
+  .qt-parties{display:grid!important;grid-template-columns:1fr 1fr!important;gap:22px!important}
+  .doc-page .qt-parties{display:grid!important;grid-template-columns:1fr 1fr!important;gap:22px!important}
+  #print-root .qt-parties{display:grid!important;grid-template-columns:1fr 1fr!important;gap:22px!important}
+  .qt-header{display:flex!important;flex-direction:row!important;justify-content:space-between!important}
   .qt-meta-bar{display:flex!important;flex-wrap:wrap!important}
-  /* Laat footer onderaan staan */
   .qt-footer{margin-top:auto!important}
   .fct-pg,.fct-pg2,.qt-pg,.prod-page{flex:1!important;overflow:visible!important}
+  /* print-root breedte forceren zodat mobile CSS niet triggert */
+  #print-root{width:210mm!important;min-width:210mm!important}
   .doc-page-lbl{display:none!important}
   
   /* Coverpagina */
@@ -7644,12 +7648,14 @@ ${styles}
   .printbar{display:none!important}
 }
 </style></head><body>
+<div id="print-root" style="width:210mm;min-width:210mm">
 <div class="printbar">
   <strong style="color:#1e293b">${docNummer}</strong>
   <button onclick="window.print()" style="background:#2563eb;color:#fff;border:none;padding:5px 12px;border-radius:5px;cursor:pointer;font-size:12px;font-weight:600">🖨 Afdrukken / PDF</button>
   <span style="color:#64748b;font-size:11px">Kies bij printer "Microsoft Print to PDF" of "Opslaan als PDF"</span>
 </div>
 ${docWrapHtml}
+</div>
 </body></html>`;
 }
 
@@ -7683,6 +7689,10 @@ function DocModal({doc,type,settings,onClose,onFactuur,onStatusOff,onStatusFact,
     let pr = document.getElementById("print-root");
     if(!pr){ pr = document.createElement("div"); pr.id = "print-root"; document.body.appendChild(pr); }
 
+    // Breedte forceren zodat mobile CSS (@media max-width:768px) niet triggert
+    pr.style.width = "210mm";
+    pr.style.minWidth = "210mm";
+    pr.style.maxWidth = "210mm";
     // Kopieer de gerenderde DOM naar print-root
     pr.innerHTML = docWrap.outerHTML;
 
