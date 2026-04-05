@@ -7610,6 +7610,7 @@ function FactuurDocument({doc, settings}) {
         <div className="qt-footer" style={{background:dc}}><div className="qt-footer-txt"><strong>{bed.naam}</strong> · {fmtBtwnr(bed.btwnr)}</div></div>
       </div>
     </>}
+  </div>
   );
 }
 
