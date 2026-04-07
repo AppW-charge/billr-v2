@@ -1733,7 +1733,27 @@ tr.row-active td{border-top:2px solid #2563eb}
   .doc-page .qt-parties{display:grid!important;grid-template-columns:1fr 1fr!important;gap:22px!important}
   #print-root .qt-parties{display:grid!important;grid-template-columns:1fr 1fr!important;gap:22px!important}
   .qt-header{display:flex!important;flex-direction:row!important;justify-content:space-between!important}
-  .qt-meta-bar{display:flex!important;flex-wrap:wrap!important}
+  .qt-meta-bar{display:grid!important;grid-template-columns:1fr 1fr!important;background:#f8fafc!important;border:1px solid #e2e8f0!important;border-radius:6px!important;overflow:hidden!important;margin-bottom:18px!important}
+  .qt-meta-item{padding:9px 14px!important;border-right:1px solid #e2e8f0!important;border-bottom:1px solid #e2e8f0!important}
+  .qt-meta-item:nth-child(2n){border-right:none!important}
+  .qt-meta-item:nth-last-child(-n+2){border-bottom:none!important}
+  .qt-meta-lbl{font-size:9.5px!important;font-weight:700!important;text-transform:uppercase!important;letter-spacing:.8px!important;color:#94a3b8!important;margin-bottom:1px!important}
+  .qt-meta-val{font-size:12.5px!important;font-weight:700!important}
+  .qt-totals{display:flex!important;justify-content:flex-end!important;margin-top:18px!important}
+  .qt-tot-box{min-width:260px!important;border:1px solid #e2e8f0!important;border-radius:8px!important;overflow:hidden!important}
+  .qt-tot-row{display:flex!important;justify-content:space-between!important;padding:7px 14px!important;font-size:12.5px!important;border-bottom:1px solid #f1f5f9!important}
+  .qt-tot-row.last{border-bottom:none!important;font-weight:800!important;font-size:15px!important;padding:10px 14px!important}
+  .qt-tot-row.btwr{color:#64748b!important;font-size:11.5px!important}
+  .qt-betaal{margin-top:14px!important;padding:11px 13px!important;background:#f0fdf4!important;border:1px solid #86efac!important;border-radius:6px!important;font-size:12px!important;line-height:1.8!important}
+  .qt-notes{margin-top:10px!important;padding:11px 13px!important;background:#fffbeb!important;border:1px solid #fde68a!important;border-radius:6px!important;font-size:12px!important}
+  .qt-sign{margin-top:18px!important;display:grid!important;grid-template-columns:1fr!important;gap:16px!important}
+  .qt-sign-box{border:1.5px dashed #cbd5e1!important;border-radius:7px!important;padding:16px!important;min-height:70px!important}
+  .qt-tbl{width:100%!important;border-collapse:collapse!important;border:1px solid #e2e8f0!important}
+  .qt-tbl th{background:#f8fafc!important;padding:7px 10px!important;text-align:left!important;font-size:10px!important;font-weight:700!important;color:#64748b!important;text-transform:uppercase!important;letter-spacing:.5px!important;border-bottom:1px solid #e2e8f0!important}
+  .qt-tbl td{padding:8px 10px!important;border-bottom:1px solid #f1f5f9!important;font-size:11.5px!important}
+  .qt-item-main{font-weight:600!important;color:#1e293b!important}
+  .grp-sub{display:flex!important;justify-content:flex-end!important;gap:12px!important;padding:5px 12px!important;background:#f0f4f8!important;font-size:11.5px!important;font-weight:700!important}
+  .legal-txt{font-size:11px!important;color:#475569!important;line-height:1.9!important;white-space:pre-wrap!important}
   .qt-footer{margin-top:auto!important}
   .fct-pg,.fct-pg2,.qt-pg,.prod-page{flex:1!important;overflow:visible!important}
   /* print-root breedte forceren zodat mobile CSS niet triggert */
@@ -2846,13 +2866,9 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
         }
         const freshFcts = await sbLoadFacturen(user.id);
         if(freshFcts.length > 0) {
-          // Enkel overschrijven als er geen recente lokale edit is (guard: 2 minuten)
           const recentEdit = localTimestamps.current["b4_fct"] && (Date.now() - localTimestamps.current["b4_fct"] < 120000);
-          if(!recentEdit) {
-            setFacturen(freshFcts);
-          } else {
-            console.log("Tab sync: facturen NIET overschreven — recente lokale wijziging beschermd");
-          }
+          if(!recentEdit) setFacturen(freshFcts);
+          else console.log("Tab sync: facturen beschermd door recente lokale edit");
         }
         if(allData["b4_at"]&&sbTs("b4_at")>lcTs("b4_at")) setAcceptTokens(p("b4_at",{}));
         if(allData["b4_wo"]&&sbTs("b4_wo")>lcTs("b4_wo")) setWidgetOrder(p("b4_wo",null));
@@ -3037,7 +3053,6 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
       if(gewijzigd?.nummer) {
         const u=userRef.current;
         if(u) {
-          // Guard: blokkeert tab-sync 2 min zodat deze save niet overschreven wordt
           localTimestamps.current["b4_fct"] = Date.now() + 120000;
           try{localStorage.setItem("billr_ts",JSON.stringify(localTimestamps.current));}catch(_){}
           sbSaveFactuur(gewijzigd, u.id);
@@ -3930,12 +3945,9 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
         const ff = {...f, lijnen: updLijnen};
         if(ff.id) {
           setFacturen(p=>p.map(x=>x.id===ff.id?{...x,...ff}:x));
-          // Direct opslaan naar Supabase — anders gaat tab-sync het overschrijven
           localTimestamps.current["b4_fct"] = Date.now() + 120000;
           try{localStorage.setItem("billr_ts",JSON.stringify(localTimestamps.current));}catch(_){}
-          setTimeout(()=>{
-            if(userRef.current?.id) sbSaveFactuur({...ff}, userRef.current.id);
-          }, 150);
+          setTimeout(()=>{ if(userRef.current?.id) sbSaveFactuur({...ff}, userRef.current.id); }, 150);
           notify("Factuur bijgewerkt ✓");
         } else {
           const nr = ff.nummerOverride || nextNr("FACT",facturen,"nummer");
@@ -4319,6 +4331,7 @@ function Dashboard({offertes, facturen, onGoto, onNew, onFactuur, settings, offe
   const toggleTodo = (id) => saveTodos(todos.map(t=>t.id===id?{...t,gedaan:!t.gedaan}:t));
   const deleteTodo = (id) => saveTodos(todos.filter(t=>t.id!==id));
   const [todoFilter, setTodoFilter] = useState("open");
+  const [leadFilter, setLeadFilter] = useState("alle");
   const defaultOrder = ["todoLijst","websiteAanvragen","statistieken","recenteOffertes","openFacturen","goedgekeurdeOffertes","offerteLogboek","afspraken","snelleActies","agenda"];
   // Zorg dat todoLijst altijd in de order zit
   const rawOrder = widgetOrder || settings.dashboardWidgets?.widgetOrder || defaultOrder;
@@ -7649,6 +7662,7 @@ function buildPrintHtml(docWrapHtml, docNummer) {
     .filter(Boolean).join(";");
   return `<!DOCTYPE html><html lang="nl"><head>
 <meta charset="UTF-8"><title>${docNummer||"document"}</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
 <style>
 :root{${vars}}
 *{box-sizing:border-box;margin:0;padding:0}
@@ -7656,12 +7670,12 @@ body{margin:0;padding:0;background:#f1f5f9;font-family:Inter,Arial,sans-serif;fo
 ${styles}
 .printbar{padding:8px 12px;background:#f0f4f8;display:flex;gap:10px;align-items:center;font-family:Arial;font-size:12px;border-bottom:1px solid #e2e8f0}
 .doc-wrap{padding:0!important;background:#fff!important}
-.doc-page{box-shadow:none!important;border-radius:0!important;margin:0!important;width:210mm!important;height:297mm!important;max-height:297mm!important;display:flex!important;flex-direction:column!important;overflow:visible!important;break-after:page;page-break-after:always}
+.doc-page{box-shadow:none!important;border-radius:0!important;margin:0!important;width:210mm!important;height:297mm!important;max-height:297mm!important;display:flex!important;flex-direction:column!important;overflow:hidden!important;break-after:page;page-break-after:always}
 .doc-page:last-child{break-after:auto!important;page-break-after:auto!important}
 .doc-page-lbl{display:none!important}
 .cov{width:100%!important;height:297mm!important;max-height:297mm!important;overflow:hidden!important}
 .qt-footer{margin-top:auto!important;flex-shrink:0!important}
-.prod-page,.qt-pg,.fct-pg,.fct-pg2{padding:8mm 12mm!important;flex:1!important;overflow:visible!important}
+.prod-page,.qt-pg,.fct-pg,.fct-pg2{padding:8mm 12mm!important;flex:1!important;overflow:visible!important;box-sizing:border-box!important}
 .fiche-screen-embed{display:none!important}
 .fiche-print-images{display:block!important}
 .fiche-print-page{width:210mm!important;height:297mm!important;overflow:hidden!important;display:flex!important;flex-direction:column!important;break-after:page!important}
@@ -7796,11 +7810,9 @@ function DocModal({doc,type,settings,onClose,onFactuur,onStatusOff,onStatusFact,
             const clone = docWrap.cloneNode(true);
             clone.querySelectorAll("button,input,select,textarea,script,.doc-page-lbl").forEach(el=>el.remove());
             const styles = Array.from(document.styleSheets).map(s=>{try{return Array.from(s.cssRules).map(r=>r.cssText).join("\n");}catch(_){return "";}}).join("\n");
-            const rootStyle2 = getComputedStyle(document.documentElement);
-            const vars2 = ["--theme","--p","--p2","--sb-txt-rgb","--bdr","--bg","--txt","--dc"]
-              .map(v=>{const val=rootStyle2.getPropertyValue(v).trim();return val?`${v}:${val}`:null;})
-              .filter(Boolean).join(";");
-            const html = `<!DOCTYPE html><html lang="nl"><head><meta charset="utf-8"><title>${doc.nummer}</title><link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet"><style>:root{${vars2}}*{box-sizing:border-box;margin:0;padding:0}body{font-family:Inter,sans-serif;background:#f1f5f9;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important}${styles.substring(0,60000)}.doc-page{box-shadow:none!important;border-radius:0!important;margin:0!important;width:210mm!important;height:297mm!important;max-height:297mm!important;display:flex!important;flex-direction:column!important;overflow:visible!important;break-after:page;page-break-after:always}.doc-page:last-child{break-after:auto!important;page-break-after:auto!important}.doc-page-lbl{display:none!important}.cov{width:100%!important;height:297mm!important;max-height:297mm!important;overflow:hidden!important}.qt-footer{margin-top:auto!important;flex-shrink:0!important}.prod-page,.qt-pg,.fct-pg,.fct-pg2{padding:8mm 12mm!important;flex:1!important;overflow:visible!important;box-sizing:border-box!important}.qt-header{display:flex!important;flex-direction:row!important;justify-content:space-between!important;align-items:flex-start!important}.qt-parties{display:grid!important;grid-template-columns:1fr 1fr!important;gap:22px!important}.qt-meta-bar{display:grid!important;grid-template-columns:1fr 1fr!important}.qt-tbl{width:100%!important;border-collapse:collapse!important}.qt-totals{display:flex!important;justify-content:flex-end!important}.doc-wrap{padding:0!important;background:#fff!important}@page{size:A4 portrait;margin:0}@media print{*{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;box-shadow:none!important}}</style></head><body style="background:#fff">${clone.outerHTML}<script>window.onload=()=>{window.print();}<\/script></body></html>`;
+            const rootVars = getComputedStyle(document.documentElement);
+            const cssVars = ["--theme","--p","--p2","--sb-txt-rgb","--bdr","--bg","--txt"].map(v=>{const val=rootVars.getPropertyValue(v).trim();return val?`${v}:${val}`:null;}).filter(Boolean).join(";");
+            const html = `<!DOCTYPE html><html lang="nl"><head><meta charset="utf-8"><title>${doc.nummer}</title><link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet"><style>:root{${cssVars}}*{box-sizing:border-box;margin:0;padding:0}body{font-family:Inter,sans-serif;background:#fff;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}${styles.substring(0,60000)}.doc-page{box-shadow:none!important;border-radius:0!important;margin:0!important;width:210mm!important;overflow:visible!important;display:flex!important;flex-direction:column!important;break-after:page;page-break-after:always}.doc-page:last-child{break-after:auto!important;page-break-after:auto!important}.prod-page,.qt-pg,.fct-pg,.fct-pg2{padding:8mm 12mm!important;flex:1!important;overflow:visible!important;box-sizing:border-box!important}.qt-header{display:flex!important;flex-direction:row!important;justify-content:space-between!important;align-items:flex-start!important}.qt-parties{display:grid!important;grid-template-columns:1fr 1fr!important;gap:22px!important}.qt-meta-bar{display:grid!important;grid-template-columns:1fr 1fr!important}.qt-totals{display:flex!important;justify-content:flex-end!important}.qt-footer{margin-top:auto!important;flex-shrink:0!important}.doc-page-lbl{display:none!important}.cov{display:grid!important;grid-template-columns:42% 58%!important}@page{size:A4 portrait;margin:0}@media print{*{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}}</style></head><body>${clone.outerHTML}<script>window.onload=()=>{window.print();}<\/script></body></html>`;
             const blob = new Blob([html],{type:"text/html"});
             const url = URL.createObjectURL(blob);
             const w = window.open(url,"_blank");
@@ -10312,11 +10324,11 @@ function AanvragenPage({leads=[], onRefresh, onStatus, onToKlant, onToOfferte, n
   const fmtDt = ts => { try { return new Date(ts).toLocaleString("nl-BE",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"}); } catch(_){return ts||"";} };
 
   return (
-    <div className="page-wrap">
-      <div className="ph">
+    <div style={{padding:"0 0 20px"}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:20,flexWrap:"wrap",gap:12}}>
         <div>
-          <h1 className="pt">📥 Aanvragen</h1>
-          <p className="ps">Klantaanvragen via de website</p>
+          <h1 style={{fontWeight:900,fontSize:22,color:"#1e293b",letterSpacing:"-.5px",margin:0}}>📥 Aanvragen</h1>
+          <p style={{fontSize:13,color:"#64748b",margin:"3px 0 0"}}>Klantaanvragen via de website</p>
         </div>
         <div style={{display:"flex",gap:8,alignItems:"center"}}>
           {aantalNieuw>0&&<span style={{background:"#ef4444",color:"#fff",borderRadius:20,padding:"4px 12px",fontWeight:700,fontSize:13}}>{aantalNieuw} nieuw</span>}
