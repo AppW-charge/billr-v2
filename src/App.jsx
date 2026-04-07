@@ -1751,10 +1751,10 @@ tr.row-active td{border-top:2px solid #2563eb}
   .cov-r{height:100%!important;box-sizing:border-box!important}
   
   /* Content pagina's: interne padding (omdat @page margin=0) */
-  .prod-page{padding:8mm 12mm!important;box-sizing:border-box!important;flex:1!important;overflow:hidden!important}
-  .fct-pg{padding:8mm 12mm!important;box-sizing:border-box!important;flex:1!important;overflow:hidden!important}
-  .qt-pg{padding:8mm 12mm!important;box-sizing:border-box!important;flex:1!important;overflow:hidden!important}
-  .fct-pg2{padding:8mm 12mm!important;box-sizing:border-box!important;flex:1!important;overflow:hidden!important}
+  .prod-page{padding:8mm 12mm!important;box-sizing:border-box!important;flex:1!important;overflow:visible!important}
+  .fct-pg{padding:8mm 12mm!important;box-sizing:border-box!important;flex:1!important;overflow:visible!important}
+  .qt-pg{padding:8mm 12mm!important;box-sizing:border-box!important;flex:1!important;overflow:visible!important}
+  .fct-pg2{padding:8mm 12mm!important;box-sizing:border-box!important;flex:1!important;overflow:visible!important}
   
   /* Footer: altijd onderaan de pagina */
   .qt-footer{
@@ -2845,7 +2845,15 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
           setOffertes(freshOffs);
         }
         const freshFcts = await sbLoadFacturen(user.id);
-        if(freshFcts.length > 0) setFacturen(freshFcts);
+        if(freshFcts.length > 0) {
+          // Enkel overschrijven als er geen recente lokale edit is (guard: 2 minuten)
+          const recentEdit = localTimestamps.current["b4_fct"] && (Date.now() - localTimestamps.current["b4_fct"] < 120000);
+          if(!recentEdit) {
+            setFacturen(freshFcts);
+          } else {
+            console.log("Tab sync: facturen NIET overschreven — recente lokale wijziging beschermd");
+          }
+        }
         if(allData["b4_at"]&&sbTs("b4_at")>lcTs("b4_at")) setAcceptTokens(p("b4_at",{}));
         if(allData["b4_wo"]&&sbTs("b4_wo")>lcTs("b4_wo")) setWidgetOrder(p("b4_wo",null));
         console.log("Tab sync OK — enkel gelezen, nooit geschreven");
@@ -3026,7 +3034,15 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
     setFacturen(prev => {
       const next = prev.map(f=>f.id===id?{...f,...upd,log:[...(f.log||[]),logEntry(upd.status?"Status → "+(FACT_STATUS[upd.status]?.l||upd.status):upd.logActie||"Gewijzigd")]}:f);
       const gewijzigd = next.find(f=>f.id===id);
-      if(gewijzigd?.nummer) { const u=userRef.current; if(u) sbSaveFactuur(gewijzigd, u.id); }
+      if(gewijzigd?.nummer) {
+        const u=userRef.current;
+        if(u) {
+          // Guard: blokkeert tab-sync 2 min zodat deze save niet overschreven wordt
+          localTimestamps.current["b4_fct"] = Date.now() + 120000;
+          try{localStorage.setItem("billr_ts",JSON.stringify(localTimestamps.current));}catch(_){}
+          sbSaveFactuur(gewijzigd, u.id);
+        }
+      }
       return next;
     });
   };
@@ -3914,6 +3930,12 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
         const ff = {...f, lijnen: updLijnen};
         if(ff.id) {
           setFacturen(p=>p.map(x=>x.id===ff.id?{...x,...ff}:x));
+          // Direct opslaan naar Supabase — anders gaat tab-sync het overschrijven
+          localTimestamps.current["b4_fct"] = Date.now() + 120000;
+          try{localStorage.setItem("billr_ts",JSON.stringify(localTimestamps.current));}catch(_){}
+          setTimeout(()=>{
+            if(userRef.current?.id) sbSaveFactuur({...ff}, userRef.current.id);
+          }, 150);
           notify("Factuur bijgewerkt ✓");
         } else {
           const nr = ff.nummerOverride || nextNr("FACT",facturen,"nummer");
@@ -7634,12 +7656,12 @@ body{margin:0;padding:0;background:#f1f5f9;font-family:Inter,Arial,sans-serif;fo
 ${styles}
 .printbar{padding:8px 12px;background:#f0f4f8;display:flex;gap:10px;align-items:center;font-family:Arial;font-size:12px;border-bottom:1px solid #e2e8f0}
 .doc-wrap{padding:0!important;background:#fff!important}
-.doc-page{box-shadow:none!important;border-radius:0!important;margin:0!important;width:210mm!important;height:297mm!important;max-height:297mm!important;display:flex!important;flex-direction:column!important;overflow:hidden!important;break-after:page;page-break-after:always}
+.doc-page{box-shadow:none!important;border-radius:0!important;margin:0!important;width:210mm!important;height:297mm!important;max-height:297mm!important;display:flex!important;flex-direction:column!important;overflow:visible!important;break-after:page;page-break-after:always}
 .doc-page:last-child{break-after:auto!important;page-break-after:auto!important}
 .doc-page-lbl{display:none!important}
 .cov{width:100%!important;height:297mm!important;max-height:297mm!important;overflow:hidden!important}
 .qt-footer{margin-top:auto!important;flex-shrink:0!important}
-.prod-page,.qt-pg,.fct-pg,.fct-pg2{padding:8mm 12mm!important;flex:1!important;overflow:hidden!important}
+.prod-page,.qt-pg,.fct-pg,.fct-pg2{padding:8mm 12mm!important;flex:1!important;overflow:visible!important}
 .fiche-screen-embed{display:none!important}
 .fiche-print-images{display:block!important}
 .fiche-print-page{width:210mm!important;height:297mm!important;overflow:hidden!important;display:flex!important;flex-direction:column!important;break-after:page!important}
@@ -7774,7 +7796,11 @@ function DocModal({doc,type,settings,onClose,onFactuur,onStatusOff,onStatusFact,
             const clone = docWrap.cloneNode(true);
             clone.querySelectorAll("button,input,select,textarea,script,.doc-page-lbl").forEach(el=>el.remove());
             const styles = Array.from(document.styleSheets).map(s=>{try{return Array.from(s.cssRules).map(r=>r.cssText).join("\n");}catch(_){return "";}}).join("\n");
-            const html = `<!DOCTYPE html><html lang="nl"><head><meta charset="utf-8"><title>${doc.nummer}</title><style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:Inter,Arial,sans-serif;background:#f1f5f9;-webkit-print-color-adjust:exact;print-color-adjust:exact}@media print{body{background:#fff}.doc-page{box-shadow:none!important;border-radius:0!important;margin:0!important}}${styles.substring(0,60000)}</style></head><body>${clone.outerHTML}<script>window.onload=()=>{window.print();}<\/script></body></html>`;
+            const rootStyle2 = getComputedStyle(document.documentElement);
+            const vars2 = ["--theme","--p","--p2","--sb-txt-rgb","--bdr","--bg","--txt","--dc"]
+              .map(v=>{const val=rootStyle2.getPropertyValue(v).trim();return val?`${v}:${val}`:null;})
+              .filter(Boolean).join(";");
+            const html = `<!DOCTYPE html><html lang="nl"><head><meta charset="utf-8"><title>${doc.nummer}</title><link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet"><style>:root{${vars2}}*{box-sizing:border-box;margin:0;padding:0}body{font-family:Inter,sans-serif;background:#f1f5f9;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important}${styles.substring(0,60000)}.doc-page{box-shadow:none!important;border-radius:0!important;margin:0!important;width:210mm!important;height:297mm!important;max-height:297mm!important;display:flex!important;flex-direction:column!important;overflow:visible!important;break-after:page;page-break-after:always}.doc-page:last-child{break-after:auto!important;page-break-after:auto!important}.doc-page-lbl{display:none!important}.cov{width:100%!important;height:297mm!important;max-height:297mm!important;overflow:hidden!important}.qt-footer{margin-top:auto!important;flex-shrink:0!important}.prod-page,.qt-pg,.fct-pg,.fct-pg2{padding:8mm 12mm!important;flex:1!important;overflow:visible!important;box-sizing:border-box!important}.qt-header{display:flex!important;flex-direction:row!important;justify-content:space-between!important;align-items:flex-start!important}.qt-parties{display:grid!important;grid-template-columns:1fr 1fr!important;gap:22px!important}.qt-meta-bar{display:grid!important;grid-template-columns:1fr 1fr!important}.qt-tbl{width:100%!important;border-collapse:collapse!important}.qt-totals{display:flex!important;justify-content:flex-end!important}.doc-wrap{padding:0!important;background:#fff!important}@page{size:A4 portrait;margin:0}@media print{*{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;box-shadow:none!important}}</style></head><body style="background:#fff">${clone.outerHTML}<script>window.onload=()=>{window.print();}<\/script></body></html>`;
             const blob = new Blob([html],{type:"text/html"});
             const url = URL.createObjectURL(blob);
             const w = window.open(url,"_blank");
