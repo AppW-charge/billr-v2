@@ -1717,7 +1717,7 @@ tr.row-active td{border-top:2px solid #2563eb}
   .print-only{display:block!important}
   .no-print{display:none!important}
   
-  /* ═══ Elke doc-page = exact 1 A4 — 297mm hoog, geclipped ═══ */
+  /* ═══ Elke doc-page = exact 1 A4 pagina ═══ */
   .doc-page{
     box-shadow:none!important;border-radius:0!important;
     margin:0!important;width:210mm!important;max-width:210mm!important;
@@ -1729,7 +1729,6 @@ tr.row-active td{border-top:2px solid #2563eb}
     box-sizing:border-box!important;position:relative!important;
   }
   .doc-page:last-child{break-after:auto!important;page-break-after:auto!important}
-  /* Herstel 2-kolom layout */
   .qt-parties{display:grid!important;grid-template-columns:1fr 1fr!important;gap:22px!important}
   .doc-page .qt-parties{display:grid!important;grid-template-columns:1fr 1fr!important;gap:22px!important}
   #print-root .qt-parties{display:grid!important;grid-template-columns:1fr 1fr!important;gap:22px!important}
@@ -1738,25 +1737,15 @@ tr.row-active td{border-top:2px solid #2563eb}
   .qt-meta-item{padding:9px 14px!important;border-right:1px solid #e2e8f0!important;border-bottom:1px solid #e2e8f0!important}
   .qt-meta-item:nth-child(2n){border-right:none!important}
   .qt-meta-item:nth-last-child(-n+2){border-bottom:none!important}
-  .qt-meta-lbl{font-size:9.5px!important;font-weight:700!important;text-transform:uppercase!important;letter-spacing:.8px!important;color:#94a3b8!important;margin-bottom:1px!important}
+  .qt-meta-lbl{font-size:9.5px!important;font-weight:700!important;text-transform:uppercase!important;color:#94a3b8!important;margin-bottom:1px!important}
   .qt-meta-val{font-size:12.5px!important;font-weight:700!important}
   .qt-footer{margin-top:auto!important;flex-shrink:0!important}
   .fct-pg,.fct-pg2,.qt-pg,.prod-page{flex:1!important;overflow:hidden!important;min-height:0!important}
-  /* print-root breedte forceren */
   #print-root{width:210mm!important;min-width:210mm!important}
   .doc-page-lbl{display:none!important}
-  
-  /* Coverpagina */
-  .cov{
-    width:100%!important;height:297mm!important;
-    min-height:297mm!important;max-height:297mm!important;
-    display:grid!important;grid-template-columns:42% 58%!important;
-    overflow:hidden!important;
-  }
+  .cov{width:100%!important;height:297mm!important;min-height:297mm!important;max-height:297mm!important;display:grid!important;grid-template-columns:42% 58%!important;overflow:hidden!important}
   .cov-l{height:100%!important;min-height:100%!important}
   .cov-r{height:100%!important;box-sizing:border-box!important}
-  
-  /* Content pagina's */
   .prod-page{padding:8mm 12mm!important;box-sizing:border-box!important;flex:1!important;overflow:hidden!important;min-height:0!important}
   .fct-pg{padding:8mm 12mm!important;box-sizing:border-box!important;flex:1!important;overflow:hidden!important;min-height:0!important}
   .qt-pg{padding:8mm 12mm!important;box-sizing:border-box!important;flex:1!important;overflow:hidden!important;min-height:0!important}
@@ -2854,7 +2843,7 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
         if(freshFcts.length > 0) {
           const recentEdit = localTimestamps.current["b4_fct"] && (Date.now() - localTimestamps.current["b4_fct"] < 120000);
           if(!recentEdit) setFacturen(freshFcts);
-          else console.log("Tab sync: facturen beschermd — recente lokale edit binnen 2 min");
+          else console.log("Tab sync: facturen beschermd — recente lokale edit");
         }
         if(allData["b4_at"]&&sbTs("b4_at")>lcTs("b4_at")) setAcceptTokens(p("b4_at",{}));
         if(allData["b4_wo"]&&sbTs("b4_wo")>lcTs("b4_wo")) setWidgetOrder(p("b4_wo",null));
@@ -3930,17 +3919,18 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
         if(newProds.length>0){setProducten(p=>[...newProds,...p]);notify(`${newProds.length} nieuw${newProds.length>1?"e":""} product${newProds.length>1?"en":""} aangemaakt`,"in");}
         const ff = {...f, lijnen: updLijnen};
         if(ff.id) {
-          // Eerst state updaten
-          setFacturen(p=>p.map(x=>x.id===ff.id?{...x,...ff}:x));
-          // Dan direct naar Supabase — KRITIEK: zonder dit gaat tab-sync de edit tenietdoen
-          localTimestamps.current["b4_fct"] = Date.now() + 120000;
-          try{localStorage.setItem("billr_ts",JSON.stringify(localTimestamps.current));}catch(_){}
-          if(userRef.current?.id) {
-            sbSaveFactuur({...ff}, userRef.current.id).then(ok => {
-              if(ok) console.log("✅ Factuur opgeslagen naar Supabase:", ff.nummer);
-              else console.error("❌ Supabase save mislukt voor factuur:", ff.nummer);
-            });
-          }
+          setFacturen(prev => {
+            const merged = prev.map(x => x.id !== ff.id ? x : {...x, ...ff});
+            const opgeslagen = merged.find(x => x.id === ff.id);
+            if(opgeslagen && userRef.current?.id) {
+              localTimestamps.current["b4_fct"] = Date.now() + 120000;
+              try{localStorage.setItem("billr_ts",JSON.stringify(localTimestamps.current));}catch(_){}
+              sbSaveFactuur(opgeslagen, userRef.current.id)
+                .then(ok => console.log(ok ? "✅ Factuur opgeslagen:" : "❌ Save mislukt:", opgeslagen.nummer))
+                .catch(e => console.error("❌ Save error:", e));
+            }
+            return merged;
+          });
           notify("Factuur bijgewerkt ✓");
         } else {
           const nr = ff.nummerOverride || nextNr("FACT",facturen,"nummer");
@@ -7655,6 +7645,7 @@ function buildPrintHtml(docWrapHtml, docNummer) {
     .filter(Boolean).join(";");
   return `<!DOCTYPE html><html lang="nl"><head>
 <meta charset="UTF-8"><title>${docNummer||"document"}</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
 <style>
 :root{${vars}}
 *{box-sizing:border-box;margin:0;padding:0}
@@ -7732,18 +7723,13 @@ function DocModal({doc,type,settings,onClose,onFactuur,onStatusOff,onStatusFact,
       const val = rootStyle.getPropertyValue(v).trim();
       if(val) pr.style.setProperty(v, val);
     });
-    // Forceer 297mm per pagina + verwijder lege pagina's
     pr.querySelectorAll(".doc-page").forEach(page => {
       const content = (page.innerText || page.textContent || "").trim();
       if(content.length < 15) { page.remove(); return; }
       page.style.cssText += ";height:297mm!important;min-height:297mm!important;max-height:297mm!important;overflow:hidden!important;break-after:page!important;page-break-after:always!important;break-inside:avoid!important;display:flex!important;flex-direction:column!important;box-sizing:border-box!important;width:210mm!important;margin:0!important;";
     });
-    pr.querySelectorAll(".fct-pg,.qt-pg,.fct-pg2,.prod-page").forEach(el => {
-      el.style.cssText += ";flex:1!important;overflow:hidden!important;min-height:0!important;box-sizing:border-box!important;";
-    });
-    pr.querySelectorAll(".cov").forEach(el => {
-      el.style.cssText += ";height:297mm!important;max-height:297mm!important;overflow:hidden!important;";
-    });
+    pr.querySelectorAll(".fct-pg,.qt-pg,.fct-pg2,.prod-page").forEach(el=>{el.style.cssText+=";flex:1!important;overflow:hidden!important;min-height:0!important;box-sizing:border-box!important;";});
+    pr.querySelectorAll(".cov").forEach(el=>{el.style.cssText+=";height:297mm!important;max-height:297mm!important;overflow:hidden!important;";});
 
     const prev = document.title;
     document.title = doc.nummer || "document";
@@ -10444,7 +10430,7 @@ function AanvragenPage({leads=[], onRefresh, onStatus, onToKlant, onToOfferte, n
               </div>
 
               {/* Foto's */}
-              {selected.fotos && selected.fotos.length > 0 && (
+              {selected.fotos && Array.isArray(selected.fotos) && selected.fotos.length > 0 && (
                 <div style={{marginBottom:14}}>
                   <div style={{fontWeight:700,fontSize:13,color:"#1e293b",marginBottom:10}}>📸 Foto's ({selected.fotos.length})</div>
                   <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(120px,1fr))",gap:8}}>
