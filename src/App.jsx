@@ -1717,39 +1717,44 @@ tr.row-active td{border-top:2px solid #2563eb}
   .print-only{display:block!important}
   .no-print{display:none!important}
   
-  /* ═══ Elke doc-page = exact 1 A4 pagina ═══ */
+  /* ═══ Elke doc-page in print: auto hoogte, content vloeit vrij ═══ */
   .doc-page{
     box-shadow:none!important;border-radius:0!important;
-    margin:0!important;width:210mm!important;max-width:210mm!important;
-    height:297mm!important;min-height:297mm!important;max-height:297mm!important;
-    overflow:hidden!important;
+    margin:0!important;max-width:100%!important;width:210mm!important;
+    height:auto!important;min-height:100mm!important;max-height:none!important;
+    overflow:visible!important;
     display:flex!important;flex-direction:column!important;
     break-after:page!important;page-break-after:always!important;
-    break-inside:avoid!important;page-break-inside:avoid!important;
     box-sizing:border-box!important;position:relative!important;
   }
   .doc-page:last-child{break-after:auto!important;page-break-after:auto!important}
+  /* Herstel 2-kolom layout - override mobile CSS */
   .qt-parties{display:grid!important;grid-template-columns:1fr 1fr!important;gap:22px!important}
   .doc-page .qt-parties{display:grid!important;grid-template-columns:1fr 1fr!important;gap:22px!important}
   #print-root .qt-parties{display:grid!important;grid-template-columns:1fr 1fr!important;gap:22px!important}
-  .qt-header{display:flex!important;flex-direction:row!important;justify-content:space-between!important;align-items:flex-start!important}
-  .qt-meta-bar{display:grid!important;grid-template-columns:1fr 1fr!important;background:#f8fafc!important;border:1px solid #e2e8f0!important;border-radius:6px!important;overflow:hidden!important;margin-bottom:18px!important}
-  .qt-meta-item{padding:9px 14px!important;border-right:1px solid #e2e8f0!important;border-bottom:1px solid #e2e8f0!important}
-  .qt-meta-item:nth-child(2n){border-right:none!important}
-  .qt-meta-item:nth-last-child(-n+2){border-bottom:none!important}
-  .qt-meta-lbl{font-size:9.5px!important;font-weight:700!important;text-transform:uppercase!important;color:#94a3b8!important;margin-bottom:1px!important}
-  .qt-meta-val{font-size:12.5px!important;font-weight:700!important}
-  .qt-footer{margin-top:auto!important;flex-shrink:0!important}
-  .fct-pg,.fct-pg2,.qt-pg,.prod-page{flex:1!important;overflow:hidden!important;min-height:0!important}
+  .qt-header{display:flex!important;flex-direction:row!important;justify-content:space-between!important}
+  .qt-meta-bar{display:flex!important;flex-wrap:wrap!important}
+  .qt-footer{margin-top:auto!important}
+  .fct-pg,.fct-pg2,.qt-pg,.prod-page{flex:1!important;overflow:visible!important}
+  /* print-root breedte forceren zodat mobile CSS niet triggert */
   #print-root{width:210mm!important;min-width:210mm!important}
   .doc-page-lbl{display:none!important}
-  .cov{width:100%!important;height:297mm!important;min-height:297mm!important;max-height:297mm!important;display:grid!important;grid-template-columns:42% 58%!important;overflow:hidden!important}
+  
+  /* Coverpagina */
+  .cov{
+    width:100%!important;height:297mm!important;
+    min-height:297mm!important;max-height:297mm!important;
+    display:grid!important;grid-template-columns:42% 58%!important;
+    overflow:hidden!important;
+  }
   .cov-l{height:100%!important;min-height:100%!important}
   .cov-r{height:100%!important;box-sizing:border-box!important}
-  .prod-page{padding:8mm 12mm!important;box-sizing:border-box!important;flex:1!important;overflow:hidden!important;min-height:0!important}
-  .fct-pg{padding:8mm 12mm!important;box-sizing:border-box!important;flex:1!important;overflow:hidden!important;min-height:0!important}
-  .qt-pg{padding:8mm 12mm!important;box-sizing:border-box!important;flex:1!important;overflow:hidden!important;min-height:0!important}
-  .fct-pg2{padding:8mm 12mm!important;box-sizing:border-box!important;flex:1!important;overflow:hidden!important;min-height:0!important}
+  
+  /* Content pagina's: interne padding (omdat @page margin=0) */
+  .prod-page{padding:8mm 12mm!important;box-sizing:border-box!important;flex:1!important;overflow:hidden!important}
+  .fct-pg{padding:8mm 12mm!important;box-sizing:border-box!important;flex:1!important;overflow:hidden!important}
+  .qt-pg{padding:8mm 12mm!important;box-sizing:border-box!important;flex:1!important;overflow:hidden!important}
+  .fct-pg2{padding:8mm 12mm!important;box-sizing:border-box!important;flex:1!important;overflow:hidden!important}
   
   /* Footer: altijd onderaan de pagina */
   .qt-footer{
@@ -2843,7 +2848,7 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
         if(freshFcts.length > 0) {
           const recentEdit = localTimestamps.current["b4_fct"] && (Date.now() - localTimestamps.current["b4_fct"] < 120000);
           if(!recentEdit) setFacturen(freshFcts);
-          else console.log("Tab sync: facturen beschermd — recente lokale edit");
+          else console.log("Tab sync: facturen beschermd");
         }
         if(allData["b4_at"]&&sbTs("b4_at")>lcTs("b4_at")) setAcceptTokens(p("b4_at",{}));
         if(allData["b4_wo"]&&sbTs("b4_wo")>lcTs("b4_wo")) setWidgetOrder(p("b4_wo",null));
@@ -3926,8 +3931,8 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
               localTimestamps.current["b4_fct"] = Date.now() + 120000;
               try{localStorage.setItem("billr_ts",JSON.stringify(localTimestamps.current));}catch(_){}
               sbSaveFactuur(opgeslagen, userRef.current.id)
-                .then(ok => console.log(ok ? "✅ Factuur opgeslagen:" : "❌ Save mislukt:", opgeslagen.nummer))
-                .catch(e => console.error("❌ Save error:", e));
+                .then(ok=>console.log(ok?"✅ Factuur opgeslagen:":"❌ Save mislukt:",opgeslagen.nummer))
+                .catch(e=>console.error("❌",e));
             }
             return merged;
           });
@@ -7645,7 +7650,6 @@ function buildPrintHtml(docWrapHtml, docNummer) {
     .filter(Boolean).join(";");
   return `<!DOCTYPE html><html lang="nl"><head>
 <meta charset="UTF-8"><title>${docNummer||"document"}</title>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
 <style>
 :root{${vars}}
 *{box-sizing:border-box;margin:0;padding:0}
@@ -7653,12 +7657,12 @@ body{margin:0;padding:0;background:#f1f5f9;font-family:Inter,Arial,sans-serif;fo
 ${styles}
 .printbar{padding:8px 12px;background:#f0f4f8;display:flex;gap:10px;align-items:center;font-family:Arial;font-size:12px;border-bottom:1px solid #e2e8f0}
 .doc-wrap{padding:0!important;background:#fff!important}
-.doc-page{box-shadow:none!important;border-radius:0!important;margin:0!important;width:210mm!important;height:297mm!important;min-height:297mm!important;max-height:297mm!important;display:flex!important;flex-direction:column!important;overflow:hidden!important;break-after:page!important;page-break-after:always!important;break-inside:avoid!important;box-sizing:border-box!important}
+.doc-page{box-shadow:none!important;border-radius:0!important;margin:0!important;width:210mm!important;height:297mm!important;max-height:297mm!important;display:flex!important;flex-direction:column!important;overflow:hidden!important;break-after:page;page-break-after:always}
 .doc-page:last-child{break-after:auto!important;page-break-after:auto!important}
 .doc-page-lbl{display:none!important}
 .cov{width:100%!important;height:297mm!important;max-height:297mm!important;overflow:hidden!important}
 .qt-footer{margin-top:auto!important;flex-shrink:0!important}
-.prod-page,.qt-pg,.fct-pg,.fct-pg2{padding:8mm 12mm!important;flex:1!important;overflow:hidden!important;box-sizing:border-box!important;min-height:0!important}
+.prod-page,.qt-pg,.fct-pg,.fct-pg2{padding:8mm 12mm!important;flex:1!important;overflow:hidden!important}
 .fiche-screen-embed{display:none!important}
 .fiche-print-images{display:block!important}
 .fiche-print-page{width:210mm!important;height:297mm!important;overflow:hidden!important;display:flex!important;flex-direction:column!important;break-after:page!important}
@@ -7723,13 +7727,11 @@ function DocModal({doc,type,settings,onClose,onFactuur,onStatusOff,onStatusFact,
       const val = rootStyle.getPropertyValue(v).trim();
       if(val) pr.style.setProperty(v, val);
     });
+    // Verwijder lege doc-pages (geen zichtbare content)
     pr.querySelectorAll(".doc-page").forEach(page => {
-      const content = (page.innerText || page.textContent || "").trim();
-      if(content.length < 15) { page.remove(); return; }
-      page.style.cssText += ";height:297mm!important;min-height:297mm!important;max-height:297mm!important;overflow:hidden!important;break-after:page!important;page-break-after:always!important;break-inside:avoid!important;display:flex!important;flex-direction:column!important;box-sizing:border-box!important;width:210mm!important;margin:0!important;";
+      const txt = page.innerText || page.textContent || "";
+      if(txt.trim().length < 10) page.remove();
     });
-    pr.querySelectorAll(".fct-pg,.qt-pg,.fct-pg2,.prod-page").forEach(el=>{el.style.cssText+=";flex:1!important;overflow:hidden!important;min-height:0!important;box-sizing:border-box!important;";});
-    pr.querySelectorAll(".cov").forEach(el=>{el.style.cssText+=";height:297mm!important;max-height:297mm!important;overflow:hidden!important;";});
 
     const prev = document.title;
     document.title = doc.nummer || "document";
@@ -10295,19 +10297,33 @@ function EmailJSTestBtn({settings, notify}) {
 function AanvragenPage({leads=[], onRefresh, onStatus, onToKlant, onToOfferte, notify, sbClient}) {
   const [filter, setFilter] = useState("nieuw");
   const [selected, setSelected] = useState(null);
+  const [fotoIdx, setFotoIdx] = useState(null);
   const [toKlantDone, setToKlantDone] = useState(new Set());
 
   const statussen = ["nieuw","in behandeling","behandeld","afgewezen"];
-  const stIco = {nieuw:"🔵",["in behandeling"]:"🟡",behandeld:"🟢",afgewezen:"🔴"};
-  const stKleur = {nieuw:"#3b82f6",["in behandeling"]:"#f59e0b",behandeld:"#10b981",afgewezen:"#ef4444"};
-
+  const stIco = {nieuw:"🔵","in behandeling":"🟡",behandeld:"🟢",afgewezen:"🔴"};
+  const stKleur = {nieuw:"#3b82f6","in behandeling":"#f59e0b",behandeld:"#10b981",afgewezen:"#ef4444"};
   const gefilterd = filter === "alle" ? leads : leads.filter(l=>l.status===filter);
   const aantalNieuw = leads.filter(l=>l.status==="nieuw").length;
-
   const fmtDt = ts => { try { return new Date(ts).toLocaleString("nl-BE",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"}); } catch(_){return ts||"";} };
+  const fotos = selected && Array.isArray(selected.fotos) ? selected.fotos : [];
+
+  useEffect(()=>{
+    const h = e => { if(e.key==="Escape"){ if(fotoIdx!==null) setFotoIdx(null); else setSelected(null); }};
+    window.addEventListener("keydown",h);
+    return ()=>window.removeEventListener("keydown",h);
+  },[fotoIdx,selected]);
+
+  const InfoRij = ({label,waarde}) => waarde ? (
+    <div style={{display:"flex",gap:12,padding:"8px 0",borderBottom:"1px solid #f1f5f9",alignItems:"flex-start"}}>
+      <span style={{color:"#94a3b8",fontSize:12,fontWeight:600,textTransform:"uppercase",letterSpacing:".5px",minWidth:110,flexShrink:0,paddingTop:1}}>{label}</span>
+      <span style={{fontWeight:600,color:"#1e293b",fontSize:13,wordBreak:"break-word"}}>{waarde}</span>
+    </div>
+  ) : null;
 
   return (
-    <div style={{padding:"0 0 20px"}}>
+    <div style={{padding:"0 0 40px"}}>
+      {/* Header */}
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:20,flexWrap:"wrap",gap:12}}>
         <div>
           <h1 style={{fontWeight:900,fontSize:22,color:"#1e293b",letterSpacing:"-.5px",margin:0}}>📥 Aanvragen</h1>
@@ -10321,154 +10337,199 @@ function AanvragenPage({leads=[], onRefresh, onStatus, onToKlant, onToOfferte, n
       </div>
 
       {/* Filter tabs */}
-      <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:16,padding:"0 4px"}}>
+      <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:20}}>
         {["alle","nieuw","in behandeling","behandeld","afgewezen"].map(s=>(
           <button key={s} onClick={()=>setFilter(s)} style={{
-            padding:"6px 14px",borderRadius:20,border:"2px solid",cursor:"pointer",fontWeight:600,fontSize:13,
+            padding:"7px 16px",borderRadius:20,border:"2px solid",cursor:"pointer",fontWeight:600,fontSize:13,
             borderColor:filter===s?(stKleur[s]||"#1a2e4a"):"#e2e8f0",
             background:filter===s?(stKleur[s]||"#1a2e4a"):"#fff",
             color:filter===s?"#fff":(stKleur[s]||"#64748b")
           }}>
-            {stIco[s]||"📋"} {s==="alle"?"Alle":s} {s==="nieuw"&&aantalNieuw?`(${aantalNieuw})`:""}
+            {stIco[s]||"📋"} {s==="alle"?"Alle":s}{s==="nieuw"&&aantalNieuw?` (${aantalNieuw})`:""}
           </button>
         ))}
       </div>
 
-      <div style={{display:"grid",gridTemplateColumns:selected?"1fr 1fr":"1fr",gap:16}}>
-        {/* Lijst */}
-        <div>
-          {gefilterd.length===0
-            ? <div style={{textAlign:"center",padding:"60px 20px",color:"#94a3b8"}}>
-                <div style={{fontSize:48,marginBottom:12}}>📭</div>
-                <div style={{fontSize:16,fontWeight:600}}>Geen aanvragen</div>
-                <div style={{fontSize:13,marginTop:4}}>
-                  <a href="/aanvraag.html" target="_blank" style={{color:"#2563eb"}}>Deel de aanvraaglink</a> met klanten
-                </div>
-              </div>
-            : gefilterd.map(lead=>(
-            <div key={lead.id} onClick={()=>setSelected(lead)} style={{
-              background:selected?.id===lead.id?"#eff6ff":"#fff",
-              border:`2px solid ${selected?.id===lead.id?"#3b82f6":"#e2e8f0"}`,
-              borderRadius:12,padding:"14px 16px",marginBottom:10,cursor:"pointer",
-              transition:"all .15s"
+      {/* Kaarten lijst */}
+      {gefilterd.length===0
+        ? <div style={{textAlign:"center",padding:"80px 20px",color:"#94a3b8",background:"#fff",borderRadius:14,border:"2px dashed #e2e8f0"}}>
+            <div style={{fontSize:56,marginBottom:16}}>📭</div>
+            <div style={{fontSize:17,fontWeight:700,color:"#64748b"}}>Geen aanvragen</div>
+            <div style={{fontSize:13,marginTop:6}}>
+              <a href="/aanvraag.html" target="_blank" style={{color:"#2563eb"}}>Deel de aanvraaglink</a> met klanten
+            </div>
+          </div>
+        : <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(300px,1fr))",gap:12}}>
+          {gefilterd.map(lead=>(
+            <div key={lead.id} onClick={()=>{setSelected(lead);setFotoIdx(null);}} style={{
+              background:"#fff",border:`2px solid ${selected?.id===lead.id?"#3b82f6":"#e2e8f0"}`,
+              borderRadius:14,padding:"16px",cursor:"pointer",transition:"all .15s",
+              boxShadow:selected?.id===lead.id?"0 0 0 3px #bfdbfe":"0 1px 4px rgba(0,0,0,.06)"
             }}>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8}}>
-                <div style={{flex:1,minWidth:0}}>
-                  <div style={{fontWeight:700,fontSize:15,color:"#1e293b"}}>{lead.naam||"Onbekend"}</div>
-                  <div style={{fontSize:12,color:"#64748b",marginTop:2}}>
-                    {lead.service||lead.type||"Aanvraag"} · {fmtDt(lead.created_at)}
-                  </div>
-                  {lead.email&&<div style={{fontSize:12,color:"#475569",marginTop:2}}>✉ {lead.email}</div>}
-                </div>
-                <span style={{
-                  background:stKleur[lead.status]+"22",color:stKleur[lead.status],
-                  border:`1px solid ${stKleur[lead.status]}`,
-                  borderRadius:8,padding:"3px 8px",fontSize:11,fontWeight:700,whiteSpace:"nowrap",flexShrink:0
-                }}>{stIco[lead.status]} {lead.status}</span>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8,marginBottom:8}}>
+                <div style={{fontWeight:800,fontSize:15,color:"#1e293b"}}>{lead.naam||"Onbekend"}</div>
+                <span style={{background:stKleur[lead.status]+"22",color:stKleur[lead.status],border:`1.5px solid ${stKleur[lead.status]}`,borderRadius:8,padding:"3px 9px",fontSize:11,fontWeight:700,whiteSpace:"nowrap",flexShrink:0}}>
+                  {stIco[lead.status]} {lead.status}
+                </span>
               </div>
+              <div style={{fontSize:12,color:"#64748b",marginBottom:3}}>📅 {fmtDt(lead.created_at)}</div>
+              {lead.service&&<div style={{fontSize:12,color:"#475569",marginBottom:3}}>⚡ {lead.service}</div>}
+              {lead.email&&<div style={{fontSize:12,color:"#475569",marginBottom:3}}>✉ {lead.email}</div>}
+              {lead.tel&&<div style={{fontSize:12,color:"#475569",marginBottom:3}}>📞 {lead.tel}</div>}
+              {Array.isArray(lead.fotos)&&lead.fotos.length>0&&(
+                <div style={{marginTop:8,display:"flex",gap:4}}>
+                  {lead.fotos.slice(0,4).map((f,i)=>{
+                    const src=typeof f==="string"?f:(f.url||f.data||"");
+                    return <img key={i} src={src} alt="" style={{width:38,height:38,objectFit:"cover",borderRadius:6,border:"1px solid #e2e8f0"}} onError={e=>e.target.style.display="none"}/>;
+                  })}
+                  {lead.fotos.length>4&&<div style={{width:38,height:38,borderRadius:6,background:"#f0f4f8",display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:700,color:"#64748b"}}>+{lead.fotos.length-4}</div>}
+                </div>
+              )}
             </div>
           ))}
         </div>
+      }
 
-        {/* Detail panel */}
-        {selected&&(
-          <div style={{background:"#fff",border:"2px solid #e2e8f0",borderRadius:14,overflow:"hidden",position:"sticky",top:80,maxHeight:"calc(100vh - 120px)",overflowY:"auto"}}>
-            {/* Header */}
-            <div style={{background:"#1a2e4a",padding:"16px 20px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+      {/* DETAIL MODAL */}
+      {selected&&(
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.6)",zIndex:9000,display:"flex",alignItems:"flex-start",justifyContent:"center",padding:"24px 16px",overflowY:"auto"}}
+          onClick={e=>{if(e.target===e.currentTarget)setSelected(null);}}>
+          <div style={{background:"#fff",borderRadius:18,width:"100%",maxWidth:820,boxShadow:"0 24px 80px rgba(0,0,0,.35)",overflow:"hidden"}}>
+
+            {/* Modal header */}
+            <div style={{background:"#0f1e35",padding:"20px 24px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
               <div>
-                <div style={{color:"#fff",fontWeight:800,fontSize:17}}>{selected.naam}</div>
-                <div style={{color:"rgba(255,255,255,.6)",fontSize:12,marginTop:2}}>{fmtDt(selected.created_at)}</div>
+                <div style={{color:"#fff",fontWeight:900,fontSize:20}}>{selected.naam||"Aanvraag"}</div>
+                <div style={{color:"rgba(255,255,255,.5)",fontSize:12,marginTop:3}}>📅 {fmtDt(selected.created_at)}</div>
               </div>
-              <button onClick={()=>setSelected(null)} style={{background:"rgba(255,255,255,.2)",border:"none",color:"#fff",borderRadius:8,width:32,height:32,cursor:"pointer",fontSize:18}}>✕</button>
+              <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                <span style={{background:stKleur[selected.status]+"44",color:stKleur[selected.status],border:`1.5px solid ${stKleur[selected.status]}`,borderRadius:10,padding:"5px 12px",fontSize:12,fontWeight:700}}>
+                  {stIco[selected.status]} {selected.status}
+                </span>
+                <button onClick={()=>setSelected(null)} style={{background:"rgba(255,255,255,.15)",border:"none",color:"#fff",borderRadius:10,width:36,height:36,cursor:"pointer",fontSize:20,display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
+              </div>
             </div>
 
-            <div style={{padding:"20px"}}>
-              {/* Status wijzigen */}
-              <div style={{marginBottom:16}}>
-                <label style={{fontSize:12,fontWeight:700,color:"#64748b",display:"block",marginBottom:6}}>STATUS</label>
-                <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-                  {statussen.map(s=>(
-                    <button key={s} onClick={()=>{onStatus(selected.id,s);setSelected({...selected,status:s});}}
-                      style={{padding:"6px 12px",borderRadius:8,border:`2px solid ${stKleur[s]}`,
-                        background:selected.status===s?stKleur[s]:"#fff",
-                        color:selected.status===s?"#fff":stKleur[s],
-                        fontWeight:600,fontSize:12,cursor:"pointer"}}>
-                      {stIco[s]} {s}
-                    </button>
-                  ))}
-                </div>
-              </div>
+            <div style={{padding:"24px",display:"grid",gridTemplateColumns:"1fr 1fr",gap:20}}>
 
-              {/* Klantgegevens */}
-              <div style={{background:"#f8fafc",borderRadius:10,padding:"14px",marginBottom:14}}>
-                <div style={{fontWeight:700,fontSize:13,color:"#1e293b",marginBottom:10}}>👤 Klantgegevens</div>
-                {[
-                  ["Naam",selected.naam],["Email",selected.email],["Tel",selected.tel],
-                  ["Type",selected.klantType],["Bedrijf",selected.bedrijf],["BTW nr",selected.btwnr],
-                  ["Adres",selected.adres],["Gemeente",[selected.postcode,selected.gemeente].filter(Boolean).join(" ")],
-                ].filter(([,v])=>v).map(([l,v])=>(
-                  <div key={l} style={{display:"flex",gap:8,marginBottom:6,fontSize:13}}>
-                    <span style={{color:"#64748b",minWidth:70,flexShrink:0}}>{l}</span>
-                    <span style={{fontWeight:600,color:"#1e293b"}}>{v}</span>
-                  </div>
-                ))}
-              </div>
+              {/* Kolom links */}
+              <div style={{display:"flex",flexDirection:"column",gap:16}}>
 
-              {/* Aanvraagdetails */}
-              <div style={{background:"#f8fafc",borderRadius:10,padding:"14px",marginBottom:14}}>
-                <div style={{fontWeight:700,fontSize:13,color:"#1e293b",marginBottom:10}}>⚡ Aanvraagdetails</div>
-                {[
-                  ["Service",selected.service],["Omschrijving",selected.opmerking||selected.bericht],
-                  ["Installatietype",selected.installatieType],["Voertuig",selected.voertuig],
-                  ["Stroom",selected.stroom],["Netbeheerder",selected.netbeheerder],
-                ].filter(([,v])=>v).map(([l,v])=>(
-                  <div key={l} style={{display:"flex",gap:8,marginBottom:6,fontSize:13}}>
-                    <span style={{color:"#64748b",minWidth:100,flexShrink:0}}>{l}</span>
-                    <span style={{fontWeight:600,color:"#1e293b",wordBreak:"break-word"}}>{v}</span>
-                  </div>
-                ))}
-              </div>
-
-              {/* Foto's */}
-              {selected.fotos && Array.isArray(selected.fotos) && selected.fotos.length > 0 && (
-                <div style={{marginBottom:14}}>
-                  <div style={{fontWeight:700,fontSize:13,color:"#1e293b",marginBottom:10}}>📸 Foto's ({selected.fotos.length})</div>
-                  <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(120px,1fr))",gap:8}}>
-                    {selected.fotos.map((foto,i)=>(
-                      <a key={i} href={foto.url||foto} target="_blank" style={{display:"block"}}>
-                        <img src={foto.url||foto} alt={foto.label||`Foto ${i+1}`}
-                          style={{width:"100%",aspectRatio:"1",objectFit:"cover",borderRadius:8,border:"1px solid #e2e8f0"}}
-                          onError={e=>{e.target.style.display="none";}}/>
-                        {foto.label&&<div style={{fontSize:10,color:"#64748b",textAlign:"center",marginTop:4}}>{foto.label}</div>}
-                      </a>
+                {/* Status */}
+                <div style={{background:"#f8fafc",borderRadius:12,padding:"16px",border:"1px solid #e2e8f0"}}>
+                  <div style={{fontWeight:800,fontSize:11,color:"#94a3b8",textTransform:"uppercase",letterSpacing:".8px",marginBottom:10}}>Status wijzigen</div>
+                  <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                    {statussen.map(s=>(
+                      <button key={s} onClick={()=>{onStatus(selected.id,s);setSelected({...selected,status:s});}}
+                        style={{padding:"6px 12px",borderRadius:8,border:`2px solid ${stKleur[s]}`,
+                          background:selected.status===s?stKleur[s]:"#fff",
+                          color:selected.status===s?"#fff":stKleur[s],
+                          fontWeight:700,fontSize:12,cursor:"pointer"}}>
+                        {stIco[s]} {s}
+                      </button>
                     ))}
                   </div>
                 </div>
-              )}
 
-              {/* Acties */}
-              <div style={{display:"flex",flexDirection:"column",gap:10,marginTop:20}}>
-                <button onClick={()=>{onToKlant(selected);setToKlantDone(p=>new Set(p).add(selected.id));}}
-                  style={{width:"100%",padding:"14px",background:toKlantDone.has(selected.id)?"#10b981":"#1a2e4a",
-                    color:"#fff",border:"none",borderRadius:10,fontWeight:700,fontSize:15,cursor:"pointer"}}>
-                  {toKlantDone.has(selected.id)?"✅ Klant toegevoegd":"👤 Toevoegen als klant"}
-                </button>
-                <button onClick={()=>{onToOfferte(selected);}}
-                  style={{width:"100%",padding:"14px",background:"#2563eb",
-                    color:"#fff",border:"none",borderRadius:10,fontWeight:700,fontSize:15,cursor:"pointer"}}>
-                  📋 Offerte aanmaken
-                </button>
-                <a href={`mailto:${selected.email}?subject=Uw aanvraag bij W-charge BV`}
-                  style={{display:"block",width:"100%",padding:"12px",background:"#f1f5f9",
-                    color:"#475569",border:"2px solid #e2e8f0",borderRadius:10,fontWeight:600,
-                    fontSize:14,textAlign:"center",textDecoration:"none"}}>
-                  ✉ Email versturen
-                </a>
+                {/* Klantgegevens */}
+                <div style={{background:"#f8fafc",borderRadius:12,padding:"16px",border:"1px solid #e2e8f0",flex:1}}>
+                  <div style={{fontWeight:800,fontSize:11,color:"#94a3b8",textTransform:"uppercase",letterSpacing:".8px",marginBottom:12}}>👤 Klantgegevens</div>
+                  <InfoRij label="Naam" waarde={selected.naam}/>
+                  <InfoRij label="Email" waarde={selected.email}/>
+                  <InfoRij label="Telefoon" waarde={selected.tel}/>
+                  <InfoRij label="Type" waarde={selected.klantType}/>
+                  <InfoRij label="Bedrijf" waarde={selected.bedrijf}/>
+                  <InfoRij label="BTW nr" waarde={selected.btwnr}/>
+                  <InfoRij label="Adres" waarde={selected.adres}/>
+                  <InfoRij label="Gemeente" waarde={[selected.postcode,selected.gemeente].filter(Boolean).join(" ")}/>
+                </div>
+
+                {/* Acties */}
+                <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                  <button onClick={()=>{onToKlant(selected);setToKlantDone(p=>new Set(p).add(selected.id));}}
+                    style={{width:"100%",padding:"13px",background:toKlantDone.has(selected.id)?"#10b981":"#0f1e35",color:"#fff",border:"none",borderRadius:10,fontWeight:700,fontSize:14,cursor:"pointer"}}>
+                    {toKlantDone.has(selected.id)?"✅ Klant toegevoegd":"👤 Toevoegen als klant"}
+                  </button>
+                  <button onClick={()=>onToOfferte(selected)}
+                    style={{width:"100%",padding:"13px",background:"#2563eb",color:"#fff",border:"none",borderRadius:10,fontWeight:700,fontSize:14,cursor:"pointer"}}>
+                    📋 Offerte aanmaken
+                  </button>
+                  {selected.email&&<a href={`mailto:${selected.email}?subject=Uw aanvraag bij W-charge BV`}
+                    style={{display:"block",width:"100%",padding:"11px",background:"#f1f5f9",color:"#475569",border:"2px solid #e2e8f0",borderRadius:10,fontWeight:600,fontSize:13,textAlign:"center",textDecoration:"none"}}>
+                    ✉ Email versturen
+                  </a>}
+                </div>
+              </div>
+
+              {/* Kolom rechts */}
+              <div style={{display:"flex",flexDirection:"column",gap:16}}>
+
+                {/* Aanvraagdetails */}
+                <div style={{background:"#f8fafc",borderRadius:12,padding:"16px",border:"1px solid #e2e8f0"}}>
+                  <div style={{fontWeight:800,fontSize:11,color:"#94a3b8",textTransform:"uppercase",letterSpacing:".8px",marginBottom:12}}>⚡ Aanvraagdetails</div>
+                  <InfoRij label="Service" waarde={selected.service}/>
+                  <InfoRij label="Type installatie" waarde={selected.installatieType}/>
+                  <InfoRij label="Voertuig" waarde={selected.voertuig}/>
+                  <InfoRij label="Stroom" waarde={selected.stroom}/>
+                  <InfoRij label="Netbeheerder" waarde={selected.netbeheerder}/>
+                  {(selected.opmerking||selected.bericht)&&(
+                    <div style={{marginTop:10,padding:"12px",background:"#fffbeb",borderRadius:8,border:"1px solid #fde68a"}}>
+                      <div style={{fontSize:11,fontWeight:700,color:"#92400e",marginBottom:6,textTransform:"uppercase",letterSpacing:".5px"}}>💬 Opmerking / bericht</div>
+                      <div style={{fontSize:13,color:"#1e293b",lineHeight:1.7}}>{selected.opmerking||selected.bericht}</div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Foto's */}
+                {fotos.length>0&&(
+                  <div style={{background:"#f8fafc",borderRadius:12,padding:"16px",border:"1px solid #e2e8f0",flex:1}}>
+                    <div style={{fontWeight:800,fontSize:11,color:"#94a3b8",textTransform:"uppercase",letterSpacing:".8px",marginBottom:12}}>📸 Foto's ({fotos.length}) — klik om te vergroten</div>
+                    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(130px,1fr))",gap:8}}>
+                      {fotos.map((foto,i)=>{
+                        const src=typeof foto==="string"?foto:(foto.url||foto.data||"");
+                        const label=typeof foto==="object"?(foto.label||foto.naam||`Foto ${i+1}`):`Foto ${i+1}`;
+                        return (
+                          <div key={i} onClick={()=>setFotoIdx(i)} style={{cursor:"pointer"}}>
+                            <div style={{borderRadius:10,overflow:"hidden",border:"2px solid #e2e8f0",aspectRatio:"1",background:"#f0f4f8",position:"relative"}}>
+                              <img src={src} alt={label} style={{width:"100%",height:"100%",objectFit:"cover",display:"block",transition:"transform .2s"}}
+                                onMouseEnter={e=>e.target.style.transform="scale(1.05)"}
+                                onMouseLeave={e=>e.target.style.transform="scale(1)"}
+                                onError={e=>{e.target.parentElement.innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#94a3b8;font-size:11px">Geen preview</div>';}}/>
+                            </div>
+                            <div style={{fontSize:11,color:"#64748b",textAlign:"center",marginTop:4,fontWeight:500}}>{label}</div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
+
+      {/* LIGHTBOX */}
+      {selected&&fotoIdx!==null&&fotos.length>0&&(
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.93)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center"}}
+          onClick={()=>setFotoIdx(null)}>
+          <button onClick={e=>{e.stopPropagation();setFotoIdx(p=>p>0?p-1:fotos.length-1);}}
+            style={{position:"absolute",left:16,top:"50%",transform:"translateY(-50%)",background:"rgba(255,255,255,.2)",border:"none",color:"#fff",borderRadius:"50%",width:52,height:52,fontSize:28,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",zIndex:1}}>‹</button>
+          <div style={{maxWidth:"90vw",maxHeight:"90vh",textAlign:"center",padding:"0 80px"}} onClick={e=>e.stopPropagation()}>
+            <img src={typeof fotos[fotoIdx]==="string"?fotos[fotoIdx]:(fotos[fotoIdx].url||fotos[fotoIdx].data||"")}
+              alt={`Foto ${fotoIdx+1}`}
+              style={{maxWidth:"100%",maxHeight:"80vh",objectFit:"contain",borderRadius:12,boxShadow:"0 0 60px rgba(0,0,0,.6)"}}/>
+            <div style={{color:"rgba(255,255,255,.6)",marginTop:14,fontSize:13}}>
+              {typeof fotos[fotoIdx]==="object"&&fotos[fotoIdx].label&&<span style={{marginRight:8}}>{fotos[fotoIdx].label}</span>}
+              {fotoIdx+1} / {fotos.length}
+            </div>
+          </div>
+          <button onClick={e=>{e.stopPropagation();setFotoIdx(p=>p<fotos.length-1?p+1:0);}}
+            style={{position:"absolute",right:16,top:"50%",transform:"translateY(-50%)",background:"rgba(255,255,255,.2)",border:"none",color:"#fff",borderRadius:"50%",width:52,height:52,fontSize:28,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",zIndex:1}}>›</button>
+          <button onClick={()=>setFotoIdx(null)}
+            style={{position:"absolute",top:16,right:16,background:"rgba(255,255,255,.2)",border:"none",color:"#fff",borderRadius:10,width:42,height:42,fontSize:22,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
+        </div>
+      )}
     </div>
   );
 }
