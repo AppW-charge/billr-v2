@@ -893,7 +893,7 @@ const AANMANING_TEMPLATES = [
 
 Onze factuur ${f.nummer} d.d. ${fmtDate(f.datum)} ten bedrage van ${fmtEuro(b)} is nog onbetaald.
 
-Wij verzoeken u vriendelijk dit bedrag te storten vóór ${addDays(today(),7)} op rekening ${f._iban||"BE83 3632 1828 6315"} met mededeling ${genOGM(f.nummer)}.
+Wij verzoeken u vriendelijk dit bedrag te storten vóór ${addDays(today(),7)} op rekening ${f._iban||"BE83 3632 1828 6315"} met als referentie <strong>${f.nummer}</strong>.
 
 Mogelijks heeft u deze factuur over het hoofd gezien. Mocht u al betaald hebben, gelieve dit bericht te negeren.
 
@@ -9836,9 +9836,70 @@ ${bed.naam||""}`},
 
   const buildHtmlEmail = () => {
     const kleur = tmpl.c;
-    const ogm = genOGM(f.nummer);
     const tekst = tmpl.tekst.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").split("\n").join("<br>");
-    return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:Inter,Arial,sans-serif;background:#f1f5f9;padding:20px}.wrap{max-width:680px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,.1)}.hdr{background:${dc};padding:28px 32px;display:flex;justify-content:space-between;align-items:center}.hdr-t{color:#fff;font-size:24px;font-weight:900}.hdr-n{color:rgba(255,255,255,.65);font-size:12px;margin-top:4px}.badge{background:${kleur};color:#fff;border-radius:8px;padding:6px 14px;font-weight:800;font-size:13px}.body{padding:28px}.alert{background:${kleur}22;border-left:4px solid ${kleur};border-radius:0 8px 8px 0;padding:14px 18px;margin-bottom:22px}.al-t{font-weight:800;font-size:15px;color:${kleur};margin-bottom:3px}.tekst{font-size:13.5px;color:#475569;line-height:1.85;margin-bottom:22px}.tabel{width:100%;border-collapse:collapse;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;margin-bottom:22px}.tabel th{background:#f8fafc;padding:9px 13px;text-align:left;font-size:10.5px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.5px}.tabel td{padding:9px 13px;border-bottom:1px solid #f1f5f9;font-size:13px}.totaalrij td{font-weight:800;font-size:15px;background:#fef2f2;color:#ef4444}.betaal{background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:14px 18px;margin-bottom:16px}.bl{font-size:11px;font-weight:700;color:#15803d;text-transform:uppercase;margin-bottom:3px}.bv{font-weight:700;font-size:13px;color:#1e293b}.ogm{font-family:monospace;font-size:13px;font-weight:700;background:#f0f4f8;padding:3px 8px;border-radius:5px}.ftr{background:#f8fafc;border-top:1px solid #e2e8f0;padding:18px 28px;font-size:11px;color:#94a3b8;line-height:1.8;text-align:center}</style></head><body><div class="wrap"><div class="hdr"><div><div class="hdr-t">⚠️ ${tmpl.l}</div><div class="hdr-n">Factuur ${f.nummer} — ${f.klant?.naam||""}</div></div><div class="badge">${tmpl.l.toUpperCase()}</div></div><div class="body"><div class="alert"><div class="al-t">Factuur ${f.nummer} is onbetaald</div><div style="font-size:13px;color:#475569">Vervaldatum: ${fmtDate(f.vervaldatum)} · ${dagen} dagen te laat</div></div><div class="tekst">${tekst}</div><table class="tabel"><thead><tr><th>Omschrijving</th><th style="text-align:right">Bedrag</th></tr></thead><tbody>${(f.lijnen||[]).filter(l=>l.naam).map(l=>`<tr><td>${l.naam||""}</td><td style="text-align:right;font-weight:600">${fmtEuro(l.prijs*l.aantal)}</td></tr>`).join("")}<tr><td colspan="2" style="border:none;padding:3px"></td></tr><tr><td style="color:#64748b">Subtotaal excl. BTW</td><td style="text-align:right;color:#64748b">${fmtEuro(t)}</td></tr>${rente>0?`<tr><td style="color:#ef4444">Wettelijke intrest (1%/mnd, ${dagen} dagen)</td><td style="text-align:right;color:#ef4444">${fmtEuro(rente)}</td></tr>`:""}</tbody><tfoot><tr class="totaalrij"><td><strong>TOTAAL OPEISBAAR</strong></td><td style="text-align:right"><strong>${fmtEuro(t+rente)}</strong></td></tr></tfoot></table><div class="betaal"><div class="bl">💳 Betaalinstructies</div><div class="bv">IBAN: ${bed.iban||""} &nbsp;·&nbsp; BIC: ${bed.bic||""}</div><div class="bv">Mededeling: <span class="ogm">${ogm}</span></div></div>${rente>0?`<div style="font-size:11.5px;color:#94a3b8;margin-top:6px">Bij niet-betaling: wettelijke rente 1%/maand + schadevergoeding 15% (min. €65)</div>`:""}</div><div class="ftr"><strong>${bed.naam||""}</strong> · ${bed.adres||""} · ${bed.gemeente||""}<br>BTW: ${fmtBtwnr(bed.btwnr)} · ${bed.email||""} · ${bed.tel||""}</div></div></body></html>`;
+    const factuurLink = window.location.origin + "/offerte.html?id=" + f.id + "&nr=" + encodeURIComponent(f.nummer||"");
+    return `<!DOCTYPE html><html><head><meta charset="utf-8">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:Inter,Arial,sans-serif;background:#f1f5f9;padding:20px}
+.wrap{max-width:620px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,.1)}
+.hdr{background:${dc};padding:24px 28px;display:flex;justify-content:space-between;align-items:center}
+.hdr-t{color:#fff;font-size:22px;font-weight:900;letter-spacing:-.5px}
+.hdr-n{color:rgba(255,255,255,.6);font-size:12px;margin-top:3px}
+.badge{background:${kleur};color:#fff;border-radius:8px;padding:5px 13px;font-weight:800;font-size:12px}
+.body{padding:28px}
+.alert{background:${kleur}18;border-left:4px solid ${kleur};border-radius:0 8px 8px 0;padding:14px 18px;margin-bottom:22px}
+.al-t{font-weight:800;font-size:15px;color:${kleur};margin-bottom:3px}
+.tekst{font-size:14px;color:#475569;line-height:1.9;margin-bottom:24px}
+.totaal-blok{background:#f8fafc;border:2px solid #e2e8f0;border-radius:10px;padding:18px 22px;margin-bottom:24px;display:flex;justify-content:space-between;align-items:center}
+.totaal-lbl{font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px}
+.totaal-val{font-size:26px;font-weight:900;color:#1e293b}
+.rente-val{font-size:12px;color:#f59e0b;font-weight:600;margin-top:2px}
+.btn-wrap{text-align:center;margin-bottom:24px}
+.btn-factuur{display:inline-block;background:${dc};color:#fff;padding:14px 32px;border-radius:10px;text-decoration:none;font-weight:800;font-size:15px;letter-spacing:-.2px}
+.betaal{background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:14px 18px;margin-bottom:16px}
+.bl{font-size:11px;font-weight:700;color:#15803d;text-transform:uppercase;margin-bottom:5px}
+.bv{font-weight:600;font-size:13px;color:#1e293b;margin-bottom:2px}
+.ftr{background:#f8fafc;border-top:1px solid #e2e8f0;padding:16px 28px;font-size:11px;color:#94a3b8;line-height:1.8;text-align:center}
+</style></head><body>
+<div class="wrap">
+  <div class="hdr">
+    <div><div class="hdr-t">⚠️ ${tmpl.l}</div><div class="hdr-n">Factuur ${f.nummer} · ${f.klant?.naam||""}</div></div>
+    <div class="badge">${tmpl.l.toUpperCase()}</div>
+  </div>
+  <div class="body">
+    <div class="alert">
+      <div class="al-t">Factuur ${f.nummer} is nog onbetaald</div>
+      <div style="font-size:13px;color:#475569">Vervaldatum: ${fmtDate(f.vervaldatum)} · ${dagen} dagen te laat</div>
+    </div>
+    <div class="tekst">${tekst}</div>
+    <div class="totaal-blok">
+      <div>
+        <div class="totaal-lbl">Te betalen</div>
+        <div class="totaal-val">${fmtEuro(t+rente)}</div>
+        ${rente>0?`<div class="rente-val">incl. wettelijke intrest ${fmtEuro(rente)}</div>`:""}
+      </div>
+      <div style="text-align:right;font-size:12px;color:#94a3b8">
+        <div>Factuur</div>
+        <div style="font-weight:700;color:#1e293b;font-size:14px">${f.nummer}</div>
+      </div>
+    </div>
+    <div class="btn-wrap">
+      <a href="${factuurLink}" class="btn-factuur">📄 Bekijk factuur online</a>
+    </div>
+    <div class="betaal">
+      <div class="bl">💳 Betaalinstructies</div>
+      <div class="bv">IBAN: ${bed.iban||""}</div>
+      <div class="bv">BIC: ${bed.bic||""}</div>
+      <div class="bv">Referentie: <strong>${f.nummer}</strong></div>
+    </div>
+  </div>
+  <div class="ftr">
+    <strong>${bed.naam||""}</strong> · ${bed.adres||""} · ${bed.gemeente||""}<br>
+    BTW: ${fmtBtwnr(bed.btwnr)} · ${bed.email||""} · ${bed.tel||""}
+  </div>
+</div>
+</body></html>`;
   };
 
   const verzend = async () => {
