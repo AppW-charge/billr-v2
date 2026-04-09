@@ -1993,6 +1993,9 @@ export default function App() {
   const saveTodos = (lijst) => {
     setTodos(lijst);
     try { localStorage.setItem("b4_todo", JSON.stringify(lijst)); } catch(_){}
+    // Timestamp updaten zodat tab-sync niet overschrijft
+    localTimestamps.current["b4_todo"] = Date.now() + 60000;
+    try { localStorage.setItem("billr_ts", JSON.stringify(localTimestamps.current)); } catch(_){}
     if(!userRef.current?.id) return;
     const json = JSON.stringify(lijst);
     sb.from("user_data").upsert(
@@ -2426,13 +2429,9 @@ export default function App() {
       else if(filter === "behandeld") q = q.eq("status","behandeld");
       const { data, error } = await q;
       if(!error && data) {
-        // Normaliseer fotos: jsonb komt al als array van Supabase, maar soms als string
         const normalized = data.map(lead => {
           let fotos = lead.fotos;
-          if(typeof fotos === "string") {
-            try { fotos = JSON.parse(fotos); } catch(_) { fotos = []; }
-          }
-          // Zorg dat het altijd een array is
+          if(typeof fotos === "string") { try { fotos = JSON.parse(fotos); } catch(_) { fotos = []; } }
           if(!Array.isArray(fotos)) fotos = fotos ? [fotos] : [];
           return {...lead, fotos};
         });
@@ -2861,6 +2860,11 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
         }
         if(allData["b4_at"]&&sbTs("b4_at")>lcTs("b4_at")) setAcceptTokens(p("b4_at",{}));
         if(allData["b4_wo"]&&sbTs("b4_wo")>lcTs("b4_wo")) setWidgetOrder(p("b4_wo",null));
+        // Todos: enkel laden als Supabase nieuwer dan lokale versie
+        if(allData["b4_todo"]&&sbTs("b4_todo")>lcTs("b4_todo")) {
+          const v=p("b4_todo",[]);
+          if(Array.isArray(v)&&v.length) setTodos(v);
+        }
         console.log("Tab sync OK — enkel gelezen, nooit geschreven");
       } catch(e) { console.warn("Tab sync mislukt:",e); }
     };
@@ -4286,7 +4290,7 @@ function Dashboard({offertes, facturen, onGoto, onNew, onFactuur, settings, offe
   const openstaand = openFact.reduce((s,f)=>s+calcTotals(f.lijnen||[]).totaal,0);
   const conv = offertes.length ? Math.round(offertes.filter(o=>["goedgekeurd","gefactureerd"].includes(o.status)).length/offertes.length*100) : 0;
   const recOff = [...offertes].sort((a,b)=>new Date(b.aangemaakt)-new Date(a.aangemaakt)).slice(0,5);
-  const goedgekeurdDoorKlant = offertes.filter(o=>o.klantAkkoord);
+  const goedgekeurdDoorKlant = offertes.filter(o=>o.klantAkkoord && o.status!=="gefactureerd" && o.planStatus!=="uitgevoerd");
 
   // ── ACTIE INBOX: detecteer openstaande acties ──
   const actiesVereist = [];
@@ -9772,6 +9776,221 @@ function CreditnotaModal({facturen,creditnota,settings,onSave,onClose}) {
 }
 
 // ─── AANMANINGEN PAGE ─────────────────────────────────────────────
+function AanmaningModal({factuur, settings, onSend, onClose}) {
+  const f = factuur;
+  const t = calcTotals(f.lijnen||[]).totaal;
+  const dagen = Math.max(0, Math.floor((new Date()-new Date(f.vervaldatum))/(1000*60*60*24)));
+  const rente = t*(0.01/30*dagen);
+  const bed = settings?.bedrijf||{};
+  const dc = bed.kleur||"#1a2e4a";
+  const [niveau, setNiveau] = React.useState(1);
+  const [sending, setSending] = React.useState(false);
+  const [preview, setPreview] = React.useState(false);
+
+  const templates = [
+    {l:"1e Herinnering",  c:"#3b82f6", tekst:`Geachte ${f.klant?.naam||""},
+
+Onze factuur ${f.nummer} d.d. ${fmtDate(f.datum)} ten bedrage van ${fmtEuro(t)} is nog niet betaald.
+
+Wij verzoeken u vriendelijk dit bedrag vóór ${addDays(today(),7)} te storten op rekening ${bed.iban||""} met mededeling ${genOGM(f.nummer)}.
+
+Mogelijks heeft u deze factuur over het hoofd gezien. Heeft u reeds betaald, gelieve dit bericht te negeren.
+
+Met vriendelijke groeten,
+${bed.naam||""}
+${bed.tel||""}`},
+    {l:"2e Herinnering",  c:"#f59e0b", tekst:`Geachte ${f.klant?.naam||""},
+
+Ondanks onze eerste herinnering is factuur ${f.nummer} (${fmtEuro(t)}) nog steeds onbetaald.
+
+Wij verzoeken u dringend te betalen vóór ${addDays(today(),7)}.
+Wettelijke intrest: ${fmtEuro(rente)} (1%/maand vanaf vervaldatum).
+
+Bij uitblijven van betaling zien wij ons genoodzaakt verdere stappen te ondernemen.
+
+Met vriendelijke groeten,
+${bed.naam||""}
+${bed.tel||""}`},
+    {l:"Ingebrekestelling",c:"#ef4444",tekst:`Geachte ${f.klant?.naam||""},
+
+ONDANKS ONZE HERINNERINGEN is factuur ${f.nummer} nog steeds onbetaald.
+
+Verschuldigd: ${fmtEuro(t)}
+Wettelijke intrest (1%/mnd): ${fmtEuro(rente)}
+Schadevergoeding (15%): ${fmtEuro(t*0.15)}
+TOTAAL OPEISBAAR: ${fmtEuro(t+rente+t*0.15)}
+
+U heeft 7 dagen om te betalen, daarna wordt deze zaak overgedragen aan onze advocaat.
+
+Met formele groeten,
+${bed.naam||""}`},
+  ];
+  const tmpl = templates[Math.min(niveau-1, templates.length-1)];
+
+  const buildHtmlEmail = () => {
+    const kleur = tmpl.c;
+    const ogm = genOGM(f.nummer);
+    const tekst = tmpl.tekst.replace(/
+/g,"<br>");
+    return `<!DOCTYPE html><html><head><meta charset="utf-8">
+<style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:Inter,Arial,sans-serif;background:#f1f5f9;padding:20px}
+.wrap{max-width:680px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,.1)}
+.hdr{background:${dc};padding:28px 32px;display:flex;justify-content:space-between;align-items:center}
+.hdr-titel{color:#fff;font-size:26px;font-weight:900;letter-spacing:-1px}
+.hdr-nr{color:rgba(255,255,255,.7);font-size:13px;margin-top:4px}
+.badge{background:${kleur};color:#fff;border-radius:8px;padding:8px 16px;font-weight:800;font-size:15px}
+.body{padding:32px}
+.alert{background:${kleur}22;border-left:4px solid ${kleur};border-radius:0 8px 8px 0;padding:16px 20px;margin-bottom:24px}
+.alert-title{font-weight:900;font-size:16px;color:${kleur};margin-bottom:4px}
+.tekst{font-size:14px;color:#475569;line-height:1.8;white-space:pre-wrap;margin-bottom:24px}
+.tabel{width:100%;border-collapse:collapse;border-radius:8px;overflow:hidden;border:1px solid #e2e8f0;margin-bottom:24px}
+.tabel th{background:#f8fafc;padding:10px 14px;text-align:left;font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.5px}
+.tabel td{padding:10px 14px;border-bottom:1px solid #f1f5f9;font-size:13px}
+.totaalrij td{font-weight:800;font-size:15px;background:#fef2f2;color:#ef4444}
+.betaal{background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:16px 20px;margin-bottom:20px}
+.betaal-lbl{font-size:11px;font-weight:700;color:#15803d;text-transform:uppercase;margin-bottom:4px}
+.betaal-val{font-weight:700;font-size:13px;color:#1e293b}
+.ogm{font-family:monospace;font-size:14px;font-weight:700;color:#1e293b;background:#f0f4f8;padding:4px 10px;border-radius:6px;display:inline-block}
+.ftr{background:#f8fafc;border-top:1px solid #e2e8f0;padding:20px 32px;font-size:11.5px;color:#94a3b8;line-height:1.8;text-align:center}
+</style></head><body>
+<div class="wrap">
+  <div class="hdr">
+    <div><div class="hdr-titel">⚠️ ${tmpl.l}</div><div class="hdr-nr">Factuur ${f.nummer}</div></div>
+    <div class="badge">${tmpl.l.toUpperCase()}</div>
+  </div>
+  <div class="body">
+    <div class="alert">
+      <div class="alert-title">Factuur ${f.nummer} is onbetaald</div>
+      <div style="font-size:13px;color:#475569">Vervaldatum: ${fmtDate(f.vervaldatum)} · ${dagen} dagen te laat</div>
+    </div>
+    <div class="tekst">${tekst}</div>
+    <table class="tabel">
+      <thead><tr><th>Omschrijving</th><th style="text-align:right">Bedrag</th></tr></thead>
+      <tbody>
+        ${(f.lijnen||[]).filter(l=>l.naam).map(l=>`<tr><td>${l.naam}</td><td style="text-align:right;font-weight:600">${fmtEuro(l.prijs*l.aantal)}</td></tr>`).join("")}
+        <tr><td colspan="2" style="border:none;padding:4px"></td></tr>
+        <tr><td style="color:#64748b">Subtotaal excl. BTW</td><td style="text-align:right;color:#64748b">${fmtEuro(t)}</td></tr>
+        ${rente>0?`<tr><td style="color:#ef4444">Wettelijke intrest (1%/mnd, ${dagen} dagen)</td><td style="text-align:right;color:#ef4444">${fmtEuro(rente)}</td></tr>`:""}
+      </tbody>
+      <tfoot><tr class="totaalrij"><td><strong>TOTAAL OPEISBAAR</strong></td><td style="text-align:right"><strong>${fmtEuro(t+rente)}</strong></td></tr></tfoot>
+    </table>
+    <div class="betaal">
+      <div class="betaal-lbl">💳 Betaalinstructies</div>
+      <div class="betaal-val">IBAN: ${bed.iban||""} &nbsp;·&nbsp; BIC: ${bed.bic||""}</div>
+      <div class="betaal-val">Mededeling: <span class="ogm">${ogm}</span></div>
+    </div>
+    ${rente>0?`<div style="font-size:12px;color:#94a3b8;margin-top:8px">Bij niet-betaling: wettelijke rente 1%/maand + schadevergoeding 15% (min. €65)</div>`:""}
+  </div>
+  <div class="ftr">
+    <strong>${bed.naam||""}</strong> · ${bed.adres||""} · ${bed.gemeente||""}<br>
+    BTW: ${fmtBtwnr(bed.btwnr)} · ${bed.email||""} · ${bed.tel||""}
+  </div>
+</div>
+</body></html>`;
+  };
+
+  const verzend = async () => {
+    setSending(true);
+    try {
+      const pubKey = settings?.email?.emailjsPublicKey;
+      const serviceId = settings?.email?.emailjsServiceId;
+      const templateId = settings?.email?.emailjsTemplateFactuur;
+      const html = buildHtmlEmail();
+
+      if(pubKey && serviceId && templateId) {
+        if(window.emailjs) {
+          await window.emailjs.send(serviceId, templateId, {
+            to_email: f.klant?.email||"",
+            to_name: f.klant?.naam||"",
+            subject: `${tmpl.l} — Factuur ${f.nummer}`,
+            html_body: html,
+            text_body: tmpl.tekst,
+          }, pubKey);
+        }
+      } else {
+        // Fallback: download HTML + open mailto
+        const blob = new Blob([html],{type:"text/html"});
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url; a.download = `aanmaning_${f.nummer}.html`; a.click();
+        setTimeout(()=>URL.revokeObjectURL(url),5000);
+        const sub = `${tmpl.l} — Factuur ${f.nummer}`;
+        window.open(`mailto:${f.klant?.email||""}?subject=${encodeURIComponent(sub)}&body=${encodeURIComponent(tmpl.tekst)}`);
+      }
+      onSend({factuurId:f.id,factuurNr:f.nummer,klantNaam:f.klant?.naam,niveau,bedrag:t,rente,tekst:tmpl.tekst});
+    } catch(e) {
+      alert("Fout bij verzenden: "+e.message);
+    }
+    setSending(false);
+  };
+
+  return (
+    <div className="mo"><div className="mdl" style={{maxWidth:720}}>
+      <div className="mh">
+        <div className="mt-m">🔔 Aanmaning — {f.nummer} · {f.klant?.naam}</div>
+        <button className="xbtn" onClick={onClose}>×</button>
+      </div>
+      <div className="mb-body" style={{padding:20}}>
+        {/* Niveau kiezen */}
+        <div style={{marginBottom:20}}>
+          <div style={{fontSize:12,fontWeight:700,color:"#64748b",textTransform:"uppercase",letterSpacing:".6px",marginBottom:10}}>Type aanmaning</div>
+          <div style={{display:"flex",gap:8}}>
+            {templates.map((t,i)=>(
+              <button key={i} onClick={()=>setNiveau(i+1)} style={{
+                padding:"10px 16px",borderRadius:10,border:`2px solid ${niveau===i+1?t.c:"#e2e8f0"}`,
+                background:niveau===i+1?t.c+"22":"#fff",color:t.c,fontWeight:700,fontSize:13,cursor:"pointer"
+              }}>{t.l}</button>
+            ))}
+          </div>
+        </div>
+
+        {/* Bedragen */}
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12,marginBottom:20}}>
+          {[["Factuur",fmtEuro(t),"#1e293b"],["Wettelijke intrest",fmtEuro(rente),"#f59e0b"],["Totaal opeisbaar",fmtEuro(t+rente),"#ef4444"]].map(([l,v,c])=>(
+            <div key={l} style={{background:"#f8fafc",borderRadius:10,padding:"12px 14px",border:"1px solid #e2e8f0"}}>
+              <div style={{fontSize:11,color:"#94a3b8",fontWeight:600,textTransform:"uppercase",letterSpacing:".5px",marginBottom:4}}>{l}</div>
+              <div style={{fontWeight:800,fontSize:16,color:c}}>{v}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* Preview toggle */}
+        <div style={{marginBottom:16}}>
+          <button onClick={()=>setPreview(p=>!p)} style={{fontSize:12,background:"#f1f5f9",border:"1px solid #e2e8f0",borderRadius:6,padding:"6px 12px",cursor:"pointer"}}>
+            {preview?"▲ Verberg preview":"▼ Toon email preview"}
+          </button>
+        </div>
+        {preview&&(
+          <div style={{border:"1px solid #e2e8f0",borderRadius:10,overflow:"hidden",marginBottom:16,maxHeight:400,overflowY:"auto"}}>
+            <iframe srcDoc={buildHtmlEmail()} style={{width:"100%",height:400,border:"none"}} title="Email preview"/>
+          </div>
+        )}
+
+        {/* Tekst */}
+        <div style={{background:"#f8fafc",borderRadius:10,padding:"14px",border:"1px solid #e2e8f0",marginBottom:20}}>
+          <div style={{fontSize:11,fontWeight:700,color:"#94a3b8",textTransform:"uppercase",marginBottom:8}}>Email tekst</div>
+          <pre style={{fontSize:12.5,color:"#1e293b",whiteSpace:"pre-wrap",lineHeight:1.7,fontFamily:"Inter,sans-serif"}}>{tmpl.tekst}</pre>
+        </div>
+
+        {!settings?.email?.emailjsPublicKey&&(
+          <div style={{background:"#fffbeb",border:"1px solid #fde68a",borderRadius:8,padding:"10px 14px",marginBottom:16,fontSize:12,color:"#78350f"}}>
+            ⚠️ EmailJS niet geconfigureerd — de HTML email wordt gedownload en een mailto-venster geopend.
+          </div>
+        )}
+
+        <div style={{display:"flex",gap:10}}>
+          <button onClick={verzend} disabled={sending} style={{flex:1,padding:"14px",background:tmpl.c,color:"#fff",border:"none",borderRadius:10,fontWeight:700,fontSize:15,cursor:"pointer",opacity:sending?0.7:1}}>
+            {sending?"Bezig...":"🔔 Aanmaning versturen"}
+          </button>
+          <button onClick={()=>{const blob=new Blob([buildHtmlEmail()],{type:"text/html"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=`aanmaning_${f.nummer}.html`;a.click();}} style={{padding:"14px 18px",background:"#f1f5f9",border:"2px solid #e2e8f0",borderRadius:10,fontWeight:600,fontSize:13,cursor:"pointer"}}>
+            ⬇ Download HTML
+          </button>
+        </div>
+      </div>
+    </div></div>
+  );
+}
+
 function AanmaningenPage({facturen,aanmaningen,onVerzend,onCreate,settings}) {
   const openFact=facturen.filter(f=>["verstuurd","afgedrukt","onbetaald","vervallen"].includes(f.status));
   const getAanmaningen=fid=>aanmaningen.filter(a=>a.factuurId===fid);
@@ -10343,7 +10562,6 @@ function AanvragenPage({leads=[], onRefresh, onStatus, onToKlant, onToOfferte, n
   const aantalNieuw = leads.filter(l=>l.status==="nieuw").length;
   const fmtDt = ts => { try { return new Date(ts).toLocaleString("nl-BE",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"}); } catch(_){return ts||"";} };
 
-  // Haal fotos op uit lead — werkt met zowel string URL's als {label,url} objecten
   const getFotos = lead => {
     if(!lead) return [];
     let f = lead.fotos;
@@ -10352,16 +10570,8 @@ function AanvragenPage({leads=[], onRefresh, onStatus, onToKlant, onToOfferte, n
     if(!Array.isArray(f)) return [];
     return f;
   };
-  const getFotoSrc = f => {
-    if(!f) return "";
-    if(typeof f === "string") return f;
-    return f.url || f.data || f.src || "";
-  };
-  const getFotoLabel = (f, i) => {
-    if(!f || typeof f === "string") return `Foto ${i+1}`;
-    return f.label || f.naam || f.name || `Foto ${i+1}`;
-  };
-
+  const getFotoSrc = f => { if(!f) return ""; if(typeof f === "string") return f; return f.url||f.data||f.src||""; };
+  const getFotoLabel = (f,i) => { if(!f||typeof f==="string") return `Foto ${i+1}`; return f.label||f.naam||f.name||`Foto ${i+1}`; };
   const fotos = getFotos(selected);
 
   useEffect(()=>{
@@ -10370,8 +10580,7 @@ function AanvragenPage({leads=[], onRefresh, onStatus, onToKlant, onToOfferte, n
       if(e.key==="ArrowLeft"&&fotoIdx!==null&&fotos.length>1) setFotoIdx(p=>p>0?p-1:fotos.length-1);
       if(e.key==="ArrowRight"&&fotoIdx!==null&&fotos.length>1) setFotoIdx(p=>p<fotos.length-1?p+1:0);
     };
-    window.addEventListener("keydown",h);
-    return ()=>window.removeEventListener("keydown",h);
+    window.addEventListener("keydown",h); return ()=>window.removeEventListener("keydown",h);
   },[fotoIdx,fotos.length,selected]);
 
   const InfoRij = ({label,waarde}) => waarde ? (
@@ -10394,20 +10603,13 @@ function AanvragenPage({leads=[], onRefresh, onStatus, onToKlant, onToOfferte, n
           <a href="/aanvraag.html" target="_blank" className="btn b2">🔗 Aanvraagpagina</a>
         </div>
       </div>
-
       <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:20}}>
         {["alle","nieuw","in behandeling","behandeld","afgewezen"].map(s=>(
-          <button key={s} onClick={()=>setFilter(s)} style={{
-            padding:"7px 16px",borderRadius:20,border:"2px solid",cursor:"pointer",fontWeight:600,fontSize:13,
-            borderColor:filter===s?(stKleur[s]||"#1a2e4a"):"#e2e8f0",
-            background:filter===s?(stKleur[s]||"#1a2e4a"):"#fff",
-            color:filter===s?"#fff":(stKleur[s]||"#64748b")
-          }}>
+          <button key={s} onClick={()=>setFilter(s)} style={{padding:"7px 16px",borderRadius:20,border:"2px solid",cursor:"pointer",fontWeight:600,fontSize:13,borderColor:filter===s?(stKleur[s]||"#1a2e4a"):"#e2e8f0",background:filter===s?(stKleur[s]||"#1a2e4a"):"#fff",color:filter===s?"#fff":(stKleur[s]||"#64748b")}}>
             {stIco[s]||"📋"} {s==="alle"?"Alle":s}{s==="nieuw"&&aantalNieuw?` (${aantalNieuw})`:""}
           </button>
         ))}
       </div>
-
       {gefilterd.length===0
         ? <div style={{textAlign:"center",padding:"80px 20px",color:"#94a3b8",background:"#fff",borderRadius:14,border:"2px dashed #e2e8f0"}}>
             <div style={{fontSize:56,marginBottom:16}}>📭</div>
@@ -10416,44 +10618,26 @@ function AanvragenPage({leads=[], onRefresh, onStatus, onToKlant, onToOfferte, n
           </div>
         : <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(300px,1fr))",gap:12}}>
           {gefilterd.map(lead=>{
-            const lFotos = getFotos(lead);
-            return (
-              <div key={lead.id} onClick={()=>{setSelected(lead);setFotoIdx(null);}} style={{
-                background:"#fff",border:`2px solid ${selected?.id===lead.id?"#3b82f6":"#e2e8f0"}`,
-                borderRadius:14,padding:"16px",cursor:"pointer",transition:"all .15s",
-                boxShadow:selected?.id===lead.id?"0 0 0 3px #bfdbfe":"0 1px 4px rgba(0,0,0,.06)"
-              }}>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8,marginBottom:8}}>
-                  <div style={{fontWeight:800,fontSize:15,color:"#1e293b"}}>{lead.naam||"Onbekend"}</div>
-                  <span style={{background:stKleur[lead.status]+"22",color:stKleur[lead.status],border:`1.5px solid ${stKleur[lead.status]}`,borderRadius:8,padding:"3px 9px",fontSize:11,fontWeight:700,whiteSpace:"nowrap",flexShrink:0}}>
-                    {stIco[lead.status]} {lead.status}
-                  </span>
-                </div>
-                <div style={{fontSize:12,color:"#64748b",marginBottom:3}}>📅 {fmtDt(lead.created_at)}</div>
-                {lead.service&&<div style={{fontSize:12,color:"#475569",marginBottom:3}}>⚡ {lead.service}</div>}
-                {lead.email&&<div style={{fontSize:12,color:"#475569",marginBottom:3}}>✉ {lead.email}</div>}
-                {lead.tel&&<div style={{fontSize:12,color:"#475569",marginBottom:3}}>📞 {lead.tel}</div>}
-                {lFotos.length>0&&(
-                  <div style={{marginTop:10,display:"flex",gap:4,alignItems:"center"}}>
-                    {lFotos.slice(0,5).map((f,i)=>{
-                      const src=getFotoSrc(f);
-                      return src
-                        ? <img key={i} src={src} alt="" style={{width:40,height:40,objectFit:"cover",borderRadius:6,border:"1px solid #e2e8f0",flexShrink:0}} onError={e=>{e.target.style.display="none";}}/>
-                        : null;
-                    })}
-                    {lFotos.length>5&&<div style={{minWidth:40,height:40,borderRadius:6,background:"#f0f4f8",display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:700,color:"#64748b"}}>+{lFotos.length-5}</div>}
-                  </div>
-                )}
+            const lFotos=getFotos(lead);
+            return <div key={lead.id} onClick={()=>{setSelected(lead);setFotoIdx(null);}} style={{background:"#fff",border:`2px solid ${selected?.id===lead.id?"#3b82f6":"#e2e8f0"}`,borderRadius:14,padding:"16px",cursor:"pointer",transition:"all .15s",boxShadow:selected?.id===lead.id?"0 0 0 3px #bfdbfe":"0 1px 4px rgba(0,0,0,.06)"}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8,marginBottom:8}}>
+                <div style={{fontWeight:800,fontSize:15,color:"#1e293b"}}>{lead.naam||"Onbekend"}</div>
+                <span style={{background:stKleur[lead.status]+"22",color:stKleur[lead.status],border:`1.5px solid ${stKleur[lead.status]}`,borderRadius:8,padding:"3px 9px",fontSize:11,fontWeight:700,whiteSpace:"nowrap",flexShrink:0}}>{stIco[lead.status]} {lead.status}</span>
               </div>
-            );
+              <div style={{fontSize:12,color:"#64748b",marginBottom:3}}>📅 {fmtDt(lead.created_at)}</div>
+              {lead.service&&<div style={{fontSize:12,color:"#475569",marginBottom:3}}>⚡ {lead.service}</div>}
+              {lead.email&&<div style={{fontSize:12,color:"#475569",marginBottom:3}}>✉ {lead.email}</div>}
+              {lead.tel&&<div style={{fontSize:12,color:"#475569",marginBottom:3}}>📞 {lead.tel}</div>}
+              {lFotos.length>0&&<div style={{marginTop:10,display:"flex",gap:4}}>
+                {lFotos.slice(0,5).map((f,i)=>{const src=getFotoSrc(f);return src?<img key={i} src={src} alt="" style={{width:40,height:40,objectFit:"cover",borderRadius:6,border:"1px solid #e2e8f0",flexShrink:0}} onError={e=>{e.target.style.display="none";}}/>:null;})}
+                {lFotos.length>5&&<div style={{minWidth:40,height:40,borderRadius:6,background:"#f0f4f8",display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:700,color:"#64748b"}}>+{lFotos.length-5}</div>}
+              </div>}
+            </div>;
           })}
         </div>
       }
-
-      {/* DETAIL MODAL */}
       {selected&&(
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.6)",zIndex:9000,display:"flex",alignItems:"flex-start",justifyContent:"center",padding:"20px 16px",overflowY:"auto"}}
-          onClick={e=>{if(e.target===e.currentTarget)setSelected(null);}}>
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.6)",zIndex:9000,display:"flex",alignItems:"flex-start",justifyContent:"center",padding:"20px 16px",overflowY:"auto"}} onClick={e=>{if(e.target===e.currentTarget)setSelected(null);}}>
           <div style={{background:"#fff",borderRadius:18,width:"100%",maxWidth:880,boxShadow:"0 24px 80px rgba(0,0,0,.35)",overflow:"hidden",marginBottom:20}}>
             <div style={{background:"#0f1e35",padding:"20px 24px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
               <div>
@@ -10461,28 +10645,18 @@ function AanvragenPage({leads=[], onRefresh, onStatus, onToKlant, onToOfferte, n
                 <div style={{color:"rgba(255,255,255,.5)",fontSize:12,marginTop:3}}>📅 {fmtDt(selected.created_at)}</div>
               </div>
               <div style={{display:"flex",gap:8,alignItems:"center"}}>
-                <span style={{background:stKleur[selected.status]+"44",color:stKleur[selected.status],border:`1.5px solid ${stKleur[selected.status]}`,borderRadius:10,padding:"5px 12px",fontSize:12,fontWeight:700}}>
-                  {stIco[selected.status]} {selected.status}
-                </span>
+                <span style={{background:stKleur[selected.status]+"44",color:stKleur[selected.status],border:`1.5px solid ${stKleur[selected.status]}`,borderRadius:10,padding:"5px 12px",fontSize:12,fontWeight:700}}>{stIco[selected.status]} {selected.status}</span>
                 <button onClick={()=>setSelected(null)} style={{background:"rgba(255,255,255,.15)",border:"none",color:"#fff",borderRadius:10,width:36,height:36,cursor:"pointer",fontSize:20,display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
               </div>
             </div>
-
             <div style={{padding:"24px",display:"grid",gridTemplateColumns:"1fr 1fr",gap:20}}>
-              {/* Kolom links */}
               <div style={{display:"flex",flexDirection:"column",gap:14}}>
                 <div style={{background:"#f8fafc",borderRadius:12,padding:"14px",border:"1px solid #e2e8f0"}}>
                   <div style={{fontWeight:700,fontSize:11,color:"#94a3b8",textTransform:"uppercase",letterSpacing:".8px",marginBottom:10}}>Status wijzigen</div>
                   <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-                    {statussen.map(s=>(
-                      <button key={s} onClick={()=>{onStatus(selected.id,s);setSelected({...selected,status:s});}}
-                        style={{padding:"6px 12px",borderRadius:8,border:`2px solid ${stKleur[s]}`,background:selected.status===s?stKleur[s]:"#fff",color:selected.status===s?"#fff":stKleur[s],fontWeight:700,fontSize:12,cursor:"pointer"}}>
-                        {stIco[s]} {s}
-                      </button>
-                    ))}
+                    {statussen.map(s=><button key={s} onClick={()=>{onStatus(selected.id,s);setSelected({...selected,status:s});}} style={{padding:"6px 12px",borderRadius:8,border:`2px solid ${stKleur[s]}`,background:selected.status===s?stKleur[s]:"#fff",color:selected.status===s?"#fff":stKleur[s],fontWeight:700,fontSize:12,cursor:"pointer"}}>{stIco[s]} {s}</button>)}
                   </div>
                 </div>
-
                 <div style={{background:"#f8fafc",borderRadius:12,padding:"14px",border:"1px solid #e2e8f0",flex:1}}>
                   <div style={{fontWeight:700,fontSize:11,color:"#94a3b8",textTransform:"uppercase",letterSpacing:".8px",marginBottom:10}}>👤 Klantgegevens</div>
                   <InfoRij label="Naam" waarde={selected.naam}/>
@@ -10494,24 +10668,12 @@ function AanvragenPage({leads=[], onRefresh, onStatus, onToKlant, onToOfferte, n
                   <InfoRij label="Adres" waarde={selected.adres}/>
                   <InfoRij label="Gemeente" waarde={[selected.postcode,selected.gemeente].filter(Boolean).join(" ")}/>
                 </div>
-
                 <div style={{display:"flex",flexDirection:"column",gap:8}}>
-                  <button onClick={()=>{onToKlant(selected);setToKlantDone(p=>new Set(p).add(selected.id));}}
-                    style={{width:"100%",padding:"13px",background:toKlantDone.has(selected.id)?"#10b981":"#0f1e35",color:"#fff",border:"none",borderRadius:10,fontWeight:700,fontSize:14,cursor:"pointer"}}>
-                    {toKlantDone.has(selected.id)?"✅ Klant toegevoegd":"👤 Toevoegen als klant"}
-                  </button>
-                  <button onClick={()=>onToOfferte(selected)}
-                    style={{width:"100%",padding:"13px",background:"#2563eb",color:"#fff",border:"none",borderRadius:10,fontWeight:700,fontSize:14,cursor:"pointer"}}>
-                    📋 Offerte aanmaken
-                  </button>
-                  {selected.email&&<a href={`mailto:${selected.email}?subject=Uw aanvraag bij W-charge BV`}
-                    style={{display:"block",width:"100%",padding:"11px",background:"#f1f5f9",color:"#475569",border:"2px solid #e2e8f0",borderRadius:10,fontWeight:600,fontSize:13,textAlign:"center",textDecoration:"none"}}>
-                    ✉ Email versturen
-                  </a>}
+                  <button onClick={()=>{onToKlant(selected);setToKlantDone(p=>new Set(p).add(selected.id));}} style={{width:"100%",padding:"13px",background:toKlantDone.has(selected.id)?"#10b981":"#0f1e35",color:"#fff",border:"none",borderRadius:10,fontWeight:700,fontSize:14,cursor:"pointer"}}>{toKlantDone.has(selected.id)?"✅ Klant toegevoegd":"👤 Toevoegen als klant"}</button>
+                  <button onClick={()=>onToOfferte(selected)} style={{width:"100%",padding:"13px",background:"#2563eb",color:"#fff",border:"none",borderRadius:10,fontWeight:700,fontSize:14,cursor:"pointer"}}>📋 Offerte aanmaken</button>
+                  {selected.email&&<a href={`mailto:${selected.email}?subject=Uw aanvraag bij W-charge BV`} style={{display:"block",width:"100%",padding:"11px",background:"#f1f5f9",color:"#475569",border:"2px solid #e2e8f0",borderRadius:10,fontWeight:600,fontSize:13,textAlign:"center",textDecoration:"none"}}>✉ Email versturen</a>}
                 </div>
               </div>
-
-              {/* Kolom rechts */}
               <div style={{display:"flex",flexDirection:"column",gap:14}}>
                 <div style={{background:"#f8fafc",borderRadius:12,padding:"14px",border:"1px solid #e2e8f0"}}>
                   <div style={{fontWeight:700,fontSize:11,color:"#94a3b8",textTransform:"uppercase",letterSpacing:".8px",marginBottom:10}}>⚡ Aanvraagdetails</div>
@@ -10520,46 +10682,24 @@ function AanvragenPage({leads=[], onRefresh, onStatus, onToKlant, onToOfferte, n
                   <InfoRij label="Voertuig" waarde={selected.voertuig}/>
                   <InfoRij label="Stroom" waarde={selected.stroom}/>
                   <InfoRij label="Netbeheerder" waarde={selected.netbeheerder}/>
-                  {(selected.opmerking||selected.bericht)&&(
-                    <div style={{marginTop:10,padding:"12px",background:"#fffbeb",borderRadius:8,border:"1px solid #fde68a"}}>
-                      <div style={{fontSize:11,fontWeight:700,color:"#92400e",marginBottom:6,textTransform:"uppercase",letterSpacing:".5px"}}>💬 Opmerking</div>
-                      <div style={{fontSize:13,color:"#1e293b",lineHeight:1.7,whiteSpace:"pre-wrap"}}>{selected.opmerking||selected.bericht}</div>
-                    </div>
-                  )}
+                  {(selected.opmerking||selected.bericht)&&<div style={{marginTop:10,padding:"12px",background:"#fffbeb",borderRadius:8,border:"1px solid #fde68a"}}><div style={{fontSize:11,fontWeight:700,color:"#92400e",marginBottom:6,textTransform:"uppercase",letterSpacing:".5px"}}>💬 Opmerking</div><div style={{fontSize:13,color:"#1e293b",lineHeight:1.7,whiteSpace:"pre-wrap"}}>{selected.opmerking||selected.bericht}</div></div>}
                 </div>
-
-                {/* FOTO'S */}
                 <div style={{background:"#f8fafc",borderRadius:12,padding:"14px",border:"1px solid #e2e8f0",flex:1}}>
-                  <div style={{fontWeight:700,fontSize:11,color:"#94a3b8",textTransform:"uppercase",letterSpacing:".8px",marginBottom:12}}>
-                    📸 Foto's {fotos.length>0?`(${fotos.length}) — klik om te vergroten`:""}
-                  </div>
+                  <div style={{fontWeight:700,fontSize:11,color:"#94a3b8",textTransform:"uppercase",letterSpacing:".8px",marginBottom:12}}>📸 Foto's {fotos.length>0?`(${fotos.length}) — klik om te vergroten`:""}</div>
                   {fotos.length>0
                     ? <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(130px,1fr))",gap:8}}>
-                        {fotos.map((foto,i)=>{
-                          const src=getFotoSrc(foto);
-                          const label=getFotoLabel(foto,i);
-                          return (
-                            <div key={i} onClick={()=>setFotoIdx(i)} style={{cursor:"zoom-in"}}>
-                              <div style={{borderRadius:10,overflow:"hidden",border:"2px solid #e2e8f0",aspectRatio:"1",background:"#e8edf2",position:"relative"}}>
-                                {src
-                                  ? <img src={src} alt={label}
-                                      style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}}
-                                      onError={e=>{e.target.style.display="none";e.target.insertAdjacentHTML("afterend",'<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#94a3b8;font-size:11px;text-align:center;padding:4px">Kan niet laden</div>');}}/>
-                                  : <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",color:"#94a3b8",fontSize:11}}>Geen URL</div>
-                                }
-                              </div>
-                              <div style={{fontSize:11,color:"#64748b",textAlign:"center",marginTop:4,fontWeight:500,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{label}</div>
+                        {fotos.map((foto,i)=>{const src=getFotoSrc(foto);const label=getFotoLabel(foto,i);return(
+                          <div key={i} onClick={()=>setFotoIdx(i)} style={{cursor:"zoom-in"}}>
+                            <div style={{borderRadius:10,overflow:"hidden",border:"2px solid #e2e8f0",aspectRatio:"1",background:"#e8edf2"}}>
+                              {src?<img src={src} alt={label} style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}} onError={e=>{e.target.style.display="none";}}/>:<div style={{display:"flex",height:"100%",alignItems:"center",justifyContent:"center",color:"#94a3b8",fontSize:11,textAlign:"center",padding:4}}>Geen URL</div>}
                             </div>
-                          );
-                        })}
+                            <div style={{fontSize:11,color:"#64748b",textAlign:"center",marginTop:4,fontWeight:500,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{label}</div>
+                          </div>
+                        );})}
                       </div>
                     : <div style={{textAlign:"center",color:"#94a3b8",padding:"30px 0"}}>
                         <div style={{fontSize:36,marginBottom:8}}>📷</div>
                         <div style={{fontSize:13}}>Geen foto's meegestuurd</div>
-                        {/* Debug: toon ruwe fotos waarde */}
-                        {selected.fotos!==null&&selected.fotos!==undefined&&<div style={{fontSize:10,color:"#cbd5e1",marginTop:8,wordBreak:"break-all"}}>
-                          Raw: {typeof selected.fotos === "string" ? selected.fotos.slice(0,100) : JSON.stringify(selected.fotos)?.slice(0,100)}
-                        </div>}
                       </div>
                   }
                 </div>
@@ -10568,25 +10708,15 @@ function AanvragenPage({leads=[], onRefresh, onStatus, onToKlant, onToOfferte, n
           </div>
         </div>
       )}
-
-      {/* LIGHTBOX */}
       {selected&&fotoIdx!==null&&fotos.length>0&&(
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.94)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center"}}
-          onClick={()=>setFotoIdx(null)}>
-          {fotos.length>1&&<button onClick={e=>{e.stopPropagation();setFotoIdx(p=>p>0?p-1:fotos.length-1);}}
-            style={{position:"absolute",left:16,top:"50%",transform:"translateY(-50%)",background:"rgba(255,255,255,.2)",border:"none",color:"#fff",borderRadius:"50%",width:52,height:52,fontSize:28,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",zIndex:1}}>‹</button>}
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.94)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center"}} onClick={()=>setFotoIdx(null)}>
+          {fotos.length>1&&<button onClick={e=>{e.stopPropagation();setFotoIdx(p=>p>0?p-1:fotos.length-1);}} style={{position:"absolute",left:16,top:"50%",transform:"translateY(-50%)",background:"rgba(255,255,255,.2)",border:"none",color:"#fff",borderRadius:"50%",width:52,height:52,fontSize:28,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",zIndex:1}}>‹</button>}
           <div style={{maxWidth:"90vw",maxHeight:"90vh",textAlign:"center",padding:fotos.length>1?"0 80px":"0 20px"}} onClick={e=>e.stopPropagation()}>
-            <img src={getFotoSrc(fotos[fotoIdx])} alt={getFotoLabel(fotos[fotoIdx],fotoIdx)}
-              style={{maxWidth:"100%",maxHeight:"82vh",objectFit:"contain",borderRadius:12,boxShadow:"0 0 60px rgba(0,0,0,.6)"}}/>
-            <div style={{color:"rgba(255,255,255,.65)",marginTop:14,fontSize:13}}>
-              <span style={{marginRight:8}}>{getFotoLabel(fotos[fotoIdx],fotoIdx)}</span>
-              {fotos.length>1&&<span>({fotoIdx+1}/{fotos.length})</span>}
-            </div>
+            <img src={getFotoSrc(fotos[fotoIdx])} alt={getFotoLabel(fotos[fotoIdx],fotoIdx)} style={{maxWidth:"100%",maxHeight:"82vh",objectFit:"contain",borderRadius:12,boxShadow:"0 0 60px rgba(0,0,0,.6)"}}/>
+            <div style={{color:"rgba(255,255,255,.65)",marginTop:14,fontSize:13}}><span style={{marginRight:8}}>{getFotoLabel(fotos[fotoIdx],fotoIdx)}</span>{fotos.length>1&&<span>({fotoIdx+1}/{fotos.length})</span>}</div>
           </div>
-          {fotos.length>1&&<button onClick={e=>{e.stopPropagation();setFotoIdx(p=>p<fotos.length-1?p+1:0);}}
-            style={{position:"absolute",right:16,top:"50%",transform:"translateY(-50%)",background:"rgba(255,255,255,.2)",border:"none",color:"#fff",borderRadius:"50%",width:52,height:52,fontSize:28,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",zIndex:1}}>›</button>}
-          <button onClick={()=>setFotoIdx(null)}
-            style={{position:"absolute",top:16,right:16,background:"rgba(255,255,255,.2)",border:"none",color:"#fff",borderRadius:10,width:42,height:42,fontSize:22,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
+          {fotos.length>1&&<button onClick={e=>{e.stopPropagation();setFotoIdx(p=>p<fotos.length-1?p+1:0);}} style={{position:"absolute",right:16,top:"50%",transform:"translateY(-50%)",background:"rgba(255,255,255,.2)",border:"none",color:"#fff",borderRadius:"50%",width:52,height:52,fontSize:28,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",zIndex:1}}>›</button>}
+          <button onClick={()=>setFotoIdx(null)} style={{position:"absolute",top:16,right:16,background:"rgba(255,255,255,.2)",border:"none",color:"#fff",borderRadius:10,width:42,height:42,fontSize:22,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
         </div>
       )}
     </div>
