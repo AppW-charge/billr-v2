@@ -1401,7 +1401,7 @@ tr.row-active td{border-top:2px solid #2563eb}
 .doc-act-panel{display:flex;flex-direction:column;gap:0}
 .doc-act-btns{display:flex;gap:7px;flex-wrap:wrap;padding:10px 14px;align-items:center;border-bottom:1px solid #e0eeff}
 .doc-act-label{font-weight:700;font-size:11.5px;color:#1e3a5f;margin-right:4px;white-space:nowrap}
-.doc-log-wrap{padding:10px 14px;max-height:240px;overflow-y:auto}
+.doc-log-wrap{padding:8px 14px;max-height:160px;overflow-y:auto;display:flex;flex-direction:column;gap:4px}
 .doc-log-entry{display:flex;gap:8px;align-items:flex-start;font-size:11.5px}
 .doc-log-ts{color:#94a3b8;font-size:10.5px;white-space:nowrap;flex-shrink:0;margin-top:1px}
 .doc-log-act{color:#1e3a5f;font-weight:500}
@@ -2426,8 +2426,18 @@ export default function App() {
       else if(filter === "behandeld") q = q.eq("status","behandeld");
       const { data, error } = await q;
       if(!error && data) {
-        setWebsiteLeads(data);
-        const nieuw = data.filter(l => l.status === "nieuw").length;
+        // Normaliseer fotos: jsonb komt al als array van Supabase, maar soms als string
+        const normalized = data.map(lead => {
+          let fotos = lead.fotos;
+          if(typeof fotos === "string") {
+            try { fotos = JSON.parse(fotos); } catch(_) { fotos = []; }
+          }
+          // Zorg dat het altijd een array is
+          if(!Array.isArray(fotos)) fotos = fotos ? [fotos] : [];
+          return {...lead, fotos};
+        });
+        setWebsiteLeads(normalized);
+        const nieuw = normalized.filter(l => l.status === "nieuw").length;
         if(nieuw > 0) document.title = `(${nieuw}) BILLR`;
         else document.title = "BILLR";
       }
@@ -2948,7 +2958,7 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
         status: "verstuurd_peppol", 
         peppolVerstuurd: true, 
         peppolId: result.documentId,
-        logActie: `🇧🇪 Verstuurd via Peppol naar ${factuur?.klant?.naam||factuur?.klant?.btwnr||"klant"} (ID: ${result.documentId})`
+        logActie: `🇧🇪 Verstuurd via Peppol (ID: ${result.documentId})`
       };
       updFact(factuur.id, peppolUpd);
       // Update ook de viewDoc zodat UI meteen toont dat het verstuurd is
@@ -3014,7 +3024,7 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
 
   const updOff = (id, upd) => {
     setOffertes(prev => {
-      const actie = upd.logActie || (upd.status ? "Status → "+(OFF_STATUS[upd.status]?.l||upd.status) : "Gewijzigd");
+      const actie = upd.status ? "Status → "+(OFF_STATUS[upd.status]?.l||upd.status) : upd.logActie||"Gewijzigd";
       const next = prev.map(o => o.id===id ? {...o,...upd, log:[...(o.log||[]), logEntry(actie)]} : o);
       // Sla enkel de gewijzigde offerte op (per nummer)
       const gewijzigd = next.find(o => o.id===id);
@@ -3027,7 +3037,7 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
   };
   const updFact = (id,upd) => {
     setFacturen(prev => {
-      const next = prev.map(f=>f.id===id?{...f,...upd,log:[...(f.log||[]),logEntry(upd.status?(upd.logActie||("Status → "+(FACT_STATUS[upd.status]?.l||upd.status))):upd.logActie||"Gewijzigd")]}:f);
+      const next = prev.map(f=>f.id===id?{...f,...upd,log:[...(f.log||[]),logEntry(upd.logActie||(upd.status?"Status → "+(FACT_STATUS[upd.status]?.l||upd.status):"Gewijzigd"))]}:f);
       const gewijzigd = next.find(f=>f.id===id);
       if(gewijzigd?.nummer) {
         const u=userRef.current;
@@ -3770,7 +3780,7 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
     ["facturen","🧾","Facturen",factOpen||null],
     ["creditnotas","📑","Creditnota's",null],
     ["aanmaningen","🔔","Aanmaningen",aanmaningen.filter(a=>a.status==="openstaand").length||null],
-    ["aanvragen","📥","Aanvragen",null],
+    ["aanvragen","📥","Aanvragen",websiteLeads.filter(l=>l.status==="nieuw").length||null],
     ["klanten","👥","Klanten",null],
     ["producten","📦","Producten",null],
     ["agenda","📅","Agenda",null],
@@ -3950,7 +3960,7 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
         }
         setFactuurWizOpen(false);setEditFact(null);
       }} onClose={()=>{setFactuurWizOpen(false);setEditFact(null);}} notify={notify}/>}
-      {viewDoc&&<DocModal doc={viewDoc.doc} type={viewDoc.type} settings={settings} producten={producten} sbClient={sb} userId={user?.id} onClose={()=>setViewDoc(null)} onFactuur={d=>{setFactModal(d);setViewDoc(null);}} onStatusOff={(s,la)=>{handleOffStatus(viewDoc.doc.id,{status:s,logActie:la||("Status → "+(OFF_STATUS[s]?.l||s))});notify("Status: "+OFF_STATUS[s]?.l);}} onStatusFact={(s,la)=>{updFact(viewDoc.doc.id,{status:s,logActie:la||("Status → "+(FACT_STATUS[s]?.l||s))});notify("Status: "+FACT_STATUS[s]?.l);}} onEmail={()=>setEmailModal({doc:viewDoc.doc,type:viewDoc.type})} onPeppol={viewDoc.type==="factuur"?()=>sendPeppol(viewDoc.doc):null} onNummer={nr=>{if(viewDoc.type==="offerte"){updOff(viewDoc.doc.id,{nummer:nr});setViewDoc(p=>({...p,doc:{...p.doc,nummer:nr}}));}else{updFact(viewDoc.doc.id,{nummer:nr});setViewDoc(p=>({...p,doc:{...p.doc,nummer:nr}}));}notify("Nummer bijgewerkt ✓");setTimeout(()=>flushSavesRef.current(),100);}}/>}
+      {viewDoc&&<DocModal doc={viewDoc.doc} type={viewDoc.type} settings={settings} producten={producten} sbClient={sb} userId={user?.id} onClose={()=>setViewDoc(null)} onFactuur={d=>{setFactModal(d);setViewDoc(null);}} onStatusOff={s=>{handleOffStatus(viewDoc.doc.id,{status:s});notify("Status: "+OFF_STATUS[s]?.l);}} onStatusFact={s=>{updFact(viewDoc.doc.id,{status:s});notify("Status: "+FACT_STATUS[s]?.l);}} onEmail={()=>setEmailModal({doc:viewDoc.doc,type:viewDoc.type})} onPeppol={viewDoc.type==="factuur"?()=>sendPeppol(viewDoc.doc):null} onNummer={nr=>{if(viewDoc.type==="offerte"){updOff(viewDoc.doc.id,{nummer:nr});setViewDoc(p=>({...p,doc:{...p.doc,nummer:nr}}));}else{updFact(viewDoc.doc.id,{nummer:nr});setViewDoc(p=>({...p,doc:{...p.doc,nummer:nr}}));}notify("Nummer bijgewerkt ✓");setTimeout(()=>flushSavesRef.current(),100);}}/>}
       {factModal&&<FactuurModal off={factModal} settings={settings} onMaak={maakFactuur} onClose={()=>setFactModal(null)}/>}
       {klantModal!==null&&<KlantModal klant={klantModal} onSave={k=>{if(k.id){setKlanten(p=>p.map(x=>x.id===k.id?k:x));notify("Klant opgeslagen");}else{setKlanten(p=>[{...k,id:uid(),aangemaakt:new Date().toISOString()},...p]);notify("Klant toegevoegd ✓");}setKlantModal(null);}} onClose={()=>setKlantModal(null)}/>}
       {prodModal!==null&&<ProductModal prod={prodModal} settings={settings} onSave={p=>{
@@ -3970,10 +3980,10 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
         onSend={async (success)=>{
           if(success) {
             if(emailModal.type==="offerte") {
-              updOff(emailModal.doc.id, {status:"verstuurd_mail", logActie:`📧 Email verzonden naar ${emailModal.doc.klant?.email||"klant"}${settings?.email?.cc?` (CC: ${settings.email.cc})`:""}`});
+              updOff(emailModal.doc.id, {status:"verstuurd_mail", logActie:`📧 Verzonden via email naar ${emailModal.doc.klant?.email||"klant"}`});
               await shareOfferte(emailModal.doc); // Sla snapshot op voor publieke offerte.html (await zodat fiches mee zijn)
             } else {
-              updFact(emailModal.doc.id, {status:"verstuurd_mail", logActie:`📧 Email verzonden naar ${emailModal.doc.klant?.email||"klant"}${settings?.email?.cc?` (CC: ${settings.email.cc})`:""}`});
+              updFact(emailModal.doc.id, {status:"verstuurd_mail", logActie:`📧 Verzonden via email naar ${emailModal.doc.klant?.email||"klant"}`});
               // Sla factuur snapshot op in offerte_shares zodat de bekijk-link werkt
               try {
                 const bed2 = settings?.bedrijf || {};
@@ -4043,12 +4053,13 @@ function AgendaPage({offertes, settings, onPlan, onPlanDelete}) {
   const [maand, setMaand] = React.useState(now.getMonth());
   const [geselecteerd, setGeselecteerd] = React.useState(null);
 
-  // Enkel bevestigde afspraken
+  // Alle afspraken met datum
   const afspraken = offertes.filter(o =>
-    o.planBevestigingVerstuurd === true &&
     o.planDatum &&
     o.planStatus !== "geannuleerd" &&
-    o.status !== "uitgevoerd"
+    o.status !== "uitgevoerd" &&
+    o.status !== "afgewezen" &&
+    o.status !== "concept"
   );
 
   // Per datum groeperen
@@ -4318,6 +4329,7 @@ function Dashboard({offertes, facturen, onGoto, onNew, onFactuur, settings, offe
   const toggleTodo = (id) => saveTodos(todos.map(t=>t.id===id?{...t,gedaan:!t.gedaan}:t));
   const deleteTodo = (id) => saveTodos(todos.filter(t=>t.id!==id));
   const [todoFilter, setTodoFilter] = useState("open");
+  const [leadFilter, setLeadFilter] = useState("alle");
   const defaultOrder = ["todoLijst","websiteAanvragen","statistieken","recenteOffertes","openFacturen","goedgekeurdeOffertes","offerteLogboek","afspraken","snelleActies","agenda"];
   // Zorg dat todoLijst altijd in de order zit
   const rawOrder = widgetOrder || settings.dashboardWidgets?.widgetOrder || defaultOrder;
@@ -5068,47 +5080,34 @@ function DocIcons({doc, type}) {
 }
 
 function DocLog({log=[]}) {
-  const fmt = ts => {
-    try {
-      const d = new Date(ts);
-      return d.toLocaleDateString("nl-BE",{day:"2-digit",month:"2-digit",year:"numeric"})
-        + " " + d.toLocaleTimeString("nl-BE",{hour:"2-digit",minute:"2-digit"});
-    } catch(_){ return ts||""; }
-  };
+  const fmt = ts => { try{ const d=new Date(ts); return d.toLocaleDateString("nl-BE",{day:"2-digit",month:"2-digit",year:"numeric"})+" "+d.toLocaleTimeString("nl-BE",{hour:"2-digit",minute:"2-digit"}); }catch(_){return ts||"";} };
   const getIco = actie => {
-    const a = (actie||"").toLowerCase();
-    if(a.includes("peppol")) return {ico:"🇧🇪",kleur:"#7c3aed"};
-    if(a.includes("email")||a.includes("verzonden")) return {ico:"📧",kleur:"#2563eb"};
-    if(a.includes("afgedrukt")||a.includes("print")) return {ico:"🖨️",kleur:"#8b5cf6"};
-    if(a.includes("betaald")) return {ico:"💶",kleur:"#10b981"};
-    if(a.includes("aangemaakt")) return {ico:"✨",kleur:"#0ea5e9"};
-    if(a.includes("goedgekeurd")||a.includes("akkoord")) return {ico:"✅",kleur:"#10b981"};
-    if(a.includes("afgewezen")) return {ico:"❌",kleur:"#ef4444"};
-    if(a.includes("boekhouder")||a.includes("boekhouding")) return {ico:"📊",kleur:"#f59e0b"};
-    if(a.includes("aanmaning")) return {ico:"🔔",kleur:"#ef4444"};
-    if(a.includes("status")) return {ico:"🔄",kleur:"#64748b"};
-    if(a.includes("gewijzigd")||a.includes("bijgewerkt")) return {ico:"✏️",kleur:"#64748b"};
-    if(a.includes("ingepland")||a.includes("afspraak")) return {ico:"📅",kleur:"#0ea5e9"};
-    return {ico:"•",kleur:"#94a3b8"};
+    const a=(actie||"").toLowerCase();
+    if(a.includes("peppol")) return {ico:"🇧🇪",k:"#7c3aed"};
+    if(a.includes("email")||a.includes("verzonden")) return {ico:"📧",k:"#2563eb"};
+    if(a.includes("afgedrukt")||a.includes("print")) return {ico:"🖨️",k:"#8b5cf6"};
+    if(a.includes("betaald")) return {ico:"💶",k:"#10b981"};
+    if(a.includes("aangemaakt")) return {ico:"✨",k:"#0ea5e9"};
+    if(a.includes("goedgekeurd")||a.includes("akkoord")) return {ico:"✅",k:"#10b981"};
+    if(a.includes("afgewezen")) return {ico:"❌",k:"#ef4444"};
+    if(a.includes("boekhouder")) return {ico:"📊",k:"#f59e0b"};
+    if(a.includes("aanmaning")) return {ico:"🔔",k:"#ef4444"};
+    if(a.includes("afspraak")||a.includes("ingepland")||a.includes("bevestigd")) return {ico:"📅",k:"#0ea5e9"};
+    if(a.includes("gewijzigd")||a.includes("bijgewerkt")) return {ico:"✏️",k:"#64748b"};
+    return {ico:"•",k:"#94a3b8"};
   };
-  const clean = [...(log||[])].filter(l => l.actie || l.txt);
+  const clean=[...(log||[])].filter(l=>l.actie||l.txt);
   if(!clean.length) return <div className="doc-log-empty">Nog geen acties geregistreerd</div>;
-  return (
-    <div style={{display:"flex",flexDirection:"column",gap:0}}>
-      {[...clean].reverse().map((l,i)=>{
-        const {ico,kleur} = getIco(l.actie||l.txt);
-        return (
-          <div key={i} style={{display:"flex",gap:8,alignItems:"flex-start",padding:"6px 0",borderBottom:i<clean.length-1?"1px solid #f1f5f9":"none"}}>
-            <span style={{fontSize:14,flexShrink:0,marginTop:1}}>{ico}</span>
-            <div style={{flex:1,minWidth:0}}>
-              <div style={{fontSize:12.5,fontWeight:600,color:kleur,lineHeight:1.4}}>{l.actie||l.txt}</div>
-              <div style={{fontSize:10.5,color:"#94a3b8",marginTop:1}}>{fmt(l.ts)}</div>
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
+  return <div>{[...clean].reverse().map((l,i)=>{
+    const {ico,k}=getIco(l.actie||l.txt);
+    return <div key={i} style={{display:"flex",gap:8,alignItems:"flex-start",padding:"6px 0",borderBottom:i<clean.length-1?"1px solid #f1f5f9":"none"}}>
+      <span style={{fontSize:14,flexShrink:0,marginTop:1}}>{ico}</span>
+      <div style={{flex:1,minWidth:0}}>
+        <div style={{fontSize:12.5,fontWeight:600,color:k,lineHeight:1.4}}>{l.actie||l.txt}</div>
+        <div style={{fontSize:10.5,color:"#94a3b8",marginTop:1}}>{fmt(l.ts)}</div>
+      </div>
+    </div>;
+  })}</div>;
 }
 
 
@@ -7720,7 +7719,6 @@ function DocModal({doc,type,settings,onClose,onFactuur,onStatusOff,onStatusFact,
   const [editNummer,setEditNummer] = useState(false);
   const [nummerVal,setNummerVal] = useState(doc.nummer||"");
   const [ficheCache,setFicheCache] = useState({});
-  const [logOpen,setLogOpen] = useState(true);
 
   // Laad fiches voor offerte on-demand uit product_fiches tabel
   useEffect(()=>{
@@ -7771,9 +7769,8 @@ function DocModal({doc,type,settings,onClose,onFactuur,onStatusOff,onStatusFact,
       setTimeout(()=>{ pr.innerHTML = ""; document.title = prev; }, 2000);
     }, 300); });
 
-    const printTs = new Date().toLocaleString("nl-BE",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"});
-    if(type==="offerte") onStatusOff("afgedrukt", `🖨️ Afgedrukt op ${printTs}`);
-    else onStatusFact("afgedrukt", `🖨️ Afgedrukt op ${printTs}`);
+    if(type==="offerte") onStatusOff("afgedrukt");
+    else onStatusFact("afgedrukt");
   };
 
   // Ctrl+P shortcut
@@ -7815,6 +7812,13 @@ function DocModal({doc,type,settings,onClose,onFactuur,onStatusOff,onStatusFact,
             </select>
           )}
           {type==="offerte"&&doc.status==="goedgekeurd"&&!doc.factuurId&&<button className="btn bg btn-sm" onClick={()=>onFactuur(doc)}>🧾 Factuur</button>}
+          {type==="offerte"&&!["goedgekeurd","afgewezen","gefactureerd"].includes(doc.status)&&(
+            <button className="btn btn-sm" style={{background:"#10b981",color:"#fff",fontWeight:700}}
+              onClick={()=>{if(window.confirm("Offerte "+doc.nummer+" goedgekeurd via email?")) {
+                const ts=new Date().toLocaleString("nl-BE",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"});
+                onStatusOff("goedgekeurd",`✅ Goedgekeurd door klant via email (${ts})`);
+              }}}>✅ Goedgekeurd via email</button>
+          )}
           <button className="btn bs btn-sm" onClick={onEmail}>📧 Verzenden</button>
           {type==="factuur"&&onPeppol&&settings?.integraties?.peppolEnabled&&(
   doc.peppolVerstuurd
@@ -7851,22 +7855,6 @@ function DocModal({doc,type,settings,onClose,onFactuur,onStatusOff,onStatusFact,
       </div>
       <div className="mb-body" style={{padding:0}}>
         {type==="offerte"?<OfferteDocument doc={doc} settings={settings} producten={producten} ficheCache={ficheCache}/>:<FactuurDocument doc={doc} settings={settings}/>}
-      </div>
-      {/* Activiteitenlog onderaan de modal */}
-      <div style={{borderTop:"2px solid #f1f5f9",background:"#fafbfc"}}>
-        <div style={{padding:"12px 20px",display:"flex",justifyContent:"space-between",alignItems:"center",cursor:"pointer",userSelect:"none"}}
-          onClick={()=>setLogOpen&&setLogOpen(p=>!p)}>
-          <div style={{fontWeight:700,fontSize:12,color:"#64748b",textTransform:"uppercase",letterSpacing:".6px",display:"flex",alignItems:"center",gap:6}}>
-            📋 Activiteitenlog
-            {(doc.log||[]).length>0&&<span style={{background:"#e2e8f0",color:"#475569",borderRadius:10,padding:"1px 7px",fontSize:11,fontWeight:700}}>{(doc.log||[]).length}</span>}
-          </div>
-          <span style={{color:"#94a3b8",fontSize:16}}>{logOpen?"▲":"▼"}</span>
-        </div>
-        {logOpen&&(
-          <div style={{padding:"0 20px 16px",maxHeight:320,overflowY:"auto"}}>
-            <DocLog log={doc.log||[]}/>
-          </div>
-        )}
       </div>
     </div></div>
   );
@@ -10354,10 +10342,27 @@ function AanvragenPage({leads=[], onRefresh, onStatus, onToKlant, onToOfferte, n
   const gefilterd = filter==="alle" ? leads : leads.filter(l=>l.status===filter);
   const aantalNieuw = leads.filter(l=>l.status==="nieuw").length;
   const fmtDt = ts => { try { return new Date(ts).toLocaleString("nl-BE",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"}); } catch(_){return ts||"";} };
-  const getFotos = lead => Array.isArray(lead.fotos) ? lead.fotos : [];
-  const getFotoSrc = f => typeof f==="string" ? f : (f?.url||f?.data||"");
-  const getFotoLabel = (f,i) => typeof f==="object" ? (f?.label||f?.naam||`Foto ${i+1}`) : `Foto ${i+1}`;
-  const fotos = selected ? getFotos(selected) : [];
+
+  // Haal fotos op uit lead — werkt met zowel string URL's als {label,url} objecten
+  const getFotos = lead => {
+    if(!lead) return [];
+    let f = lead.fotos;
+    if(!f) return [];
+    if(typeof f === "string") { try { f = JSON.parse(f); } catch(_) { return []; } }
+    if(!Array.isArray(f)) return [];
+    return f;
+  };
+  const getFotoSrc = f => {
+    if(!f) return "";
+    if(typeof f === "string") return f;
+    return f.url || f.data || f.src || "";
+  };
+  const getFotoLabel = (f, i) => {
+    if(!f || typeof f === "string") return `Foto ${i+1}`;
+    return f.label || f.naam || f.name || `Foto ${i+1}`;
+  };
+
+  const fotos = getFotos(selected);
 
   useEffect(()=>{
     const h = e => {
@@ -10430,10 +10435,12 @@ function AanvragenPage({leads=[], onRefresh, onStatus, onToKlant, onToOfferte, n
                 {lead.tel&&<div style={{fontSize:12,color:"#475569",marginBottom:3}}>📞 {lead.tel}</div>}
                 {lFotos.length>0&&(
                   <div style={{marginTop:10,display:"flex",gap:4,alignItems:"center"}}>
-                    {lFotos.slice(0,5).map((f,i)=>(
-                      <img key={i} src={getFotoSrc(f)} alt="" style={{width:40,height:40,objectFit:"cover",borderRadius:6,border:"1px solid #e2e8f0",flexShrink:0}}
-                        onError={e=>{e.target.style.display="none";}}/>
-                    ))}
+                    {lFotos.slice(0,5).map((f,i)=>{
+                      const src=getFotoSrc(f);
+                      return src
+                        ? <img key={i} src={src} alt="" style={{width:40,height:40,objectFit:"cover",borderRadius:6,border:"1px solid #e2e8f0",flexShrink:0}} onError={e=>{e.target.style.display="none";}}/>
+                        : null;
+                    })}
                     {lFotos.length>5&&<div style={{minWidth:40,height:40,borderRadius:6,background:"#f0f4f8",display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:700,color:"#64748b"}}>+{lFotos.length-5}</div>}
                   </div>
                 )}
@@ -10443,10 +10450,11 @@ function AanvragenPage({leads=[], onRefresh, onStatus, onToKlant, onToOfferte, n
         </div>
       }
 
+      {/* DETAIL MODAL */}
       {selected&&(
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.6)",zIndex:9000,display:"flex",alignItems:"flex-start",justifyContent:"center",padding:"20px 16px",overflowY:"auto"}}
           onClick={e=>{if(e.target===e.currentTarget)setSelected(null);}}>
-          <div style={{background:"#fff",borderRadius:18,width:"100%",maxWidth:860,boxShadow:"0 24px 80px rgba(0,0,0,.35)",overflow:"hidden",marginBottom:20}}>
+          <div style={{background:"#fff",borderRadius:18,width:"100%",maxWidth:880,boxShadow:"0 24px 80px rgba(0,0,0,.35)",overflow:"hidden",marginBottom:20}}>
             <div style={{background:"#0f1e35",padding:"20px 24px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
               <div>
                 <div style={{color:"#fff",fontWeight:900,fontSize:20}}>{selected.naam||"Aanvraag"}</div>
@@ -10461,6 +10469,7 @@ function AanvragenPage({leads=[], onRefresh, onStatus, onToKlant, onToOfferte, n
             </div>
 
             <div style={{padding:"24px",display:"grid",gridTemplateColumns:"1fr 1fr",gap:20}}>
+              {/* Kolom links */}
               <div style={{display:"flex",flexDirection:"column",gap:14}}>
                 <div style={{background:"#f8fafc",borderRadius:12,padding:"14px",border:"1px solid #e2e8f0"}}>
                   <div style={{fontWeight:700,fontSize:11,color:"#94a3b8",textTransform:"uppercase",letterSpacing:".8px",marginBottom:10}}>Status wijzigen</div>
@@ -10473,6 +10482,7 @@ function AanvragenPage({leads=[], onRefresh, onStatus, onToKlant, onToOfferte, n
                     ))}
                   </div>
                 </div>
+
                 <div style={{background:"#f8fafc",borderRadius:12,padding:"14px",border:"1px solid #e2e8f0",flex:1}}>
                   <div style={{fontWeight:700,fontSize:11,color:"#94a3b8",textTransform:"uppercase",letterSpacing:".8px",marginBottom:10}}>👤 Klantgegevens</div>
                   <InfoRij label="Naam" waarde={selected.naam}/>
@@ -10484,6 +10494,7 @@ function AanvragenPage({leads=[], onRefresh, onStatus, onToKlant, onToOfferte, n
                   <InfoRij label="Adres" waarde={selected.adres}/>
                   <InfoRij label="Gemeente" waarde={[selected.postcode,selected.gemeente].filter(Boolean).join(" ")}/>
                 </div>
+
                 <div style={{display:"flex",flexDirection:"column",gap:8}}>
                   <button onClick={()=>{onToKlant(selected);setToKlantDone(p=>new Set(p).add(selected.id));}}
                     style={{width:"100%",padding:"13px",background:toKlantDone.has(selected.id)?"#10b981":"#0f1e35",color:"#fff",border:"none",borderRadius:10,fontWeight:700,fontSize:14,cursor:"pointer"}}>
@@ -10500,6 +10511,7 @@ function AanvragenPage({leads=[], onRefresh, onStatus, onToKlant, onToOfferte, n
                 </div>
               </div>
 
+              {/* Kolom rechts */}
               <div style={{display:"flex",flexDirection:"column",gap:14}}>
                 <div style={{background:"#f8fafc",borderRadius:12,padding:"14px",border:"1px solid #e2e8f0"}}>
                   <div style={{fontWeight:700,fontSize:11,color:"#94a3b8",textTransform:"uppercase",letterSpacing:".8px",marginBottom:10}}>⚡ Aanvraagdetails</div>
@@ -10515,37 +10527,49 @@ function AanvragenPage({leads=[], onRefresh, onStatus, onToKlant, onToOfferte, n
                     </div>
                   )}
                 </div>
-                {fotos.length>0
-                  ? <div style={{background:"#f8fafc",borderRadius:12,padding:"14px",border:"1px solid #e2e8f0",flex:1}}>
-                      <div style={{fontWeight:700,fontSize:11,color:"#94a3b8",textTransform:"uppercase",letterSpacing:".8px",marginBottom:12}}>
-                        📸 Foto's ({fotos.length}) <span style={{fontWeight:400,fontSize:11,textTransform:"none",letterSpacing:0}}>— klik om te vergroten</span>
-                      </div>
-                      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(120px,1fr))",gap:8}}>
+
+                {/* FOTO'S */}
+                <div style={{background:"#f8fafc",borderRadius:12,padding:"14px",border:"1px solid #e2e8f0",flex:1}}>
+                  <div style={{fontWeight:700,fontSize:11,color:"#94a3b8",textTransform:"uppercase",letterSpacing:".8px",marginBottom:12}}>
+                    📸 Foto's {fotos.length>0?`(${fotos.length}) — klik om te vergroten`:""}
+                  </div>
+                  {fotos.length>0
+                    ? <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(130px,1fr))",gap:8}}>
                         {fotos.map((foto,i)=>{
                           const src=getFotoSrc(foto);
                           const label=getFotoLabel(foto,i);
                           return (
                             <div key={i} onClick={()=>setFotoIdx(i)} style={{cursor:"zoom-in"}}>
-                              <div style={{borderRadius:10,overflow:"hidden",border:"2px solid #e2e8f0",aspectRatio:"1",background:"#e8edf2"}}>
-                                {src&&<img src={src} alt={label} style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}}
-                                  onError={e=>{e.target.style.display="none";}}/>}
+                              <div style={{borderRadius:10,overflow:"hidden",border:"2px solid #e2e8f0",aspectRatio:"1",background:"#e8edf2",position:"relative"}}>
+                                {src
+                                  ? <img src={src} alt={label}
+                                      style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}}
+                                      onError={e=>{e.target.style.display="none";e.target.insertAdjacentHTML("afterend",'<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#94a3b8;font-size:11px;text-align:center;padding:4px">Kan niet laden</div>');}}/>
+                                  : <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",color:"#94a3b8",fontSize:11}}>Geen URL</div>
+                                }
                               </div>
                               <div style={{fontSize:11,color:"#64748b",textAlign:"center",marginTop:4,fontWeight:500,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{label}</div>
                             </div>
                           );
                         })}
                       </div>
-                    </div>
-                  : <div style={{background:"#f8fafc",borderRadius:12,padding:"14px",border:"1px solid #e2e8f0",textAlign:"center",color:"#94a3b8",fontSize:13}}>
-                      <div style={{fontSize:32,marginBottom:6}}>📷</div>Geen foto's meegestuurd
-                    </div>
-                }
+                    : <div style={{textAlign:"center",color:"#94a3b8",padding:"30px 0"}}>
+                        <div style={{fontSize:36,marginBottom:8}}>📷</div>
+                        <div style={{fontSize:13}}>Geen foto's meegestuurd</div>
+                        {/* Debug: toon ruwe fotos waarde */}
+                        {selected.fotos!==null&&selected.fotos!==undefined&&<div style={{fontSize:10,color:"#cbd5e1",marginTop:8,wordBreak:"break-all"}}>
+                          Raw: {typeof selected.fotos === "string" ? selected.fotos.slice(0,100) : JSON.stringify(selected.fotos)?.slice(0,100)}
+                        </div>}
+                      </div>
+                  }
+                </div>
               </div>
             </div>
           </div>
         </div>
       )}
 
+      {/* LIGHTBOX */}
       {selected&&fotoIdx!==null&&fotos.length>0&&(
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.94)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center"}}
           onClick={()=>setFotoIdx(null)}>
