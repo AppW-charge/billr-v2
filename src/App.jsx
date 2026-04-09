@@ -9799,7 +9799,7 @@ function AanmaningModal({factuur, settings, onSend, onClose}) {
 
 Onze factuur ${f.nummer} d.d. ${fmtDate(f.datum)} ten bedrage van ${fmtEuro(t)} is nog niet betaald.
 
-Wij verzoeken u vriendelijk dit bedrag vóór ${addDays(today(),7)} te storten op rekening ${bed.iban||""} met mededeling ${genOGM(f.nummer)}.
+Wij verzoeken u vriendelijk dit bedrag vóór ${addDays(today(),7)} te storten op rekening ${bed.iban||""} met vermelding van referentie ${f.nummer}.
 
 Mogelijks heeft u deze factuur over het hoofd gezien. Heeft u reeds betaald, gelieve dit bericht te negeren.
 
