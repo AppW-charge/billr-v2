@@ -9790,9 +9790,9 @@ function AanmaningModal({factuur, settings, onSend, onClose}) {
   const rente = t*(0.01/30*dagen);
   const bed = settings?.bedrijf||{};
   const dc = bed.kleur||"#1a2e4a";
-  const [niveau, setNiveau] = React.useState(1);
-  const [sending, setSending] = React.useState(false);
-  const [preview, setPreview] = React.useState(false);
+  const [niveau, setNiveau] = useState(1);
+  const [sending, setSending] = useState(false);
+  const [preview, setPreview] = useState(false);
 
   const templates = [
     {l:"1e Herinnering",  c:"#3b82f6", tekst:`Geachte ${f.klant?.naam||""},
