@@ -4024,7 +4024,15 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
       />}
       {creditnotaModal!==null&&<CreditnotaModal facturen={facturen} creditnota={creditnotaModal} settings={settings} onSave={cn=>{if(cn.id){setCreditnotas(p=>p.map(x=>x.id===cn.id?cn:x));}else{const n={...cn,id:uid(),nummer:nextNr("CN",creditnotas,"nummer"),aangemaakt:new Date().toISOString(),type:"creditnota"};setCreditnotas(p=>[n,...p]);if(cn.factuurId){updFact(cn.factuurId,{gecrediteerd:true});}}notify("Creditnota opgeslagen ✓");setCreditnotaModal(null);}} onClose={()=>setCreditnotaModal(null)}/>}
       {betalingModal&&<BetalingModal factuur={betalingModal} betalingen={betalingen.filter(b=>b.factuurId===betalingModal.id)} onSave={b=>{const nb={...b,id:uid(),factuurId:betalingModal.id,datum:b.datum||today(),aangemaakt:new Date().toISOString()};setBetalingen(p=>[nb,...p]);const totBet=betalingen.filter(x=>x.factuurId===betalingModal.id).reduce((s,x)=>s+x.bedrag,0)+nb.bedrag;const factTot=calcTotals(betalingModal.lijnen||[]).totaal;if(totBet>=factTot-0.01)updFact(betalingModal.id,{status:"betaald"});else updFact(betalingModal.id,{status:"gedeeltelijk"});notify("Betaling geregistreerd ✓");setBetalingModal(null);}} onClose={()=>setBetalingModal(null)}/>}
-      {aanmaningModal&&<AanmaningModal factuur={aanmaningModal} settings={settings} onSend={(am)=>{setAanmaningen(p=>[{...am,id:uid(),aangemaakt:new Date().toISOString(),status:"verzonden",verzonden:today()},...p]);notify("Aanmaning verzonden ✓");setAanmaningModal(null);}} onClose={()=>setAanmaningModal(null)}/>}
+      {aanmaningModal&&<AanmaningModal factuur={aanmaningModal} settings={settings} onSend={(am)=>{
+        // 1. Sla aanmaning op
+        setAanmaningen(p=>[{...am,id:uid(),aangemaakt:new Date().toISOString(),status:"verzonden",verzonden:today()},...p]);
+        // 2. Log op de factuur zelf
+        const ts = new Date().toLocaleString("nl-BE",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"});
+        updFact(aanmaningModal.id, {logActie:`🔔 ${am.niveau===1?"1e Herinnering":am.niveau===2?"2e Herinnering":"Ingebrekestelling"} verstuurd naar ${aanmaningModal.klant?.email||"klant"} (${ts}) — te betalen: €${(am.bedrag||0).toFixed(2).replace(".",",")}` });
+        notify("Aanmaning verzonden naar " + (aanmaningModal.klant?.email||"klant") + " ✓");
+        setAanmaningModal(null);
+      }} onClose={()=>setAanmaningModal(null)}/>}
       {dossierModal!==null&&<DossierModal dossier={dossierModal} klanten={klanten} offertes={offertes} facturen={facturen} onSave={d=>{if(d.id){setDossiers(p=>p.map(x=>x.id===d.id?d:x));}else{setDossiers(p=>[{...d,id:uid(),aangemaakt:new Date().toISOString()},...p]);}notify("Dossier opgeslagen ✓");setDossierModal(null);}} onClose={()=>setDossierModal(null)} notify={notify}/>}
       {tijdModal!==null&&<TijdModal tijdslot={tijdModal} klanten={klanten} offertes={offertes} onSave={t=>{if(t.id){setTijdslots(p=>p.map(x=>x.id===t.id?t:x));}else{setTijdslots(p=>[{...t,id:uid(),aangemaakt:new Date().toISOString()},...p]);}notify("Tijd opgeslagen ✓");setTijdModal(null);}} onClose={()=>setTijdModal(null)}/>}
       {planningModal&&<PlanningModal offerte={planningModal} settings={settings} klanten={klanten} planningProposals={planningProposals} onSave={(id,planData)=>{
@@ -9837,7 +9845,9 @@ ${bed.naam||""}`},
   const buildHtmlEmail = () => {
     const kleur = tmpl.c;
     const tekst = tmpl.tekst.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").split("\n").join("<br>");
-    const factuurLink = window.location.origin + "/offerte.html?id=" + f.id + "&nr=" + encodeURIComponent(f.nummer||"");
+    // Link naar publieke factuurpagina: gebruik offerteId als dat bestaat (factuur is gekoppeld aan offerte)
+    // Fallback: toon factuur via offerte.html met type=factuur parameter
+    const factuurLink = window.location.origin + "/offerte.html?id=" + (f.offerteId||f.id) + "&nr=" + encodeURIComponent(f.nummer||"") + "&type=factuur";
     return `<!DOCTYPE html><html><head><meta charset="utf-8">
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
@@ -9964,8 +9974,15 @@ body{font-family:Inter,Arial,sans-serif;background:#f1f5f9;padding:20px}
           <pre style={{fontSize:12.5,color:"#1e293b",whiteSpace:"pre-wrap",lineHeight:1.7,fontFamily:"Inter,sans-serif"}}>{tmpl.tekst}</pre>
         </div>
         {!settings?.email?.emailjsPublicKey&&<div style={{background:"#fffbeb",border:"1px solid #fde68a",borderRadius:8,padding:"10px 14px",marginBottom:14,fontSize:12,color:"#78350f"}}>⚠️ EmailJS niet geconfigureerd — HTML email wordt gedownload + mailto-venster geopend.</div>}
+        <div style={{background:"#f0f9ff",border:"1px solid #bae6fd",borderRadius:8,padding:"10px 14px",marginBottom:14,display:"flex",alignItems:"center",gap:8}}>
+          <span style={{fontSize:16}}>📧</span>
+          <div>
+            <div style={{fontSize:11,fontWeight:700,color:"#0369a1",textTransform:"uppercase",letterSpacing:".5px"}}>Verzenden naar</div>
+            <div style={{fontSize:13,fontWeight:600,color:"#1e293b"}}>{f.klant?.email||<span style={{color:"#ef4444"}}>❌ Geen emailadres bij klant</span>}</div>
+          </div>
+        </div>
         <div style={{display:"flex",gap:10}}>
-          <button onClick={verzend} disabled={sending} style={{flex:1,padding:"13px",background:tmpl.c,color:"#fff",border:"none",borderRadius:10,fontWeight:700,fontSize:14,cursor:"pointer",opacity:sending?0.7:1}}>
+          <button onClick={verzend} disabled={sending||!f.klant?.email} style={{flex:1,padding:"13px",background:tmpl.c,color:"#fff",border:"none",borderRadius:10,fontWeight:700,fontSize:14,cursor:"pointer",opacity:(sending||!f.klant?.email)?0.5:1}}>
             {sending?"Bezig...":"🔔 Aanmaning versturen"}
           </button>
           <button onClick={()=>{const blob=new Blob([buildHtmlEmail()],{type:"text/html"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=`aanmaning_${f.nummer}.html`;a.click();}} style={{padding:"13px 18px",background:"#f1f5f9",border:"2px solid #e2e8f0",borderRadius:10,fontWeight:600,fontSize:13,cursor:"pointer"}}>
