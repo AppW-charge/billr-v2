@@ -256,11 +256,12 @@ function calcTotals(lijnen=[], bebatTarief=BEBAT_TARIEF) {
   lijnen.forEach(l=>{
     const r=l.btw||0; // 0 als verlegd, 6 of 21 anders
     if(r>0){if(!gr[r])gr[r]=0;gr[r]+=l.prijs*l.aantal*(r/100);}
-    // BEBAT toeslag — altijd 21% BTW
+    // BEBAT toeslag — zelfde BTW-tarief als de productlijn (6% of 21%)
     if(l.bebatKg && l.bebatKg>0 && isBebatProduct(l.naam,l.cat||"")) {
       const bebatEx = l.bebatKg * l.aantal * bebatTarief;
-      if(!gr[BEBAT_BTW])gr[BEBAT_BTW]=0;
-      gr[BEBAT_BTW]+=bebatEx*(BEBAT_BTW/100);
+      const bebatBtw = l.btw || BEBAT_BTW; // gebruik lijn-BTW, niet altijd 21
+      if(!gr[bebatBtw])gr[bebatBtw]=0;
+      gr[bebatBtw]+=bebatEx*(bebatBtw/100);
     }
   });
   const btw=Object.values(gr).reduce((s,v)=>s+v,0);
@@ -893,7 +894,7 @@ const AANMANING_TEMPLATES = [
 
 Onze factuur ${f.nummer} d.d. ${fmtDate(f.datum)} ten bedrage van ${fmtEuro(b)} is nog onbetaald.
 
-Wij verzoeken u vriendelijk dit bedrag te storten vóór ${addDays(today(),7)} op rekening ${f._iban||"BE83 3632 1828 6315"} met als referentie <strong>${f.nummer}</strong>.
+Wij verzoeken u vriendelijk dit bedrag te storten vóór ${addDays(today(),7)} op rekening ${f._iban||"BE83 3632 1828 6315"} met mededeling ${genOGM(f.nummer)}.
 
 Mogelijks heeft u deze factuur over het hoofd gezien. Mocht u al betaald hebben, gelieve dit bericht te negeren.
 
@@ -1993,12 +1994,10 @@ export default function App() {
   const saveTodos = (lijst) => {
     setTodos(lijst);
     try { localStorage.setItem("b4_todo", JSON.stringify(lijst)); } catch(_){}
-    // Timestamp guard: tab-sync overschrijft niet binnen 1 minuut
     localTimestamps.current["b4_todo"] = Date.now() + 60000;
     try { localStorage.setItem("billr_ts", JSON.stringify(localTimestamps.current)); } catch(_){}
     if(!userRef.current?.id) return;
     const json = JSON.stringify(lijst);
-    // .then() ipv .catch() — Supabase client ondersteunt .catch() niet direct
     sb.from("user_data").upsert(
       {user_id: userRef.current.id, key:"b4_todo", value: json, updated_at: new Date().toISOString()},
       {onConflict:"user_id,key"}
@@ -2861,10 +2860,6 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
         }
         if(allData["b4_at"]&&sbTs("b4_at")>lcTs("b4_at")) setAcceptTokens(p("b4_at",{}));
         if(allData["b4_wo"]&&sbTs("b4_wo")>lcTs("b4_wo")) setWidgetOrder(p("b4_wo",null));
-        if(allData["b4_todo"]&&sbTs("b4_todo")>lcTs("b4_todo")) {
-          const v=p("b4_todo",[]);
-          if(Array.isArray(v)&&v.length) setTodos(v);
-        }
         console.log("Tab sync OK — enkel gelezen, nooit geschreven");
       } catch(e) { console.warn("Tab sync mislukt:",e); }
     };
@@ -3379,12 +3374,8 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
     const pubKey = emailCfg.emailjsPublicKey;
     if(!serviceId || !templateId || !pubKey) { notify("\u274c EmailJS niet geconfigureerd in Instellingen.", "er"); return false; }
     window.emailjs.init(pubKey);
-    // Altijd meest recente klantdata ophalen uit klanten[]
-    // Als klant ondertussen nieuw email heeft, pakt dit dat op
     const klantUitLijst = klanten.find(k => k.id === offerte.klantId);
-    const klantData = klantUitLijst
-      ? { ...offerte.klant, ...klantUitLijst } // merge: klantlijst wint
-      : (offerte.klant || {});
+    const klantData = klantUitLijst ? { ...offerte.klant, ...klantUitLijst } : (offerte.klant || {});
     const bed = settings?.bedrijf || {};
     const dc = settings?.sjabloon?.accentKleur || settings?.thema?.kleur || bed.kleur || "#1a2e4a";
     const totals = calcTotals(offerte.lijnen || []);
@@ -3522,10 +3513,7 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
     if(!serviceId || !templateId || !pubKey) { notify("\u274c EmailJS niet geconfigureerd in Instellingen.", "er"); return; }
     console.log("📧 Bevestigingsmail:", {serviceId, templateId});
     window.emailjs.init(pubKey);
-    const klantUitLijst2 = klanten.find(k => k.id === offerte.klantId);
-    const klantData = klantUitLijst2
-      ? { ...offerte.klant, ...klantUitLijst2 }
-      : (offerte.klant || {});
+    const klantData = klanten.find(k => k.id === offerte.klantId) || offerte.klant || {};
     const bed = settings?.bedrijf || {};
     const dc = settings?.sjabloon?.accentKleur || settings?.thema?.kleur || bed.kleur || "#1a2e4a";
     const totals = calcTotals(offerte.lijnen || []);
@@ -4025,10 +4013,8 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
       {creditnotaModal!==null&&<CreditnotaModal facturen={facturen} creditnota={creditnotaModal} settings={settings} onSave={cn=>{if(cn.id){setCreditnotas(p=>p.map(x=>x.id===cn.id?cn:x));}else{const n={...cn,id:uid(),nummer:nextNr("CN",creditnotas,"nummer"),aangemaakt:new Date().toISOString(),type:"creditnota"};setCreditnotas(p=>[n,...p]);if(cn.factuurId){updFact(cn.factuurId,{gecrediteerd:true});}}notify("Creditnota opgeslagen ✓");setCreditnotaModal(null);}} onClose={()=>setCreditnotaModal(null)}/>}
       {betalingModal&&<BetalingModal factuur={betalingModal} betalingen={betalingen.filter(b=>b.factuurId===betalingModal.id)} onSave={b=>{const nb={...b,id:uid(),factuurId:betalingModal.id,datum:b.datum||today(),aangemaakt:new Date().toISOString()};setBetalingen(p=>[nb,...p]);const totBet=betalingen.filter(x=>x.factuurId===betalingModal.id).reduce((s,x)=>s+x.bedrag,0)+nb.bedrag;const factTot=calcTotals(betalingModal.lijnen||[]).totaal;if(totBet>=factTot-0.01)updFact(betalingModal.id,{status:"betaald"});else updFact(betalingModal.id,{status:"gedeeltelijk"});notify("Betaling geregistreerd ✓");setBetalingModal(null);}} onClose={()=>setBetalingModal(null)}/>}
       {aanmaningModal&&<AanmaningModal factuur={aanmaningModal} settings={settings} onSend={(am)=>{
-        // 1. Sla aanmaning op
         setAanmaningen(p=>[{...am,id:uid(),aangemaakt:new Date().toISOString(),status:"verzonden",verzonden:today()},...p]);
-        // 2. Log op de factuur zelf
-        const ts = new Date().toLocaleString("nl-BE",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"});
+        const ts=new Date().toLocaleString("nl-BE",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"});
         updFact(aanmaningModal.id, {logActie:`🔔 ${am.niveau===1?"1e Herinnering":am.niveau===2?"2e Herinnering":"Ingebrekestelling"} verstuurd naar ${aanmaningModal.klant?.email||"klant"} (${ts}) — te betalen: €${(am.bedrag||0).toFixed(2).replace(".",",")}` });
         notify("Aanmaning verzonden naar " + (aanmaningModal.klant?.email||"klant") + " ✓");
         setAanmaningModal(null);
@@ -4349,6 +4335,7 @@ function Dashboard({offertes, facturen, onGoto, onNew, onFactuur, settings, offe
   const toggleTodo = (id) => saveTodos(todos.map(t=>t.id===id?{...t,gedaan:!t.gedaan}:t));
   const deleteTodo = (id) => saveTodos(todos.filter(t=>t.id!==id));
   const [todoFilter, setTodoFilter] = useState("open");
+  const [leadFilter, setLeadFilter] = useState("alle");
   const defaultOrder = ["todoLijst","websiteAanvragen","statistieken","recenteOffertes","openFacturen","goedgekeurdeOffertes","offerteLogboek","afspraken","snelleActies","agenda"];
   // Zorg dat todoLijst altijd in de order zit
   const rawOrder = widgetOrder || settings.dashboardWidgets?.widgetOrder || defaultOrder;
