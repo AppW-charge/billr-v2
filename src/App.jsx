@@ -256,10 +256,10 @@ function calcTotals(lijnen=[], bebatTarief=BEBAT_TARIEF) {
   lijnen.forEach(l=>{
     const r=l.btw||0; // 0 als verlegd, 6 of 21 anders
     if(r>0){if(!gr[r])gr[r]=0;gr[r]+=l.prijs*l.aantal*(r/100);}
-    // BEBAT toeslag — zelfde BTW-tarief als de productlijn (6% of 21%)
+    // BEBAT toeslag — zelfde BTW als productlijn
     if(l.bebatKg && l.bebatKg>0 && isBebatProduct(l.naam,l.cat||"")) {
       const bebatEx = l.bebatKg * l.aantal * bebatTarief;
-      const bebatBtw = l.btw || BEBAT_BTW; // gebruik lijn-BTW, niet altijd 21
+      const bebatBtw = l.btw || BEBAT_BTW;
       if(!gr[bebatBtw])gr[bebatBtw]=0;
       gr[bebatBtw]+=bebatEx*(bebatBtw/100);
     }
@@ -1718,50 +1718,59 @@ tr.row-active td{border-top:2px solid #2563eb}
   .print-only{display:block!important}
   .no-print{display:none!important}
   
-  /* ═══ Elke doc-page in print: auto hoogte, content vloeit vrij ═══ */
+  /* ═══ PRINT LAYOUT — Elke doc-page = exact 1 A4 pagina (297mm) ═══ */
   .doc-page{
     box-shadow:none!important;border-radius:0!important;
-    margin:0!important;max-width:100%!important;width:210mm!important;
-    height:auto!important;min-height:100mm!important;max-height:none!important;
-    overflow:visible!important;
+    margin:0!important;width:210mm!important;max-width:210mm!important;
+    height:297mm!important;min-height:297mm!important;max-height:297mm!important;
+    overflow:hidden!important;
     display:flex!important;flex-direction:column!important;
     break-after:page!important;page-break-after:always!important;
+    break-inside:avoid!important;page-break-inside:avoid!important;
     box-sizing:border-box!important;position:relative!important;
   }
   .doc-page:last-child{break-after:auto!important;page-break-after:auto!important}
-  /* Herstel 2-kolom layout - override mobile CSS */
-  .qt-parties{display:grid!important;grid-template-columns:1fr 1fr!important;gap:22px!important}
-  .doc-page .qt-parties{display:grid!important;grid-template-columns:1fr 1fr!important;gap:22px!important}
-  #print-root .qt-parties{display:grid!important;grid-template-columns:1fr 1fr!important;gap:22px!important}
-  .qt-header{display:flex!important;flex-direction:row!important;justify-content:space-between!important}
-  .qt-meta-bar{display:flex!important;flex-wrap:wrap!important}
-  .qt-footer{margin-top:auto!important}
-  .fct-pg,.fct-pg2,.qt-pg,.prod-page{flex:1!important;overflow:visible!important}
-  /* print-root breedte forceren zodat mobile CSS niet triggert */
-  #print-root{width:210mm!important;min-width:210mm!important}
-  .doc-page-lbl{display:none!important}
-  
+
+  /* Content pagina's krijgen padding (margin=0 op @page) */
+  .prod-page{padding:8mm 12mm!important;box-sizing:border-box!important;flex:1!important;overflow:hidden!important;min-height:0!important}
+  .fct-pg{padding:8mm 12mm!important;box-sizing:border-box!important;flex:1!important;overflow:hidden!important;min-height:0!important}
+  .qt-pg{padding:8mm 12mm!important;box-sizing:border-box!important;flex:1!important;overflow:hidden!important;min-height:0!important}
+  .fct-pg2{padding:8mm 12mm!important;box-sizing:border-box!important;flex:1!important;overflow:hidden!important;min-height:0!important}
+
   /* Coverpagina */
-  .cov{
-    width:100%!important;height:297mm!important;
-    min-height:297mm!important;max-height:297mm!important;
-    display:grid!important;grid-template-columns:42% 58%!important;
-    overflow:hidden!important;
-  }
+  .cov{width:100%!important;height:297mm!important;min-height:297mm!important;max-height:297mm!important;display:grid!important;grid-template-columns:42% 58%!important;overflow:hidden!important}
   .cov-l{height:100%!important;min-height:100%!important}
   .cov-r{height:100%!important;box-sizing:border-box!important}
-  
-  /* Content pagina's: interne padding (omdat @page margin=0) */
-  .prod-page{padding:8mm 12mm!important;box-sizing:border-box!important;flex:1!important;overflow:hidden!important}
-  .fct-pg{padding:8mm 12mm!important;box-sizing:border-box!important;flex:1!important;overflow:hidden!important}
-  .qt-pg{padding:8mm 12mm!important;box-sizing:border-box!important;flex:1!important;overflow:hidden!important}
-  .fct-pg2{padding:8mm 12mm!important;box-sizing:border-box!important;flex:1!important;overflow:hidden!important}
-  
-  /* Footer: altijd onderaan de pagina */
-  .qt-footer{
-    margin-top:auto!important;flex-shrink:0!important;
-    break-inside:avoid!important;page-break-inside:avoid!important;
+
+  /* print-root breedte = 210mm zodat mobile CSS niet triggert */
+  #print-root{width:210mm!important;min-width:210mm!important}
+  .doc-page-lbl{display:none!important}
+
+  /* 2-kolom layouts herstellen */
+  .qt-parties,.doc-page .qt-parties,#print-root .qt-parties{display:grid!important;grid-template-columns:1fr 1fr!important;gap:22px!important}
+  .qt-header{display:flex!important;flex-direction:row!important;justify-content:space-between!important;align-items:flex-start!important}
+
+  /* Meta-bar: 2×2 grid — DATUM links, GELDIG rechts / BTW links, BETALING rechts */
+  .qt-meta-bar{
+    display:grid!important;grid-template-columns:1fr 1fr!important;
+    background:#f8fafc!important;border:1px solid #e2e8f0!important;
+    border-radius:6px!important;overflow:hidden!important;
+    margin-bottom:14px!important;
   }
+  .qt-meta-item{padding:8px 14px!important;border-right:1px solid #e2e8f0!important;border-bottom:1px solid #e2e8f0!important}
+  .qt-meta-item:nth-child(2n){border-right:none!important}
+  .qt-meta-item:nth-last-child(-n+2){border-bottom:none!important}
+  .qt-meta-lbl{font-size:9px!important;font-weight:700!important;text-transform:uppercase!important;letter-spacing:.8px!important;color:#94a3b8!important;margin-bottom:2px!important}
+  .qt-meta-val{font-size:12px!important;font-weight:700!important;color:#1e293b!important}
+
+  /* Footer: kleeft altijd onderaan via margin-top:auto in flex-column */
+  .qt-footer{margin-top:auto!important;flex-shrink:0!important;break-inside:avoid!important;page-break-inside:avoid!important}
+
+  /* Totalen en sign-blok: niet splitsen over pagina's */
+  .qt-totals,.qt-sign,.qt-betaal,.qt-voorschot,.qt-notes,.qt-confirm-link{break-inside:avoid!important;page-break-inside:avoid!important}
+  .qt-tbl tr{break-inside:avoid!important;page-break-inside:avoid!important}
+  .grp-hdr{break-after:avoid!important;page-break-after:avoid!important}
+  .grp-sub,.prod-item,.qt-meta-bar{break-inside:avoid!important;page-break-inside:avoid!important}
   
   /* Technische fiche pagina's */
   .fiche-print-page{
@@ -1779,11 +1788,7 @@ tr.row-active td{border-top:2px solid #2563eb}
   .fiche-screen-embed{display:none!important}
   .fiche-print-images{display:block!important}
   
-  /* Tabel regels: niet splitsen */
-  .qt-tbl tr{break-inside:avoid!important;page-break-inside:avoid!important}
-  .qt-totals,.qt-sign,.qt-betaal,.qt-voorschot,.qt-notes,.qt-confirm-link,.qt-fiches{break-inside:avoid!important;page-break-inside:avoid!important}
-  .grp-hdr{break-after:avoid!important;page-break-after:avoid!important}
-  .grp-sub,.prod-item,.qt-meta-bar,.qt-parties{break-inside:avoid!important;page-break-inside:avoid!important}
+
   
   /* Modal chrome verbergen */
   .mo{position:static!important;background:transparent!important;padding:0!important;display:block!important}
@@ -1997,9 +2002,8 @@ export default function App() {
     localTimestamps.current["b4_todo"] = Date.now() + 60000;
     try { localStorage.setItem("billr_ts", JSON.stringify(localTimestamps.current)); } catch(_){}
     if(!userRef.current?.id) return;
-    const json = JSON.stringify(lijst);
     sb.from("user_data").upsert(
-      {user_id: userRef.current.id, key:"b4_todo", value: json, updated_at: new Date().toISOString()},
+      {user_id: userRef.current.id, key:"b4_todo", value: JSON.stringify(lijst), updated_at: new Date().toISOString()},
       {onConflict:"user_id,key"}
     ).then(r => { if(r?.error) console.warn("Todo save:", r.error.message); });
   };
@@ -2860,6 +2864,7 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
         }
         if(allData["b4_at"]&&sbTs("b4_at")>lcTs("b4_at")) setAcceptTokens(p("b4_at",{}));
         if(allData["b4_wo"]&&sbTs("b4_wo")>lcTs("b4_wo")) setWidgetOrder(p("b4_wo",null));
+        if(allData["b4_todo"]&&sbTs("b4_todo")>lcTs("b4_todo")) { const v=p("b4_todo",[]); if(Array.isArray(v)&&v.length) setTodos(v); }
         console.log("Tab sync OK — enkel gelezen, nooit geschreven");
       } catch(e) { console.warn("Tab sync mislukt:",e); }
     };
@@ -3940,7 +3945,7 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
               localTimestamps.current["b4_fct"] = Date.now() + 120000;
               try{localStorage.setItem("billr_ts",JSON.stringify(localTimestamps.current));}catch(_){}
               sbSaveFactuur(opgeslagen, userRef.current.id)
-                .then(ok=>console.log(ok?"✅ Factuur opgeslagen:":"❌ Save mislukt:",opgeslagen.nummer))
+                .then(ok=>console.log(ok?"✅ Factuur opgeslagen:":"❌",opgeslagen.nummer))
                 .catch(e=>console.error("❌",e));
             }
             return merged;
@@ -4015,7 +4020,7 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
       {aanmaningModal&&<AanmaningModal factuur={aanmaningModal} settings={settings} onSend={(am)=>{
         setAanmaningen(p=>[{...am,id:uid(),aangemaakt:new Date().toISOString(),status:"verzonden",verzonden:today()},...p]);
         const ts=new Date().toLocaleString("nl-BE",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"});
-        updFact(aanmaningModal.id, {logActie:`🔔 ${am.niveau===1?"1e Herinnering":am.niveau===2?"2e Herinnering":"Ingebrekestelling"} verstuurd naar ${aanmaningModal.klant?.email||"klant"} (${ts}) — te betalen: €${(am.bedrag||0).toFixed(2).replace(".",",")}` });
+        updFact(aanmaningModal.id, {logActie:`🔔 ${am.niveau===1?"1e Herinnering":am.niveau===2?"2e Herinnering":"Ingebrekestelling"} verstuurd naar ${aanmaningModal.klant?.email||"klant"} (${ts})`});
         notify("Aanmaning verzonden naar " + (aanmaningModal.klant?.email||"klant") + " ✓");
         setAanmaningModal(null);
       }} onClose={()=>setAanmaningModal(null)}/>}
@@ -4059,13 +4064,9 @@ function AgendaPage({offertes, settings, onPlan, onPlanDelete}) {
   const [maand, setMaand] = React.useState(now.getMonth());
   const [geselecteerd, setGeselecteerd] = React.useState(null);
 
-  // Alle afspraken met datum
   const afspraken = offertes.filter(o =>
-    o.planDatum &&
-    o.planStatus !== "geannuleerd" &&
-    o.status !== "uitgevoerd" &&
-    o.status !== "afgewezen" &&
-    o.status !== "concept"
+    o.planDatum && o.planStatus !== "geannuleerd" &&
+    o.status !== "uitgevoerd" && o.status !== "afgewezen" && o.status !== "concept"
   );
 
   // Per datum groeperen
@@ -5098,7 +5099,7 @@ function DocLog({log=[]}) {
     if(a.includes("afgewezen")) return {ico:"❌",k:"#ef4444"};
     if(a.includes("boekhouder")) return {ico:"📊",k:"#f59e0b"};
     if(a.includes("aanmaning")) return {ico:"🔔",k:"#ef4444"};
-    if(a.includes("afspraak")||a.includes("ingepland")||a.includes("bevestigd")) return {ico:"📅",k:"#0ea5e9"};
+    if(a.includes("afspraak")||a.includes("ingepland")) return {ico:"📅",k:"#0ea5e9"};
     if(a.includes("gewijzigd")||a.includes("bijgewerkt")) return {ico:"✏️",k:"#64748b"};
     return {ico:"•",k:"#94a3b8"};
   };
@@ -7762,10 +7763,37 @@ function DocModal({doc,type,settings,onClose,onFactuur,onStatusOff,onStatusFact,
       const val = rootStyle.getPropertyValue(v).trim();
       if(val) pr.style.setProperty(v, val);
     });
-    // Verwijder lege doc-pages (geen zichtbare content)
+    // Inline stijlen forceren per doc-page + lege pagina's verwijderen
     pr.querySelectorAll(".doc-page").forEach(page => {
-      const txt = page.innerText || page.textContent || "";
-      if(txt.trim().length < 10) page.remove();
+      const content = (page.innerText || page.textContent || "").trim();
+      if(content.length < 10) { page.remove(); return; }
+      // Forceer exact A4 hoogte zodat footer altijd onderaan zit
+      Object.assign(page.style, {
+        height:"297mm", minHeight:"297mm", maxHeight:"297mm",
+        overflow:"hidden", display:"flex", flexDirection:"column",
+        boxSizing:"border-box", width:"210mm", margin:"0",
+        breakAfter:"page", pageBreakAfter:"always"
+      });
+    });
+    // Forceer content-pagina's
+    pr.querySelectorAll(".fct-pg,.qt-pg,.fct-pg2,.prod-page").forEach(el => {
+      Object.assign(el.style, {flex:"1", overflow:"hidden", minHeight:"0", boxSizing:"border-box"});
+    });
+    // Forceer meta-bar als grid
+    pr.querySelectorAll(".qt-meta-bar").forEach(el => {
+      Object.assign(el.style, {display:"grid", gridTemplateColumns:"1fr 1fr", overflow:"hidden"});
+    });
+    // Forceer footer onderaan
+    pr.querySelectorAll(".qt-footer").forEach(el => {
+      Object.assign(el.style, {marginTop:"auto", flexShrink:"0"});
+    });
+    // Forceer qt-parties als 2-kolom grid
+    pr.querySelectorAll(".qt-parties").forEach(el => {
+      Object.assign(el.style, {display:"grid", gridTemplateColumns:"1fr 1fr", gap:"22px"});
+    });
+    // Coverpagina
+    pr.querySelectorAll(".cov").forEach(el => {
+      Object.assign(el.style, {height:"297mm", maxHeight:"297mm", overflow:"hidden"});
     });
 
     const prev = document.title;
