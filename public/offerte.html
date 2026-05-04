@@ -4,37 +4,116 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Offerte bekijken</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
-body{background:#f1f5f9;font-family:Inter,Arial,sans-serif;min-height:100vh}
+body{font-family:Inter,Arial,sans-serif;background:#f1f5f9;min-height:100vh;color:#1e293b}
+/* ── TOPBAR ── */
+#topbar{background:#1e293b;padding:10px 18px;display:none;align-items:center;gap:12px;flex-wrap:wrap;position:sticky;top:0;z-index:999}
+#topbar strong{color:#fff;font-size:13px}
+#topbar button{background:#3b82f6;color:#fff;border:none;padding:8px 16px;border-radius:7px;cursor:pointer;font-size:13px;font-weight:600;font-family:inherit}
+#topbar .tip{color:rgba(255,255,255,.5);font-size:11px}
+/* ── STATES ── */
 #spin{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;gap:14px}
-.sp{width:44px;height:44px;border:4px solid #e2e8f0;border-top-color:#3b82f6;border-radius:50%;animation:s .8s linear infinite}
-@keyframes s{to{transform:rotate(360deg)}}
+.sp{width:44px;height:44px;border:4px solid #e2e8f0;border-top-color:#3b82f6;border-radius:50%;animation:sp .8s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
 #errbox{display:none;max-width:500px;margin:80px auto;background:#fff;border-radius:14px;box-shadow:0 2px 16px rgba(0,0,0,.1);padding:48px 32px;text-align:center}
-#errbox .eico{font-size:52px;margin-bottom:16px}
+#errbox .ico{font-size:52px;margin-bottom:16px}
 #errbox h2{font-size:20px;font-weight:800;color:#1e293b;margin-bottom:8px}
 #errbox p{font-size:13px;color:#64748b;line-height:1.7}
-#topbar{display:none;background:#1e293b;padding:10px 18px;position:sticky;top:0;z-index:999;display:none;align-items:center;gap:12px;flex-wrap:wrap}
-#topbar strong{color:#fff;font-size:13px}
-#topbar button{background:#3b82f6;color:#fff;border:none;padding:8px 16px;border-radius:7px;cursor:pointer;font-size:13px;font-weight:600}
-#topbar .tip{color:rgba(255,255,255,.5);font-size:11px}
-#docarea{display:none;overflow-x:auto}
+/* ── AKKOORD BALK ── */
 #akbalk{display:none;background:#fff;border-top:2px solid #e2e8f0;padding:14px 20px;align-items:center;justify-content:center;gap:12px;flex-wrap:wrap;position:sticky;bottom:0;z-index:998}
 #akbalk p{font-size:13px;color:#64748b}
 .abtn{padding:12px 24px;border-radius:8px;border:none;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit}
 .aok{background:#10b981;color:#fff}
 .aaf{background:#f1f5f9;color:#64748b;border:2px solid #e2e8f0}
 .abtn:disabled{opacity:.5;cursor:not-allowed}
-@media print{#topbar,#akbalk{display:none!important}}
+/* ── DOC CSS — identiek aan App.jsx ── */
+.doc-wrap{background:#f0f4f8;padding:16px}
+.doc-page{background:#fff;max-width:820px;width:100%;margin:0 auto 20px;box-shadow:0 2px 12px rgba(0,0,0,.1);border-radius:4px;overflow:visible;box-sizing:border-box;display:flex;flex-direction:column;position:relative}
+.cov{display:grid;grid-template-columns:42% 58%;min-height:240mm;height:100%}
+.cov-l{display:flex;flex-direction:column;padding:44px 32px;position:relative;overflow:hidden}
+.cov-logo{max-width:140px;max-height:52px;object-fit:contain;margin-bottom:14px;filter:brightness(0) invert(1)}
+.cov-logo-mark{width:52px;height:52px;border-radius:10px;background:rgba(255,255,255,.15);border:1.5px solid rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;font-size:26px;margin-bottom:12px}
+.cov-co-name{font-weight:900;font-size:21px;color:#fff;letter-spacing:-.5px;margin-bottom:3px}
+.cov-co-tag{font-size:11px;color:rgba(255,255,255,.55);margin-bottom:auto}
+.cov-contact{margin-top:auto;font-size:11px;color:rgba(255,255,255,.5);line-height:1.9}
+.cov-contact strong{color:rgba(255,255,255,.8)}
+.cov-inst-badge{display:inline-flex;align-items:center;gap:8px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);border-radius:30px;padding:7px 14px;color:#fff;font-weight:700;font-size:13px;margin-top:16px;align-self:flex-start}
+.cov-r{padding:44px 40px;display:flex;flex-direction:column;justify-content:space-between}
+.cov-doctype{font-weight:900;font-size:52px;letter-spacing:-2.5px;line-height:1}
+.cov-docnum{font-family:'JetBrains Mono',monospace;font-size:12.5px;background:#f0f4f8;padding:3px 10px;border-radius:5px;display:inline-block;margin-top:5px;margin-bottom:28px;font-weight:700}
+.cov-for-lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#94a3b8;margin-bottom:7px}
+.cov-client-name{font-size:22px;font-weight:900;letter-spacing:-.5px;margin-bottom:3px}
+.cov-client-co{font-size:14px;color:#475569;font-weight:600;margin-bottom:3px}
+.cov-client-addr{font-size:12.5px;color:#64748b;line-height:1.7}
+.cov-meta{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:28px;padding-top:18px;border-top:2px solid #f0f4f8}
+.cov-meta-lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:#94a3b8;margin-bottom:2px}
+.cov-meta-val{font-size:13px;font-weight:700;color:#1e293b}
+.cov-total{font-size:22px;font-weight:900;letter-spacing:-.5px}
+.qt-pg{padding:30px 40px}
+.qt-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:22px;padding-bottom:18px;border-bottom:2px solid #f0f4f8}
+.qt-from-logo{max-height:40px;max-width:120px;object-fit:contain;margin-bottom:6px}
+.qt-from-name{font-weight:900;font-size:18px;letter-spacing:-.4px;margin-bottom:2px}
+.qt-from-info{font-size:10.5px;color:#64748b;line-height:1.9}
+.qt-dtype{font-weight:900;font-size:28px;letter-spacing:-.8px;text-align:right}
+.qt-dnum{font-family:'JetBrains Mono',monospace;font-size:11.5px;background:#f0f4f8;padding:2px 8px;border-radius:4px;display:inline-block;margin-top:4px}
+.qt-meta-bar{display:grid;grid-template-columns:1fr 1fr;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;overflow:hidden;margin-bottom:18px}
+.qt-meta-item{padding:9px 14px;border-right:1px solid #e2e8f0;border-bottom:1px solid #e2e8f0}
+.qt-meta-item:nth-child(2n){border-right:none}
+.qt-meta-item:nth-last-child(-n+2){border-bottom:none}
+.qt-meta-lbl{font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#94a3b8;margin-bottom:1px}
+.qt-meta-val{font-size:12.5px;font-weight:700}
+.qt-parties{display:grid;grid-template-columns:1fr 1fr;gap:22px;margin-bottom:20px}
+.qt-party-lbl{font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#94a3b8;margin-bottom:6px}
+.qt-party-name{font-weight:700;font-size:13px;margin-bottom:2px}
+.qt-party-info{font-size:11.5px;color:#475569;line-height:1.8}
+.grp-hdr{padding:7px 12px;border-radius:4px 4px 0 0;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:#fff;margin-top:12px}
+.grp-hdr:first-child{margin-top:0}
+.qt-tbl{width:100%;border-collapse:collapse;border:1px solid #e2e8f0;border-top:none}
+.qt-tbl th{background:#f8fafc;padding:7px 10px;text-align:left;font-size:10px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid #e2e8f0}
+.qt-tbl th.r,.qt-tbl td.r{text-align:right}
+.qt-tbl th.c,.qt-tbl td.c{text-align:center}
+.qt-tbl tbody tr:nth-child(even){background:#fafbfc}
+.qt-tbl td{padding:8px 10px;border-bottom:1px solid #f1f5f9;font-size:11.5px}
+.qt-tbl tbody tr:last-child td{border-bottom:none}
+.qt-item-main{font-weight:600;color:#1e293b}
+.qt-item-sub{font-size:10px;color:#64748b;margin-top:1px;font-style:italic}
+.grp-sub{display:flex;justify-content:flex-end;gap:12px;padding:5px 12px;background:#f0f4f8;border:1px solid #e2e8f0;border-top:none;font-size:11.5px;font-weight:700;margin-bottom:2px}
+.qt-totals{display:flex;justify-content:flex-end;margin-top:18px}
+.qt-tot-box{min-width:260px;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden}
+.qt-tot-row{display:flex;justify-content:space-between;padding:7px 14px;font-size:12.5px;border-bottom:1px solid #f1f5f9}
+.qt-tot-row.last{border-bottom:none;font-weight:800;font-size:15px;padding:10px 14px}
+.qt-tot-row.btwr{color:#64748b;font-size:11.5px}
+.qt-betaal{margin-top:14px;padding:11px 13px;background:#f0fdf4;border:1px solid #86efac;border-radius:6px;font-size:12px;line-height:1.8}
+.qt-voorschot{margin-top:8px;padding:9px 13px;background:#f0f4ff;border:1px solid #a5b4fc;border-radius:6px;font-size:12px;color:#3730a3}
+.qt-sign{margin-top:18px;display:grid;grid-template-columns:1fr;gap:16px}
+.qt-sign-box{border:1.5px dashed #cbd5e1;border-radius:7px;padding:16px;min-height:70px}
+.qt-sign-lbl{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:#94a3b8;margin-bottom:4px}
+.qt-confirm-link{margin-top:10px;padding:11px 13px;background:#f0f4ff;border:1px solid #818cf8;border-radius:6px;font-size:11.5px;color:#3730a3;display:flex;align-items:center;gap:8px}
+.qt-footer{padding:10px 40px;display:flex;justify-content:space-between;align-items:center;margin-top:auto}
+.qt-footer-txt{font-size:10px;color:rgba(255,255,255,.5)}
+.qt-footer-txt strong{color:rgba(255,255,255,.8)}
+@media print{
+  #topbar,#akbalk{display:none!important}
+  body{background:#fff}
+  .doc-wrap{padding:0;background:#fff}
+  .doc-page{box-shadow:none;border-radius:0;margin:0;width:210mm;height:297mm;max-height:297mm;overflow:hidden;display:flex;flex-direction:column;break-after:page;page-break-after:always}
+  .doc-page:last-child{break-after:auto;page-break-after:auto}
+  .qt-pg{flex:1;overflow:hidden}
+  .qt-footer{margin-top:auto;flex-shrink:0}
+  @page{size:A4 portrait;margin:0}
+  *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
+}
 </style>
 </head>
 <body>
 <div id="spin"><div class="sp"></div><p style="color:#64748b;font-size:13px">Even geduld...</p></div>
-<div id="errbox"><div class="eico" id="eico">❌</div><h2 id="eh">Niet beschikbaar</h2><p id="ep">Link niet geldig.</p></div>
+<div id="errbox"><div class="ico" id="eico">❌</div><h2 id="eh">Niet beschikbaar</h2><p id="ep">Link niet geldig.</p></div>
 <div id="topbar">
   <strong id="docnr">Document</strong>
   <button onclick="window.print()">🖨 Afdrukken / PDF</button>
-  <span class="tip">Kies "Opslaan als PDF" of "Microsoft Print to PDF"</span>
+  <span class="tip">Kies "Opslaan als PDF"</span>
 </div>
 <div id="docarea"></div>
 <div id="akbalk">
@@ -42,117 +121,141 @@ body{background:#f1f5f9;font-family:Inter,Arial,sans-serif;min-height:100vh}
   <button class="abtn aok" id="bok">✅ Ik ga akkoord</button>
   <button class="abtn aaf" id="baf">❌ Niet akkoord</button>
 </div>
-
 <script>
-var SB="https://qxnxbqkdvvblfkihmjxy.supabase.co";
-var KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF4bnhicWtkdnZibGZraWhtanh5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMzNTI3MTMsImV4cCI6MjA4ODkyODcxM30.1JDvrHgxLpU1GZqSjDVGtfnFJg8PHuD-aFpHOxAY1To";
-var p=new URLSearchParams(location.search), oid=p.get("id");
-
-function err(ico,h,msg){
-  document.getElementById("spin").style.display="none";
-  var b=document.getElementById("errbox"); b.style.display="block";
-  document.getElementById("eico").textContent=ico;
-  document.getElementById("eh").textContent=h;
-  document.getElementById("ep").innerHTML=msg;
-}
+var SB="https://qxnxbqkdvvblfkihmjxy.supabase.co",KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF4bnhicWtkdnZibGZraWhtanh5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMzNTI3MTMsImV4cCI6MjA4ODkyODcxM30.1JDvrHgxLpU1GZqSjDVGtfnFJg8PHuD-aFpHOxAY1To";
+var params=new URLSearchParams(location.search),oid=params.get("id");
+function euro(n){return"€\u00A0"+Number(n||0).toFixed(2).replace(".",",").replace(/\B(?=(\d{3})+(?!\d))/g,".")}
+function datum(d){try{return new Date(d).toLocaleDateString("nl-BE",{day:"2-digit",month:"2-digit",year:"numeric"});}catch(e){return d||""}}
+function xe(s){return String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")}
+function err(ico,h,msg){document.getElementById("spin").style.display="none";var b=document.getElementById("errbox");b.style.display="block";document.getElementById("eico").textContent=ico;document.getElementById("eh").textContent=h;document.getElementById("ep").innerHTML=msg;}
 
 async function go(){
-  if(!oid){err("❌","Ongeldige link","Geen document ID gevonden.");return;}
+  if(!oid){err("❌","Ongeldige link","Geen document ID.");return;}
   try{
     var r=await fetch(SB+"/rest/v1/offerte_shares?id=eq."+oid+"&select=offerte_data",{headers:{"apikey":KEY,"Authorization":"Bearer "+KEY}});
     var rows=await r.json();
-    if(!r.ok) throw new Error("HTTP "+r.status);
-    if(!rows||!rows.length){
-      err("❌","Offerte niet beschikbaar","Deze link is verlopen of de offerte werd nog niet gedeeld.<br><br><b>Vraag de afzender om de offerte opnieuw te versturen vanuit BILLR.</b>");
-      return;
-    }
-
+    if(!r.ok)throw new Error("HTTP "+r.status);
+    if(!rows||!rows.length){err("❌","Offerte niet beschikbaar","Deze link is verlopen of de offerte werd nog niet verstuurd.<br><br><b>Vraag de afzender om de offerte opnieuw te versturen vanuit BILLR.</b>");return;}
     var doc=rows[0].offerte_data||{};
-    var nr=doc.nummer||p.get("nr")||"Document";
-    document.title=nr;
-    document.getElementById("docnr").textContent=nr;
-
-    // Track view
+    var nr=doc.nummer||params.get("nr")||"Document";
+    document.title=nr;document.getElementById("docnr").textContent=nr;
     fetch(SB+"/rest/v1/offerte_views",{method:"POST",headers:{"apikey":KEY,"Authorization":"Bearer "+KEY,"Content-Type":"application/json","Prefer":"return=minimal"},body:JSON.stringify({offerte_id:oid,viewed_at:new Date().toISOString()})}).catch(function(){});
-
-    document.getElementById("spin").style.display="none";
-
-    if(doc._docHtml){
-      // Laad de app CSS van Cloudflare Pages, dan render de doc HTML daarmee
-      // Dit geeft EXACT dezelfde weergave als in de app
-      showWithAppCss(doc._docHtml, doc, nr);
-    } else {
-      err("📄","Offerte ophalen",
-        "<b>"+nr+"</b> werd gevonden maar kan niet worden weergegeven.<br><br>"+
-        "Stuur de offerte opnieuw vanuit BILLR (klik op 📧 Verzenden). "+
-        "De nieuwe link zal correct werken.");
-    }
-
-  }catch(e){
-    err("❌","Fout bij laden","Technische fout: "+e.message);
-  }
+    render(doc,nr);
+  }catch(e){err("❌","Fout",e.message);}
 }
 
-async function showWithAppCss(docHtml, doc, nr){
-  // Haal de CSS URL op van de live app
-  var cssUrl = null;
-  try{
-    var appPage = await fetch("https://billr-v2.pages.dev/");
-    var html = await appPage.text();
-    var m = html.match(/href="(\/assets\/index-[^"]+\.css)"/);
-    if(m) cssUrl = "https://billr-v2.pages.dev"+m[1];
-  }catch(e){ console.warn("CSS fetch mislukt:", e); }
+function render(doc,nr){
+  var bed=doc._bed||{},dc=doc._dc||"#1a2e4a",klant=doc.klant||{},lijnen=doc.lijnen||[];
+  var isF=(doc.type==="factuur")||String(nr).startsWith("FACT");
+  var docType=isF?"FACTUUR":"OFFERTE";
 
-  // Bouw de volledige HTML pagina
-  var cssHtml = cssUrl
-    ? '<link href="'+cssUrl+'" rel="stylesheet"><link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">'
-    : '<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">';
+  // Totalen
+  var sub=0,btwGr={};
+  lijnen.forEach(function(l){sub+=(l.prijs||0)*(l.aantal||1);var btw=l.btw||0;if(btw>0){btwGr[btw]=(btwGr[btw]||0)+(l.prijs||0)*(l.aantal||1)*(btw/100);}});
+  var btwTot=Object.values(btwGr).reduce(function(a,b){return a+b;},0),tot=sub+btwTot;
 
-  var dc = doc._dc || "#1a2e4a";
-  var fullHtml = '<!DOCTYPE html><html lang="nl"><head><meta charset="UTF-8"><title>'+nr+'</title>'+cssHtml+
-    '<style>*{box-sizing:border-box;margin:0;padding:0}body{background:#f1f5f9;font-family:Inter,Arial,sans-serif;font-size:13px;color:#1e293b}'+
-    '.doc-wrap{padding:20px;background:#f1f5f9}'+
-    '.doc-page{box-shadow:none!important;border-radius:0!important;margin:0 auto 20px!important;width:210mm;overflow:visible;display:flex;flex-direction:column}'+
-    '@media print{body{background:#fff}.doc-wrap{padding:0}@page{size:A4;margin:0}.doc-page{height:297mm;max-height:297mm;overflow:hidden;break-after:page;page-break-after:always;margin:0!important}.doc-page:last-child{break-after:auto;page-break-after:auto}.fct-pg,.qt-pg,.fct-pg2,.prod-page{flex:1;overflow:hidden;min-height:0}.qt-footer{margin-top:auto;flex-shrink:0}}</style>'+
-    '</head><body><div class="doc-wrap">'+docHtml+'</div></body></html>';
+  // Groepen
+  var grMap={},grVlg=[];
+  lijnen.forEach(function(l){var g=l.groep||"__";if(!grMap[g]){grMap[g]=[];grVlg.push(g);}grMap[g].push(l);});
+  var hasGr=grVlg.length>1||grVlg[0]!=="__";
 
-  // Maak iframe
-  var wrap = document.getElementById("docarea");
-  var iframe = document.createElement("iframe");
-  iframe.style.cssText="width:100%;border:none;display:block;min-height:600px;";
-  iframe.onload = function(){
-    try{
-      var h = iframe.contentDocument.documentElement.scrollHeight;
-      iframe.style.height = Math.max(h, 600)+"px";
-    }catch(e){ iframe.style.height="1200px"; }
-  };
-  var blob = new Blob([fullHtml], {type:"text/html;charset=utf-8"});
-  iframe.src = URL.createObjectURL(blob);
-  wrap.appendChild(iframe);
+  var logoHtml=(bed.logo&&!bed.logo.startsWith("data:"))?"<img class='cov-logo' src='"+xe(bed.logo)+"' alt=''/>"
+    :"<div class='cov-logo-mark'>⚡</div>";
+  var logoSmHtml=(bed.logo&&!bed.logo.startsWith("data:"))?"<img class='qt-from-logo' src='"+xe(bed.logo)+"' alt=''/><br>":"";
 
-  // Toon UI
+  // === COVERPAGINA ===
+  var covHtml="<div class='doc-page'><div class='cov'>"
+    +"<div class='cov-l' style='background:"+xe(dc)+"'>"+logoHtml
+    +"<div class='cov-co-name'>"+xe(bed.naam||"")+"</div>"
+    +"<div class='cov-co-tag'>"+xe(bed.adres||"")+" · "+xe(bed.gemeente||"")+"</div>"
+    +"<div class='cov-contact'><strong>"+xe(bed.tel||"")+"</strong><br>"+xe(bed.email||"")+"<br>BTW: "+xe(bed.btwnr||"")+"</div>"
+    +(doc.installatieType?"<div class='cov-inst-badge'>⚡ "+xe(doc.installatieType)+"</div>":"")
+    +"</div>"
+    +"<div class='cov-r'>"
+    +"<div><div class='cov-doctype' style='color:"+xe(dc)+"'>"+docType+"</div>"
+    +"<div class='cov-docnum'>"+xe(nr)+"</div>"
+    +"<div class='cov-for-lbl'>Voor</div>"
+    +"<div class='cov-client-name'>"+xe(klant.naam||"")+"</div>"
+    +(klant.bedrijf&&klant.bedrijf!==klant.naam?"<div class='cov-client-co'>"+xe(klant.bedrijf)+"</div>":"")
+    +"<div class='cov-client-addr'>"+xe(klant.adres||"")+"<br>"+xe(klant.gemeente||"")+(klant.btwnr?"<br>BTW: "+xe(klant.btwnr):"")+"</div>"
+    +"<div class='cov-meta'>"
+    +"<div><div class='cov-meta-lbl'>Datum</div><div class='cov-meta-val'>"+datum(doc.datum||doc.aangemaakt)+"</div></div>"
+    +"<div><div class='cov-meta-lbl'>"+(isF?"Vervaldatum":"Geldig tot")+"</div><div class='cov-meta-val'>"+datum(doc.vervaldatum)+"</div></div>"
+    +"<div><div class='cov-meta-lbl'>BTW-regime</div><div class='cov-meta-val'>"+(doc.btwRegime==="verlegd"?"BTW verlegd":doc.btwRegime==="vrijgesteld"?"Vrijgesteld":"Standaard")+"</div></div>"
+    +"<div><div class='cov-meta-lbl'>Totaal</div><div class='cov-total' style='color:"+xe(dc)+"'>"+euro(tot)+"</div></div>"
+    +"</div></div></div>"
+    +"</div>"
+    +"<div class='qt-footer' style='background:"+xe(dc)+"'><div class='qt-footer-txt'><strong>"+xe(bed.naam||"")+"</strong> · "+xe(bed.adres||"")+" · "+xe(bed.gemeente||"")+"</div><div class='qt-footer-txt'>BTW: "+xe(bed.btwnr||"")+" · IBAN: "+xe(bed.iban||"")+"</div></div>"
+    +"</div>";
+
+  // === OFFERTEDETAIL PAGINA ===
+  var tblHtml="";
+  grVlg.forEach(function(g){
+    var ls=grMap[g],gsub=0;
+    if(hasGr&&g!=="__")tblHtml+="<div class='grp-hdr' style='background:"+xe(dc)+"'>"+xe(g)+"</div>";
+    tblHtml+="<table class='qt-tbl'><thead><tr><th style='width:36%'>Omschrijving</th><th>Eenh.</th><th class='c'>Aantal</th><th class='r'>E-prijs</th><th class='r'>BTW</th><th class='r'>Totaal</th></tr></thead><tbody>";
+    ls.forEach(function(l){
+      if(!l.naam)return;
+      var ext=(l.prijs||0)*(l.aantal||1);gsub+=ext;
+      tblHtml+="<tr><td><div class='qt-item-main'>"+xe(l.naam)+"</div>"+(l.omschr?"<div class='qt-item-sub'>"+xe(l.omschr)+"</div>":"")+"</td>"
+        +"<td>"+xe(l.eenheid||"stuk")+"</td><td class='c'>"+(l.aantal||1)+"</td>"
+        +"<td class='r'>"+euro(l.prijs||0)+"</td><td class='r' style='color:#64748b'>"+(l.btw||0)+"%</td>"
+        +"<td class='r' style='font-weight:700'>"+euro(ext)+"</td></tr>";
+    });
+    tblHtml+="</tbody></table>";
+    if(hasGr&&g!=="__")tblHtml+="<div class='grp-sub'><span>Subtotaal "+xe(g)+":</span><span>"+euro(gsub)+"</span></div>";
+  });
+
+  var totHtml="<div class='qt-totals'><div class='qt-tot-box'>"
+    +"<div class='qt-tot-row btwr'><span>Subtotaal excl. BTW</span><span>"+euro(sub)+"</span></div>";
+  Object.entries(btwGr).forEach(function(e){totHtml+="<div class='qt-tot-row btwr'><span>BTW "+e[0]+"%</span><span>"+euro(e[1])+"</span></div>";});
+  totHtml+="<div class='qt-tot-row last'><span>TOTAAL incl. BTW</span><span style='color:"+xe(dc)+"'>"+euro(tot)+"</span></div></div></div>";
+
+  var betaalHtml=bed.iban?"<div class='qt-betaal'><strong>Betaling:</strong> IBAN "+xe(bed.iban)+(bed.bic?" · BIC "+xe(bed.bic):"")+(isF?" · Referentie: ":" · Mededeling: ")+xe(nr)+"</div>":"";
+  var vsHtml=(doc._voorschot||doc.voorschot)&&!isF?"<div class='qt-voorschot'>💡 <strong>Voorschot:</strong> "+xe(doc._voorschot||doc.voorschot)+" te betalen vóór aanvang van de werken.</div>":"";
+  var notHtml=doc.notities?"<div class='qt-notes' style='margin-top:8px;padding:9px 13px;background:#fffbeb;border:1px solid #fde68a;border-radius:6px;font-size:12px;color:#78350f'>"+xe(doc.notities)+"</div>":"";
+  var toonAk=!isF&&(doc._sj?doc._sj.toonBevestigingslink!==false:true);
+  var akHtml=toonAk?"<div class='qt-confirm-link'>● <span>Digitaal akkoord: gebruik de knoppen onderaan de pagina</span></div>":"";
+  var signHtml=!isF?"<div class='qt-sign'><div class='qt-sign-box'><div class='qt-sign-lbl'>"+(doc._sj?.handtekeningTekst||"Geldig voor akkoord — datum, handtekening & naam")+"</div></div></div>":"";
+
+  var qtHtml="<div class='doc-page'><div class='qt-pg'>"
+    +"<div class='qt-header'>"
+    +"<div>"+logoSmHtml+"<div class='qt-from-name'>"+xe(bed.naam||"")+"</div><div class='qt-from-info'>"+xe(bed.adres||"")+" · "+xe(bed.gemeente||"")+"<br>"+xe(bed.tel||"")+" · "+xe(bed.email||"")+"<br>BTW: "+xe(bed.btwnr||"")+"</div></div>"
+    +"<div style='text-align:right'><div class='qt-dtype' style='color:"+xe(dc)+"'>"+docType+"</div><div class='qt-dnum'>"+xe(nr)+"</div></div>"
+    +"</div>"
+    +"<div class='qt-meta-bar'>"
+    +"<div class='qt-meta-item'><div class='qt-meta-lbl'>Datum</div><div class='qt-meta-val'>"+datum(doc.datum||doc.aangemaakt)+"</div></div>"
+    +"<div class='qt-meta-item'><div class='qt-meta-lbl'>"+(isF?"Vervaldatum":"Geldig tot")+"</div><div class='qt-meta-val'>"+datum(doc.vervaldatum)+"</div></div>"
+    +"<div class='qt-meta-item'><div class='qt-meta-lbl'>BTW-regime</div><div class='qt-meta-val'>"+(doc.btwRegime==="verlegd"?"BTW verlegd":doc.btwRegime==="vrijgesteld"?"Vrijgesteld":"Standaard")+"</div></div>"
+    +"<div class='qt-meta-item'><div class='qt-meta-lbl'>Betaling</div><div class='qt-meta-val'>"+(doc.betalingstermijn||14)+" dagen</div></div>"
+    +"</div>"
+    +"<div class='qt-parties'>"
+    +"<div><div class='qt-party-lbl'>Van</div><div class='qt-party-name'>"+xe(bed.naam||"")+"</div><div class='qt-party-info'>"+xe(bed.adres||"")+" "+xe(bed.gemeente||"")+"<br>BTW: "+xe(bed.btwnr||"")+(bed.iban?"<br>IBAN: "+xe(bed.iban):"")+(bed.tel?"<br>"+xe(bed.tel):"")+"</div></div>"
+    +"<div><div class='qt-party-lbl'>Klant</div><div class='qt-party-name'>"+xe(klant.naam||klant.bedrijf||"")+"</div><div class='qt-party-info'>"+(klant.bedrijf&&klant.naam!==klant.bedrijf?xe(klant.bedrijf)+"<br>":"")+xe(klant.adres||"")+" "+xe(klant.gemeente||"")+(klant.btwnr?"<br>BTW: "+xe(klant.btwnr):"")+(klant.tel?"<br>"+xe(klant.tel):"")+"</div></div>"
+    +"</div>"
+    +tblHtml+totHtml+betaalHtml+vsHtml+notHtml+akHtml+signHtml
+    +"</div>"
+    +"<div class='qt-footer' style='background:"+xe(dc)+"'><div class='qt-footer-txt'><strong>"+xe(bed.naam||"")+"</strong> · "+xe(bed.adres||"")+" · "+xe(bed.gemeente||"")+"</div><div class='qt-footer-txt'>BTW: "+xe(bed.btwnr||"")+" · IBAN: "+xe(bed.iban||"")+"</div></div>"
+    +"</div>";
+
+  var html="<div class='doc-wrap'>"+covHtml+qtHtml+"</div>";
+
+  document.getElementById("spin").style.display="none";
   document.getElementById("topbar").style.display="flex";
-  wrap.style.display="block";
-  window._printIframe = iframe;
-  window.print = function(){ iframe.contentWindow.print(); };
+  document.getElementById("docarea").innerHTML=html;
 
-  // Akkoord knoppen
-  var isFact=(doc.type==="factuur")||String(doc.nummer||"").startsWith("FACT");
-  var toonAk=!isFact&&(doc._sj?doc._sj.toonBevestigingslink!==false:true);
   if(toonAk){
-    var ak=document.getElementById("akbalk"); ak.style.display="flex";
+    var ak=document.getElementById("akbalk");ak.style.display="flex";
     async function reageer(st){
-      document.getElementById("bok").disabled=true; document.getElementById("baf").disabled=true;
+      document.getElementById("bok").disabled=true;document.getElementById("baf").disabled=true;
       try{
         var res=await fetch(SB+"/rest/v1/offerte_responses",{method:"POST",headers:{"apikey":KEY,"Authorization":"Bearer "+KEY,"Content-Type":"application/json","Prefer":"return=minimal"},body:JSON.stringify({offerte_id:oid,status:st,submitted_at:new Date().toISOString(),opmerkingen:""})});
-        if(!res.ok) throw new Error("HTTP "+res.status);
-        ak.innerHTML='<p style="font-size:14px;font-weight:700;color:'+(st==="akkoord"?"#10b981":"#ef4444")+'">'+(st==="akkoord"?"✅ Akkoord ontvangen! Wij nemen spoedig contact op.":"❌ Afwijzing geregistreerd.")+'</p>';
+        if(!res.ok)throw new Error("HTTP "+res.status);
+        ak.innerHTML='<p style="font-size:14px;font-weight:700;color:'+(st==="akkoord"?"#10b981":"#ef4444")+'">'+(st==="akkoord"?"✅ Akkoord ontvangen! Wij nemen contact op.":"❌ Afwijzing geregistreerd.")+'</p>';
       }catch(e){
-        document.getElementById("bok").disabled=false; document.getElementById("baf").disabled=false;
-        var bed=doc._bed||{};
-        var subj=encodeURIComponent((st==="akkoord"?"Akkoord: ":"Afgewezen: ")+(doc.nummer||""));
-        var body=encodeURIComponent((st==="akkoord"?"Ik ga akkoord met offerte ":"Ik ga niet akkoord met offerte ")+(doc.nummer||""));
-        location.href="mailto:"+encodeURIComponent(bed.email||"")+"?subject="+subj+"&body="+body;
+        document.getElementById("bok").disabled=false;document.getElementById("baf").disabled=false;
+        var bed2=doc._bed||{};
+        location.href="mailto:"+encodeURIComponent(bed2.email||"")+"?subject="+encodeURIComponent((st==="akkoord"?"Akkoord: ":"Afgewezen: ")+nr)+"&body="+encodeURIComponent((st==="akkoord"?"Ik ga akkoord met offerte ":"Ik ga niet akkoord met offerte ")+nr);
       }
     }
     document.getElementById("bok").onclick=function(){if(confirm("Bevestig akkoord met "+nr+"?"))reageer("akkoord");};
@@ -160,7 +263,7 @@ async function showWithAppCss(docHtml, doc, nr){
   }
 }
 
-go();
+if(oid)go();else err("❌","Ongeldige link","Geen ID gevonden.");
 </script>
 </body>
 </html>
