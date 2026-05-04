@@ -3205,7 +3205,8 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
         _sj: { voorbladTitel:sj.voorbladTitel, handtekeningTekst:sj.handtekeningTekst, footerTekst:sj.footerTekst, toonProductpagina:sj.toonProductpagina, toonBevestigingslink:sj.toonBevestigingslink, accentKleur:sj.accentKleur },
         _lyt: { font:lyt.font, fontSize:lyt.fontSize },
         _voorwaarden: settings?.voorwaarden?.tekst || "",
-        _voorschot: settings?.voorwaarden?.voorschot || "50%"
+        _voorschot: settings?.voorwaarden?.voorschot || "50%",
+        _userId: userRef.current?.id || ""
       };
       if(_docHtml) shareData._docHtml = _docHtml;
       let payload={id:offerte.id,nummer:offerte.nummer,offerte_data:shareData};
