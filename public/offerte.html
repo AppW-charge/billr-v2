@@ -4,133 +4,163 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Offerte bekijken</title>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:Inter,Arial,sans-serif;background:#f1f5f9;min-height:100vh;padding:0}
-#spin{display:flex;align-items:center;justify-content:center;min-height:100vh;flex-direction:column;gap:14px}
-.sp{width:44px;height:44px;border:4px solid #e2e8f0;border-top-color:#3b82f6;border-radius:50%;animation:spin .8s linear infinite}
-@keyframes spin{to{transform:rotate(360deg)}}
-#msg{display:none;max-width:520px;margin:60px auto;background:#fff;border-radius:14px;box-shadow:0 2px 16px rgba(0,0,0,.08);padding:48px 32px;text-align:center}
-#msg .ico{font-size:52px;margin-bottom:16px}
-#msg h2{font-size:22px;font-weight:800;color:#1e293b;margin-bottom:10px}
-#msg p{font-size:14px;color:#64748b;line-height:1.7}
-/* Rendered HTML mode */
-#rendered{display:none}
-#rendered .printbar{padding:10px 16px;background:#1e293b;display:flex;gap:12px;align-items:center;font-family:Inter,Arial,sans-serif;font-size:13px;position:sticky;top:0;z-index:100}
-#rendered .printbar strong{color:#fff}
-#rendered .printbar .pbtn{background:#3b82f6;color:#fff;border:none;padding:8px 16px;border-radius:7px;cursor:pointer;font-size:13px;font-weight:600;font-family:inherit}
-#rendered .printbar .pbtn:hover{background:#2563eb}
-#rendered .ptip{color:rgba(255,255,255,.55);font-size:12px}
-/* Akkoord balk onder het document */
-#akbalk{display:none;position:sticky;bottom:0;background:#fff;border-top:2px solid #e2e8f0;padding:14px 20px;display:flex;gap:10px;align-items:center;justify-content:center;flex-wrap:wrap;z-index:100}
-#akbalk p{font-size:13px;color:#64748b;margin-right:8px}
-.akbtn{padding:12px 24px;border-radius:8px;border:none;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit}
-.akbtn-ok{background:#10b981;color:#fff}
-.akbtn-af{background:#f1f5f9;color:#64748b;border:2px solid #e2e8f0}
-.akbtn:disabled{opacity:.5;cursor:not-allowed}
-#iframe-wrap{overflow-x:auto;background:#f1f5f9;min-height:calc(100vh - 50px)}
-#iframe-wrap iframe{width:100%;border:none;display:block;min-height:calc(100vh - 100px)}
+body{background:#f1f5f9;font-family:Inter,Arial,sans-serif;min-height:100vh}
+#spin{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;gap:14px}
+.sp{width:44px;height:44px;border:4px solid #e2e8f0;border-top-color:#3b82f6;border-radius:50%;animation:s .8s linear infinite}
+@keyframes s{to{transform:rotate(360deg)}}
+#errbox{display:none;max-width:500px;margin:80px auto;background:#fff;border-radius:14px;box-shadow:0 2px 16px rgba(0,0,0,.1);padding:48px 32px;text-align:center}
+#errbox .eico{font-size:52px;margin-bottom:16px}
+#errbox h2{font-size:20px;font-weight:800;color:#1e293b;margin-bottom:8px}
+#errbox p{font-size:13px;color:#64748b;line-height:1.7}
+#topbar{display:none;background:#1e293b;padding:10px 18px;position:sticky;top:0;z-index:999;display:none;align-items:center;gap:12px;flex-wrap:wrap}
+#topbar strong{color:#fff;font-size:13px}
+#topbar button{background:#3b82f6;color:#fff;border:none;padding:8px 16px;border-radius:7px;cursor:pointer;font-size:13px;font-weight:600}
+#topbar .tip{color:rgba(255,255,255,.5);font-size:11px}
+#docarea{display:none;overflow-x:auto}
+#akbalk{display:none;background:#fff;border-top:2px solid #e2e8f0;padding:14px 20px;align-items:center;justify-content:center;gap:12px;flex-wrap:wrap;position:sticky;bottom:0;z-index:998}
+#akbalk p{font-size:13px;color:#64748b}
+.abtn{padding:12px 24px;border-radius:8px;border:none;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit}
+.aok{background:#10b981;color:#fff}
+.aaf{background:#f1f5f9;color:#64748b;border:2px solid #e2e8f0}
+.abtn:disabled{opacity:.5;cursor:not-allowed}
+@media print{#topbar,#akbalk{display:none!important}}
 </style>
 </head>
 <body>
 <div id="spin"><div class="sp"></div><p style="color:#64748b;font-size:13px">Even geduld...</p></div>
-<div id="msg"><div class="ico" id="msg-ico">❌</div><h2 id="msg-h">Niet beschikbaar</h2><p id="msg-p">Deze link is niet meer geldig.</p></div>
-<div id="rendered">
-  <div class="printbar">
-    <strong id="doc-nr">Document</strong>
-    <button class="pbtn" onclick="window.print()">🖨 Afdrukken / PDF</button>
-    <span class="ptip">Kies "Microsoft Print to PDF" of "Opslaan als PDF"</span>
-  </div>
-  <div id="iframe-wrap"></div>
+<div id="errbox"><div class="eico" id="eico">❌</div><h2 id="eh">Niet beschikbaar</h2><p id="ep">Link niet geldig.</p></div>
+<div id="topbar">
+  <strong id="docnr">Document</strong>
+  <button onclick="window.print()">🖨 Afdrukken / PDF</button>
+  <span class="tip">Kies "Opslaan als PDF" of "Microsoft Print to PDF"</span>
 </div>
-<div id="akbalk" style="display:none">
+<div id="docarea"></div>
+<div id="akbalk">
   <p>Gaat u akkoord met deze offerte?</p>
-  <button class="akbtn akbtn-ok" id="btn-ok">✅ Ik ga akkoord</button>
-  <button class="akbtn akbtn-af" id="btn-af">❌ Niet akkoord</button>
+  <button class="abtn aok" id="bok">✅ Ik ga akkoord</button>
+  <button class="abtn aaf" id="baf">❌ Niet akkoord</button>
 </div>
 
 <script>
 var SB="https://qxnxbqkdvvblfkihmjxy.supabase.co";
 var KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF4bnhicWtkdnZibGZraWhtanh5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMzNTI3MTMsImV4cCI6MjA4ODkyODcxM30.1JDvrHgxLpU1GZqSjDVGtfnFJg8PHuD-aFpHOxAY1To";
-var params=new URLSearchParams(location.search);
-var oid=params.get("id");
+var p=new URLSearchParams(location.search), oid=p.get("id");
 
-function showSpin(on){document.getElementById("spin").style.display=on?"flex":"none";}
-function showMsg(ico,h,p){showSpin(false);var m=document.getElementById("msg");m.style.display="block";document.getElementById("msg-ico").textContent=ico;document.getElementById("msg-h").textContent=h;document.getElementById("msg-p").innerHTML=p;}
+function err(ico,h,msg){
+  document.getElementById("spin").style.display="none";
+  var b=document.getElementById("errbox"); b.style.display="block";
+  document.getElementById("eico").textContent=ico;
+  document.getElementById("eh").textContent=h;
+  document.getElementById("ep").innerHTML=msg;
+}
 
 async function go(){
-  if(!oid){showMsg("❌","Ongeldige link","Geen document ID gevonden.");return;}
+  if(!oid){err("❌","Ongeldige link","Geen document ID gevonden.");return;}
   try{
     var r=await fetch(SB+"/rest/v1/offerte_shares?id=eq."+oid+"&select=offerte_data",{headers:{"apikey":KEY,"Authorization":"Bearer "+KEY}});
     var rows=await r.json();
-    if(!r.ok)throw new Error("HTTP "+r.status);
+    if(!r.ok) throw new Error("HTTP "+r.status);
     if(!rows||!rows.length){
-      showMsg("❌","Offerte niet beschikbaar","Deze link is niet meer geldig of de offerte werd nog niet gedeeld.<br><br>Vraag een nieuwe link via de afzender.");
+      err("❌","Offerte niet beschikbaar","Deze link is verlopen of de offerte werd nog niet gedeeld.<br><br><b>Vraag de afzender om de offerte opnieuw te versturen vanuit BILLR.</b>");
       return;
     }
+
     var doc=rows[0].offerte_data||{};
-    var nr=doc.nummer||params.get("nr")||"Document";
-    document.title=nr+" — Offerte bekijken";
-    document.getElementById("doc-nr").textContent=nr;
+    var nr=doc.nummer||p.get("nr")||"Document";
+    document.title=nr;
+    document.getElementById("docnr").textContent=nr;
 
     // Track view
     fetch(SB+"/rest/v1/offerte_views",{method:"POST",headers:{"apikey":KEY,"Authorization":"Bearer "+KEY,"Content-Type":"application/json","Prefer":"return=minimal"},body:JSON.stringify({offerte_id:oid,viewed_at:new Date().toISOString()})}).catch(function(){});
 
-    showSpin(false);
-    document.getElementById("rendered").style.display="block";
+    document.getElementById("spin").style.display="none";
 
-    if(doc._renderedHtml){
-      // Gebruik de exacte rendered HTML van de app (identiek aan in-app preview)
-      var blob=new Blob([doc._renderedHtml],{type:"text/html"});
-      var url=URL.createObjectURL(blob);
-      var ifr=document.createElement("iframe");
-      ifr.src=url;
-      ifr.style.cssText="width:100%;border:none;display:block;";
-      // Pas hoogte aan op inhoud
-      ifr.onload=function(){
-        try{
-          var h=ifr.contentDocument.documentElement.scrollHeight;
-          ifr.style.height=(Math.max(h,600))+"px";
-        }catch(e){ifr.style.height="2000px";}
-      };
-      document.getElementById("iframe-wrap").appendChild(ifr);
+    if(doc._docHtml){
+      // Laad de app CSS van Cloudflare Pages, dan render de doc HTML daarmee
+      // Dit geeft EXACT dezelfde weergave als in de app
+      showWithAppCss(doc._docHtml, doc, nr);
     } else {
-      // Fallback: toon bericht dat offerte opnieuw verstuurd moet worden
-      document.getElementById("iframe-wrap").innerHTML='<div style="text-align:center;padding:60px 24px;color:#64748b"><div style="font-size:48px;margin-bottom:16px">📄</div><div style="font-size:16px;font-weight:700;color:#1e293b;margin-bottom:8px">'+nr+'</div><div style="font-size:13px;line-height:1.7">De offerte kon niet worden weergegeven.<br>Vraag de afzender om de offerte opnieuw te versturen.</div></div>';
-    }
-
-    // Toon akkoord knoppen voor offertes
-    var isFactuur=(doc.type==="factuur")||String(doc.nummer||"").startsWith("FACT");
-    var toonAk=!isFactuur&&(doc._sj?doc._sj.toonBevestigingslink!==false:true);
-    if(toonAk){
-      var akbalk=document.getElementById("akbalk");
-      akbalk.style.display="flex";
-      async function reageer(st){
-        document.getElementById("btn-ok").disabled=true;
-        document.getElementById("btn-af").disabled=true;
-        try{
-          var res=await fetch(SB+"/rest/v1/offerte_responses",{method:"POST",headers:{"apikey":KEY,"Authorization":"Bearer "+KEY,"Content-Type":"application/json","Prefer":"return=minimal"},body:JSON.stringify({offerte_id:oid,status:st,submitted_at:new Date().toISOString(),opmerkingen:""})});
-          if(!res.ok)throw new Error("HTTP "+res.status);
-          akbalk.innerHTML='<p style="font-size:14px;font-weight:700;color:'+(st==="akkoord"?"#10b981":"#ef4444")+'">'+(st==="akkoord"?"✅ Akkoord ontvangen! Wij nemen contact op.":"❌ Afwijzing geregistreerd.")+'</p>';
-        }catch(e){
-          var bed=doc._bed||{};
-          var sub=encodeURIComponent((st==="akkoord"?"Akkoord: ":"Afgewezen: ")+(doc.nummer||""));
-          var bod=encodeURIComponent((st==="akkoord"?"Ik ga akkoord met offerte ":"Ik ga niet akkoord met offerte ")+(doc.nummer||""));
-          location.href="mailto:"+encodeURIComponent(bed.email||"")+"?subject="+sub+"&body="+bod;
-          document.getElementById("btn-ok").disabled=false;
-          document.getElementById("btn-af").disabled=false;
-        }
-      }
-      document.getElementById("btn-ok").onclick=function(){if(confirm("Bevestig uw akkoord met "+nr+"?"))reageer("akkoord");};
-      document.getElementById("btn-af").onclick=function(){if(confirm("Offerte "+nr+" afwijzen?"))reageer("afgewezen");};
+      err("📄","Offerte ophalen",
+        "<b>"+nr+"</b> werd gevonden maar kan niet worden weergegeven.<br><br>"+
+        "Stuur de offerte opnieuw vanuit BILLR (klik op 📧 Verzenden). "+
+        "De nieuwe link zal correct werken.");
     }
 
   }catch(e){
-    showMsg("❌","Fout bij laden","Technische fout: "+e.message+"<br><br>Probeer opnieuw of contacteer ons.");
+    err("❌","Fout bij laden","Technische fout: "+e.message);
   }
 }
-if(oid)go();else showMsg("❌","Ongeldige link","Geen document ID in de URL.");
+
+async function showWithAppCss(docHtml, doc, nr){
+  // Haal de CSS URL op van de live app
+  var cssUrl = null;
+  try{
+    var appPage = await fetch("https://billr-v2.pages.dev/");
+    var html = await appPage.text();
+    var m = html.match(/href="(\/assets\/index-[^"]+\.css)"/);
+    if(m) cssUrl = "https://billr-v2.pages.dev"+m[1];
+  }catch(e){ console.warn("CSS fetch mislukt:", e); }
+
+  // Bouw de volledige HTML pagina
+  var cssHtml = cssUrl
+    ? '<link href="'+cssUrl+'" rel="stylesheet"><link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">'
+    : '<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">';
+
+  var dc = doc._dc || "#1a2e4a";
+  var fullHtml = '<!DOCTYPE html><html lang="nl"><head><meta charset="UTF-8"><title>'+nr+'</title>'+cssHtml+
+    '<style>*{box-sizing:border-box;margin:0;padding:0}body{background:#f1f5f9;font-family:Inter,Arial,sans-serif;font-size:13px;color:#1e293b}'+
+    '.doc-wrap{padding:20px;background:#f1f5f9}'+
+    '.doc-page{box-shadow:none!important;border-radius:0!important;margin:0 auto 20px!important;width:210mm;overflow:visible;display:flex;flex-direction:column}'+
+    '@media print{body{background:#fff}.doc-wrap{padding:0}@page{size:A4;margin:0}.doc-page{height:297mm;max-height:297mm;overflow:hidden;break-after:page;page-break-after:always;margin:0!important}.doc-page:last-child{break-after:auto;page-break-after:auto}.fct-pg,.qt-pg,.fct-pg2,.prod-page{flex:1;overflow:hidden;min-height:0}.qt-footer{margin-top:auto;flex-shrink:0}}</style>'+
+    '</head><body><div class="doc-wrap">'+docHtml+'</div></body></html>';
+
+  // Maak iframe
+  var wrap = document.getElementById("docarea");
+  var iframe = document.createElement("iframe");
+  iframe.style.cssText="width:100%;border:none;display:block;min-height:600px;";
+  iframe.onload = function(){
+    try{
+      var h = iframe.contentDocument.documentElement.scrollHeight;
+      iframe.style.height = Math.max(h, 600)+"px";
+    }catch(e){ iframe.style.height="1200px"; }
+  };
+  var blob = new Blob([fullHtml], {type:"text/html;charset=utf-8"});
+  iframe.src = URL.createObjectURL(blob);
+  wrap.appendChild(iframe);
+
+  // Toon UI
+  document.getElementById("topbar").style.display="flex";
+  wrap.style.display="block";
+  window._printIframe = iframe;
+  window.print = function(){ iframe.contentWindow.print(); };
+
+  // Akkoord knoppen
+  var isFact=(doc.type==="factuur")||String(doc.nummer||"").startsWith("FACT");
+  var toonAk=!isFact&&(doc._sj?doc._sj.toonBevestigingslink!==false:true);
+  if(toonAk){
+    var ak=document.getElementById("akbalk"); ak.style.display="flex";
+    async function reageer(st){
+      document.getElementById("bok").disabled=true; document.getElementById("baf").disabled=true;
+      try{
+        var res=await fetch(SB+"/rest/v1/offerte_responses",{method:"POST",headers:{"apikey":KEY,"Authorization":"Bearer "+KEY,"Content-Type":"application/json","Prefer":"return=minimal"},body:JSON.stringify({offerte_id:oid,status:st,submitted_at:new Date().toISOString(),opmerkingen:""})});
+        if(!res.ok) throw new Error("HTTP "+res.status);
+        ak.innerHTML='<p style="font-size:14px;font-weight:700;color:'+(st==="akkoord"?"#10b981":"#ef4444")+'">'+(st==="akkoord"?"✅ Akkoord ontvangen! Wij nemen spoedig contact op.":"❌ Afwijzing geregistreerd.")+'</p>';
+      }catch(e){
+        document.getElementById("bok").disabled=false; document.getElementById("baf").disabled=false;
+        var bed=doc._bed||{};
+        var subj=encodeURIComponent((st==="akkoord"?"Akkoord: ":"Afgewezen: ")+(doc.nummer||""));
+        var body=encodeURIComponent((st==="akkoord"?"Ik ga akkoord met offerte ":"Ik ga niet akkoord met offerte ")+(doc.nummer||""));
+        location.href="mailto:"+encodeURIComponent(bed.email||"")+"?subject="+subj+"&body="+body;
+      }
+    }
+    document.getElementById("bok").onclick=function(){if(confirm("Bevestig akkoord met "+nr+"?"))reageer("akkoord");};
+    document.getElementById("baf").onclick=function(){if(confirm("Offerte "+nr+" afwijzen?"))reageer("afgewezen");};
+  }
+}
+
+go();
 </script>
 </body>
 </html>
