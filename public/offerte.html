@@ -3,172 +3,134 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Offerte bekijken — W-charge BV</title>
+<title>Offerte bekijken</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:Arial,sans-serif;background:#f0f4f8;min-height:100vh;padding:12px}
-.wrap{max-width:680px;margin:0 auto}
-.card{background:#fff;border-radius:12px;box-shadow:0 2px 12px rgba(0,0,0,.1);overflow:hidden;margin-bottom:12px}
-.hdr{padding:20px 24px;display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px}
-.hdr-naam{font-weight:900;font-size:18px;color:#fff;letter-spacing:-.3px}
-.hdr-info{font-size:11px;color:rgba(255,255,255,.7);line-height:1.8;margin-top:3px}
-.hdr-type{font-weight:900;font-size:24px;color:#fff;text-transform:uppercase;text-align:right}
-.hdr-nr{font-size:11px;color:rgba(255,255,255,.7);font-family:monospace;text-align:right;margin-top:3px}
-.body{padding:20px 24px}
-.meta{display:grid;grid-template-columns:1fr 1fr;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;margin-bottom:16px;background:#f8fafc}
-.mi{padding:10px 14px;border-right:1px solid #e2e8f0;border-bottom:1px solid #e2e8f0}
-.mi:nth-child(2n){border-right:none}
-.mi:nth-last-child(-n+2){border-bottom:none}
-.ml{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#94a3b8;margin-bottom:2px}
-.mv{font-size:13px;font-weight:700;color:#1e293b}
-.parties{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px}
-.party{background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:12px 14px}
-.pl{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#94a3b8;margin-bottom:5px}
-.pn{font-weight:700;font-size:13px;color:#1e293b;margin-bottom:2px}
-.pi{font-size:11.5px;color:#475569;line-height:1.8}
-table{width:100%;border-collapse:collapse;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;margin-bottom:14px;font-size:13px}
-th{background:#f8fafc;padding:8px 11px;text-align:left;font-size:10px;font-weight:700;color:#64748b;text-transform:uppercase;border-bottom:1px solid #e2e8f0}
-td{padding:8px 11px;border-bottom:1px solid #f1f5f9;color:#1e293b}
-tr:last-child td{border-bottom:none}
-.grp{background-color:var(--dc,#1a2e4a);color:#fff;font-weight:700;font-size:11px;padding:7px 11px;text-transform:uppercase;letter-spacing:.5px}
-.totbox{display:flex;justify-content:flex-end;margin-bottom:14px}
-.totinn{min-width:260px;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden}
-.trow{display:flex;justify-content:space-between;padding:7px 13px;font-size:13px;border-bottom:1px solid #f1f5f9}
-.trow:last-child{border-bottom:none;font-weight:800;font-size:15px;background:#f0fdf4;padding:10px 13px}
-.betaal{background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:12px 14px;margin-bottom:10px;font-size:13px;line-height:1.8}
-.vscot{background:#f0f4ff;border:1px solid #a5b4fc;border-radius:8px;padding:10px 14px;margin-bottom:10px;font-size:12.5px;color:#3730a3}
-.akkoord{background:#f0f4ff;border:2px solid #818cf8;border-radius:10px;padding:16px 18px;margin-bottom:10px}
-.aklbl{font-size:11px;font-weight:700;color:#3730a3;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px}
-.akp{font-size:13px;color:#475569;margin-bottom:12px}
-.btns{display:flex;gap:8px;flex-wrap:wrap}
-.btn{padding:12px 20px;border-radius:8px;border:none;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;flex:1;min-width:120px}
-.btn-ok{background:#10b981;color:#fff}
-.btn-af{background:#f1f5f9;color:#64748b;border:2px solid #e2e8f0}
-.btn:disabled{opacity:.5;cursor:not-allowed}
-.ftr{padding:12px 24px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px}
-.ft{font-size:10.5px;color:rgba(255,255,255,.65);line-height:1.8}
-.vw{font-size:12px;color:#64748b;line-height:1.9;white-space:pre-wrap}
-#msg{padding:60px 24px;text-align:center}
-#msg .ico{font-size:48px;margin-bottom:14px}
-#msg h2{font-size:20px;font-weight:800;color:#1e293b;margin-bottom:8px}
-#msg p{font-size:13px;color:#64748b;line-height:1.6;max-width:400px;margin:0 auto}
-#spin{text-align:center;padding:60px}
-.sp{display:inline-block;width:40px;height:40px;border:4px solid #e2e8f0;border-top-color:#3b82f6;border-radius:50%;animation:spin .8s linear infinite}
+body{font-family:Inter,Arial,sans-serif;background:#f1f5f9;min-height:100vh;padding:0}
+#spin{display:flex;align-items:center;justify-content:center;min-height:100vh;flex-direction:column;gap:14px}
+.sp{width:44px;height:44px;border:4px solid #e2e8f0;border-top-color:#3b82f6;border-radius:50%;animation:spin .8s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
-@media(max-width:560px){.parties,.meta{grid-template-columns:1fr}.mi{border-right:none}.totbox{justify-content:stretch}.totinn{min-width:0;width:100%}.hdr{flex-direction:column}.hdr-type,.hdr-nr{text-align:left}}
+#msg{display:none;max-width:520px;margin:60px auto;background:#fff;border-radius:14px;box-shadow:0 2px 16px rgba(0,0,0,.08);padding:48px 32px;text-align:center}
+#msg .ico{font-size:52px;margin-bottom:16px}
+#msg h2{font-size:22px;font-weight:800;color:#1e293b;margin-bottom:10px}
+#msg p{font-size:14px;color:#64748b;line-height:1.7}
+/* Rendered HTML mode */
+#rendered{display:none}
+#rendered .printbar{padding:10px 16px;background:#1e293b;display:flex;gap:12px;align-items:center;font-family:Inter,Arial,sans-serif;font-size:13px;position:sticky;top:0;z-index:100}
+#rendered .printbar strong{color:#fff}
+#rendered .printbar .pbtn{background:#3b82f6;color:#fff;border:none;padding:8px 16px;border-radius:7px;cursor:pointer;font-size:13px;font-weight:600;font-family:inherit}
+#rendered .printbar .pbtn:hover{background:#2563eb}
+#rendered .ptip{color:rgba(255,255,255,.55);font-size:12px}
+/* Akkoord balk onder het document */
+#akbalk{display:none;position:sticky;bottom:0;background:#fff;border-top:2px solid #e2e8f0;padding:14px 20px;display:flex;gap:10px;align-items:center;justify-content:center;flex-wrap:wrap;z-index:100}
+#akbalk p{font-size:13px;color:#64748b;margin-right:8px}
+.akbtn{padding:12px 24px;border-radius:8px;border:none;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit}
+.akbtn-ok{background:#10b981;color:#fff}
+.akbtn-af{background:#f1f5f9;color:#64748b;border:2px solid #e2e8f0}
+.akbtn:disabled{opacity:.5;cursor:not-allowed}
+#iframe-wrap{overflow-x:auto;background:#f1f5f9;min-height:calc(100vh - 50px)}
+#iframe-wrap iframe{width:100%;border:none;display:block;min-height:calc(100vh - 100px)}
 </style>
 </head>
 <body>
-<div class="wrap">
-  <div id="spin"><div class="sp"></div><p style="margin-top:14px;color:#64748b;font-size:13px">Offerte laden...</p></div>
-  <div id="msg" style="display:none" class="card">
-    <div class="ico" id="msg-ico">❌</div>
-    <h2 id="msg-h"></h2>
-    <p id="msg-p"></p>
+<div id="spin"><div class="sp"></div><p style="color:#64748b;font-size:13px">Even geduld...</p></div>
+<div id="msg"><div class="ico" id="msg-ico">❌</div><h2 id="msg-h">Niet beschikbaar</h2><p id="msg-p">Deze link is niet meer geldig.</p></div>
+<div id="rendered">
+  <div class="printbar">
+    <strong id="doc-nr">Document</strong>
+    <button class="pbtn" onclick="window.print()">🖨 Afdrukken / PDF</button>
+    <span class="ptip">Kies "Microsoft Print to PDF" of "Opslaan als PDF"</span>
   </div>
-  <div id="main" style="display:none"></div>
+  <div id="iframe-wrap"></div>
 </div>
+<div id="akbalk" style="display:none">
+  <p>Gaat u akkoord met deze offerte?</p>
+  <button class="akbtn akbtn-ok" id="btn-ok">✅ Ik ga akkoord</button>
+  <button class="akbtn akbtn-af" id="btn-af">❌ Niet akkoord</button>
+</div>
+
 <script>
-var SB = "https://qxnxbqkdvvblfkihmjxy.supabase.co";
-var KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF4bnhicWtkdnZibGZraWhtanh5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMzNTI3MTMsImV4cCI6MjA4ODkyODcxM30.1JDvrHgxLpU1GZqSjDVGtfnFJg8PHuD-aFpHOxAY1To";
+var SB="https://qxnxbqkdvvblfkihmjxy.supabase.co";
+var KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF4bnhicWtkdnZibGZraWhtanh5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMzNTI3MTMsImV4cCI6MjA4ODkyODcxM30.1JDvrHgxLpU1GZqSjDVGtfnFJg8PHuD-aFpHOxAY1To";
+var params=new URLSearchParams(location.search);
+var oid=params.get("id");
 
-function $(id){ return document.getElementById(id); }
-function spin(on){ $("spin").style.display=on?"block":"none"; }
-function showMsg(ico,h,p){ spin(false); $("msg").style.display="block"; $("msg-ico").textContent=ico; $("msg-h").textContent=h; $("msg-p").innerHTML=p; }
-function showMain(html){ spin(false); $("main").style.display="block"; $("main").innerHTML=html; }
-function euro(n){ return "\u20AC\u00A0"+Number(n||0).toFixed(2).replace(".",",").replace(/\B(?=(\d{3})+(?!\d))/g,"."); }
-function datum(d){ try{ return new Date(d).toLocaleDateString("nl-BE",{day:"2-digit",month:"2-digit",year:"numeric"}); }catch(e){ return d||""; } }
-function xe(s){ return String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
-
-var params = new URLSearchParams(location.search);
-var oid = params.get("id");
-if(!oid){ showMsg("❌","Ongeldige link","Geen offerte ID gevonden in de link."); }
+function showSpin(on){document.getElementById("spin").style.display=on?"flex":"none";}
+function showMsg(ico,h,p){showSpin(false);var m=document.getElementById("msg");m.style.display="block";document.getElementById("msg-ico").textContent=ico;document.getElementById("msg-h").textContent=h;document.getElementById("msg-p").innerHTML=p;}
 
 async function go(){
-  try {
-    var r = await fetch(SB+"/rest/v1/offerte_shares?id=eq."+oid+"&select=offerte_data",{
-      headers:{"apikey":KEY,"Authorization":"Bearer "+KEY,"Content-Type":"application/json"}
-    });
-    var rows = await r.json();
-    if(!r.ok) throw new Error("HTTP "+r.status+": "+JSON.stringify(rows));
-    if(!rows||!rows.length){ showMsg("❌","Offerte niet gevonden","Deze link is niet meer geldig of de offerte werd nog niet gedeeld. Vraag een nieuwe link aan via de afzender."); return; }
+  if(!oid){showMsg("❌","Ongeldige link","Geen document ID gevonden.");return;}
+  try{
+    var r=await fetch(SB+"/rest/v1/offerte_shares?id=eq."+oid+"&select=offerte_data",{headers:{"apikey":KEY,"Authorization":"Bearer "+KEY}});
+    var rows=await r.json();
+    if(!r.ok)throw new Error("HTTP "+r.status);
+    if(!rows||!rows.length){
+      showMsg("❌","Offerte niet beschikbaar","Deze link is niet meer geldig of de offerte werd nog niet gedeeld.<br><br>Vraag een nieuwe link via de afzender.");
+      return;
+    }
+    var doc=rows[0].offerte_data||{};
+    var nr=doc.nummer||params.get("nr")||"Document";
+    document.title=nr+" — Offerte bekijken";
+    document.getElementById("doc-nr").textContent=nr;
 
-    var doc = rows[0].offerte_data||{};
-    var bed = doc._bed||{};
-    var dc = doc._dc||"#1a2e4a";
-    var klant = doc.klant||{};
-    var lijnen = doc.lijnen||[];
-    var isFact = (doc.type==="factuur")||(String(doc.nummer||"").startsWith("FACT"));
-    var docType = isFact?"FACTUUR":"OFFERTE";
-
-    // Bereken totalen
-    var sub=0, btwGr={};
-    lijnen.forEach(function(l){
-      sub+=(l.prijs||0)*(l.aantal||1);
-      var r=l.btw||0;
-      if(r>0){ btwGr[r]=(btwGr[r]||0)+(l.prijs||0)*(l.aantal||1)*(r/100); }
-    });
-    var btw=Object.values(btwGr).reduce(function(a,b){return a+b;},0);
-    var tot=sub+btw;
-
-    // Track view (niet blokkeren bij fout)
+    // Track view
     fetch(SB+"/rest/v1/offerte_views",{method:"POST",headers:{"apikey":KEY,"Authorization":"Bearer "+KEY,"Content-Type":"application/json","Prefer":"return=minimal"},body:JSON.stringify({offerte_id:oid,viewed_at:new Date().toISOString()})}).catch(function(){});
 
-    // Groepen
-    var grMap={}, grVlg=[];
-    lijnen.forEach(function(l){ var g=l.groep||"__"; if(!grMap[g]){ grMap[g]=[]; grVlg.push(g); } grMap[g].push(l); });
-    var hasGr = grVlg.length>1 || grVlg[0]!=="__";
+    showSpin(false);
+    document.getElementById("rendered").style.display="block";
 
-    var tbl = "<table><thead><tr><th>Omschrijving</th><th>Eenh.</th><th style='text-align:center'>Aantal</th><th style='text-align:right'>Prijs</th><th style='text-align:right'>BTW</th><th style='text-align:right'>Totaal</th></tr></thead><tbody>";
-    var grpSubs = [];
-    grVlg.forEach(function(g){
-      var ls=grMap[g], gsub=0;
-      if(hasGr && g!=="__") tbl+="<tr><td colspan='6' class='grp' style='background-color:"+xe(dc)+"'>"+xe(g)+"</td></tr>";
-      ls.forEach(function(l){
-        if(!l.naam) return;
-        var ext=(l.prijs||0)*(l.aantal||1);
-        gsub+=ext;
-        tbl+="<tr><td><b style='font-size:13px'>"+xe(l.naam)+"</b>"+(l.omschr?"<br><span style='font-size:11px;color:#64748b;font-style:italic'>"+xe(l.omschr)+"</span>":"")+"</td><td style='color:#64748b'>"+xe(l.eenheid||"stuk")+"</td><td style='text-align:center'>"+(l.aantal||1)+"</td><td style='text-align:right'>"+euro(l.prijs||0)+"</td><td style='text-align:right;color:#64748b'>"+(l.btw||0)+"%</td><td style='text-align:right;font-weight:700'>"+euro(ext)+"</td></tr>";
-      });
-      if(hasGr && g!=="__") grpSubs.push("<div style='display:flex;justify-content:flex-end;padding:6px 11px;background:#f0f4f8;border:1px solid #e2e8f0;border-top:none;font-size:12px;font-weight:700;margin-bottom:8px'><span>Subtotaal "+xe(g)+": "+euro(gsub)+"</span></div>");
-    });
-    tbl+="</tbody></table>"+grpSubs.join("");
-
-    var totHtml="<div class='totbox'><div class='totinn'><div class='trow'><span style='color:#64748b'>Subtotaal excl. BTW</span><span>"+euro(sub)+"</span></div>";
-    Object.entries(btwGr).forEach(function(e){ totHtml+="<div class='trow'><span style='color:#64748b'>BTW "+e[0]+"%</span><span>"+euro(e[1])+"</span></div>"; });
-    totHtml+="<div class='trow'><span>TOTAAL incl. BTW</span><span style='color:"+xe(dc)+"'>"+euro(tot)+"</span></div></div></div>";
-
-    var betHtml = bed.iban?"<div class='betaal'><b>Betaling:</b> IBAN "+xe(bed.iban)+(bed.bic?" · BIC "+xe(bed.bic):"")+" · Mededeling: "+xe(doc.nummer||"")+"</div>":"";
-    var vsHtml = (doc.voorschot||doc._voorschot)&&!isFact?"<div class='vscot'>💡 <b>Voorschot:</b> "+xe(doc.voorschot||doc._voorschot)+" te betalen vóór aanvang van de werken.</div>":"";
-    var toonAk = doc._sj?doc._sj.toonBevestigingslink!==false:true;
-    var akHtml = !isFact&&toonAk?"<div class='akkoord'><div class='aklbl'>📋 Digitaal akkoord</div><p class='akp'>Gaat u akkoord met deze offerte? Klik dan hieronder.</p><div class='btns'><button class='btn btn-ok' id='bok'>✅ Ik ga akkoord</button><button class='btn btn-af' id='baf'>❌ Niet akkoord</button></div></div>":"";
-    var vwHtml = doc._voorwaarden?"<div class='card'><div class='body'><div style='font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;margin-bottom:8px'>Algemene voorwaarden</div><div class='vw'>"+xe(doc._voorwaarden)+"</div></div></div>":"";
-    var logoH = (bed.logo&&!bed.logo.startsWith("data:"))?"<img src='"+xe(bed.logo)+"' style='max-height:36px;max-width:110px;object-fit:contain;margin-bottom:5px'/>":"";
-
-    showMain("<div class='card'><div class='hdr' style='background:"+xe(dc)+"'><div>"+logoH+"<div class='hdr-naam'>"+xe(bed.naam||"")+"</div><div class='hdr-info'>"+xe(bed.adres||"")+" · "+xe(bed.gemeente||"")+"<br>"+xe(bed.tel||"")+" · "+xe(bed.email||"")+"</div></div><div><div class='hdr-type'>"+docType+"</div><div class='hdr-nr'>"+xe(doc.nummer||"")+"</div></div></div><div class='body'><div class='meta'><div class='mi'><div class='ml'>Datum</div><div class='mv'>"+datum(doc.datum||doc.aangemaakt)+"</div></div><div class='mi'><div class='ml'>"+(isFact?"Vervaldatum":"Geldig tot")+"</div><div class='mv'>"+datum(doc.vervaldatum)+"</div></div><div class='mi'><div class='ml'>BTW-regime</div><div class='mv'>"+(doc.btwRegime==="verlegd"?"BTW verlegd":doc.btwRegime==="vrijgesteld"?"Vrijgesteld":"Standaard")+"</div></div><div class='mi'><div class='ml'>Betaling</div><div class='mv'>14 dagen</div></div></div><div class='parties'><div class='party'><div class='pl'>Van</div><div class='pn'>"+xe(bed.naam||"")+"</div><div class='pi'>"+xe(bed.adres||"")+" "+xe(bed.gemeente||"")+"<br>BTW: "+xe(bed.btwnr||"")+(bed.iban?"<br>IBAN: "+xe(bed.iban):"")+(bed.tel?"<br>"+xe(bed.tel):"")+"</div></div><div class='party'><div class='pl'>Klant</div><div class='pn'>"+xe(klant.naam||klant.bedrijf||"")+"</div><div class='pi'>"+xe(klant.adres||"")+" "+xe(klant.gemeente||"")+(klant.btwnr?"<br>BTW: "+xe(klant.btwnr):"")+(klant.tel?"<br>"+xe(klant.tel):"")+"</div></div></div>"+tbl+totHtml+betHtml+vsHtml+akHtml+"</div><div class='ftr' style='background:"+xe(dc)+"'><div class='ft'><b>"+xe(bed.naam||"")+"</b> · "+xe(bed.adres||"")+" · "+xe(bed.gemeente||"")+"</div><div class='ft'>BTW: "+xe(bed.btwnr||"")+" · IBAN: "+xe(bed.iban||"")+"</div></div></div>"+vwHtml);
-
-    var bok=$("bok"), baf=$("baf");
-    async function reageer(st){
-      if(bok){bok.disabled=true;} if(baf){baf.disabled=true;}
-      try{
-        var res=await fetch(SB+"/rest/v1/offerte_responses",{method:"POST",headers:{"apikey":KEY,"Authorization":"Bearer "+KEY,"Content-Type":"application/json","Prefer":"return=minimal"},body:JSON.stringify({offerte_id:oid,status:st,submitted_at:new Date().toISOString(),opmerkingen:""})});
-        if(!res.ok) throw new Error("HTTP "+res.status);
-        showMsg(st==="akkoord"?"✅":"❌",st==="akkoord"?"Akkoord ontvangen!":"Offerte afgewezen",st==="akkoord"?"Uw bevestiging werd geregistreerd. Wij nemen contact op.":"Uw reactie werd geregistreerd.");
-      } catch(e){
-        if(bok){bok.disabled=false;} if(baf){baf.disabled=false;}
-        var sub2=encodeURIComponent((st==="akkoord"?"Akkoord: ":"Afgewezen: ")+(doc.nummer||""));
-        var bod2=encodeURIComponent((st==="akkoord"?"Ik ga akkoord met offerte ":"Ik ga niet akkoord met offerte ")+(doc.nummer||""));
-        location.href="mailto:"+encodeURIComponent(bed.email||"")+"?subject="+sub2+"&body="+bod2;
-      }
+    if(doc._renderedHtml){
+      // Gebruik de exacte rendered HTML van de app (identiek aan in-app preview)
+      var blob=new Blob([doc._renderedHtml],{type:"text/html"});
+      var url=URL.createObjectURL(blob);
+      var ifr=document.createElement("iframe");
+      ifr.src=url;
+      ifr.style.cssText="width:100%;border:none;display:block;";
+      // Pas hoogte aan op inhoud
+      ifr.onload=function(){
+        try{
+          var h=ifr.contentDocument.documentElement.scrollHeight;
+          ifr.style.height=(Math.max(h,600))+"px";
+        }catch(e){ifr.style.height="2000px";}
+      };
+      document.getElementById("iframe-wrap").appendChild(ifr);
+    } else {
+      // Fallback: toon bericht dat offerte opnieuw verstuurd moet worden
+      document.getElementById("iframe-wrap").innerHTML='<div style="text-align:center;padding:60px 24px;color:#64748b"><div style="font-size:48px;margin-bottom:16px">📄</div><div style="font-size:16px;font-weight:700;color:#1e293b;margin-bottom:8px">'+nr+'</div><div style="font-size:13px;line-height:1.7">De offerte kon niet worden weergegeven.<br>Vraag de afzender om de offerte opnieuw te versturen.</div></div>';
     }
-    if(bok) bok.onclick=function(){ if(confirm("Bevestig uw akkoord met offerte "+(doc.nummer||"")+"?")) reageer("akkoord"); };
-    if(baf) baf.onclick=function(){ if(confirm("Offerte "+(doc.nummer||"")+" afwijzen?")) reageer("afgewezen"); };
 
-  } catch(e){
-    showMsg("❌","Fout bij laden","Technische fout: "+e.message+"<br><br>Probeer de pagina te vernieuwen of contacteer ons.");
+    // Toon akkoord knoppen voor offertes
+    var isFactuur=(doc.type==="factuur")||String(doc.nummer||"").startsWith("FACT");
+    var toonAk=!isFactuur&&(doc._sj?doc._sj.toonBevestigingslink!==false:true);
+    if(toonAk){
+      var akbalk=document.getElementById("akbalk");
+      akbalk.style.display="flex";
+      async function reageer(st){
+        document.getElementById("btn-ok").disabled=true;
+        document.getElementById("btn-af").disabled=true;
+        try{
+          var res=await fetch(SB+"/rest/v1/offerte_responses",{method:"POST",headers:{"apikey":KEY,"Authorization":"Bearer "+KEY,"Content-Type":"application/json","Prefer":"return=minimal"},body:JSON.stringify({offerte_id:oid,status:st,submitted_at:new Date().toISOString(),opmerkingen:""})});
+          if(!res.ok)throw new Error("HTTP "+res.status);
+          akbalk.innerHTML='<p style="font-size:14px;font-weight:700;color:'+(st==="akkoord"?"#10b981":"#ef4444")+'">'+(st==="akkoord"?"✅ Akkoord ontvangen! Wij nemen contact op.":"❌ Afwijzing geregistreerd.")+'</p>';
+        }catch(e){
+          var bed=doc._bed||{};
+          var sub=encodeURIComponent((st==="akkoord"?"Akkoord: ":"Afgewezen: ")+(doc.nummer||""));
+          var bod=encodeURIComponent((st==="akkoord"?"Ik ga akkoord met offerte ":"Ik ga niet akkoord met offerte ")+(doc.nummer||""));
+          location.href="mailto:"+encodeURIComponent(bed.email||"")+"?subject="+sub+"&body="+bod;
+          document.getElementById("btn-ok").disabled=false;
+          document.getElementById("btn-af").disabled=false;
+        }
+      }
+      document.getElementById("btn-ok").onclick=function(){if(confirm("Bevestig uw akkoord met "+nr+"?"))reageer("akkoord");};
+      document.getElementById("btn-af").onclick=function(){if(confirm("Offerte "+nr+" afwijzen?"))reageer("afgewezen");};
+    }
+
+  }catch(e){
+    showMsg("❌","Fout bij laden","Technische fout: "+e.message+"<br><br>Probeer opnieuw of contacteer ons.");
   }
 }
-if(oid) go();
+if(oid)go();else showMsg("❌","Ongeldige link","Geen document ID in de URL.");
 </script>
 </body>
 </html>
