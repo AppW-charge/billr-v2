@@ -146,7 +146,9 @@ async function go(){
     var ficheMap={};
     if(productIds.length>0){
       try{
-        var fr=await fetch(SB+"/rest/v1/product_fiches?product_id=in.("+productIds.join(",")+")",{headers:{"apikey":KEY,"Authorization":"Bearer "+KEY}});
+        var userId=doc._userId||"";
+        var ficheUrl=SB+"/rest/v1/product_fiches?select=product_id,fiches&product_id=in.("+productIds.join(",")+")"+(userId?"&user_id=eq."+userId:"");
+        var fr=await fetch(ficheUrl,{headers:{"apikey":KEY,"Authorization":"Bearer "+KEY}});
         var frows=await fr.json();
         if(Array.isArray(frows))frows.forEach(function(r){if(r.fiches)ficheMap[r.product_id]=r.fiches;});
       }catch(e){console.warn("Fiches laden mislukt:",e);}
@@ -261,7 +263,9 @@ function render(doc,nr){
     var fiches=l.technischeFiches||[];
     fiches.forEach(function(f){
       if(!f.data)return;
-      var src=f.data.startsWith("data:")?f.data:"data:"+(f.type||"application/pdf")+";base64,"+f.data;
+      var raw=f.data;
+      // data kan al een volledige data-URL zijn of enkel base64
+      var src=raw.startsWith("data:")?raw:("data:"+(f.type||"application/pdf")+";base64,"+raw);
       ficheHtml+="<div class='doc-page' style='overflow:hidden'>"
         +"<div style='background:"+xe(dc)+";padding:8px 20px;display:flex;align-items:center;gap:10px'>"
         +"<span style='color:rgba(255,255,255,.7);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.7px'>Technische fiche</span>"
