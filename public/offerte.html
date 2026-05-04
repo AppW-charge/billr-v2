@@ -141,37 +141,22 @@ async function go(){
     document.title=nr;document.getElementById("docnr").textContent=nr;
     fetch(SB+"/rest/v1/offerte_views",{method:"POST",headers:{"apikey":KEY,"Authorization":"Bearer "+KEY,"Content-Type":"application/json","Prefer":"return=minimal"},body:JSON.stringify({offerte_id:oid,viewed_at:new Date().toISOString()})}).catch(function(){});
     
-    // STAP 1: Controleer of fiches al ingebed zijn in de lijnen data
-    var heeftFiches=(doc.lijnen||[]).some(function(l){return l.technischeFiches&&l.technischeFiches.length>0;});
-    
-    // STAP 2: Fiches ophalen uit product_fiches tabel als ze niet ingebed zijn
-    if(!heeftFiches){
-      var productIds=[...new Set((doc.lijnen||[]).map(function(l){return l.productId;}).filter(Boolean))];
-      if(productIds.length>0){
-        var ficheMap={};
-        var userId=doc._userId||"";
-        // Probeer eerst met user_id filter, dan zonder
-        var urls=userId
-          ?[SB+"/rest/v1/product_fiches?select=product_id,fiches&product_id=in.("+productIds.join(",")+")"+"&user_id=eq."+userId,
-            SB+"/rest/v1/product_fiches?select=product_id,fiches&product_id=in.("+productIds.join(",")+")" ]
-          :[SB+"/rest/v1/product_fiches?select=product_id,fiches&product_id=in.("+productIds.join(",")+")" ];
-        for(var ui=0;ui<urls.length;ui++){
-          try{
-            var fr=await fetch(urls[ui],{headers:{"apikey":KEY,"Authorization":"Bearer "+KEY}});
-            var frows=await fr.json();
-            if(Array.isArray(frows)&&frows.length>0){
-              frows.forEach(function(r){if(r.fiches&&r.fiches.length)ficheMap[r.product_id]=r.fiches;});
-              console.log("[Fiches] fetch "+urls[ui]+" → "+Object.keys(ficheMap).length+" producten met fiches");
-        if(Object.keys(ficheMap).length>0)break; // gevonden, stop
-            }
-          }catch(e){console.warn("Fiches fetch poging "+(ui+1)+" mislukt:",e);}
-        }
+    // Haal fiches op uit apart _fiches record in offerte_shares
+    try {
+      var fr2=await fetch(SB+"/rest/v1/offerte_shares?id=eq."+oid+"_fiches&select=offerte_data",
+        {headers:{"apikey":KEY,"Authorization":"Bearer "+KEY}});
+      var fr2rows=await fr2.json();
+      if(Array.isArray(fr2rows)&&fr2rows.length>0&&fr2rows[0].offerte_data&&fr2rows[0].offerte_data.fiches){
+        var fichesList=fr2rows[0].offerte_data.fiches;
+        var ficheByProd={};
+        fichesList.forEach(function(f){if(f.productId)ficheByProd[f.productId]=f.fiches;});
         doc.lijnen=(doc.lijnen||[]).map(function(l){
-          if(l.productId&&ficheMap[l.productId])return Object.assign({},l,{technischeFiches:ficheMap[l.productId]});
+          if(l.productId&&ficheByProd[l.productId])return Object.assign({},l,{technischeFiches:ficheByProd[l.productId]});
           return l;
         });
+        console.log("[Fiches] geladen:",fichesList.length,"producten");
       }
-    }
+    }catch(e){console.warn("[Fiches] fout:",e);}
     render(doc,nr);
   }catch(e){err("❌","Fout",e.message);}
 }
@@ -271,7 +256,6 @@ function render(doc,nr){
     +"</div>";
 
   // === TECHNISCHE FICHES PAGINA'S ===
-  console.log("[Fiches] lijnen met fiches:", lijnen.filter(function(l){return l.technischeFiches&&l.technischeFiches.length;}).length);
   var ficheHtml="";
   lijnen.forEach(function(l){
     if(!l.naam)return;
