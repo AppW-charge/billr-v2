@@ -3155,17 +3155,21 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
       const sj = settings?.sjabloon || {};
       const lyt = settings?.layout || {};
       const dc = sj.accentKleur || settings?.thema?.kleur || bed.kleur || "#1a2e4a";
+      // Capture de volledige rendered HTML — identiek aan de app preview
       let _docHtml = null;
+      let _cssUrl = null;
       try {
-        const dw=document.querySelector(".mb-body .doc-wrap");
+        const dw = document.querySelector(".mb-body .doc-wrap");
         if(dw) {
-          // Strip base64 data (fiches, logo's) zodat payload klein blijft
-          let h = dw.outerHTML;
-          h = h.replace(/src="data:[^"]{100,}"/g, 'src=""');
-          h = h.replace(/href="data:[^"]{100,}"/g, 'href=""');
-          h = h.replace(/"data:[a-z/]+;base64,[^"]{50,}"/g, '""');
-          _docHtml = h;
-          console.log("[Share] docHtml size:", Math.round(h.length/1024)+"KB");
+          // Haal CSS URL op van de live app (voor offerte.html)
+          try {
+            const styleLinks = Array.from(document.querySelectorAll('link[rel="stylesheet"]'));
+            const appCss = styleLinks.find(l => l.href && l.href.includes('/assets/'));
+            if(appCss) _cssUrl = appCss.href;
+          } catch(e) {}
+          // Sla de volledige rendered HTML op (met fiches als ze er in zitten)
+          _docHtml = dw.outerHTML;
+          console.log("[Share] docHtml:", Math.round(_docHtml.length/1024)+"KB, cssUrl:", _cssUrl);
         }
       } catch(e) { console.warn("[Share] HTML capture:", e); }
 
@@ -3225,10 +3229,17 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
 
       // Sla hoofddata op zonder fiches (zodat het altijd past)
       shareData.lijnen = shareData.lijnen.map(l => ({...l, technischeFiches: null}));
-      if(_docHtml) shareData._docHtml = _docHtml;
+      if(_cssUrl) shareData._cssUrl = _cssUrl;
+      if(_docHtml) {
+        // Strip fiche base64 uit HTML zodat het past (fiches komen uit _fiches record)
+        let dh = _docHtml;
+        dh = dh.replace(/data="data:application\/pdf;base64,[^"]{100,}"/g, 'data=""');
+        dh = dh.replace(/src="data:application\/pdf;base64,[^"]{100,}"/g, 'src=""');
+        shareData._docHtml = dh;
+      }
       let payload={id:offerte.id,nummer:offerte.nummer,offerte_data:shareData};
       const kb=Math.round(JSON.stringify(payload).length/1024);
-      if(kb>850){delete shareData._docHtml;}
+      if(kb>900){delete shareData._docHtml; console.warn("[Share] HTML te groot, weggooien:",kb+"KB");}
       const{error:uErr}=await sb.from("offerte_shares").upsert(payload,{onConflict:"id"});
       if(uErr){ console.error("[Share] FAILED:",uErr.message); }
       console.log("✅ Offerte gedeeld:",offerte.nummer,kb+"KB");
