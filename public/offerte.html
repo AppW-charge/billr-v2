@@ -1,1581 +1,376 @@
 <!DOCTYPE html>
 <html lang="nl">
 <head>
-<meta charset="UTF-8"/>
-<meta name="viewport" content="width=900, initial-scale=0.5" id="vp"/>
-<script>
-(function(){
-  var w = window.screen.width;
-  var scale = Math.min(1.0, w / 900);
-  document.getElementById('vp').setAttribute('content',
-    'width=900, initial-scale=' + scale.toFixed(3) + ', maximum-scale=5.0, user-scalable=yes'
-  );
-})();
-</script>
-<title>Offerte laden...</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Offerte bekijken</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
 <style>
-/* OFFERTE.HTML - IDENTIEK AAN BILLR PREVIEW */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
 *{box-sizing:border-box;margin:0;padding:0}
-html,body{font-family:'Inter',system-ui,Arial,sans-serif;background:#f1f5f9;color:#1e293b;-webkit-font-smoothing:antialiased}
-#loader{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;gap:14px}
-.spin{width:44px;height:44px;border:4px solid #e2e8f0;border-top-color:#1a2e4a;border-radius:50%;animation:spin .8s linear infinite}
+body{font-family:Inter,Arial,sans-serif;background:#f1f5f9;min-height:100vh;padding:16px}
+.wrap{max-width:700px;margin:0 auto}
+.card{background:#fff;border-radius:14px;box-shadow:0 2px 16px rgba(0,0,0,.08);overflow:hidden;margin-bottom:16px}
+.hdr{padding:24px 28px;display:flex;justify-content:space-between;align-items:flex-start}
+.hdr-from{flex:1}
+.hdr-from-naam{font-weight:900;font-size:18px;color:#fff;letter-spacing:-.4px}
+.hdr-from-info{font-size:11px;color:rgba(255,255,255,.7);line-height:1.9;margin-top:4px}
+.hdr-doc{text-align:right}
+.hdr-type{font-weight:900;font-size:26px;color:#fff;letter-spacing:-.8px;text-transform:uppercase}
+.hdr-nr{font-size:11px;color:rgba(255,255,255,.7);margin-top:4px;font-family:monospace}
+.body{padding:24px 28px}
+.meta-bar{display:grid;grid-template-columns:1fr 1fr;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;margin-bottom:20px}
+.meta-item{padding:10px 16px;border-right:1px solid #e2e8f0;border-bottom:1px solid #e2e8f0}
+.meta-item:nth-child(2n){border-right:none}
+.meta-item:nth-last-child(-n+2){border-bottom:none}
+.meta-lbl{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#94a3b8;margin-bottom:2px}
+.meta-val{font-size:13px;font-weight:700;color:#1e293b}
+.parties{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px}
+.party{background:#f8fafc;border-radius:8px;padding:14px 16px;border:1px solid #e2e8f0}
+.party-lbl{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#94a3b8;margin-bottom:6px}
+.party-naam{font-weight:700;font-size:14px;color:#1e293b;margin-bottom:3px}
+.party-info{font-size:12px;color:#475569;line-height:1.8}
+.tbl{width:100%;border-collapse:collapse;border-radius:8px;overflow:hidden;border:1px solid #e2e8f0;margin-bottom:16px}
+.tbl th{background:#f8fafc;padding:9px 12px;text-align:left;font-size:10px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid #e2e8f0}
+.tbl td{padding:9px 12px;border-bottom:1px solid #f1f5f9;font-size:13px;color:#1e293b}
+.tbl tr:last-child td{border-bottom:none}
+.grp-hdr{background:#1e293b;color:#fff;font-weight:700;font-size:12px;padding:8px 12px;letter-spacing:.5px;text-transform:uppercase}
+.grp-sub{display:flex;justify-content:flex-end;gap:12px;padding:6px 12px;background:#f0f4f8;border:1px solid #e2e8f0;border-top:none;font-size:12px;font-weight:700;color:#1e293b;margin-bottom:8px}
+.totalen{display:flex;justify-content:flex-end;margin-bottom:16px}
+.tot-box{min-width:280px;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden}
+.tot-row{display:flex;justify-content:space-between;padding:8px 14px;font-size:13px;border-bottom:1px solid #f1f5f9}
+.tot-row:last-child{border-bottom:none;font-weight:800;font-size:16px;background:#f0fdf4;padding:12px 14px}
+.tot-lbl{color:#64748b}
+.betaal{background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:12px 16px;margin-bottom:12px;font-size:13px;line-height:1.8}
+.voorschot{background:#f0f4ff;border:1px solid #a5b4fc;border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:12.5px;color:#3730a3}
+.sign-box{border:2px dashed #cbd5e1;border-radius:8px;padding:20px;text-align:center;margin-bottom:12px}
+.sign-lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:#94a3b8;margin-bottom:4px}
+.akkoord-blok{border:2px solid #a5b4fc;background:#f0f4ff;border-radius:10px;padding:16px 20px;margin-bottom:12px}
+.akkoord-lbl{font-size:11px;font-weight:700;color:#3730a3;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px}
+.voorwaarden{font-size:11px;color:#475569;line-height:1.9;white-space:pre-wrap;margin-bottom:14px}
+.footer{background:#1a2e4a;padding:12px 28px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px}
+.footer-txt{font-size:10.5px;color:rgba(255,255,255,.6);line-height:1.8}
+.footer-txt strong{color:rgba(255,255,255,.85)}
+
+/* Akkoord buttons */
+.btn-wrap{display:flex;gap:10px;flex-wrap:wrap}
+.btn{padding:13px 22px;border-radius:10px;border:none;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;flex:1;min-width:140px}
+.btn-ok{background:#10b981;color:#fff}
+.btn-af{background:#f8fafc;color:#64748b;border:2px solid #e2e8f0}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+
+/* Status states */
+.state{display:none;text-align:center;padding:40px 20px}
+.state.show{display:block}
+.spinner{display:inline-block;width:40px;height:40px;border:4px solid #e2e8f0;border-top-color:#3b82f6;border-radius:50%;animation:spin .8s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
-#err{display:none;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;gap:12px;padding:24px;text-align:center}
-#err h2{color:#ef4444;font-size:20px;font-weight:800}
-#err p{color:#64748b;font-size:14px;max-width:420px;line-height:1.6}
-.retry-btn{background:#1a2e4a;color:#fff;border:none;padding:10px 24px;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600}
-#root{max-width:900px;margin:0 auto;padding:20px 16px 80px;min-width:860px}
-.doc-page{background:#fff;max-width:820px;width:100%;margin:0 auto 20px;box-shadow:0 2px 12px rgba(0,0,0,.1);border-radius:4px;overflow:visible}
-.doc-page-lbl{text-align:center;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#94a3b8;margin-bottom:5px}
-.screen-only{display:block}.print-only{display:none}.no-print{display:block}
 
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600&display=swap');
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-:root{
-  --p:var(--theme,#1a2e4a);--p2:#2563eb;--sb-txt-rgb:255,255,255;
-  --bg:#f0f4f8;--card:#fff;--bdr:#e2e8f0;--txt:#0f172a;--mut:#64748b;
-  --r:10px;--sh:0 1px 3px rgba(0,0,0,.07),0 1px 2px rgba(0,0,0,.05);
-  --shm:0 4px 16px rgba(0,0,0,.1);
-  --sb-w:220px;
+/* Responsive */
+@media(max-width:600px){
+  .parties{grid-template-columns:1fr}
+  .hdr{flex-direction:column;gap:10px}
+  .hdr-doc{text-align:left}
+  .meta-bar{grid-template-columns:1fr}
+  .meta-item{border-right:none}
+  .totalen{justify-content:stretch}
+  .tot-box{min-width:0;width:100%}
 }
-@media(min-width:1400px){
-  :root{--sb-w:256px}
-  .sb-brand{font-size:22px!important}
-  .sb-logo{padding:22px 18px!important}
-  .ni{font-size:14px!important;padding:11px 18px!important}
-  .ni-ic{font-size:19px!important}
-  .sb-sec{font-size:11px!important;padding:10px 18px 5px!important}
-  .sg{grid-template-columns:repeat(4,1fr)!important}
-  .sc{padding:24px!important}
-  .sv{font-size:28px!important}
-  .content{padding:28px!important}
-  .topbar{padding:14px 28px!important}
-  .tb-title{font-size:20px!important}
-}
-@media(min-width:1800px){
-  :root{--sb-w:280px}
-  .ni{font-size:15px!important;padding:13px 22px!important}
-  .ni-ic{font-size:21px!important}
-  .content{padding:36px!important}
-}
-body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--txt);font-size:13.5px;line-height:1.5}
-
-/* -- LOGIN -- */
-.login-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,var(--p) 0%,var(--p)cc 60%,#0f172a 100%);padding:20px}
-.login-card{background:#fff;border-radius:16px;padding:40px 36px;width:100%;max-width:400px;box-shadow:0 24px 64px rgba(0,0,0,.3)}
-.login-logo{text-align:center;margin-bottom:28px}
-.login-brand{font-weight:900;font-size:36px;letter-spacing:-1.5px;color:var(--p)}
-.login-sub{font-size:12px;color:var(--mut);margin-top:2px}
-.login-tabs{display:flex;background:#f1f5f9;border-radius:8px;padding:3px;margin-bottom:22px}
-.login-tab{flex:1;padding:8px;text-align:center;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;color:var(--mut);transition:all .1s}
-.login-tab.on{background:#fff;color:var(--p);box-shadow:0 1px 3px rgba(0,0,0,.1)}
-.login-err{background:#fef2f2;border:1px solid #fca5a5;color:#991b1b;border-radius:7px;padding:9px 12px;font-size:12.5px;margin-bottom:12px}
-.login-ok{background:#f0fdf4;border:1px solid #86efac;color:#065f46;border-radius:7px;padding:9px 12px;font-size:12.5px;margin-bottom:12px}
-.forgot-link{font-size:12px;color:var(--p2);cursor:pointer;text-decoration:underline;text-align:right;display:block;margin-top:-6px;margin-bottom:10px}
-
-/* -- LAYOUT -- */
-.app{display:flex;height:100vh;height:100dvh;overflow:hidden}
-.sb{width:var(--sb-w,220px);min-width:var(--sb-w,220px);background:var(--p);display:flex;flex-direction:column;overflow-y:auto;transition:background .3s,transform .25s;z-index:100}
-
-/* -------------------------------------------------------
-   MOBILE - iPhone first, safe-area, 44px touch targets
-   ------------------------------------------------------- */
-
-
-/* Bottom Navigation Bar */
-.mob-nav{display:none}
-
-/* Hamburger: standaard verborgen op desktop */
-.mob-menu-btn{
-  display:none;align-items:center;justify-content:center;
-  width:38px;height:38px;border-radius:8px;border:none;
-  background:rgba(0,0,0,.07);cursor:pointer;font-size:18px;
-  flex-shrink:0;-webkit-tap-highlight-color:transparent;color:var(--txt)
-}
-.mob-menu-btn:active{background:rgba(0,0,0,.14)}
-/* FAB: niet meer nodig */
-.fab-menu{display:none}
-/* Mobile overlay */
-.sb-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:399;-webkit-tap-highlight-color:transparent}
-
-/* Drag handle sidebar desktop */
-.sb-drag{position:absolute;top:50%;right:-6px;transform:translateY(-50%);width:12px;height:40px;background:rgba(255,255,255,.2);border-radius:6px;cursor:ew-resize;display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .2s}
-.sb:hover .sb-drag{opacity:1}
-
-.sb-logo{padding:18px 16px 14px;display:flex;align-items:center;gap:10px;border-bottom:1px solid rgba(255,255,255,.08)}
-.sb-logo-mark{width:36px;height:36px;border-radius:8px;background:rgba(255,255,255,.15);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;overflow:hidden;border:1.5px solid rgba(255,255,255,.2)}
-.sb-logo-mark img{width:100%;height:100%;object-fit:contain}
-.sb-brand{font-weight:900;font-size:20px;color:rgb(var(--sb-txt-rgb));letter-spacing:-1px;line-height:1}
-.sb-brand-sub{font-size:9.5px;color:rgba(var(--sb-txt-rgb),.5);font-weight:400;text-transform:uppercase;letter-spacing:.5px}
-.sb-sec{font-size:9.5px;text-transform:uppercase;letter-spacing:1.2px;color:rgba(var(--sb-txt-rgb),.5);padding:12px 14px 3px;font-weight:700}
-.sb-nav{padding:8px 10px;flex:1}
-.ni{display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:7px;cursor:pointer;color:rgba(var(--sb-txt-rgb),.7);font-size:13px;font-weight:500;transition:all .1s;margin-bottom:1px}
-.ni:hover{background:rgba(var(--sb-txt-rgb),.1);color:rgba(var(--sb-txt-rgb),.9)}
-.ni.on{background:rgba(var(--sb-txt-rgb),.18);color:rgb(var(--sb-txt-rgb));font-weight:600}
-.ni-ic{font-size:15px;width:18px;text-align:center;flex-shrink:0}
-.nb{margin-left:auto;background:#ef4444;color:#fff;font-size:10px;font-weight:700;padding:1px 6px;border-radius:20px}
-.sb-foot{padding:12px 14px;border-top:1px solid rgba(255,255,255,.08)}
-.sb-user{display:flex;align-items:center;gap:8px}
-.ava{width:32px;height:32px;background:rgba(255,255,255,.2);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;color:#fff;flex-shrink:0}
-.sb-user-name{color:rgba(var(--sb-txt-rgb),.85);font-weight:600;font-size:12px}
-.sb-user-role{color:rgba(var(--sb-txt-rgb),.4);font-size:10.5px}
-.main{flex:1;display:flex;flex-direction:column;overflow:hidden}
-.topbar{background:#fff;border-bottom:1px solid var(--bdr);padding:0 24px;height:54px;display:flex;align-items:center;gap:12px;flex-shrink:0;box-shadow:0 1px 0 var(--bdr)}
-.tb-title{font-weight:800;font-size:17px;color:var(--txt);flex:1;letter-spacing:-.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.tb-btn-text{}
-.tb-btn-icon{display:none}
-.content{flex:1;overflow-y:auto;padding:22px}
-
-/* -- CARDS -- */
-.card{background:var(--card);border:1px solid var(--bdr);border-radius:var(--r);padding:18px;box-shadow:var(--sh)}
-.card-h{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
-.card-t{font-weight:700;font-size:15px;color:var(--txt)}
-
-/* -- STATS -- */
-.sg{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px}
-.g2{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:4px}
-.sc{background:var(--card);border:1px solid var(--bdr);border-radius:var(--r);padding:14px 16px;position:relative;overflow:hidden;border-top:3px solid var(--sc,#2563eb);cursor:pointer;transition:all .12s}
-.sc:hover{transform:translateY(-2px);box-shadow:0 4px 16px rgba(0,0,0,.1)}
-.sl{font-size:10px;font-weight:700;color:var(--mut);text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.sv{font-weight:800;font-size:24px;color:var(--txt);line-height:1.1}
-.ss{font-size:11.5px;color:var(--mut);margin-top:2px}
-.si{position:absolute;right:14px;top:12px;font-size:28px;opacity:.1}
-.sc-arrow{position:absolute;right:12px;bottom:12px;font-size:12px;color:var(--mut);opacity:.5}
-
-/* -- BUTTONS -- */
-.btn{display:inline-flex;align-items:center;gap:5px;padding:8px 14px;border-radius:7px;font-size:13px;font-weight:600;cursor:pointer;border:none;transition:all .1s;font-family:'Inter',sans-serif;white-space:nowrap;line-height:1}
-.bp{background:var(--p);color:#fff}.bp:hover{opacity:.9}
-.b2{background:#2563eb;color:#fff}.b2:hover{background:#1d4ed8}
-.bs{background:#fff;color:var(--txt);border:1px solid var(--bdr)}.bs:hover{background:#f8fafc}
-.bg{background:#10b981;color:#fff}.bg:hover{background:#059669}
-.br{background:#ef4444;color:#fff}.br:hover{background:#dc2626}
-.bw{background:#f59e0b;color:#fff}.bw:hover{background:#d97706}
-.bo{background:#f97316;color:#fff}.bo:hover{background:#ea580c}
-.bgh{background:transparent;color:var(--mut);border:1px solid transparent}.bgh:hover{background:#f1f5f9;color:var(--txt)}
-.btn-sm{padding:5px 10px;font-size:12px;border-radius:6px}
-.btn-lg{padding:11px 22px;font-size:14px;font-weight:700}
-.btn:disabled{opacity:.45;cursor:not-allowed}
-
-/* -- BULK ACTION BAR -- */
-.bulk-bar{position:sticky;top:0;z-index:50;background:var(--p);color:#fff;padding:10px 16px;border-radius:8px;margin-bottom:12px;display:flex;align-items:center;gap:10px;box-shadow:0 4px 16px rgba(0,0,0,.2);animation:slideDown .15s ease}
-@keyframes slideDown{from{transform:translateY(-8px);opacity:0}to{transform:translateY(0);opacity:1}}
-.bulk-cnt{font-weight:700;font-size:13.5px;min-width:100px}
-.bulk-actions{display:flex;gap:7px;flex-wrap:wrap}
-.bulk-act-btn{padding:6px 12px;border-radius:6px;border:1.5px solid rgba(255,255,255,.3);background:rgba(255,255,255,.1);color:#fff;font-size:12.5px;font-weight:600;cursor:pointer;transition:all .1s}
-.bulk-act-btn:hover{background:rgba(255,255,255,.2)}
-
-/* -- STATUS BADGE -- */
-.status-badge{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:20px;font-size:11.5px;font-weight:600;white-space:nowrap}
-.status-icon{font-size:12px;line-height:1}
-
-/* -- TABLE -- */
-.tw{overflow-x:auto;border-radius:var(--r);border:1px solid var(--bdr)}
-table{width:100%;border-collapse:collapse}
-thead th{background:#f8fafc;padding:9px 12px;text-align:left;font-size:10.5px;font-weight:700;color:var(--mut);text-transform:uppercase;letter-spacing:.6px;border-bottom:1px solid var(--bdr);white-space:nowrap}
-tbody td{padding:10px 12px;border-bottom:1px solid #f1f5f9;font-size:13px;vertical-align:middle}
-tbody tr:last-child td{border-bottom:none}
-tbody tr:hover{background:#fafbfc}
-tbody tr.selected{background:#eff6ff!important}
-.row-active{background:#f0f7ff!important}
-tr.row-active td{border-top:2px solid #2563eb}
-
-/* -- DOCUMENT ACTION PANEL & LOG -- */
-.doc-act-row td{background:#f0f7ff;border-bottom:1px solid #dbeafe!important;padding:0!important}
-.doc-act-panel{display:flex;flex-direction:column;gap:0}
-.doc-act-btns{display:flex;gap:7px;flex-wrap:wrap;padding:10px 14px;align-items:center;border-bottom:1px solid #e0eeff}
-.doc-act-label{font-weight:700;font-size:11.5px;color:#1e3a5f;margin-right:4px;white-space:nowrap}
-.doc-log-wrap{padding:8px 14px;max-height:160px;overflow-y:auto;display:flex;flex-direction:column;gap:4px}
-.doc-log-entry{display:flex;gap:8px;align-items:flex-start;font-size:11.5px}
-.doc-log-ts{color:#94a3b8;font-size:10.5px;white-space:nowrap;flex-shrink:0;margin-top:1px}
-.doc-log-act{color:#1e3a5f;font-weight:500}
-.doc-log-empty{font-size:11.5px;color:#94a3b8;font-style:italic;padding:4px 0}
-.doc-icons{display:flex;gap:2px;align-items:center}
-.doc-icon-tip{font-size:13px;cursor:default}
-
-/* -- BULK PRODUCT ACTIONS -- */
-.prd-bulk-bar{position:sticky;top:0;z-index:50;background:var(--p);color:#fff;padding:9px 14px;border-radius:8px;margin-bottom:10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;box-shadow:0 4px 16px rgba(0,0,0,.2);animation:slideDown .15s ease}
-
-/* -- ONTWERP PREVIEW -- */
-.ontw-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin-top:8px}
-.ontw-card{border:2px solid var(--bdr);border-radius:10px;cursor:pointer;transition:all .12s;overflow:hidden;background:#fff}
-.ontw-card:hover{border-color:#2563eb;box-shadow:0 3px 12px rgba(37,99,235,.15)}
-.ontw-card.sel{border-color:#2563eb;box-shadow:0 2px 8px rgba(37,99,235,.2)}
-.ontw-thumb{height:90px;position:relative;overflow:hidden}
-.ontw-label{padding:7px 9px;font-size:11.5px;font-weight:700;color:var(--txt);text-align:center;border-top:1px solid var(--bdr)}
-
-/* -- PRODUCT SUGGESTION COMPARISON -- */
-.sug-compare{display:flex;gap:8px;align-items:stretch;background:#f0fdf4;border:1.5px solid #86efac;border-radius:9px;padding:8px 10px;margin-top:6px}
-.sug-col{flex:1;min-width:0}
-.sug-col-lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px}
-.sug-col-lbl.prev{color:#059669}
-.sug-col-lbl.curr{color:#2563eb}
-.sug-product-row{display:flex;align-items:center;gap:6px;font-size:12px;padding:4px 6px;border-radius:6px}
-.sug-product-row.prev-row{background:#f0fdf4;border:1px solid #bbf7d0}
-.sug-product-row.curr-row{background:#eff6ff;border:1px solid #bfdbfe}
-.sug-divider{width:1px;background:#86efac;margin:0 4px}
-
-/* -- TABLET -- */
-@media(min-width:769px)and(max-width:1100px){
-  :root{--sb-w:190px}
-  .sg{grid-template-columns:repeat(2,1fr)!important}
-  .content{padding:14px!important}
-  .tw table{font-size:12px}
-  .tw th,.tw td{padding:7px 8px!important}
-  .mob-hide-tb{display:none!important}
-}
-/* Compactere tabel op mobiel - minder kolommen verbergen */
-
-
-/* -- FORMS -- */
-.fg{margin-bottom:13px}
-.fl{display:block;font-size:12px;font-weight:600;color:var(--txt);margin-bottom:5px}
-.fc{width:100%;padding:8px 11px;border:1.5px solid var(--bdr);border-radius:7px;font-size:13px;font-family:'Inter',sans-serif;color:var(--txt);background:#fff;outline:none;transition:border-color .1s}
-.fc:focus{border-color:#2563eb;box-shadow:0 0 0 3px rgba(37,99,235,.1)}
-.fr2{display:grid;grid-template-columns:1fr 1fr;gap:13px}
-.fr3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:13px}
-
-/* -- MODAL -- */
-.mo{position:fixed;inset:0;background:rgba(10,20,35,.75);backdrop-filter:blur(4px);z-index:1000;display:flex;align-items:center;justify-content:center;padding:14px}
-.mdl{background:#fff;border-radius:14px;box-shadow:0 24px 64px rgba(0,0,0,.25);width:100%;max-height:94vh;overflow-y:auto;display:flex;flex-direction:column}
-.msm{max-width:440px}.mmd{max-width:640px}.mlg{max-width:880px}.mxl{max-width:1060px}.mfull{max-width:1200px}
-.mh{padding:16px 22px;border-bottom:1px solid var(--bdr);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;position:sticky;top:0;background:#fff;z-index:5;border-radius:14px 14px 0 0}
-.mt-m{font-weight:800;font-size:17px;letter-spacing:-.4px}
-.mb-body{padding:22px;flex:1}
-.mf{padding:14px 22px;border-top:1px solid var(--bdr);display:flex;align-items:center;justify-content:flex-end;gap:10px;flex-shrink:0;background:#f8fafc;border-radius:0 0 14px 14px}
-.xbtn{width:30px;height:30px;border-radius:6px;background:#f1f5f9;border:none;cursor:pointer;font-size:17px;display:flex;align-items:center;justify-content:center;color:var(--mut)}
-.xbtn:hover{background:#e2e8f0}
-
-/* -- WIZARD STEPS -- */
-.wzs{display:flex;gap:0;margin-bottom:20px;background:#f0f4f8;border-radius:8px;padding:3px}
-.wz{flex:1;padding:8px 6px;text-align:center;border-radius:6px;cursor:pointer;transition:all .12s;font-size:11px;font-weight:600;color:var(--mut);display:flex;align-items:center;justify-content:center;gap:5px}
-.wz.on{background:#fff;color:var(--p);box-shadow:0 1px 3px rgba(0,0,0,.1)}
-.wz.dn{color:#10b981}
-.wzn{width:20px;height:20px;border-radius:50%;background:#e2e8f0;display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;flex-shrink:0}
-.wz.on .wzn{background:var(--p);color:#fff}
-.wz.dn .wzn{background:#10b981;color:#fff}
-
-/* -- PRODUCT TILES -- */
-.ptile-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px;max-height:450px;overflow-y:auto;padding:4px}
-.ptile{border:2px solid var(--bdr);border-radius:12px;padding:13px 10px;cursor:pointer;transition:all .12s;background:#fff;display:flex;flex-direction:column;align-items:center;text-align:center;position:relative;user-select:none}
-.ptile:hover{border-color:#2563eb;background:#f0f7ff;box-shadow:0 3px 12px rgba(37,99,235,.15);transform:translateY(-1px)}
-.ptile.sel{border-color:#10b981;background:#f0fdf4;box-shadow:0 2px 8px rgba(16,185,129,.15)}
-.ptile-img{width:100%;height:90px;object-fit:contain;border-radius:7px;background:#f8fafc;margin-bottom:7px}
-.ptile-img-ph{width:100%;height:90px;border-radius:7px;background:#f0f4f8;display:flex;align-items:center;justify-content:center;font-size:34px;margin-bottom:7px}
-.ptile-name{font-weight:700;font-size:12px;color:var(--txt);margin-bottom:3px;line-height:1.3}
-.ptile-price{font-size:13px;font-weight:800;color:#2563eb;margin-bottom:4px}
-.ptile-btw{font-size:11px;color:var(--mut);margin-bottom:6px}
-.ptile-badge{position:absolute;top:6px;right:6px;background:#10b981;color:#fff;border-radius:12px;font-size:11px;font-weight:700;padding:2px 8px}
-.ptile-qty{display:flex;align-items:center;gap:5px;margin-top:auto;width:100%}
-.ptile-qty input{width:38px;text-align:center;padding:4px;border:1.5px solid var(--bdr);border-radius:6px;font-size:13px;font-weight:700}
-.qb{width:30px;height:30px;border:1.5px solid var(--bdr);background:#fff;border-radius:6px;cursor:pointer;font-size:16px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .1s}
-.qb:hover:not(:disabled){background:#2563eb;color:#fff;border-color:#2563eb}
-.qb:disabled{opacity:.35;cursor:default}
-.qb{width:24px;height:24px;min-width:24px;border-radius:5px;border:1.5px solid var(--bdr);background:#fff;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;font-weight:700;transition:all .1s;flex-shrink:0}
-.qb:hover{background:#f1f5f9;border-color:#94a3b8}
-.qb:disabled{opacity:.3;cursor:not-allowed}
-
-/* -- KLANT CARDS (passport) -- */
-.klant-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px}
-.klant-card{background:#fff;border:1px solid var(--bdr);border-radius:12px;padding:16px;box-shadow:var(--sh);transition:all .12s}
-.klant-card:hover{box-shadow:var(--shm)}
-.klant-card-header{display:flex;align-items:flex-start;gap:12px;margin-bottom:12px}
-.klant-avatar{width:46px;height:46px;border-radius:10px;background:var(--p);display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:800;color:#fff;flex-shrink:0}
-.klant-naam{font-weight:800;font-size:14px;color:var(--txt)}
-.klant-co{font-size:12px;color:#475569;font-weight:600}
-.klant-addr{font-size:11.5px;color:var(--mut)}
-.klant-stats{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;border-top:1px solid #f1f5f9;padding-top:10px;margin-top:10px}
-.klant-stat{text-align:center}
-.klant-stat-v{font-weight:800;font-size:15px}
-.klant-stat-l{font-size:10px;color:var(--mut);text-transform:uppercase;letter-spacing:.4px}
-
-/* -- TABS -- */
-.tabs{display:flex;flex-wrap:wrap;gap:4px;padding:4px;background:#f0f4f8;border-radius:10px;margin-bottom:16px}
-.tab{flex:1;min-width:0;padding:8px 4px;text-align:center;border-radius:7px;cursor:pointer;font-size:12px;font-weight:600;color:var(--mut);transition:all .12s;white-space:nowrap;min-height:36px;display:flex;align-items:center;justify-content:center}
-.tab.on{background:#fff;color:var(--p);box-shadow:0 1px 4px rgba(0,0,0,.1);font-weight:700}
-.tab:hover:not(.on){background:rgba(255,255,255,.6)}
-.tab-txt{display:inline}
-
-
-/* -- IMPORT -- */
-.import-zone{border:2px dashed #93c5fd;border-radius:10px;padding:32px;text-align:center;cursor:pointer;transition:all .15s;background:#f8fbff}
-.import-zone:hover,.import-zone.drag{border-color:#2563eb;background:#eff6ff}
-
-/* -- MISC -- */
-.g2{display:grid;grid-template-columns:1fr 1fr;gap:20px}
-.flex{display:flex}.fca{align-items:center}.gap2{gap:8px}.gap3{gap:12px}.mla{margin-left:auto}
-.mb4{margin-bottom:16px}.mb5{margin-bottom:20px}
-.es{text-align:center;padding:48px 20px;color:var(--mut)}
-.srch{position:relative}
-.srch-i{padding:8px 11px 8px 34px;border:1.5px solid var(--bdr);border-radius:7px;font-size:13px;width:220px;outline:none;font-family:'Inter',sans-serif}
-.srch-i:focus{border-color:#2563eb}
-.srch-ic{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--mut);font-size:13px}
-.tag{display:inline-block;background:#f1f5f9;color:#475569;font-size:11px;padding:2px 7px;border-radius:4px;font-weight:600}
-.chk{width:16px;height:16px;border-radius:3px;cursor:pointer;accent-color:#2563eb}
-.divider{height:1px;background:var(--bdr);margin:13px 0}
-.mono{font-family:'JetBrains Mono',monospace;font-size:12px}
-.period-btn{padding:6px 12px;border-radius:6px;border:1.5px solid var(--bdr);font-size:12.5px;font-weight:600;cursor:pointer;background:#fff;color:var(--mut)}
-.period-btn.on{background:var(--p);color:#fff;border-color:var(--p)}
-.spin{display:inline-block;animation:spin .8s linear infinite}
-@keyframes spin{to{transform:rotate(360deg)}}
-.notif{position:fixed;bottom:20px;right:20px;z-index:9999;padding:11px 18px;border-radius:9px;font-size:13px;font-weight:600;box-shadow:0 4px 16px rgba(0,0,0,.2);display:flex;align-items:center;gap:7px;animation:su .2s ease}
-.notif.ok{background:#065f46;color:#fff;border-left:4px solid #10b981}
-.notif.er{background:#7f1d1d;color:#fff;border-left:4px solid #ef4444}
-.notif.in{background:#1e3a5f;color:#fff;border-left:4px solid #2563eb}
-@keyframes su{from{transform:translateY(14px);opacity:0}to{transform:translateY(0);opacity:1}}
-
-/* -- ADDR DROPDOWN -- */
-.addr-wrap{position:relative}
-.addr-drop{position:absolute;top:100%;left:0;right:0;background:#fff;border:1.5px solid #2563eb;border-radius:7px;box-shadow:0 4px 16px rgba(0,0,0,.12);z-index:100;max-height:200px;overflow-y:auto;margin-top:2px}
-.addr-item{padding:9px 12px;cursor:pointer;font-size:12.5px}
-.addr-item:hover{background:#eff6ff}
-
-/* -- THEMA PICKER -- */
-.thema-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-top:10px}
-.thema-item{border-radius:8px;padding:10px 6px;cursor:pointer;text-align:center;transition:all .1s;border:2px solid transparent}
-.thema-item.on{border-color:#1e293b;transform:scale(1.05)}
-.thema-swatch{width:36px;height:36px;border-radius:8px;margin:0 auto 4px}
-.thema-name{font-size:10px;font-weight:600;color:var(--mut)}
-
-/* --- PRINT / DOCUMENT STYLES --- */
-.doc-wrap{background:#f0f4f8;padding:16px}
-.doc-page{background:#fff;max-width:820px;width:100%;margin:0 auto 20px;box-shadow:0 2px 12px rgba(0,0,0,.1);border-radius:4px;overflow:visible;box-sizing:border-box;display:flex;flex-direction:column;position:relative}
-.doc-page:first-child{page-break-before:avoid}
-.doc-page-lbl{text-align:center;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#94a3b8;margin-bottom:5px}
-
-/* Screen-only en Print-only helpers */
-.screen-only{display:block}
-.print-only{display:none}
-.no-print{display:block}
-
-/* Page 1 Cover */
-.cov{display:grid;grid-template-columns:42% 58%;min-height:240mm;height:100%}
-
-.cov-l{display:flex;flex-direction:column;padding:44px 32px;position:relative;overflow:hidden}
-.cov-l::after{content:'';position:absolute;bottom:-80px;right:-80px;width:240px;height:240px;border-radius:50%;background:rgba(255,255,255,.06)}
-.cov-logo{max-width:140px;max-height:52px;object-fit:contain;margin-bottom:14px;filter:brightness(0) invert(1)}
-.cov-logo-mark{width:52px;height:52px;border-radius:10px;background:rgba(255,255,255,.15);border:1.5px solid rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;font-size:26px;margin-bottom:12px}
-.cov-co-name{font-weight:900;font-size:21px;color:#fff;letter-spacing:-.5px;margin-bottom:3px}
-.cov-co-tag{font-size:11px;color:rgba(255,255,255,.55);margin-bottom:auto}
-.cov-contact{margin-top:auto;font-size:11px;color:rgba(255,255,255,.5);line-height:1.9}
-.cov-contact strong{color:rgba(255,255,255,.8)}
-.cov-inst-badge{display:inline-flex;align-items:center;gap:8px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);border-radius:30px;padding:7px 14px;color:#fff;font-weight:700;font-size:13px;margin-top:16px;align-self:flex-start}
-.cov-r{padding:44px 40px;display:flex;flex-direction:column;justify-content:space-between}
-.cov-doctype{font-weight:900;font-size:52px;letter-spacing:-2.5px;line-height:1}
-.cov-docnum{font-family:'JetBrains Mono',monospace;font-size:12.5px;background:#f0f4f8;padding:3px 10px;border-radius:5px;display:inline-block;margin-top:5px;margin-bottom:28px;font-weight:700}
-.cov-for-lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#94a3b8;margin-bottom:7px}
-.cov-client-name{font-size:22px;font-weight:900;letter-spacing:-.5px;margin-bottom:3px}
-.cov-client-co{font-size:14px;color:#475569;font-weight:600;margin-bottom:3px}
-.cov-client-addr{font-size:12.5px;color:#64748b;line-height:1.7}
-.cov-meta{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:28px;padding-top:18px;border-top:2px solid #f0f4f8}
-.cov-meta-lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:#94a3b8;margin-bottom:2px}
-.cov-meta-val{font-size:13px;font-weight:700;color:#1e293b}
-.cov-total{font-size:22px;font-weight:900;letter-spacing:-.5px}
-
-/* Page 2 – Product specs */
-.prod-page{padding:30px 40px}
-/* print rules consolidated below */
-.prod-item{display:grid;grid-template-columns:130px 1fr;gap:22px;margin-bottom:26px;padding-bottom:26px;border-bottom:1px solid #f1f5f9}
-.prod-item:last-child{border-bottom:none;margin-bottom:0;padding-bottom:0}
-.prod-img{width:130px;height:100px;object-fit:contain;border-radius:8px;background:#f8fafc;border:1px solid #e2e8f0}
-.prod-img-ph{width:130px;height:100px;border-radius:8px;background:#f0f4f8;display:flex;align-items:center;justify-content:center;font-size:38px;border:1px solid #e2e8f0}
-.prod-cat-tag{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;background:#eff6ff;color:#2563eb;padding:2px 8px;border-radius:4px;display:inline-block;margin-bottom:6px}
-.prod-naam{font-weight:800;font-size:15px;color:#1e293b;margin-bottom:4px;letter-spacing:-.3px}
-.prod-desc{font-size:12px;color:#475569;line-height:1.7;margin-bottom:8px}
-.prod-specs{display:flex;flex-wrap:wrap;gap:5px}
-.prod-spec{background:#f8fafc;border:1px solid #e2e8f0;border-radius:4px;padding:2px 8px;font-size:10.5px;font-weight:600;color:#475569}
-
-/* Page 3 – Quote detail */
-.qt-pg{padding:30px 40px}
-.qt-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:22px;padding-bottom:18px;border-bottom:2px solid #f0f4f8}
-.qt-from-logo{max-height:40px;max-width:120px;object-fit:contain;margin-bottom:6px}
-.qt-from-name{font-weight:900;font-size:18px;letter-spacing:-.4px;margin-bottom:2px}
-.qt-from-info{font-size:10.5px;color:#64748b;line-height:1.9}
-.qt-dtype{font-weight:900;font-size:28px;letter-spacing:-.8px;text-align:right}
-.qt-dnum{font-family:'JetBrains Mono',monospace;font-size:11.5px;background:#f0f4f8;padding:2px 8px;border-radius:4px;display:inline-block;margin-top:4px}
-.qt-meta-bar{display:flex;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;overflow:hidden;margin-bottom:18px}
-.qt-meta-item{flex:1;padding:9px 14px;border-right:1px solid #e2e8f0}
-.qt-meta-item:last-child{border-right:none}
-.qt-meta-lbl{font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#94a3b8;margin-bottom:1px}
-.qt-meta-val{font-size:12.5px;font-weight:700}
-.qt-parties{display:grid;grid-template-columns:1fr 1fr;gap:22px;margin-bottom:20px}
-.qt-party-lbl{font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#94a3b8;margin-bottom:6px}
-.qt-party-name{font-weight:700;font-size:13px;margin-bottom:2px}
-.qt-party-info{font-size:11.5px;color:#475569;line-height:1.8}
-.grp-hdr{padding:7px 12px;border-radius:4px 4px 0 0;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:#fff;margin-top:12px}
-.grp-hdr:first-child{margin-top:0}
-.qt-tbl{width:100%;border-collapse:collapse;border:1px solid #e2e8f0;border-top:none}
-.qt-tbl th{background:#f8fafc;padding:7px 10px;text-align:left;font-size:10px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid #e2e8f0}
-.qt-tbl th.r,.qt-tbl td.r{text-align:right}
-.qt-tbl th.c,.qt-tbl td.c{text-align:center}
-.qt-tbl tbody tr:nth-child(even){background:#fafbfc}
-.qt-tbl td{padding:8px 10px;border-bottom:1px solid #f1f5f9;font-size:11.5px}
-.qt-tbl tbody tr:last-child td{border-bottom:none}
-.qt-item-main{font-weight:600;color:#1e293b}
-.qt-item-sub{font-size:10px;color:#64748b;margin-top:1px;font-style:italic}
-.grp-sub{display:flex;justify-content:flex-end;gap:12px;padding:5px 12px;background:#f0f4f8;border:1px solid #e2e8f0;border-top:none;font-size:11.5px;font-weight:700;margin-bottom:2px}
-.qt-totals{display:flex;justify-content:flex-end;margin-top:18px}
-.qt-tot-box{min-width:260px;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden}
-.qt-tot-row{display:flex;justify-content:space-between;padding:7px 14px;font-size:12.5px;border-bottom:1px solid #f1f5f9}
-.qt-tot-row.last{border-bottom:none;font-weight:800;font-size:15px;padding:10px 14px}
-.qt-tot-row.btwr{color:#64748b;font-size:11.5px}
-.qt-tot-row.krt{color:#ef4444}
-.qt-fiches{margin-top:14px;padding:10px 14px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:7px}
-.qt-betaal{margin-top:14px;padding:11px 13px;background:#f0fdf4;border:1px solid #86efac;border-radius:6px;font-size:12px;line-height:1.8}
-.qt-notes{margin-top:10px;padding:11px 13px;background:#fffbeb;border:1px solid #fde68a;border-radius:6px;font-size:12px;color:#78350f}
-.qt-voorschot{margin-top:8px;padding:9px 13px;background:#f0f4ff;border:1px solid #a5b4fc;border-radius:6px;font-size:12px;color:#3730a3}
-.qt-sign{margin-top:18px;display:grid;grid-template-columns:1fr;gap:16px}
-.qt-sign-box{border:1.5px dashed #cbd5e1;border-radius:7px;padding:16px;min-height:70px;position:relative}
-.qt-sign-lbl{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:#94a3b8;margin-bottom:4px}
-.qt-confirm-link{margin-top:10px;padding:11px 13px;background:#f0f4ff;border:1px solid #818cf8;border-radius:6px;font-size:11.5px;color:#3730a3;display:flex;align-items:center;gap:8px}
-.qt-footer{padding:10px 40px;display:flex;justify-content:space-between;align-items:center;margin-top:auto;page-break-inside:avoid}
-.qt-footer-txt{font-size:10px;color:rgba(255,255,255,.5)}
-.qt-footer-txt strong{color:rgba(255,255,255,.8)}
-.stamp{display:inline-block;border:3px solid #10b981;color:#10b981;font-weight:900;font-size:20px;letter-spacing:2px;padding:4px 16px;border-radius:4px;transform:rotate(-6deg);opacity:.8}
-
-/* Factuur layout – compact, 2 pages only */
-.fct-pg{padding:30px 40px}
-.fct-pg2{padding:30px 40px}
-.fct-pg2-title{font-weight:900;font-size:16px;margin-bottom:14px;color:#1e293b}
-.legal-txt{font-size:11px;color:#475569;line-height:1.9;white-space:pre-wrap}
-
-/* -- GARANTIE / DOSSIER CARDS -- */
-.info-card{background:#fff;border:1px solid var(--bdr);border-radius:10px;padding:14px;box-shadow:var(--sh)}
-.info-card-header{display:flex;align-items:center;gap:10px;margin-bottom:10px}
-.info-badge{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:5px;font-size:11px;font-weight:700}
-.gar-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px}
-.tijd-row{display:grid;grid-template-columns:80px 1fr 100px 80px 80px 90px;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid #f1f5f9;font-size:13px}
-.btw-grid{display:grid;grid-template-columns:60px 1fr 100px 120px 120px;gap:8px;align-items:center;padding:8px 12px;font-size:13px;border-bottom:1px solid #f1f5f9}
-.btw-code{font-family:'JetBrains Mono',monospace;font-weight:800;font-size:16px;color:var(--p);background:#f0f4f8;border-radius:5px;padding:2px 6px;text-align:center}
-.export-btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:7px;border:1.5px solid var(--bdr);background:#fff;font-size:13px;font-weight:600;cursor:pointer;transition:all .1s}
-.export-btn:hover{background:#f0f4f8}
-/* -- PRINT: verwijder browser-header (URL, datum, paginanr) -- */
-@page{
-  size:A4 portrait;
-  margin:0;  /* margin:0 verwijdert de browser-header en -footer volledig */
-}
-@media print{
-  /* --- KRITIEK: margin:0 verwijdert browser URL + paginanummering --- */
-  @page{size:A4 portrait;margin:0}
-  
-  /* Kleur behouden */
-  *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important;box-shadow:none!important}
-  
-  /* Verberg alles behalve #print-root */
-  body{margin:0!important;padding:0!important;background:#fff!important}
-  body>*:not(#print-root){display:none!important}
-  #print-root{display:block!important;width:100%!important}
-  #print-root .doc-wrap{display:block!important;width:100%!important;padding:0!important;background:#fff!important}
-  
-  .screen-only{display:none!important}
-  .print-only{display:block!important}
-  .no-print{display:none!important}
-  
-  /* --- Elke doc-page = exacte A4 pagina (210×297mm) --- */
-  .doc-page{
-    box-shadow:none!important;border-radius:0!important;
-    margin:0!important;max-width:100%!important;width:210mm!important;
-    height:297mm!important;max-height:297mm!important;
-    overflow:hidden!important;
-    display:flex!important;flex-direction:column!important;
-    break-after:page!important;page-break-after:always!important;
-    box-sizing:border-box!important;position:relative!important;
-  }
-  .doc-page:last-child{break-after:auto!important;page-break-after:auto!important}
-  .doc-page-lbl{display:none!important}
-  
-  /* Coverpagina */
-  .cov{
-    width:100%!important;height:297mm!important;
-    min-height:297mm!important;max-height:297mm!important;
-    display:grid!important;grid-template-columns:42% 58%!important;
-    overflow:hidden!important;
-  }
-  .cov-l{height:100%!important;min-height:100%!important}
-  .cov-r{height:100%!important;box-sizing:border-box!important}
-  
-  /* Content pagina's: interne padding (omdat @page margin=0) */
-  .prod-page{padding:8mm 12mm!important;box-sizing:border-box!important;flex:1!important;overflow:hidden!important}
-  .fct-pg{padding:8mm 12mm!important;box-sizing:border-box!important;flex:1!important;overflow:hidden!important}
-  .qt-pg{padding:8mm 12mm!important;box-sizing:border-box!important;flex:1!important;overflow:hidden!important}
-  .fct-pg2{padding:8mm 12mm!important;box-sizing:border-box!important;flex:1!important;overflow:hidden!important}
-  
-  /* Footer: altijd onderaan de pagina */
-  .qt-footer{
-    margin-top:auto!important;flex-shrink:0!important;
-    break-inside:avoid!important;page-break-inside:avoid!important;
-  }
-  
-  /* Technische fiche pagina's */
-  .fiche-print-page{
-    width:210mm!important;height:297mm!important;
-    overflow:hidden!important;box-sizing:border-box!important;
-    break-after:page!important;page-break-after:always!important;
-    display:flex!important;flex-direction:column!important;
-  }
-  .fiche-print-page:last-child{break-after:auto!important;page-break-after:auto!important}
-  .fiche-print-page img{
-    width:100%!important;height:auto!important;
-    max-height:270mm!important;
-    object-fit:contain!important;display:block!important;
-  }
-  .fiche-screen-embed{display:none!important}
-  .fiche-print-images{display:block!important}
-  
-  /* Tabel regels: niet splitsen */
-  .qt-tbl tr{break-inside:avoid!important;page-break-inside:avoid!important}
-  .qt-totals,.qt-sign,.qt-betaal,.qt-voorschot,.qt-notes,.qt-confirm-link,.qt-fiches{break-inside:avoid!important;page-break-inside:avoid!important}
-  .grp-hdr{break-after:avoid!important;page-break-after:avoid!important}
-  .grp-sub,.prod-item,.qt-meta-bar,.qt-parties{break-inside:avoid!important;page-break-inside:avoid!important}
-  
-  /* Modal chrome verbergen */
-  .mo{position:static!important;background:transparent!important;padding:0!important;display:block!important}
-  .mdl{box-shadow:none!important;border-radius:0!important;max-width:100%!important;max-height:none!important;overflow:visible!important;height:auto!important;display:block!important}
-  .mh,.mf,.bulk-bar,.mob-nav,.fab-menu,.topbar,.sb{display:none!important}
-  .mb-body{padding:0!important;overflow:visible!important;max-height:none!important;height:auto!important}
-}
-
-/* --- INSTELLINGEN PREVIEW RESPONSIVE --- */
-
-
-@media print{.screen-only{display:none!important}.print-only{display:block!important}.no-print{display:none!important}#root{padding:0;max-width:100%}.doc-page{box-shadow:none!important;margin:0!important;border-radius:0!important}}
-
 </style>
-
 </head>
 <body>
-<div id="loader"><div class="spin"></div><div style="font-size:14px;font-weight:600;color:#64748b">Offerte laden...</div></div>
-<div id="err"><h2>Offerte niet beschikbaar</h2><p id="errmsg">Offerte kon niet geladen worden.</p><button class="retry-btn" onclick="location.reload()">Opnieuw proberen</button></div>
-<div id="root"></div>
+<div class="wrap">
+  <!-- Loading -->
+  <div class="state show" id="st-loading">
+    <div class="spinner"></div>
+    <p style="margin-top:16px;color:#64748b;font-size:14px">Even geduld...</p>
+  </div>
+  <!-- Error -->
+  <div class="state" id="st-error">
+    <div class="card"><div class="body" style="text-align:center;padding:40px">
+      <div style="font-size:48px;margin-bottom:12px">❌</div>
+      <div style="font-weight:800;font-size:18px;color:#1e293b;margin-bottom:8px">Offerte niet beschikbaar</div>
+      <div style="font-size:13px;color:#64748b" id="err-msg">Deze link is niet meer geldig of de offerte werd verwijderd.</div>
+    </div></div>
+  </div>
+  <!-- Bevestigd -->
+  <div class="state" id="st-ok">
+    <div class="card"><div class="body" style="text-align:center;padding:40px">
+      <div style="font-size:48px;margin-bottom:12px">✅</div>
+      <div style="font-weight:800;font-size:20px;color:#10b981;margin-bottom:8px">Akkoord ontvangen!</div>
+      <div style="font-size:13px;color:#475569">Uw bevestiging werd geregistreerd. U ontvangt bericht van ons.</div>
+    </div></div>
+  </div>
+  <!-- Afgewezen -->
+  <div class="state" id="st-af">
+    <div class="card"><div class="body" style="text-align:center;padding:40px">
+      <div style="font-size:48px;margin-bottom:12px">❌</div>
+      <div style="font-weight:800;font-size:20px;color:#ef4444;margin-bottom:8px">Offerte afgewezen</div>
+      <div style="font-size:13px;color:#475569">Uw reactie werd geregistreerd.</div>
+    </div></div>
+  </div>
+  <!-- Offerte content -->
+  <div id="main" style="display:none"></div>
+</div>
 
 <script>
-// pdfjs worker
-if(window.pdfjsLib) pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+const SB_URL = "https://qxnxbqkdvvblfkihmjxy.supabase.co";
+const SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF4bnhicWtkdnZibGZraWhtanh5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMzNTI3MTMsImV4cCI6MjA4ODkyODcxM30.1JDvrHgxLpU1GZqSjDVGtfnFJg8PHuD-aFpHOxAY1To";
+const params = new URLSearchParams(window.location.search);
+const offerteId = params.get("id");
 
-// Supabase
-var SB="https://qxnxbqkdvvblfkihmjxy.supabase.co";
-var KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF4bnhicWtkdnZibGZraWhtanh5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMzNTI3MTMsImV4cCI6MjA4ODkyODcxM30.1JDvrHgxLpU1GZqSjDVGtfnFJg8PHuD-aFpHOxAY1To";
-async function sbGet(p){var r=await fetch(SB+p,{headers:{"apikey":KEY,"Authorization":"Bearer "+KEY}});if(!r.ok)throw new Error(r.status);return r.json();}
-async function sbPost(p,b){var r=await fetch(SB+p,{method:"POST",headers:{"apikey":KEY,"Authorization":"Bearer "+KEY,"Content-Type":"application/json","Prefer":"return=minimal"},body:JSON.stringify(b)});return r.ok||r.status===201;}
-</script>
-
-<script type="text/babel">
-
-const { useState, useEffect, useRef, useCallback } = React;
-
-// --- HELPERS -----------------------------------------------------
-const fmtDate = d => d ? new Date(d).toLocaleDateString("nl-BE",{day:"2-digit",month:"2-digit",year:"numeric"}) : "-";
-const fmtEuro = n => "€\u00A0" + Number(n||0).toFixed(2).replace(".",",").replace(/\B(?=(\d{3})+(?!\d))/g,".");
-const addDays = (d,n) => { const r=new Date(d); r.setDate(r.getDate()+n); return r.toISOString().split("T")[0]; };
-const today = () => new Date().toISOString().split("T")[0];
-const stripBe = s => (s||"").replace(/[^0-9]/g,"");
-const fmtBtwnr = n => { const c=stripBe(n); return c.length>=9?"BE "+c.slice(0,4)+"."+c.slice(4,7)+"."+c.slice(7):(n||""); };
-
-const BEBAT_TARIEF = 2.89; // Standaard - overschrijfbaar via settings.voorwaarden.bebatTarief
-const getBebatTarief = (settings) => Number(settings?.voorwaarden?.bebatTarief) || BEBAT_TARIEF;
-const BEBAT_BTW = 21;
-
-// Bepaal of een product BEBAT-plichtig is
-// Batterij-onderdelen zijn dat: naam bevat "batter" maar NIET "bms"
-function isBebatProduct(naam, cat) {
-  naam = naam||""; cat = cat||"";
-  const n = naam.toLowerCase();
-  const c = cat.toLowerCase();
-  if(n.includes("bms") || n.includes("battery management")) return false;
-  return n.includes("batter") || c.includes("batter");
+function show(id) {
+  document.querySelectorAll(".state").forEach(e => { e.classList.remove("show"); });
+  document.getElementById("main").style.display = "none";
+  const el = document.getElementById(id);
+  if(el) el.classList.add("show");
+  else if(id === "main") document.getElementById("main").style.display = "block";
 }
 
-function calcTotals(lijnen=[], bebatTarief=BEBAT_TARIEF) {
-  // BTW komt van de lijn (bepaald door klantregime bij aanmaken offerte)
-  // NOOIT van het product zelf
-  const sub = lijnen.reduce((s,l)=>s+(l.prijs*l.aantal),0);
-  const gr={};
-  lijnen.forEach(l=>{
-    const r=l.btw||0; // 0 als verlegd, 6 of 21 anders
-    if(r>0){if(!gr[r])gr[r]=0;gr[r]+=l.prijs*l.aantal*(r/100);}
-    // BEBAT toeslag - altijd 21% BTW
-    if(l.bebatKg && l.bebatKg>0 && isBebatProduct(l.naam,l.cat||"")) {
-      const bebatEx = l.bebatKg * l.aantal * bebatTarief;
-      if(!gr[BEBAT_BTW])gr[BEBAT_BTW]=0;
-      gr[BEBAT_BTW]+=bebatEx*(BEBAT_BTW/100);
+async function sbFetch(path, opts = {}) {
+  const res = await fetch(SB_URL + path, {
+    ...opts,
+    headers: {
+      "apikey": SB_KEY,
+      "Authorization": "Bearer " + SB_KEY,
+      "Content-Type": "application/json",
+      ...(opts.headers || {})
     }
   });
-  const btw=Object.values(gr).reduce((s,v)=>s+v,0);
-  const bebatSub = lijnen.reduce((s,l)=>{
-    if(l.bebatKg&&l.bebatKg>0&&isBebatProduct(l.naam,l.cat||"")) return s+l.bebatKg*l.aantal*bebatTarief;
-    return s;
-  },0);
-  return {subtotaal:sub,btw,totaal:sub+bebatSub+btw,btwGroepen:gr,bebatSub};
+  const text = await res.text();
+  if(!res.ok) throw new Error(res.status + ": " + text);
+  return text ? JSON.parse(text) : null;
 }
 
+const fmtEuro = n => "€\u00A0" + Number(n||0).toFixed(2).replace(".", ",").replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+const fmtDate = d => { try { return new Date(d).toLocaleDateString("nl-BE",{day:"2-digit",month:"2-digit",year:"numeric"}); } catch(_){ return d||""; }};
+const xe = s => String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
 
+function calcTotals(lijnen) {
+  const sub = lijnen.reduce((s,l) => s + (l.prijs||0)*(l.aantal||1), 0);
+  const btwGr = {};
+  lijnen.forEach(l => {
+    const r = l.btw || 0;
+    if(r > 0) { if(!btwGr[r]) btwGr[r] = 0; btwGr[r] += (l.prijs||0)*(l.aantal||1)*(r/100); }
+  });
+  const btw = Object.values(btwGr).reduce((s,v) => s+v, 0);
+  return {subtotaal: sub, btw, totaal: sub+btw, btwGroepen: btwGr};
+}
 
-const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,6);
-const BTW_REGIMES = {
-  btw6:    {l:"6% - Woning > 10 jaar (renovatie)", pct:6},
-  btw21:   {l:"21% - Standaard / Nieuwe woning",   pct:21},
-  verlegd: {l:"BTW verlegd (medecontractant B2B)",  pct:0},
-};
-
-const INST_TYPES_DEFAULT = [
-  {id:"laadpaal",  l:"Laadpaal",        icon:"⚡", c:"#2563eb", bg:"#eff6ff"},
-  {id:"zon",       l:"Zonnepanelen",    icon:"☀️", c:"#d97706", bg:"#fffbeb"},
-  {id:"batterij",  l:"Batterijsysteem", icon:"🔋", c:"#059669", bg:"#f0fdf4"},
-  {id:"combo",     l:"Gecombineerd",    icon:"🏠", c:"#7c3aed", bg:"#faf5ff"},
-  {id:"vrij",      l:"Vrij",            icon:"📋", c:"#475569", bg:"#f8fafc"},
-];
-// Keep backward-compat alias
-const INST_TYPES = INST_TYPES_DEFAULT;
-// Get dynamic inst types from settings (with fallback)
-const getInstTypes = (settings) => settings?.instTypes?.length ? settings.instTypes : INST_TYPES_DEFAULT;
-// Get dynamic product cats from settings (with fallback)
-const getProdCats = (settings) => settings?.productCats?.length ? settings.productCats : [
-  {id:"c1",naam:"Laadstation",icoon:"⚡",kleur:"#2563eb"},
-  {id:"c2",naam:"Installatie",icoon:"🔧",kleur:"#7c3aed"},
-  {id:"c3",naam:"Keuring",icoon:"🔍",kleur:"#059669"},
-  {id:"c4",naam:"Zonnepanelen",icoon:"☀️",kleur:"#d97706"},
-  {id:"c5",naam:"Batterij",icoon:"🔋",kleur:"#16a34a"},
-  {id:"c6",naam:"Arbeid",icoon:"👷",kleur:"#475569"},
-];
-
-// Cat icons - updated as requested
-const CAT_ICONS = {
-  "Laadstation":      "⚡",
-  "Installatie":      "🔧",
-  "Montage":          "🔧",
-  "Monitoring":       "⚡📊",
-  "Energie":          "📊",
-  "Keuring":          "🔍",
-  "Zonnepanelen":     "☀️",
-  "Omvormer":         "⚙️",
-  "Batterij":         "🔋",
-  "Arbeid":           "🔧",
-  "default":          "📦",
-};
-const getCatIcon = (cat, settings) => {
-  // Try dynamic settings first
-  if(settings?.productCats) {
-    const dynCat = settings.productCats.find(c=>(cat||"").toLowerCase().includes(c.naam.toLowerCase()));
-    if(dynCat) return dynCat.icoon;
-  }
-  // Fallback to static map
-  const key = Object.keys(CAT_ICONS).find(k => (cat||"").toLowerCase().includes(k.toLowerCase()));
-  return key ? CAT_ICONS[key] : CAT_ICONS.default;
-};
-
-
-const INIT_SETTINGS = {
-  bedrijf:{naam:"",tagline:"",adres:"",gemeente:"",tel:"",email:"",btwnr:"",iban:"",bic:"",website:"",kleur:"#1a2e4a",logo:""},
-  email:{eigen:"info@wcharge.be",boekhouder1:"",boekhouder2:"",cc:"",emailjsServiceId:"",emailjsTemplateOfferte:"",emailjsTemplateFactuur:"",emailjsPublicKey:"",templateOfferte:"Beste {naam},\n\nIn bijlage vindt u onze offerte {nummer} d.d. {datum}, geldig tot {vervaldatum}.\n\nWat mag u verwachten?\n{technische_info}\n\nBij akkoord kunt u de offerte bevestigen via onderstaande link.\nBij vragen staan we steeds voor u klaar.\n\nMet vriendelijke groeten,\n{bedrijf}\n{tel}",templateFactuur:"Beste {naam},\n\nIn bijlage vindt u factuur {nummer} d.d. {datum}.\nGelieve te betalen vóór {vervaldatum}.\n\nBedrag: {totaal}\nIBAN: {iban} · Mededeling: {nummer}\n\nMet vriendelijke groeten,\n{bedrijf}"},
-  integraties:{kboEnabled:true,peppolEnabled:true,billitApiKey:"98050f8c-93aa-4f2e-a206-3f15e4905276",billitEnv:"production",cbeApiKey:"OqzgVJ8I5wqgA8QjB0Aotu446pn7xqVI"},
-  dashboardWidgets:{omzetGrafiek:true,recenteOffertes:true,openFacturen:true,goedgekeurdeOffertes:true,snelleActies:true,statistieken:true,agenda:true,offerteLogboek:true,afspraken:true,widgetOrder:["statistieken","recenteOffertes","openFacturen","goedgekeurdeOffertes","offerteLogboek","afspraken","snelleActies","agenda"]},
-  voorwaarden:{betalingstermijn:14,voorschot:"50%",boekjaarStart:"01-01",nummerPrefix_off:"OFF",nummerPrefix_fct:"FACT",tegenNummer_off:null,tegenNummer_fct:null,bebatTarief:2.89,tekst:`1. Al onze facturen zijn contant betaalbaar op de bankrekening vermeld op de factuur en zullen na verloop van 14 dagen van rechtswege een intrest van 1% per maand meebrengen, zonder aangetekende ingebrekestelling of dagvaarding te noodzaken.\n\n2. Op onze facturen dienen binnen de 8 dagen na ontvangst eventuele opmerkingen te geschieden.\n\n3. Het bedrag van de onbetaald gebleven facturen zal ten titel van schadevergoeding, van rechtswege verhoogd worden met 15% met een minimum van €65,00 vanaf de dag volgend op de vervaldag.\n\n4. Onze facturen zijn betaalbaar te Lochristi, zodat in geval van betwisting enkel de Rechtbanken van het arrondissement Gent bevoegd zijn.\n\nBTW 6% verklaring: Bij gebrek aan schriftelijke betwisting binnen een termijn van één maand vanaf de ontvangst van de factuur, wordt de klant geacht te erkennen dat (1) de werken worden verricht aan een woning waarvan de eerste ingebruikneming heeft plaatsgevonden in een kalenderjaar dat ten minste tien jaar voorafgaat aan de datum van de eerste factuur, (2) de woning na uitvoering uitsluitend of hoofdzakelijk als privéwoning wordt gebruikt en (3) de werken worden gefactureerd aan een eindverbruiker.\n\nBTW verlegd: Verlegging van heffing. Bij gebrek aan schriftelijke betwisting binnen één maand na ontvangst wordt de afnemer geacht te erkennen dat hij een belastingplichtige is gehouden tot periodieke BTW-aangiften.`},
-  thema:{kleur:"#1a2e4a",naam:"Elektrisch Blauw"},
-  layout:{
-    font:"Inter", fontSize:13, tekstKleur:"#1e293b",
-    paginaNummering:false, datumFormaat:"kort",
-    logo:{positie:"links", breedte:140, hoogte:52, ruimteBoven:2},
-    titel:{formaat:"titel", aangepasteNaam:"", positie:"rechts", fontSize:28, hoofdletters:true, ruimteBoven:1, ruimteLinks:5},
-    bedrijf:{positie:"rechts", fontSize:10, naamVet:true, naamFontSize:12, velden:{naam:true,adres:true,gemeente:true,btwnr:true,iban:false,tel:false,email:false}},
-    klant:{positie:"rechts", fontSize:12, velden:{naam:true,bedrijf:true,adres:true,gemeente:true,btwnr:true,tel:false,email:false}},
-    metaBar:{toonDatum:true,toonGeldig:true,toonRef:true,toonBtw:true,toonBetaling:true},
-    tabel:{toonOmschr:true,toonBtw:true,toonSubtotalen:true},
-    footer:{toon:true,tekst:""},
-    handtekening:{toon:true},
-    voorwaarden:{toon:true},
-    notitie:{toon:true},
-    watermark:{toon:false,tekst:"CONCEPT"},
-  },
-  productCats:[
-    {id:"c1",naam:"Laadstation",icoon:"⚡",kleur:"#2563eb"},
-    {id:"c2",naam:"Installatie",icoon:"🔧",kleur:"#7c3aed"},
-    {id:"c3",naam:"Energie monitoring",icoon:"📊",kleur:"#0891b2"},
-    {id:"c4",naam:"Keuring",icoon:"🔍",kleur:"#059669"},
-    {id:"c5",naam:"Zonnepanelen",icoon:"☀️",kleur:"#d97706"},
-    {id:"c6",naam:"Omvormer",icoon:"⚙️",kleur:"#ea580c"},
-    {id:"c7",naam:"Batterij",icoon:"🔋",kleur:"#16a34a"},
-    {id:"c8",naam:"Arbeid",icoon:"👷",kleur:"#475569"},
-  ],
-  instTypes:[
-    {id:"laadpaal",l:"Laadpaal",icon:"⚡",c:"#2563eb",bg:"#eff6ff"},
-    {id:"zon",l:"Zonnepanelen",icon:"☀️",c:"#d97706",bg:"#fffbeb"},
-    {id:"batterij",l:"Batterijsysteem",icon:"🔋",c:"#059669",bg:"#f0fdf4"},
-    {id:"combo",l:"Gecombineerd",icon:"🏠",c:"#7c3aed",bg:"#faf5ff"},
-    {id:"vrij",l:"Vrij",icon:"📋",c:"#475569",bg:"#f8fafc"},
-  ],
-  sjabloon:{
-    toonVoorblad:true,
-    toonProductpagina:true,
-    toonSpecs:true,
-    toonBevestigingslink:true,
-    voorbladTitel:"",
-    voorbladOndertitel:"",
-    voorbladIntro:"",
-    handtekeningTekst:"Geldig voor akkoord - datum, handtekening & naam",
-    footerTekst:"",
-    accentKleur:"",
-    paginaformaat:"A4",
-    ontwerpOfferte:"kl_split",
-    ontwerpFactuur:"classic",
-    logoPositie:"links-boven",
-    logoBreedte:140,
-    logoHoogte:52,
-    ficheWeergave:"eigen-pagina",   // "eigen-pagina" | "half" | "inline"
-    ficheMarge:8,                   // mm marge rondom fiche
-    ficheHoogte:220,                // mm hoogte van de fiche embed (bij half/inline)
-  },
-};
-
-
-function FichePages({fiche, naam, fichNaam, omschr, dc, bed, docNummer}) {
-  const [pageImages, setPageImages] = useState([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    if(!fiche || fiche==="[PDF]" || !window.pdfjsLib) { 
-      console.warn("FichePages skip:", !fiche?"no fiche":fiche==="[PDF]"?"stripped":"no pdfjsLib");
-      setLoading(false); return; 
+async function load() {
+  if(!offerteId) { show("st-error"); return; }
+  try {
+    const data = await sbFetch("/rest/v1/offerte_shares?id=eq." + offerteId + "&select=offerte_data");
+    if(!data || data.length === 0) {
+      document.getElementById("err-msg").textContent = "Offerte niet gevonden (ID: " + offerteId + "). Contacteer " + (params.get("nr") ? params.get("nr") : "ons") + " voor meer info.";
+      show("st-error");
+      return;
     }
 
-    const render = async () => {
-      try {
-        let pdfDoc;
-        if(fiche.startsWith('data:') || fiche.startsWith('http')) {
-          // Use fetch to convert data URI or URL to ArrayBuffer - avoids atob issues
-          const resp = await fetch(fiche);
-          const buf = await resp.arrayBuffer();
-          pdfDoc = await window.pdfjsLib.getDocument({data: buf}).promise;
-        } else {
-          // Raw base64 string
-          const clean = fiche.replace(/[\s\r\n]/g, '');
-          const raw = atob(clean);
-          const uint8 = new Uint8Array(raw.length);
-          for(let i = 0; i < raw.length; i++) uint8[i] = raw.charCodeAt(i);
-          pdfDoc = await window.pdfjsLib.getDocument({data: uint8}).promise;
-        }
-        const imgs = [];
-        for(let i = 1; i <= pdfDoc.numPages; i++) {
-          const page = await pdfDoc.getPage(i);
-          const scale = 2.0;
-          const viewport = page.getViewport({scale});
-          const canvas = document.createElement('canvas');
-          canvas.width = viewport.width;
-          canvas.height = viewport.height;
-          await page.render({canvasContext: canvas.getContext('2d'), viewport}).promise;
-          imgs.push(canvas.toDataURL('image/png'));
-        }
-        console.log(`✅ Fiche gerenderd: ${fichNaam||naam} - ${imgs.length} pagina's`);
-        setPageImages(imgs);
-      } catch(e) { console.error("Fiche render error:", fichNaam||naam, e.message); }
-      setLoading(false);
-    };
-    render();
-  }, [fiche]);
+    const doc = data[0].offerte_data || {};
+    const bed = doc._bed || {};
+    const dc = doc._dc || "#1a2e4a";
+    const lijnen = doc.lijnen || [];
+    const tot = calcTotals(lijnen);
+    const klant = doc.klant || {};
+    const isFactuur = doc.type === "factuur" || (doc.nummer||"").startsWith("FACT");
+    const docType = isFactuur ? "FACTUUR" : "OFFERTE";
 
-  if(loading) return (
-    <div className="doc-page" style={{pageBreakBefore:"always",display:"flex",alignItems:"center",justifyContent:"center",minHeight:200}}>
-      <div style={{textAlign:"center",color:"#64748b",padding:40}}>
-        <div style={{fontSize:24,marginBottom:8}}>⟳</div>
-        <div style={{fontSize:13}}>Technische fiche laden: {naam}...</div>
-      </div>
-    </div>
-  );
+    // Track view
+    try {
+      await sbFetch("/rest/v1/offerte_views", {
+        method: "POST",
+        headers: {"Prefer": "return=minimal"},
+        body: JSON.stringify({offerte_id: offerteId, viewed_at: new Date().toISOString(), user_agent: navigator.userAgent})
+      });
+    } catch(_) {}
 
-  // No images rendered - show download fallback
-  if(pageImages.length === 0) {
-    const pdfSrc = fiche.startsWith('data:') ? fiche : `data:application/pdf;base64,${fiche}`;
-    return (
-      <div>
-        <div className="doc-page-lbl">Technische fiche - {naam}</div>
-        <div className="doc-page" style={{pageBreakBefore:"always"}}>
-          <div style={{height:5,background:dc,flexShrink:0}}/>
-          <div style={{padding:"30mm 20mm",textAlign:"center"}}>
-            <div style={{fontSize:36,marginBottom:16}}>📋</div>
-            <div style={{fontWeight:800,fontSize:20,color:"#1e293b",marginBottom:8}}>{naam}</div>
-            {omschr&&<div style={{fontSize:13,color:"#64748b",marginBottom:20}}>{omschr}</div>}
-            <div style={{fontSize:13,color:"#94a3b8",marginBottom:20}}>Technische fiche: {fichNaam||"document.pdf"}</div>
-            <a href={pdfSrc} download={fichNaam||`${naam}-fiche.pdf`}
-              style={{fontSize:13,color:"#059669",background:"#dcfce7",padding:"10px 20px",borderRadius:8,textDecoration:"none",fontWeight:600}}>
-              📥 Download PDF
-            </a>
-          </div>
-          <div className="qt-footer" style={{background:dc}}>
-            <div className="qt-footer-txt"><strong>{bed.naam}</strong> · {bed.adres}, {bed.gemeente}</div>
-            <div className="qt-footer-txt">{fichNaam||"technische-fiche.pdf"}</div>
-          </div>
-        </div>
-      </div>
-    );
-  }
+    // Bouw HTML
+    const logoHtml = (bed.logo && !bed.logo.startsWith("data:"))
+      ? `<img src="${xe(bed.logo)}" alt="${xe(bed.naam)}" style="max-height:40px;max-width:120px;object-fit:contain;margin-bottom:6px"/>`
+      : `<div style="font-weight:900;font-size:20px;color:#fff">${xe(bed.naam)}</div>`;
 
-  // Each PDF page = its own A4 doc-page (perfect for print)
-  return (
-    <div>
-      {pageImages.map((img, i) => (
-        <div key={"fp-"+i}>
-          <div className="doc-page-lbl">Technische fiche - {naam} (pagina {i+1}/{pageImages.length})</div>
-          <div className="doc-page fiche-print-page" style={{pageBreakBefore:"always",breakBefore:"page"}}>
-            <div style={{height:5,background:dc,flexShrink:0}}/>
-            {i === 0 && (
-              <div style={{padding:"4mm 8mm 2mm",display:"flex",justifyContent:"space-between",alignItems:"center",borderBottom:"1px solid #e2e8f0"}}>
-                <div>
-                  <div style={{fontSize:9,fontWeight:700,color:"#94a3b8",textTransform:"uppercase",letterSpacing:.6}}>Technische fiche</div>
-                  <div style={{fontWeight:800,fontSize:14,color:"#1e293b"}}>{naam}</div>
-                </div>
-                <div style={{textAlign:"right",fontSize:9,color:"#94a3b8"}}>{bed.naam} · {docNummer}</div>
-              </div>
-            )}
-            <div style={{padding:i===0?"2mm 6mm 4mm":"4mm 6mm",flex:1,display:"flex",alignItems:"flex-start",justifyContent:"center",overflow:"hidden"}}>
-              <img src={img} alt={`${naam} p${i+1}`} style={{width:"100%",height:"auto",maxHeight:i===0?"250mm":"270mm",objectFit:"contain",display:"block"}}/>
-            </div>
-            <div style={{padding:"2mm 8mm",display:"flex",justifyContent:"space-between",alignItems:"center",fontSize:9,color:"#94a3b8",borderTop:"1px solid #e2e8f0"}}>
-              <span>{bed.naam}</span>
-              <span>{fichNaam||"technische-fiche.pdf"} · pagina {i+1}/{pageImages.length}</span>
-            </div>
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-
-function OfferteDocument({doc, settings, ficheCache={}, producten=[]}) {
-  // Bouw fiche cache: producten state + doorgegeven cache + localStorage
-  const _fc = (() => {
-    const c = {...ficheCache};
-    try { const r=localStorage.getItem("billr_fiche_cache"); if(r) { const lc=JSON.parse(r); Object.entries(lc).forEach(([k,v])=>{ if(!c[k]) c[k]=v; }); } } catch(_){}
-    producten.forEach(p => {
-      if(p.technischeFiches?.some(f=>f.data)) c[p.id] = p.technischeFiches.filter(f=>f.data);
-      else if(p.technischeFiche && p.technischeFiche.length>100) c[p.id] = [{data:p.technischeFiche,naam:p.fichNaam||"fiche.pdf"}];
+    // Groepen of plat
+    const groepenMap = {};
+    const groepenVolgorde = [];
+    lijnen.forEach(l => {
+      const g = l.groep || "__geen__";
+      if(!groepenMap[g]) { groepenMap[g] = []; groepenVolgorde.push(g); }
+      groepenMap[g].push(l);
     });
-    return c;
-  })();
-  const bed = settings?.bedrijf || INIT_SETTINGS.bedrijf;
-  const sj = settings?.sjabloon || INIT_SETTINGS.sjabloon || {};
-  const lyt = settings?.layout || INIT_SETTINGS.layout || {};
-  const dc = sj.accentKleur || settings?.thema?.kleur || bed.kleur || "#1a2e4a";
-  
-  // Logo instellingen - aparte voorblad en offerte/factuur
-  const logoVoorblad = {
-    w: lyt.logo?.voorblad?.breedte || lyt.logo?.breedte || sj.logoBreedte || 200,
-    h: lyt.logo?.voorblad?.hoogte || lyt.logo?.hoogte || sj.logoHoogte || 80,
-    pos: lyt.logo?.voorblad?.positie || lyt.logo?.positie || sj.logoPositie || "links",
-    zIndex: lyt.logo?.voorblad?.zIndex !== undefined ? lyt.logo.voorblad.zIndex : 10,
-    ruimteBoven: lyt.logo?.voorblad?.ruimteBoven || 2
-  };
-  const logoOfferte = {
-    w: lyt.logo?.offerte?.breedte || lyt.logo?.breedte || sj.logoBreedte || 140,
-    h: lyt.logo?.offerte?.hoogte || lyt.logo?.hoogte || sj.logoHoogte || 52,
-    pos: lyt.logo?.offerte?.positie || lyt.logo?.positie || sj.logoPositie || "links",
-    zIndex: lyt.logo?.offerte?.zIndex !== undefined ? lyt.logo.offerte.zIndex : 10,
-    ruimteBoven: lyt.logo?.offerte?.ruimteBoven || 2
-  };
-  
-  const logoPos = sj.logoPositie || "links-boven"; // Legacy, voor oude voorbladen
-  const docFont = lyt.font || sj.fontFamily || "Inter";
-  const docFontSize = lyt.fontSize || sj.fontSize || 13;
-  const txtKleur = lyt.tekstKleur || "#1e293b";
-  // Layout-driven visibility
-  const toonHandtekening = lyt.handtekening?.toon !== false && sj.toonHandtekening !== false;
-  const toonVoorwaarden = lyt.voorwaarden?.toon !== false && sj.toonVoorblad !== false;
-  const toonWatermark = lyt.watermark?.toon === true || sj.toonWatermark;
-  const watermarkTekst = lyt.watermark?.tekst || "CONCEPT";
-  const titelFormaat = lyt.titel?.formaat || "titel";
-  const titelTekst = titelFormaat === "geen" ? "" : titelFormaat === "aangepast" ? (lyt.titel?.aangepasteNaam || sj.voorbladTitel || "OFFERTE") : sj.voorbladTitel || "OFFERTE";
-  const titelHoofdletters = lyt.titel?.hoofdletters !== false;
-  const titelFontSize = lyt.titel?.fontSize || 28;
-  const titelPositie = lyt.titel?.positie || "rechts";
-  // Bedrijf velden
-  const bedVelden = lyt.bedrijf?.velden || {};
-  const klantVelden = lyt.klant?.velden || {};
-  const metaBar = lyt.metaBar || {};
-  const tabelOpts = lyt.tabel || {};
-  const tot = calcTotals(doc.lijnen||[], getBebatTarief(settings));
-  const kortingBedrag = doc.kortingType==="pct" ? tot.subtotaal*(doc.korting/100) : Number(doc.korting||0);
-  const eindTot = doc.korting>0 ? tot.totaal - kortingBedrag*(1+0.21) : tot.totaal;
-  const inst = INST_TYPES.find(t=>t.id===doc.installatieType);
-  const groepen = doc.groepen||[];
-  const lijnenPerGroep = [...groepen.map(g=>({...g,items:(doc.lijnen||[]).filter(l=>l.groepId===g.id)})).filter(g=>g.items.length>0), {id:"rest",naam:"Producten",items:(doc.lijnen||[]).filter(l=>!l.groepId||!groepen.find(g=>g.id===l.groepId))}.items.length>0?{id:"rest",naam:"Producten",items:(doc.lijnen||[]).filter(l=>!l.groepId||!groepen.find(g=>g.id===l.groepId))}:null].filter(Boolean);
-  const uniqueProds = [...new Map((doc.lijnen||[]).filter(l=>l.naam).map(l=>[l.productId||l.id,l])).values()];
-  const confirmLink = `mailto:?subject=Akkoord offerte ${doc.nummer||""}%20-%20${encodeURIComponent(bed.naam)}&body=Geachte%20${encodeURIComponent(bed.naam)}%2C%0A%0AHierbij%20bevestig%20ik%20mijn%20akkoord%20met%20offerte%20${doc.nummer||""}%20d.d.%20${fmtDate(doc.aangemaakt)}%20voor%20een%20totaalbedrag%20van%20${encodeURIComponent(fmtEuro(eindTot))}.%0A%0AMet%20vriendelijke%20groeten%2C%0A${encodeURIComponent(doc.klant?.naam||"")}`;
+    const heeftGroepen = groepenVolgorde.length > 1 || groepenVolgorde[0] !== "__geen__";
 
-  const ontwerp = sj.ontwerpOfferte || "kl_split";
+    let tabelHtml = `<table class="tbl"><thead><tr>
+      <th style="width:40%">Omschrijving</th>
+      <th>Eenh.</th><th>Aantal</th><th style="text-align:right">Prijs excl.</th>
+      <th style="text-align:right">BTW</th><th style="text-align:right">Totaal</th>
+    </tr></thead><tbody>`;
 
-  // -- Voorblad helpers
-  const CovKlantInfo = () => (
-    <div style={{fontFamily:docFont}}>
-      <div style={{fontSize:10,fontWeight:700,letterSpacing:1,textTransform:"uppercase",color:"#94a3b8",marginBottom:4}}>Opgemaakt voor</div>
-      {klantVelden.naam!==false&&<div style={{fontWeight:800,fontSize:20,color:txtKleur,lineHeight:1.2}}>{doc.klant?.naam||"-"}</div>}
-      {klantVelden.bedrijf!==false&&doc.klant?.bedrijf&&<div style={{fontWeight:600,fontSize:14,color:"#475569",marginTop:2}}>{doc.klant.bedrijf}</div>}
-      <div style={{fontSize:lyt.klant?.fontSize||12,color:"#64748b",marginTop:6}}>
-        {klantVelden.adres!==false&&doc.klant?.adres&&<div>{doc.klant.adres}</div>}
-        {klantVelden.gemeente!==false&&doc.klant?.gemeente&&<div>{doc.klant.gemeente}</div>}
-      </div>
-      {klantVelden.btwnr!==false&&doc.klant?.btwnr&&<div style={{fontFamily:"JetBrains Mono,monospace",fontSize:11,color:"#94a3b8",marginTop:4}}>{fmtBtwnr(doc.klant.btwnr)}</div>}
-      {klantVelden.tel!==false&&doc.klant?.tel&&<div style={{fontSize:11,color:"#94a3b8"}}>{doc.klant.tel}</div>}
-      {klantVelden.email!==false&&doc.klant?.email&&<div style={{fontSize:11,color:"#94a3b8"}}>{doc.klant.email}</div>}
-    </div>
-  );
-  const CovMeta = ({light}) => (
-    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"12px 24px"}}>
-      {[{l:"Datum",v:fmtDate(doc.aangemaakt)},{l:"Geldig tot",v:fmtDate(doc.vervaldatum)},{l:"Referentie",v:doc.nummer},{l:"Totaal incl. BTW",v:fmtEuro(eindTot),big:true}].map((m,i)=>(
-        <div key={i}>
-          <div style={{fontSize:10,fontWeight:700,letterSpacing:.8,textTransform:"uppercase",color:light?"rgba(255,255,255,.5)":"#94a3b8",marginBottom:2}}>{m.l}</div>
-          <div style={{fontWeight:m.big?800:600,fontSize:m.big?18:13,color:light?"#fff":m.big?dc:"#1e293b",fontFamily:m.l==="Referentie"?"JetBrains Mono,monospace":undefined}}>{m.v}</div>
-        </div>
-      ))}
-    </div>
-  );
-  const CovBedrijf = ({light}) => (
-    <div style={{fontFamily:docFont}}>
-      {bed.logo?<img src={bed.logo} alt="" style={{maxWidth:logoVoorblad.w,maxHeight:logoVoorblad.h,marginBottom:8,objectFit:"contain",display:"block",position:"relative",zIndex:logoVoorblad.zIndex}}/>:<div style={{fontSize:28,marginBottom:4}}>⚡</div>}
-      {bedVelden.naam!==false&&<div style={{fontWeight:lyt.bedrijf?.naamVet!==false?900:700,fontSize:lyt.bedrijf?.naamFontSize||18,color:light?"#fff":txtKleur,letterSpacing:-0.5}}>{bed.naam}</div>}
-      <div style={{fontSize:11,color:light?"rgba(255,255,255,.6)":"#94a3b8",marginTop:2}}>{bed.tagline}</div>
-      <div style={{fontSize:lyt.bedrijf?.fontSize||11,color:light?"rgba(255,255,255,.7)":"#64748b",marginTop:8,lineHeight:1.8}}>
-        {bedVelden.adres!==false&&<div>{bed.adres}</div>}
-        {bedVelden.gemeente!==false&&<div>{bed.gemeente}</div>}
-        {bedVelden.tel!==false&&bed.tel&&<div>{bed.tel}</div>}
-        {bedVelden.email!==false&&bed.email&&<div>{bed.email}</div>}
-      </div>
-    </div>
-  );
-
-  return(
-    <div className="doc-wrap">
-      {/* PAGE 1: VOORBLAD */}
-      {sj.toonVoorblad!==false&&<>
-      <div className="doc-page-lbl">Pagina 1 - Voorblad</div>
-      <div className="doc-page">
-
-        {/* ONTWERP 1: Klassiek gesplitst */}
-        {ontwerp==="kl_split"&&<div className="cov">
-          <div className="cov-l" style={{background:`linear-gradient(155deg,${dc} 0%,${dc}ee 70%,#0f172a 100%)`}}>
-            <CovBedrijf light/>
-            {inst&&<div className="cov-inst-badge"><span style={{fontSize:20}}>{inst.icon}</span>{inst.l}</div>}
-          </div>
-          <div className="cov-r">
-            <div>
-              {titelFormaat!=="geen"&&<div className="cov-doctype" style={{color:dc,fontSize:titelFontSize,textTransform:titelHoofdletters?"uppercase":"none"}}>{titelTekst}</div>}
-              <div className="cov-docnum">{doc.nummer}</div>
-            </div>
-            <CovKlantInfo/>
-            <CovMeta/>
-            <div style={{fontSize:11,color:"#94a3b8",marginTop:10}}>{bed.naam} · {fmtBtwnr(bed.btwnr)} · IBAN: {bed.iban}</div>
-          </div>
-        </div>}
-
-        {/* ONTWERP 2: Modern top-banner */}
-        {ontwerp==="modern_top"&&<div style={{minHeight:"297mm",display:"flex",flexDirection:"column"}}>
-          <div style={{background:`linear-gradient(135deg,${dc},${dc}cc)`,padding:"40px 48px 32px",color:"#fff"}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
-              <div>
-                {bed.logo?<img src={bed.logo} alt="" style={{maxHeight:logoVoorblad.h,maxWidth:logoVoorblad.w,marginBottom:8,filter:"brightness(0) invert(1)",objectFit:"contain",position:"relative",zIndex:logoVoorblad.zIndex}}/>:<div style={{fontSize:24,fontWeight:900,letterSpacing:-1}}>{bed.naam}</div>}
-                <div style={{fontSize:11,opacity:.7,marginTop:2}}>{bed.tagline}</div>
-              </div>
-              <div style={{textAlign:"right"}}>
-                <div style={{fontSize:32,fontWeight:900,letterSpacing:-1}}>{sj.voorbladTitel||"OFFERTE"}</div>
-                <div style={{fontFamily:"JetBrains Mono,monospace",fontSize:14,opacity:.8,marginTop:2}}>{doc.nummer}</div>
-              </div>
-            </div>
-          </div>
-          <div style={{padding:"40px 48px",flex:1,display:"grid",gridTemplateColumns:"1fr 1fr",gap:40}}>
-            <CovKlantInfo/>
-            <CovMeta/>
-          </div>
-          <div style={{padding:"0 48px 32px",borderTop:"1px solid #e2e8f0",paddingTop:24}}>
-            <div style={{fontSize:11,color:"#94a3b8"}}>{bed.naam} · {bed.adres}, {bed.gemeente} · {bed.tel} · {bed.email} · {fmtBtwnr(bed.btwnr)}</div>
-          </div>
-        </div>}
-
-        {/* ONTWERP 3: Minimalistisch */}
-        {ontwerp==="minimal"&&<div style={{minHeight:"297mm",padding:"60px 64px",display:"flex",flexDirection:"column",justifyContent:"space-between"}}>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
-            <div>
-              <div style={{fontWeight:900,fontSize:22,color:dc,letterSpacing:-1}}>{bed.naam}</div>
-              <div style={{fontSize:11,color:"#94a3b8",marginTop:2}}>{bed.tagline}</div>
-            </div>
-            <div style={{textAlign:"right"}}>
-              <div style={{fontSize:11,fontWeight:700,letterSpacing:2,textTransform:"uppercase",color:"#94a3b8"}}>{sj.voorbladTitel||"Offerte"}</div>
-              <div style={{fontFamily:"JetBrains Mono,monospace",fontSize:20,fontWeight:800,color:"#1e293b",marginTop:2}}>{doc.nummer}</div>
-            </div>
-          </div>
-          <div style={{borderLeft:`4px solid ${dc}`,paddingLeft:24}}>
-            <CovKlantInfo/>
-          </div>
-          <CovMeta/>
-          <div style={{fontSize:10,color:"#cbd5e1"}}>{bed.naam} · {fmtBtwnr(bed.btwnr)} · {bed.iban} · {bed.tel}</div>
-        </div>}
-
-        {/* ONTWERP 4: Diagonaal */}
-        {ontwerp==="diagonal"&&<div style={{minHeight:"297mm",position:"relative",overflow:"hidden"}}>
-          <div style={{position:"absolute",top:0,left:0,right:0,height:"55%",background:`linear-gradient(150deg,${dc} 60%,transparent 60%)`}}/>
-          <div style={{position:"absolute",top:0,left:0,right:0,height:"55%",background:`linear-gradient(150deg,${dc}dd 60%,${dc}33 100%)`}}/>
-          <div style={{position:"relative",padding:"48px 52px",color:"#fff"}}>
-            <div style={{fontWeight:900,fontSize:20,letterSpacing:-0.5}}>{bed.naam}</div>
-            <div style={{fontSize:11,opacity:.7,marginTop:2}}>{bed.tagline}</div>
-            <div style={{marginTop:"15mm"}}>
-              <div style={{fontWeight:900,fontSize:36,letterSpacing:-1,lineHeight:1}}>{sj.voorbladTitel||"OFFERTE"}</div>
-              <div style={{fontFamily:"JetBrains Mono,monospace",fontSize:14,opacity:.8,marginTop:4}}>{doc.nummer}</div>
-            </div>
-          </div>
-          <div style={{position:"relative",padding:"0 52px",marginTop:"5mm",display:"grid",gridTemplateColumns:"1fr 1fr",gap:32}}>
-            <CovKlantInfo/>
-            <CovMeta/>
-          </div>
-          <div style={{position:"absolute",bottom:24,left:52,right:52,fontSize:10,color:"#94a3b8",borderTop:"1px solid #e2e8f0",paddingTop:10}}>
-            {bed.naam} · {bed.adres}, {bed.gemeente} · {fmtBtwnr(bed.btwnr)}
-          </div>
-        </div>}
-
-        {/* ONTWERP 5: Gecentreerd */}
-        {ontwerp==="centered"&&<div style={{minHeight:"297mm",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",textAlign:"center",padding:"48px",gap:32}}>
-          <div>
-            {bed.logo?<img src={bed.logo} alt="" style={{maxHeight:logoVoorblad.h,maxWidth:logoVoorblad.w,marginBottom:10,objectFit:"contain",position:"relative",zIndex:logoVoorblad.zIndex}}/>:<div style={{fontSize:40,marginBottom:8}}>⚡</div>}
-            <div style={{fontWeight:900,fontSize:22,color:dc}}>{bed.naam}</div>
-            <div style={{fontSize:11,color:"#94a3b8"}}>{bed.tagline}</div>
-          </div>
-          <div style={{width:60,height:4,background:dc,borderRadius:2}}/>
-          <div>
-            <div style={{fontSize:11,fontWeight:700,letterSpacing:2,textTransform:"uppercase",color:"#94a3b8"}}>{sj.voorbladTitel||"Offerte"}</div>
-            <div style={{fontFamily:"JetBrains Mono,monospace",fontSize:24,fontWeight:800,color:"#1e293b",marginTop:4}}>{doc.nummer}</div>
-          </div>
-          <div style={{background:"#f8fafc",borderRadius:12,padding:"24px 32px",minWidth:320,textAlign:"left"}}>
-            <CovKlantInfo/>
-          </div>
-          <CovMeta/>
-          <div style={{fontSize:10,color:"#cbd5e1"}}>{bed.naam} · {fmtBtwnr(bed.btwnr)} · IBAN: {bed.iban}</div>
-        </div>}
-
-      </div>
-
-      </>}
-      {/* PAGE 2: PRODUCTINFO + TECHNISCHE FICHES */}
-      {sj.toonProductpagina!==false&&uniqueProds.length>0&&<>
-        <div className="doc-page-lbl">Pagina 2 - Productinformatie & Technische fiches</div>
-        <div className="doc-page">
-          <div style={{height:6,background:dc,borderRadius:"4px 4px 0 0",flexShrink:0}}/>
-          <div className="prod-page">
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end",marginBottom:6}}>
-              <div>
-                <div style={{fontWeight:900,fontSize:20,color:dc,letterSpacing:"-.5px"}}>{inst?.icon} Productinformatie & Technische Fiches</div>
-                <div style={{fontSize:12,color:"#64748b",marginTop:2}}>Geselecteerde producten voor {doc.klant?.naam||"de klant"}</div>
-              </div>
-              <div style={{fontSize:10,color:"#94a3b8",textAlign:"right"}}>{bed.naam} · {doc.nummer}</div>
-            </div>
-            <div style={{height:1,background:"#e2e8f0",marginBottom:20}}/>
-            {uniqueProds.map((l,i)=>{
-              // Parse technische fiche specs
-              const rawSpecs = l.specs||[];
-              // Group specs: first 3 regular, rest as table entries
-              const specRows = rawSpecs.filter(s=>s.includes(":")||s.includes("="))
-                .map(s=>{const ci=s.indexOf(":");const eq=s.indexOf("=");const si=ci>=0&&(eq<0||ci<=eq)?ci:eq;return si>=0?{key:s.slice(0,si).trim(),val:s.slice(si+1).trim()}:{key:s.trim(),val:""};});
-              const bulletSpecs = rawSpecs.filter(s=>!s.includes(":")||specRows.find(r=>r.key+" :"+r.val===s));
-              return(
-                <div key={i} style={{marginBottom:28,pageBreakInside:"avoid"}}>
-                  {/* Product header with image + naam */}
-                  <div style={{display:"flex",gap:16,alignItems:"flex-start",marginBottom:10}}>
-                    {l.imageUrl&&<div style={{flexShrink:0,width:90,height:90,borderRadius:10,overflow:"hidden",border:"1px solid #e2e8f0",background:"#f8fafc",display:"flex",alignItems:"center",justifyContent:"center"}}>
-                      <img src={l.imageUrl} alt="" style={{width:"100%",height:"100%",objectFit:"contain"}} onError={e=>{e.target.parentElement.style.display="none"}}/>
-                    </div>}
-                    <div style={{flex:1}}>
-                      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
-                        <span style={{background:dc,color:"#fff",borderRadius:5,padding:"2px 9px",fontSize:10,fontWeight:700}}>{groepen.find(g=>g.id===l.groepId)?.naam||l.cat||"Product"}</span>
-                        <span style={{fontSize:11,color:"#94a3b8"}}>×{l.aantal} {l.eenheid}</span>
-                      </div>
-                      <div style={{fontWeight:800,fontSize:16,color:"#1e293b",lineHeight:1.3,marginBottom:4}}>{l.naam}</div>
-                      {l.omschr&&<div style={{fontSize:12.5,color:"#475569",lineHeight:1.6}}>{l.omschr}</div>}
-                    </div>
-                    <div style={{flexShrink:0,textAlign:"right",background:"#f8fafc",borderRadius:8,padding:"10px 14px",border:"1px solid #e2e8f0"}}>
-                      <div style={{fontSize:10,color:"#94a3b8",fontWeight:600}}>EENHEIDSPRIJS</div>
-                      <div style={{fontWeight:800,fontSize:16,color:dc}}>{fmtEuro(l.prijs)}</div>
-                      <div style={{fontSize:10,color:"#94a3b8"}}>BTW {l.btw}%</div>
-                    </div>
-                  </div>
-                  {/* Technische fiche als tabel indien specs aanwezig */}
-                  {rawSpecs.length>0&&(
-                    <div style={{background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:8,padding:"12px 14px"}}>
-                      <div style={{fontWeight:700,fontSize:11,letterSpacing:.8,textTransform:"uppercase",color:dc,marginBottom:8}}>📋 Technische specificaties</div>
-                      {specRows.length>0?(
-                        <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
-                          <tbody>{specRows.map((r,j)=>(
-                            <tr key={j} style={{borderBottom:"1px solid #e2e8f0"}}>
-                              <td style={{padding:"4px 8px",fontWeight:600,color:"#475569",width:"40%",background:j%2===0?"#fff":"#f8fafc"}}>{r.key}</td>
-                              <td style={{padding:"4px 8px",color:"#1e293b",background:j%2===0?"#fff":"#f8fafc"}}>{r.val}</td>
-                            </tr>
-                          ))}</tbody>
-                        </table>
-                      ):(
-                        <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
-                          {rawSpecs.map((s,j)=>(
-                            <span key={j} style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:5,padding:"3px 9px",fontSize:11.5,color:"#374151"}}>✓ {s}</span>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                  {i<uniqueProds.length-1&&<div style={{height:1,background:"#e2e8f0",marginTop:20}}/>}
-                  {/* Technische fiches - download links */}
-                  {((l.technischeFiches||[]).some(f=>f.data||f.url)||l.technischeFiche)&&<div style={{marginTop:8,display:"flex",flexWrap:"wrap",gap:4}}>
-                    {(l.technischeFiches||[]).filter(f=>f.data||f.url).map((f,fi)=>(
-                      <a key={fi} href={f.data||f.url} download={f.naam||"fiche.pdf"} style={{display:"inline-flex",alignItems:"center",gap:5,background:"#eff6ff",border:"1px solid #bfdbfe",borderRadius:6,padding:"5px 12px",fontSize:11.5,color:"#2563eb",textDecoration:"none",fontWeight:600}}>📎 {f.naam||"Technische fiche"}</a>
-                    ))}
-                    {l.technischeFiche&&l.technischeFiche!=="[PDF]"&&!(l.technischeFiches||[]).length&&(
-                      <a href={l.technischeFiche} download={l.fichNaam||"fiche.pdf"} style={{display:"inline-flex",alignItems:"center",gap:5,background:"#eff6ff",border:"1px solid #bfdbfe",borderRadius:6,padding:"5px 12px",fontSize:11.5,color:"#2563eb",textDecoration:"none",fontWeight:600}}>📎 {l.fichNaam||"Technische fiche"}</a>
-                    )}
-                    {/* Fiches zonder data - toon als label (cache nog niet geladen) */}
-                    {(l.technischeFiches||[]).filter(f=>!f.data&&!f.url).map((f,fi)=>(
-                      <span key={"lbl"+fi} style={{display:"inline-flex",alignItems:"center",gap:4,background:"#f1f5f9",border:"1px solid #e2e8f0",borderRadius:5,padding:"3px 10px",fontSize:11,color:"#64748b"}}>📎 {f.naam||"Fiche "+(fi+1)}</span>
-                    ))}
-                  </div>}
-                </div>
-              );
-            })}
-          </div>
-          <div className="qt-footer" style={{background:dc}}><div className="qt-footer-txt"><strong>{bed.naam}</strong></div><div className="qt-footer-txt">{bed.tel} · {bed.email}</div><div className="qt-footer-txt">{bed.website}</div></div>
-        </div>
-      </>}
-
-      {/* PAGE 3: OFFERTEDETAIL */}
-      <div className="doc-page-lbl">Pagina 3 - Offertedetail</div>
-      <div className="doc-page">
-        <div style={{height:5,background:dc,flexShrink:0}}/>
-        <div className="qt-pg">
-          <div className="qt-header">
-            <div>
-              {bed.logo?<img src={bed.logo} alt="" style={{maxWidth:logoOfferte.w,maxHeight:logoOfferte.h,objectFit:"contain",position:"relative",zIndex:logoOfferte.zIndex}}/>:<div className="qt-from-name" style={{color:dc}}>⚡ {bed.naam}</div>}
-              <div className="qt-from-info">{bed.adres} · {bed.gemeente}<br/>{bed.tel} · {bed.email} · {fmtBtwnr(bed.btwnr)}</div>
-            </div>
-            <div style={{textAlign:"right"}}>
-              <div className="qt-dtype" style={{color:dc}}>OFFERTE</div>
-              <div className="qt-dnum" style={{color:dc}}>{doc.nummer}</div>
-            </div>
-          </div>
-          <div className="qt-meta-bar">
-            {metaBar.toonDatum!==false&&<div className="qt-meta-item"><div className="qt-meta-lbl">Datum</div><div className="qt-meta-val">{fmtDate(doc.aangemaakt)}</div></div>}
-            {metaBar.toonGeldig!==false&&<div className="qt-meta-item"><div className="qt-meta-lbl">Geldig tot</div><div className="qt-meta-val">{fmtDate(doc.vervaldatum)}</div></div>}
-            {metaBar.toonBtw!==false&&<div className="qt-meta-item"><div className="qt-meta-lbl">BTW-regime</div><div className="qt-meta-val">{BTW_REGIMES[doc.btwRegime]?.l?.split("-")[0]?.trim()||"-"}</div></div>}
-            {metaBar.toonBetaling!==false&&<div className="qt-meta-item"><div className="qt-meta-lbl">Betaling</div><div className="qt-meta-val">{doc.betalingstermijn} dagen</div></div>}
-          </div>
-          <div className="qt-parties">
-            <div style={{direction:"ltr"}}>{bedVelden.naam!==false&&<div className="qt-party-name">{bed.naam}</div>}{bedVelden.adres!==false&&<div className="qt-party-info">{bed.adres}</div>}{bedVelden.gemeente!==false&&<div className="qt-party-info">{bed.gemeente}</div>}<div style={{fontFamily:"JetBrains Mono,monospace",fontSize:10.5,color:"#64748b",marginTop:3}}>{bedVelden.btwnr!==false&&<>{fmtBtwnr(bed.btwnr)}<br/></>}{bedVelden.iban!==false&&<>IBAN: {bed.iban}<br/></>}{bedVelden.tel!==false&&<>{bed.tel}<br/></>}{bedVelden.email!==false&&<>{bed.email}</>}</div></div>
-            <div style={{direction:"ltr"}}><div className="qt-party-lbl">Klant</div>{klantVelden.naam!==false&&<div className="qt-party-name">{doc.klant?.naam}</div>}{klantVelden.bedrijf!==false&&doc.klant?.bedrijf&&<div style={{fontWeight:600,color:"#475569",fontSize:12.5}}>{doc.klant.bedrijf}</div>}{klantVelden.adres!==false&&<div className="qt-party-info">{doc.klant?.adres}</div>}{klantVelden.gemeente!==false&&<div className="qt-party-info">{doc.klant?.gemeente}</div>}{klantVelden.btwnr!==false&&doc.klant?.btwnr&&<div style={{fontFamily:"JetBrains Mono,monospace",fontSize:10.5,color:"#64748b"}}>{fmtBtwnr(doc.klant.btwnr)}</div>}{klantVelden.tel!==false&&doc.klant?.tel&&<div style={{fontSize:11,color:"#64748b"}}>{doc.klant.tel}</div>}{klantVelden.email!==false&&doc.klant?.email&&<div style={{fontSize:11,color:"#64748b"}}>{doc.klant.email}</div>}</div>
-          </div>
-          {lijnenPerGroep.map(g=>(
-            <div key={g.id}>
-              <div className="grp-hdr" style={{background:dc}}>{g.naam}</div>
-              <table className="qt-tbl">
-                <thead><tr><th>Omschrijving</th><th>Eenh.</th><th className="c">Aantal</th><th className="r">Prijs excl.</th><th className="r">BTW</th><th className="r">Totaal</th></tr></thead>
-                <tbody>{g.items.map((l,i)=>{
-                  const isInfo = !l.productId && l.prijs===0 && l.naam;
-                  if(isInfo) return(
-                    <tr key={i} style={{background:"#f8fafc"}}>
-                      <td colSpan={6} style={{padding:"6px 10px",fontSize:12,color:"#475569",fontStyle:"italic",borderBottom:"1px solid #e2e8f0"}}>
-                        <span style={{fontWeight:600,color:"#64748b"}}>ℹ️ {l.naam}</span>
-                        {l.omschr&&<span style={{marginLeft:6,color:"#94a3b8"}}> - {l.omschr}</span>}
-                      </td>
-                    </tr>
-                  );
-                  return(
-                  <tr key={i} style={l.prijs<0?{color:"#ef4444",fontStyle:"italic"}:{}}>
-                    <td><div className="qt-item-main">{l.naam}</div>{l.omschr&&<div className="qt-item-sub">{l.omschr}</div>}</td>
-                    <td>{l.eenheid||"stuk"}</td><td className="c">{l.aantal}</td>
-                    <td className="r">{fmtEuro(l.prijs)}</td>
-                    <td className="r">{l.btw}%</td>
-                    <td className="r"><strong>{fmtEuro(l.prijs*l.aantal)}</strong></td>
-                  </tr>
-                  );
-                })}</tbody>
-              </table>
-              <div className="grp-sub"><span>Subtotaal {g.naam}:</span><strong>{fmtEuro(g.items.reduce((s,l)=>s+l.prijs*l.aantal,0))}</strong></div>
-            </div>
-          ))}
-          <div className="qt-totals">
-            <div className="qt-tot-box">
-              <div className="qt-tot-row"><span>Subtotaal excl. BTW</span><span>{fmtEuro(tot.subtotaal)}</span></div>
-              {tot.bebatSub>0&&<div className="qt-tot-row btwr"><span>♻️ BEBAT bijdrage</span><span>{fmtEuro(tot.bebatSub)}</span></div>}
-              {Object.entries(tot.btwGroepen).map(([p,b])=><div key={p} className="qt-tot-row btwr"><span>BTW {p}%</span><span>{fmtEuro(b)}</span></div>)}
-              {doc.korting>0&&<div className="qt-tot-row krt"><span>Korting {doc.kortingType==="pct"?`(${doc.korting}%)`:"(forfait)"}</span><span>−{fmtEuro(kortingBedrag*(1+0.21))}</span></div>}
-              <div className="qt-tot-row last" style={{background:dc,color:"#fff"}}><span>TOTAAL incl. BTW</span><span>{fmtEuro(eindTot)}</span></div>
-            </div>
-          </div>
-          <div className="qt-betaal"><strong>Betaling:</strong> IBAN {bed.iban} · BIC {bed.bic} · Mededeling: {doc.nummer}</div>
-          {doc.voorschot&&doc.voorschot!=="Geen voorschot"&&<div className="qt-voorschot">💡 <strong>Voorschot:</strong> {doc.voorschot} te betalen vóór aanvang van de werken.</div>}
-          {doc.notities&&<div className="qt-notes"><strong>Opmerking:</strong> {doc.notities}</div>}
-          <div className="qt-sign">
-            <div className="qt-sign-box">
-              <div className="qt-sign-lbl">{sj.handtekeningTekst||"Akkoord klant - datum, handtekening & naam"}</div>
-              <div style={{fontSize:12,color:"#94a3b8",marginTop:8}}>Gelieve ondertekend terug te bezorgen of digitaal te bevestigen via onderstaande link.</div>
-            </div>
-          </div>
-          {sj.toonBevestigingslink!==false&&<div className="qt-confirm-link">
-            📧 <strong>Digitaal akkoord:</strong> <a href={confirmLink} style={{color:"#4338ca",textDecoration:"underline"}}>Klik hier om uw offerte te bevestigen via email</a>
-          </div>}
-        </div>
-        <div className="qt-footer" style={{background:dc}}><div className="qt-footer-txt"><strong>{bed.naam}</strong> · {bed.adres}, {bed.gemeente}</div><div className="qt-footer-txt">BTW: <strong>{fmtBtwnr(bed.btwnr)}</strong></div><div className="qt-footer-txt">{sj.footerTekst||`IBAN: ${bed.iban}`}</div></div>
-      </div>
-
-      {/* PAGE 4: VOORWAARDEN */}
-      <div className="doc-page-lbl">Pagina 4 - Voorwaarden</div>
-      <div className="doc-page">
-        <div style={{height:5,background:dc,flexShrink:0}}/>
-        <div style={{padding:"30px 36px",flex:1,overflow:"hidden"}}>
-          <div style={{fontWeight:900,fontSize:18,color:dc,marginBottom:16,letterSpacing:"-.4px"}}>Algemene Verkoopsvoorwaarden & Verklaringen</div>
-          <div className="legal-txt" style={{fontSize:11,lineHeight:1.6}}>{settings?.voorwaarden?.tekst||INIT_SETTINGS.voorwaarden.tekst}</div>
-        </div>
-        <div className="qt-footer" style={{background:dc}}><div className="qt-footer-txt"><strong>{bed.naam}</strong> · {bed.adres}, {bed.gemeente}</div><div className="qt-footer-txt">BTW: <strong>{fmtBtwnr(bed.btwnr)}</strong> · {bed.website}</div></div>
-      </div>
-
-      {/* TECHNISCHE FICHES - AAN HET EINDE, elke PDF-pagina = eigen A4 */}
-      {uniqueProds.filter(l=>(l.technischeFiche&&l.technischeFiche!=="[PDF]")||(l.technischeFiches||[]).length>0).map((l,fi)=>{
-        console.log(`📎 Fiche sectie voor ${l.naam}:`, 
-          'technischeFiche:', l.technischeFiche ? (l.technischeFiche.length>100?l.technischeFiche.slice(0,50)+'...':l.technischeFiche) : 'null',
-          'technischeFiches:', (l.technischeFiches||[]).map(f=>({naam:f.naam, hasData:!!f.data, dataLen:f.data?.length||0, url:f.url||''}))
-        );
-        return(
-        <div key={"fiche-grp-"+fi}>
-          {/* Legacy: single technischeFiche - alleen als GEEN array */}
-          {l.technischeFiche&&l.technischeFiche!=="[PDF]"&&l.technischeFiche.length>100&&!(l.technischeFiches||[]).length&&
-            <FichePages fiche={l.technischeFiche} naam={l.naam} fichNaam={l.fichNaam} omschr={l.omschr} dc={dc} bed={bed} docNummer={doc.nummer}/>}
-          {/* Nieuw: array technischeFiches - render ALLE met data */}
-          {(l.technischeFiches||[]).map((f,ffi)=>{
-            // Haal data op: eerst van lijn zelf, dan uit _fc (realtime cache met producten state)
-            const cachedFiches = _fc[l.productId] || _fc[l.id] || [];
-            const cached = cachedFiches.find(cf => cf.naam === f.naam) || cachedFiches[0] || null;
-            const ficheData = f.data || f.url || cached?.data || null;
-            if(!ficheData || ficheData.length < 100) {
-              // Geen base64 data - toon placeholder
-              return(
-                <div key={"fiche-ph-"+fi+"-"+ffi}>
-                  <div className="doc-page-lbl">Technische fiche - {f.naam||l.naam}</div>
-                  <div className="doc-page" style={{pageBreakBefore:"always"}}>
-                    <div style={{height:5,background:dc,flexShrink:0}}/>
-                    <div style={{padding:"30mm 20mm",textAlign:"center"}}>
-                      <div style={{fontSize:36,marginBottom:16}}>📋</div>
-                      <div style={{fontWeight:800,fontSize:20,color:"#1e293b",marginBottom:8}}>{l.naam}</div>
-                      <div style={{fontSize:14,color:"#94a3b8",marginBottom:8}}>{f.naam||"Technische fiche"}</div>
-                      <div style={{fontSize:12,color:"#f59e0b",padding:"8px 16px",background:"#fffbeb",borderRadius:8,display:"inline-block"}}>⚠ PDF data niet beschikbaar - product opnieuw opslaan om fiches te herstellen</div>
-                    </div>
-                  </div>
-                </div>
-              );
-            }
-            return <FichePages key={"fiche-"+fi+"-"+ffi} fiche={ficheData} naam={l.naam} fichNaam={f.naam} omschr={l.omschr} dc={dc} bed={bed} docNummer={doc.nummer}/>;
-          })}
-        </div>
-      );})}
-    </div>
-  );
-}
-
-
-function Bevestiging({offerteId, status, klantAkkoord, toonBevestigingslink}) {
-  const [fase, setFase] = React.useState("start");
-  const [datum, setDatum] = React.useState("");
-  const [notitie, setNotitie] = React.useState("");
-  const [sending, setSending] = React.useState(false);
-  const [open, setOpen] = React.useState(false);
-
-  if(toonBevestigingslink===false) return null;
-  const isOK = status==="goedgekeurd" || klantAkkoord;
-  const isNOK = status==="afgewezen";
-
-  if(isOK || fase==="ok") return (
-    <div style={{position:"fixed",bottom:0,left:0,right:0,zIndex:9999,background:"#d1fae5",borderTop:"3px solid #10b981",padding:"20px 24px",textAlign:"center",boxShadow:"0 -4px 20px rgba(0,0,0,.15)"}}>
-      <div style={{fontSize:48,marginBottom:8}}>✅</div>
-      <div style={{fontWeight:800,fontSize:22,color:"#065f46",marginBottom:6}}>Offerte goedgekeurd!</div>
-      <div style={{fontSize:16,color:"#059669"}}>Bedankt! We nemen spoedig contact op.</div>
-    </div>
-  );
-
-  if(isNOK || fase==="nok") return (
-    <div style={{position:"fixed",bottom:0,left:0,right:0,zIndex:9999,background:"#fef2f2",borderTop:"3px solid #ef4444",padding:"20px 24px",textAlign:"center",boxShadow:"0 -4px 20px rgba(0,0,0,.15)"}}>
-      <div style={{fontSize:48,marginBottom:8}}>❌</div>
-      <div style={{fontWeight:800,fontSize:20,color:"#991b1b",marginBottom:6}}>Offerte afgewezen</div>
-      <div style={{fontSize:15,color:"#b91c1c"}}>Bedankt voor uw reactie.</div>
-    </div>
-  );
-
-  const doAkkoord = async () => {
-    setSending(true);
-    try {
-      await sbPost("/rest/v1/offerte_responses", {
-        offerte_id: offerteId,
-        status: "goedgekeurd",
-        periode: datum || null,
-        opmerkingen: notitie || null,
-        submitted_at: new Date().toISOString()
-      });
-      setFase("ok");
-    } catch(e) { alert("Er ging iets mis. Probeer opnieuw."); }
-    setSending(false);
-  };
-
-  const doAfwijzen = async () => {
-    if(!window.confirm("Bent u zeker dat u deze offerte wilt afwijzen?")) return;
-    try {
-      await sbPost("/rest/v1/offerte_responses", {
-        offerte_id: offerteId,
-        status: "afgewezen",
-        submitted_at: new Date().toISOString()
-      });
-      setFase("nok");
-    } catch(e) { alert("Er ging iets mis."); }
-  };
-
-  const today = new Date().toISOString().split("T")[0];
-  const dc = "var(--dc,#1a2e4a)";
-
-  // Modal overlay - fullscreen op mobiel
-  const Modal = ({children}) => (
-    <div style={{
-      position:"fixed", inset:0, zIndex:9999,
-      background:"rgba(0,0,0,.6)",
-      display:"flex", alignItems:"flex-end",
-    }} onClick={e=>{if(e.target===e.currentTarget){setOpen(false);setFase("start");}}}>
-      <div style={{
-        background:"#fff",
-        width:"100%",
-        borderRadius:"20px 20px 0 0",
-        boxShadow:"0 -8px 40px rgba(0,0,0,.3)",
-        maxHeight:"92vh",
-        overflowY:"auto",
-        paddingBottom:"env(safe-area-inset-bottom,16px)"
-      }}>
-        {/* Handle */}
-        <div style={{display:"flex",justifyContent:"center",padding:"12px 0 4px"}}>
-          <div style={{width:44,height:5,background:"#e2e8f0",borderRadius:3}}/>
-        </div>
-        {/* Header */}
-        <div style={{
-          background:dc, color:"#fff",
-          padding:"16px 22px",
-          display:"flex", justifyContent:"space-between", alignItems:"center"
-        }}>
-          <span style={{fontWeight:800,fontSize:18}}>📋 Reageer op offerte</span>
-          <button onClick={()=>{setOpen(false);setFase("start");}} style={{
-            background:"rgba(255,255,255,.2)", border:"none", color:"#fff",
-            borderRadius:10, width:36, height:36, cursor:"pointer",
-            fontSize:20, display:"flex", alignItems:"center", justifyContent:"center"
-          }}>✕</button>
-        </div>
-        <div style={{padding:"24px 22px 32px"}}>
-          {children}
-        </div>
-      </div>
-    </div>
-  );
-
-  return (
-    <>
-      {/* Vaste balk onderaan - altijd zichtbaar */}
-      <div style={{
-        position:"fixed", bottom:0, left:0, right:0,
-        zIndex:9998,
-        background:"#fff",
-        borderTop:"2px solid #e2e8f0",
-        padding:"12px 16px",
-        paddingBottom:"calc(12px + env(safe-area-inset-bottom,0px))",
-        boxShadow:"0 -4px 20px rgba(0,0,0,.12)",
-        display:"flex", gap:10
-      }}>
-        <button
-          onClick={()=>{setOpen(true);setFase("start");}}
-          style={{
-            flex:1, background:dc, color:"#fff",
-            border:"none", borderRadius:12,
-            padding:"16px 20px",
-            fontSize:17, fontWeight:800,
-            cursor:"pointer",
-            boxShadow:"0 4px 14px rgba(0,0,0,.2)"
-          }}>
-          📋 Reageer op offerte
-        </button>
-      </div>
-      {/* Spacer zodat inhoud niet achter balk schuilt */}
-      <div style={{height:80}}/>
-
-      {open && (
-        <Modal>
-          {fase === "start" && (
-            <div>
-              <p style={{fontSize:16,color:"#475569",marginBottom:24,lineHeight:1.6,textAlign:"center"}}>
-                Gaat u akkoord met deze offerte?
-              </p>
-              <button style={{
-                width:"100%", background:"#059669", color:"#fff",
-                border:"none", padding:"18px", borderRadius:12,
-                fontSize:18, fontWeight:800, cursor:"pointer",
-                marginBottom:12, boxShadow:"0 4px 14px rgba(5,150,105,.3)"
-              }} onClick={()=>setFase("pform")}>
-                ✅ Ja, ik ga akkoord
-              </button>
-              <button style={{
-                width:"100%", background:"#fef2f2", color:"#ef4444",
-                border:"2px solid #fecaca", padding:"14px", borderRadius:12,
-                fontSize:16, fontWeight:700, cursor:"pointer"
-              }} onClick={doAfwijzen}>
-                ❌ Neen, ik wens af te wijzen
-              </button>
-            </div>
-          )}
-
-          {fase === "pform" && (
-            <div>
-              <h3 style={{fontSize:18,fontWeight:800,marginBottom:6,color:"#1e293b"}}>✅ Bevestig uw akkoord</h3>
-              <p style={{fontSize:14,color:"#64748b",marginBottom:20,lineHeight:1.5}}>
-                Optioneel: geef een voorkeursdatum mee voor de installatie.
-              </p>
-
-              <label style={{fontSize:14,fontWeight:700,color:"#374151",display:"block",marginBottom:8}}>
-                📅 Gewenste installatiedatum (optioneel)
-              </label>
-              <input
-                type="date"
-                min={today}
-                value={datum}
-                onChange={e=>setDatum(e.target.value)}
-                style={{
-                  width:"100%", border:"2px solid #d1d5db",
-                  borderRadius:10, padding:"14px 16px", fontSize:16,
-                  marginBottom:6, color:"#1e293b", fontFamily:"inherit",
-                  cursor:"pointer", WebkitAppearance:"none"
-                }}
-              />
-              {datum && (
-                <div style={{fontSize:14,color:"#059669",marginBottom:16,fontWeight:600,padding:"8px 12px",background:"#f0fdf4",borderRadius:8}}>
-                  📅 {new Date(datum+"T12:00:00").toLocaleDateString("nl-BE",{weekday:"long",day:"numeric",month:"long",year:"numeric"})}
-                </div>
-              )}
-
-              <label style={{fontSize:14,fontWeight:700,color:"#374151",display:"block",marginBottom:8,marginTop:datum?0:16}}>
-                💬 Opmerkingen (optioneel)
-              </label>
-              <textarea
-                value={notitie}
-                onChange={e=>setNotitie(e.target.value)}
-                placeholder="Bijv. toegang, speciale instructies, voorkeur tijdstip..."
-                rows={3}
-                style={{
-                  width:"100%", border:"2px solid #d1d5db", borderRadius:10,
-                  padding:"12px 14px", fontSize:15, fontFamily:"inherit",
-                  resize:"none", marginBottom:20, lineHeight:1.5
-                }}
-              />
-
-              <button style={{
-                width:"100%", background:"#059669", color:"#fff",
-                border:"none", padding:"18px", borderRadius:12,
-                fontSize:18, fontWeight:800, cursor:"pointer",
-                opacity:sending?0.7:1,
-                marginBottom:10,
-                boxShadow:"0 4px 14px rgba(5,150,105,.3)"
-              }} onClick={doAkkoord} disabled={sending}>
-                {sending ? "⏳ Bezig met verzenden..." : "✅ Bevestig mijn akkoord"}
-              </button>
-              <button style={{
-                width:"100%", background:"#f8fafc", color:"#64748b",
-                border:"2px solid #e2e8f0", padding:"14px", borderRadius:10,
-                fontSize:15, cursor:"pointer", fontWeight:600
-              }} onClick={()=>setFase("start")}>
-                ← Terug
-              </button>
-            </div>
-          )}
-        </Modal>
-      )}
-    </>
-  );
-}
-
-// --- HOOFD APP ---------------------------------------------------
-
-function App() {
-  const [data, setData] = useState(null);
-  const [ficheCache, setFicheCache] = useState({});
-  const [error, setError] = useState(null);
-  const params = new URLSearchParams(location.search);
-  const OID = params.get("id");
-  const ONR = params.get("nr");
-
-  useEffect(() => {
-    if(!OID) { setError("Geen offerte-ID in de URL."); return; }
-    (async () => {
-      let d = null;
-      for(let i=1;i<=3;i++) {
-        try {
-          const rows = await sbGet("/rest/v1/offerte_shares?id=eq."+encodeURIComponent(OID)+"&select=offerte_data");
-          if(rows&&rows[0]&&rows[0].offerte_data) { d=rows[0].offerte_data; break; }
-        } catch(e) { console.warn("Poging",i,e.message); }
-        if(i<3) await new Promise(r=>setTimeout(r,2000));
+    groepenVolgorde.forEach(groep => {
+      const gLijnen = groepenMap[groep];
+      if(heeftGroepen && groep !== "__geen__") {
+        tabelHtml += `<tr><td colspan="6" class="grp-hdr" style="background:${xe(dc)}">${xe(groep)}</td></tr>`;
       }
-      if(!d) { setError("Offerte '"+(ONR||OID)+"' niet gevonden."); return; }
-      setData(d);
-      // Register view
-      try { sbPost("/rest/v1/offerte_views",{offerte_id:OID,user_agent:navigator.userAgent,viewed_at:new Date().toISOString()}); } catch(_){}
-      // Load fiches: eerst uit offerte_fiches, dan fallback naar product_fiches
-      try {
-        const fr = await sbGet("/rest/v1/offerte_fiches?offerte_id=eq."+encodeURIComponent(OID)+"&select=product_id,fiches");
-        if(fr&&fr.length>0 && fr.some(r=>r.fiches&&r.fiches.some(f=>f.data))) {
-          const cache = {};
-          fr.forEach(r => { if(r.fiches&&r.fiches.some(f=>f.data)) cache[r.product_id]=r.fiches; });
-          setFicheCache(cache);
-        } else {
-          // Fallback: product_fiches tabel
-          const pIds = [...new Set((d.lijnen||[]).map(function(l){return l.productId;}).filter(Boolean))];
-          if(pIds.length > 0) {
-            sbGet("/rest/v1/product_fiches?product_id=in.("+pIds.join(",")+")&select=product_id,fiches").then(function(pf){
-              if(pf&&pf.length>0){const c={};pf.forEach(function(r){if(r.fiches&&r.fiches.some(function(f){return f.data;}))c[r.product_id]=r.fiches;});setFicheCache(c);}
-            }).catch(function(){});
-          }
-        }      } catch(e){ console.warn("Fiches laden mislukt:", e.message); }
-    })();
-  }, []);
+      let grpSub = 0;
+      gLijnen.forEach(l => {
+        if(!l.naam) return;
+        const ext = (l.prijs||0)*(l.aantal||1);
+        grpSub += ext;
+        tabelHtml += `<tr>
+          <td><div style="font-weight:600">${xe(l.naam)}</div>${l.omschr?`<div style="font-size:11px;color:#64748b;font-style:italic">${xe(l.omschr)}</div>`:""}${l.merk?`<div style="font-size:10px;color:#94a3b8">${xe(l.merk)}</div>`:""}</td>
+          <td style="color:#64748b">${xe(l.eenheid||"stuk")}</td>
+          <td>${l.aantal||1}</td>
+          <td style="text-align:right">${fmtEuro(l.prijs||0)}</td>
+          <td style="text-align:right;color:#64748b">${l.btw||0}%</td>
+          <td style="text-align:right;font-weight:600">${fmtEuro(ext)}</td>
+        </tr>`;
+      });
+      if(heeftGroepen && groep !== "__geen__") {
+        tabelHtml += `</tbody></table><div class="grp-sub"><span>Subtotaal ${xe(groep)}:</span><span>${fmtEuro(grpSub)}</span></div><table class="tbl"><tbody>`;
+      }
+    });
+    tabelHtml += "</tbody></table>";
 
-  if(error) {
-    document.getElementById("loader").style.display="none";
-    document.getElementById("err").style.display="flex";
-    document.getElementById("errmsg").textContent=error;
-    return null;
-  }
-  if(!data) return null;
+    // Totalen
+    let totenHtml = `<div class="totalen"><div class="tot-box">
+      <div class="tot-row"><span class="tot-lbl">Subtotaal excl. BTW</span><span>${fmtEuro(tot.subtotaal)}</span></div>`;
+    Object.entries(tot.btwGroepen).forEach(([pct, bedrag]) => {
+      totenHtml += `<div class="tot-row"><span class="tot-lbl">BTW ${pct}%</span><span>${fmtEuro(bedrag)}</span></div>`;
+    });
+    totenHtml += `<div class="tot-row"><span>TOTAAL incl. BTW</span><span style="color:${xe(dc)}">${fmtEuro(tot.totaal)}</span></div>
+    </div></div>`;
 
-  document.getElementById("loader").style.display="none";
-  const dc = data._dc || "#1a2e4a";
-  document.documentElement.style.setProperty("--dc", dc);
-  document.title = "Offerte "+(data.nummer||"")+" - "+(data._bed?.naam||"");
+    // Betaalinformatie
+    const betaalHtml = !isFactuur && bed.iban ? `<div class="betaal">
+      <strong>Betaling:</strong> IBAN ${xe(bed.iban)}${bed.bic?" · BIC "+xe(bed.bic):""}${doc.nummer?" · Mededeling: "+xe(doc.nummer):""}
+    </div>` : (isFactuur && bed.iban ? `<div class="betaal">
+      <strong>Betaling vóór ${fmtDate(doc.vervaldatum)}:</strong> IBAN ${xe(bed.iban)}${bed.bic?" · BIC "+xe(bed.bic):""}${doc.nummer?" · Referentie: "+xe(doc.nummer):""}
+    </div>` : "");
 
-  // Build settings from stored data
-  const settings = {
-    ...INIT_SETTINGS,
-    bedrijf: data._bed || INIT_SETTINGS.bedrijf,
-    sjabloon: {...INIT_SETTINGS.sjabloon, ...(data._sj||{}), accentKleur:dc},
-    layout: data._lyt ? {...INIT_SETTINGS.layout, ...(data._lyt||{})} : INIT_SETTINGS.layout,
-    voorwaarden: {...INIT_SETTINGS.voorwaarden, tekst:data._voorwaarden||"", voorschot:data._voorschot||"50%"},
-    thema: {kleur:dc},
-  };
+    const voorschotHtml = (doc.voorschot || doc._voorschot) && !isFactuur
+      ? `<div class="voorschot">💡 <strong>Voorschot:</strong> ${xe(doc.voorschot||doc._voorschot)} te betalen vóór aanvang van de werken.</div>` : "";
 
-  return (
-    <div>
-      <OfferteDocument doc={data} settings={settings} ficheCache={ficheCache}/>
-      <div style={{padding:"0 8px 16px"}}>
-        <Bevestiging
-          offerteId={OID}
-          status={data.status}
-          klantAkkoord={data.klantAkkoord}
-          toonBevestigingslink={data._sj?.toonBevestigingslink}
-        />
+    // Akkoord blok (enkel voor offertes)
+    const toonBevestigingslink = doc._sj?.toonBevestigingslink !== false;
+    const akkoordHtml = !isFactuur && toonBevestigingslink ? `
+      <div class="akkoord-blok">
+        <div class="akkoord-lbl">📋 Digitaal akkoord</div>
+        <p style="font-size:13px;color:#475569;margin-bottom:14px">Gaat u akkoord met deze offerte? Klik dan op de knop hieronder.</p>
+        <div class="btn-wrap">
+          <button class="btn btn-ok" id="btn-akkoord">✅ Ik ga akkoord</button>
+          <button class="btn btn-af" id="btn-afwijzen">❌ Niet akkoord</button>
+        </div>
+      </div>` : "";
+
+    // Handtekening blok
+    const handtekeningTekst = doc._sj?.handtekeningTekst || "Geldig voor akkoord — datum, handtekening & naam";
+    const signHtml = !isFactuur ? `<div class="sign-box">
+      <div class="sign-lbl">${xe(handtekeningTekst)}</div>
+      <div style="font-size:11px;color:#94a3b8;margin-top:4px">Gelieve ondertekend terug te bezorgen of digitaal te bevestigen via bovenstaande knop.</div>
+    </div>` : "";
+
+    // Algemene voorwaarden
+    const voorwHtml = doc._voorwaarden ? `<div class="card"><div class="body">
+      <div style="font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.6px;margin-bottom:10px">📋 Algemene voorwaarden</div>
+      <div class="voorwaarden">${xe(doc._voorwaarden)}</div>
+    </div></div>` : "";
+
+    // Meta-bar
+    const metaItems = [
+      {l:"Datum", v: fmtDate(doc.datum||doc.aangemaakt)},
+      !isFactuur ? {l:"Geldig tot", v: fmtDate(doc.vervaldatum)} : {l:"Vervaldatum betaling", v: fmtDate(doc.vervaldatum)},
+      {l:"BTW-regime", v: doc.btwRegime==="verlegd"?"BTW verlegd":doc.btwRegime==="vrijgesteld"?"Vrijgesteld":(doc.btwRegime||"Standaard")},
+      {l:"Betaling", v: (doc.voorwaarden?.betalingstermijn||14) + " dagen"},
+    ];
+
+    document.getElementById("main").innerHTML = `
+      <div class="card">
+        <div class="hdr" style="background:${xe(dc)}">
+          <div class="hdr-from">
+            ${logoHtml}
+            <div class="hdr-from-info">${xe(bed.adres||"")} · ${xe(bed.gemeente||"")}<br>${xe(bed.tel||"")} · ${xe(bed.email||"")}</div>
+          </div>
+          <div class="hdr-doc">
+            <div class="hdr-type">${docType}</div>
+            <div class="hdr-nr">${xe(doc.nummer||"")}</div>
+          </div>
+        </div>
+        <div class="body">
+          <div class="meta-bar">
+            ${metaItems.map(m=>`<div class="meta-item"><div class="meta-lbl">${xe(m.l)}</div><div class="meta-val">${xe(m.v)}</div></div>`).join("")}
+          </div>
+          <div class="parties">
+            <div class="party">
+              <div class="party-lbl">Van</div>
+              <div class="party-naam">${xe(bed.naam||"")}</div>
+              <div class="party-info">${xe(bed.adres||"")} ${xe(bed.gemeente||"")}<br>BTW: ${xe(bed.btwnr||"")}${bed.iban?`<br>IBAN: ${xe(bed.iban)}`:""}${bed.tel?`<br>${xe(bed.tel)}`:""}${bed.email?`<br>${xe(bed.email)}`:""}</div>
+            </div>
+            <div class="party">
+              <div class="party-lbl">Klant</div>
+              <div class="party-naam">${xe(klant.naam||klant.bedrijf||"")}</div>
+              <div class="party-info">${klant.bedrijf&&klant.naam!==klant.bedrijf?xe(klant.bedrijf)+"<br>":""}${xe(klant.adres||"")} ${xe(klant.gemeente||"")}${klant.btwnr?`<br>BTW: ${xe(klant.btwnr)}`:""}${klant.tel?`<br>${xe(klant.tel)}`:""}${klant.email?`<br>${xe(klant.email)}`:""}</div>
+            </div>
+          </div>
+          ${tabelHtml}
+          ${totenHtml}
+          ${betaalHtml}
+          ${voorschotHtml}
+          ${akkoordHtml}
+          ${signHtml}
+        </div>
+        <div class="footer" style="background:${xe(dc)}">
+          <div class="footer-txt"><strong>${xe(bed.naam||"")}</strong> · ${xe(bed.adres||"")} · ${xe(bed.gemeente||"")}</div>
+          <div class="footer-txt">BTW: ${xe(bed.btwnr||"")} · IBAN: ${xe(bed.iban||"")}</div>
+        </div>
       </div>
-    </div>
-  );
+      ${voorwHtml}
+    `;
+
+    show("main");
+
+    // Akkoord buttons
+    const btnOk = document.getElementById("btn-akkoord");
+    const btnAf = document.getElementById("btn-afwijzen");
+
+    async function stuurReactie(status) {
+      btnOk && (btnOk.disabled = true);
+      btnAf && (btnAf.disabled = true);
+      try {
+        await sbFetch("/rest/v1/offerte_responses", {
+          method: "POST",
+          headers: {"Prefer": "return=minimal"},
+          body: JSON.stringify({
+            offerte_id: offerteId,
+            status: status,
+            submitted_at: new Date().toISOString(),
+            opmerkingen: ""
+          })
+        });
+        show(status === "akkoord" ? "st-ok" : "st-af");
+      } catch(e) {
+        console.error("Reactie fout:", e);
+        // Fallback: open mailto
+        const s = status === "akkoord" ? "Akkoord met offerte" : "Offerte afgewezen";
+        const b = encodeURIComponent((status === "akkoord" ? "Ik ga akkoord met offerte " : "Ik ga NIET akkoord met offerte ") + (doc.nummer||""));
+        window.location.href = "mailto:" + (bed.email||"") + "?subject=" + encodeURIComponent(s + " " + (doc.nummer||"")) + "&body=" + b;
+        if(btnOk) btnOk.disabled = false;
+        if(btnAf) btnAf.disabled = false;
+      }
+    }
+
+    if(btnOk) btnOk.addEventListener("click", () => {
+      if(window.confirm("Bevestig uw akkoord met offerte " + (doc.nummer||"") + "?")) stuurReactie("akkoord");
+    });
+    if(btnAf) btnAf.addEventListener("click", () => {
+      if(window.confirm("Weet u zeker dat u deze offerte wil afwijzen?")) stuurReactie("afgewezen");
+    });
+
+  } catch(e) {
+    console.error("Laad fout:", e);
+    document.getElementById("err-msg").textContent = "Fout bij laden: " + e.message + " — controleer de Supabase RLS instellingen voor de tabel offerte_shares.";
+    show("st-error");
+  }
 }
 
-ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+load();
 </script>
-
 </body>
 </html>
