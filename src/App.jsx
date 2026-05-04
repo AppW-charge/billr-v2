@@ -3156,7 +3156,18 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
       const lyt = settings?.layout || {};
       const dc = sj.accentKleur || settings?.thema?.kleur || bed.kleur || "#1a2e4a";
       let _docHtml = null;
-      try { const dw=document.querySelector(".mb-body .doc-wrap"); if(dw) _docHtml=dw.outerHTML; } catch(e) {}
+      try {
+        const dw=document.querySelector(".mb-body .doc-wrap");
+        if(dw) {
+          // Strip base64 data (fiches, logo's) zodat payload klein blijft
+          let h = dw.outerHTML;
+          h = h.replace(/src="data:[^"]{100,}"/g, 'src=""');
+          h = h.replace(/href="data:[^"]{100,}"/g, 'href=""');
+          h = h.replace(/"data:[a-z/]+;base64,[^"]{50,}"/g, '""');
+          _docHtml = h;
+          console.log("[Share] docHtml size:", Math.round(h.length/1024)+"KB");
+        }
+      } catch(e) { console.warn("[Share] HTML capture:", e); }
 
       // Haal fiches op uit product_fiches en embed ze in shareData
       // Zodat offerte.html ze kan tonen zonder auth
