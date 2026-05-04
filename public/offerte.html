@@ -140,6 +140,22 @@ async function go(){
     var nr=doc.nummer||params.get("nr")||"Document";
     document.title=nr;document.getElementById("docnr").textContent=nr;
     fetch(SB+"/rest/v1/offerte_views",{method:"POST",headers:{"apikey":KEY,"Authorization":"Bearer "+KEY,"Content-Type":"application/json","Prefer":"return=minimal"},body:JSON.stringify({offerte_id:oid,viewed_at:new Date().toISOString()})}).catch(function(){});
+    
+    // Haal technische fiches op uit product_fiches tabel (directe fetch, geen payload limiet)
+    var productIds=[...new Set((doc.lijnen||[]).map(function(l){return l.productId;}).filter(Boolean))];
+    var ficheMap={};
+    if(productIds.length>0){
+      try{
+        var fr=await fetch(SB+"/rest/v1/product_fiches?product_id=in.("+productIds.join(",")+")",{headers:{"apikey":KEY,"Authorization":"Bearer "+KEY}});
+        var frows=await fr.json();
+        if(Array.isArray(frows))frows.forEach(function(r){if(r.fiches)ficheMap[r.product_id]=r.fiches;});
+      }catch(e){console.warn("Fiches laden mislukt:",e);}
+    }
+    // Embed fiches in lijnen
+    doc.lijnen=(doc.lijnen||[]).map(function(l){
+      if(l.productId&&ficheMap[l.productId])return Object.assign({},l,{technischeFiches:ficheMap[l.productId]});
+      return l;
+    });
     render(doc,nr);
   }catch(e){err("❌","Fout",e.message);}
 }
@@ -238,7 +254,28 @@ function render(doc,nr){
     +"<div class='qt-footer' style='background:"+xe(dc)+"'><div class='qt-footer-txt'><strong>"+xe(bed.naam||"")+"</strong> · "+xe(bed.adres||"")+" · "+xe(bed.gemeente||"")+"</div><div class='qt-footer-txt'>BTW: "+xe(bed.btwnr||"")+" · IBAN: "+xe(bed.iban||"")+"</div></div>"
     +"</div>";
 
-  var html="<div class='doc-wrap'>"+covHtml+qtHtml+"</div>";
+  // === TECHNISCHE FICHES PAGINA'S ===
+  var ficheHtml="";
+  lijnen.forEach(function(l){
+    if(!l.naam)return;
+    var fiches=l.technischeFiches||[];
+    fiches.forEach(function(f){
+      if(!f.data)return;
+      var src=f.data.startsWith("data:")?f.data:"data:"+(f.type||"application/pdf")+";base64,"+f.data;
+      ficheHtml+="<div class='doc-page' style='overflow:hidden'>"
+        +"<div style='background:"+xe(dc)+";padding:8px 20px;display:flex;align-items:center;gap:10px'>"
+        +"<span style='color:rgba(255,255,255,.7);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.7px'>Technische fiche</span>"
+        +"<span style='color:#fff;font-size:12px;font-weight:700'>"+xe(l.naam)+"</span>"
+        +(f.naam?"<span style='color:rgba(255,255,255,.5);font-size:10px;margin-left:auto'>"+xe(f.naam)+"</span>":"")
+        +"</div>"
+        +(f.type&&f.type.includes("pdf")
+          ? "<div style='flex:1;overflow:hidden'><iframe src='"+src+"' style='width:100%;height:calc(297mm - 40px);border:none;display:block'></iframe></div>"
+          : "<div style='flex:1;overflow:hidden;display:flex;align-items:center;justify-content:center;background:#f8fafc'><img src='"+src+"' style='max-width:100%;max-height:calc(297mm - 60px);object-fit:contain'/></div>"
+        )
+        +"</div>";
+    });
+  });
+  var html="<div class='doc-wrap'>"+covHtml+qtHtml+ficheHtml+"</div>";
 
   document.getElementById("spin").style.display="none";
   document.getElementById("topbar").style.display="flex";
