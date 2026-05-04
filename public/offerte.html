@@ -3,374 +3,172 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Offerte bekijken</title>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<title>Offerte bekijken — W-charge BV</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:Inter,Arial,sans-serif;background:#f1f5f9;min-height:100vh;padding:16px}
-.wrap{max-width:700px;margin:0 auto}
-.card{background:#fff;border-radius:14px;box-shadow:0 2px 16px rgba(0,0,0,.08);overflow:hidden;margin-bottom:16px}
-.hdr{padding:24px 28px;display:flex;justify-content:space-between;align-items:flex-start}
-.hdr-from{flex:1}
-.hdr-from-naam{font-weight:900;font-size:18px;color:#fff;letter-spacing:-.4px}
-.hdr-from-info{font-size:11px;color:rgba(255,255,255,.7);line-height:1.9;margin-top:4px}
-.hdr-doc{text-align:right}
-.hdr-type{font-weight:900;font-size:26px;color:#fff;letter-spacing:-.8px;text-transform:uppercase}
-.hdr-nr{font-size:11px;color:rgba(255,255,255,.7);margin-top:4px;font-family:monospace}
-.body{padding:24px 28px}
-.meta-bar{display:grid;grid-template-columns:1fr 1fr;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;margin-bottom:20px}
-.meta-item{padding:10px 16px;border-right:1px solid #e2e8f0;border-bottom:1px solid #e2e8f0}
-.meta-item:nth-child(2n){border-right:none}
-.meta-item:nth-last-child(-n+2){border-bottom:none}
-.meta-lbl{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#94a3b8;margin-bottom:2px}
-.meta-val{font-size:13px;font-weight:700;color:#1e293b}
-.parties{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px}
-.party{background:#f8fafc;border-radius:8px;padding:14px 16px;border:1px solid #e2e8f0}
-.party-lbl{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#94a3b8;margin-bottom:6px}
-.party-naam{font-weight:700;font-size:14px;color:#1e293b;margin-bottom:3px}
-.party-info{font-size:12px;color:#475569;line-height:1.8}
-.tbl{width:100%;border-collapse:collapse;border-radius:8px;overflow:hidden;border:1px solid #e2e8f0;margin-bottom:16px}
-.tbl th{background:#f8fafc;padding:9px 12px;text-align:left;font-size:10px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid #e2e8f0}
-.tbl td{padding:9px 12px;border-bottom:1px solid #f1f5f9;font-size:13px;color:#1e293b}
-.tbl tr:last-child td{border-bottom:none}
-.grp-hdr{background:#1e293b;color:#fff;font-weight:700;font-size:12px;padding:8px 12px;letter-spacing:.5px;text-transform:uppercase}
-.grp-sub{display:flex;justify-content:flex-end;gap:12px;padding:6px 12px;background:#f0f4f8;border:1px solid #e2e8f0;border-top:none;font-size:12px;font-weight:700;color:#1e293b;margin-bottom:8px}
-.totalen{display:flex;justify-content:flex-end;margin-bottom:16px}
-.tot-box{min-width:280px;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden}
-.tot-row{display:flex;justify-content:space-between;padding:8px 14px;font-size:13px;border-bottom:1px solid #f1f5f9}
-.tot-row:last-child{border-bottom:none;font-weight:800;font-size:16px;background:#f0fdf4;padding:12px 14px}
-.tot-lbl{color:#64748b}
-.betaal{background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:12px 16px;margin-bottom:12px;font-size:13px;line-height:1.8}
-.voorschot{background:#f0f4ff;border:1px solid #a5b4fc;border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:12.5px;color:#3730a3}
-.sign-box{border:2px dashed #cbd5e1;border-radius:8px;padding:20px;text-align:center;margin-bottom:12px}
-.sign-lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:#94a3b8;margin-bottom:4px}
-.akkoord-blok{border:2px solid #a5b4fc;background:#f0f4ff;border-radius:10px;padding:16px 20px;margin-bottom:12px}
-.akkoord-lbl{font-size:11px;font-weight:700;color:#3730a3;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px}
-.voorwaarden{font-size:11px;color:#475569;line-height:1.9;white-space:pre-wrap;margin-bottom:14px}
-.footer{background:#1a2e4a;padding:12px 28px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px}
-.footer-txt{font-size:10.5px;color:rgba(255,255,255,.6);line-height:1.8}
-.footer-txt strong{color:rgba(255,255,255,.85)}
-
-/* Akkoord buttons */
-.btn-wrap{display:flex;gap:10px;flex-wrap:wrap}
-.btn{padding:13px 22px;border-radius:10px;border:none;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;flex:1;min-width:140px}
+body{font-family:Arial,sans-serif;background:#f0f4f8;min-height:100vh;padding:12px}
+.wrap{max-width:680px;margin:0 auto}
+.card{background:#fff;border-radius:12px;box-shadow:0 2px 12px rgba(0,0,0,.1);overflow:hidden;margin-bottom:12px}
+.hdr{padding:20px 24px;display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px}
+.hdr-naam{font-weight:900;font-size:18px;color:#fff;letter-spacing:-.3px}
+.hdr-info{font-size:11px;color:rgba(255,255,255,.7);line-height:1.8;margin-top:3px}
+.hdr-type{font-weight:900;font-size:24px;color:#fff;text-transform:uppercase;text-align:right}
+.hdr-nr{font-size:11px;color:rgba(255,255,255,.7);font-family:monospace;text-align:right;margin-top:3px}
+.body{padding:20px 24px}
+.meta{display:grid;grid-template-columns:1fr 1fr;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;margin-bottom:16px;background:#f8fafc}
+.mi{padding:10px 14px;border-right:1px solid #e2e8f0;border-bottom:1px solid #e2e8f0}
+.mi:nth-child(2n){border-right:none}
+.mi:nth-last-child(-n+2){border-bottom:none}
+.ml{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#94a3b8;margin-bottom:2px}
+.mv{font-size:13px;font-weight:700;color:#1e293b}
+.parties{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px}
+.party{background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:12px 14px}
+.pl{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#94a3b8;margin-bottom:5px}
+.pn{font-weight:700;font-size:13px;color:#1e293b;margin-bottom:2px}
+.pi{font-size:11.5px;color:#475569;line-height:1.8}
+table{width:100%;border-collapse:collapse;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;margin-bottom:14px;font-size:13px}
+th{background:#f8fafc;padding:8px 11px;text-align:left;font-size:10px;font-weight:700;color:#64748b;text-transform:uppercase;border-bottom:1px solid #e2e8f0}
+td{padding:8px 11px;border-bottom:1px solid #f1f5f9;color:#1e293b}
+tr:last-child td{border-bottom:none}
+.grp{background-color:var(--dc,#1a2e4a);color:#fff;font-weight:700;font-size:11px;padding:7px 11px;text-transform:uppercase;letter-spacing:.5px}
+.totbox{display:flex;justify-content:flex-end;margin-bottom:14px}
+.totinn{min-width:260px;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden}
+.trow{display:flex;justify-content:space-between;padding:7px 13px;font-size:13px;border-bottom:1px solid #f1f5f9}
+.trow:last-child{border-bottom:none;font-weight:800;font-size:15px;background:#f0fdf4;padding:10px 13px}
+.betaal{background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:12px 14px;margin-bottom:10px;font-size:13px;line-height:1.8}
+.vscot{background:#f0f4ff;border:1px solid #a5b4fc;border-radius:8px;padding:10px 14px;margin-bottom:10px;font-size:12.5px;color:#3730a3}
+.akkoord{background:#f0f4ff;border:2px solid #818cf8;border-radius:10px;padding:16px 18px;margin-bottom:10px}
+.aklbl{font-size:11px;font-weight:700;color:#3730a3;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px}
+.akp{font-size:13px;color:#475569;margin-bottom:12px}
+.btns{display:flex;gap:8px;flex-wrap:wrap}
+.btn{padding:12px 20px;border-radius:8px;border:none;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;flex:1;min-width:120px}
 .btn-ok{background:#10b981;color:#fff}
-.btn-af{background:#f8fafc;color:#64748b;border:2px solid #e2e8f0}
+.btn-af{background:#f1f5f9;color:#64748b;border:2px solid #e2e8f0}
 .btn:disabled{opacity:.5;cursor:not-allowed}
-
-/* Status states */
-.state{display:none;text-align:center;padding:40px 20px}
-.state.show{display:block}
-.spinner{display:inline-block;width:40px;height:40px;border:4px solid #e2e8f0;border-top-color:#3b82f6;border-radius:50%;animation:spin .8s linear infinite}
+.ftr{padding:12px 24px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px}
+.ft{font-size:10.5px;color:rgba(255,255,255,.65);line-height:1.8}
+.vw{font-size:12px;color:#64748b;line-height:1.9;white-space:pre-wrap}
+#msg{padding:60px 24px;text-align:center}
+#msg .ico{font-size:48px;margin-bottom:14px}
+#msg h2{font-size:20px;font-weight:800;color:#1e293b;margin-bottom:8px}
+#msg p{font-size:13px;color:#64748b;line-height:1.6;max-width:400px;margin:0 auto}
+#spin{text-align:center;padding:60px}
+.sp{display:inline-block;width:40px;height:40px;border:4px solid #e2e8f0;border-top-color:#3b82f6;border-radius:50%;animation:spin .8s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
-
-/* Responsive */
-@media(max-width:600px){
-  .parties{grid-template-columns:1fr}
-  .hdr{flex-direction:column;gap:10px}
-  .hdr-doc{text-align:left}
-  .meta-bar{grid-template-columns:1fr}
-  .meta-item{border-right:none}
-  .totalen{justify-content:stretch}
-  .tot-box{min-width:0;width:100%}
-}
+@media(max-width:560px){.parties,.meta{grid-template-columns:1fr}.mi{border-right:none}.totbox{justify-content:stretch}.totinn{min-width:0;width:100%}.hdr{flex-direction:column}.hdr-type,.hdr-nr{text-align:left}}
 </style>
 </head>
 <body>
 <div class="wrap">
-  <!-- Loading -->
-  <div class="state show" id="st-loading">
-    <div class="spinner"></div>
-    <p style="margin-top:16px;color:#64748b;font-size:14px">Even geduld...</p>
+  <div id="spin"><div class="sp"></div><p style="margin-top:14px;color:#64748b;font-size:13px">Offerte laden...</p></div>
+  <div id="msg" style="display:none" class="card">
+    <div class="ico" id="msg-ico">❌</div>
+    <h2 id="msg-h"></h2>
+    <p id="msg-p"></p>
   </div>
-  <!-- Error -->
-  <div class="state" id="st-error">
-    <div class="card"><div class="body" style="text-align:center;padding:40px">
-      <div style="font-size:48px;margin-bottom:12px">❌</div>
-      <div style="font-weight:800;font-size:18px;color:#1e293b;margin-bottom:8px">Offerte niet beschikbaar</div>
-      <div style="font-size:13px;color:#64748b" id="err-msg">Deze link is niet meer geldig of de offerte werd verwijderd.</div>
-    </div></div>
-  </div>
-  <!-- Bevestigd -->
-  <div class="state" id="st-ok">
-    <div class="card"><div class="body" style="text-align:center;padding:40px">
-      <div style="font-size:48px;margin-bottom:12px">✅</div>
-      <div style="font-weight:800;font-size:20px;color:#10b981;margin-bottom:8px">Akkoord ontvangen!</div>
-      <div style="font-size:13px;color:#475569">Uw bevestiging werd geregistreerd. U ontvangt bericht van ons.</div>
-    </div></div>
-  </div>
-  <!-- Afgewezen -->
-  <div class="state" id="st-af">
-    <div class="card"><div class="body" style="text-align:center;padding:40px">
-      <div style="font-size:48px;margin-bottom:12px">❌</div>
-      <div style="font-weight:800;font-size:20px;color:#ef4444;margin-bottom:8px">Offerte afgewezen</div>
-      <div style="font-size:13px;color:#475569">Uw reactie werd geregistreerd.</div>
-    </div></div>
-  </div>
-  <!-- Offerte content -->
   <div id="main" style="display:none"></div>
 </div>
-
 <script>
-const SB_URL = "https://qxnxbqkdvvblfkihmjxy.supabase.co";
-const SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF4bnhicWtkdnZibGZraWhtanh5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMzNTI3MTMsImV4cCI6MjA4ODkyODcxM30.1JDvrHgxLpU1GZqSjDVGtfnFJg8PHuD-aFpHOxAY1To";
-const params = new URLSearchParams(window.location.search);
-const offerteId = params.get("id");
+var SB = "https://qxnxbqkdvvblfkihmjxy.supabase.co";
+var KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF4bnhicWtkdnZibGZraWhtanh5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMzNTI3MTMsImV4cCI6MjA4ODkyODcxM30.1JDvrHgxLpU1GZqSjDVGtfnFJg8PHuD-aFpHOxAY1To";
 
-function show(id) {
-  document.querySelectorAll(".state").forEach(e => { e.classList.remove("show"); });
-  document.getElementById("main").style.display = "none";
-  const el = document.getElementById(id);
-  if(el) el.classList.add("show");
-  else if(id === "main") document.getElementById("main").style.display = "block";
-}
+function $(id){ return document.getElementById(id); }
+function spin(on){ $("spin").style.display=on?"block":"none"; }
+function showMsg(ico,h,p){ spin(false); $("msg").style.display="block"; $("msg-ico").textContent=ico; $("msg-h").textContent=h; $("msg-p").innerHTML=p; }
+function showMain(html){ spin(false); $("main").style.display="block"; $("main").innerHTML=html; }
+function euro(n){ return "\u20AC\u00A0"+Number(n||0).toFixed(2).replace(".",",").replace(/\B(?=(\d{3})+(?!\d))/g,"."); }
+function datum(d){ try{ return new Date(d).toLocaleDateString("nl-BE",{day:"2-digit",month:"2-digit",year:"numeric"}); }catch(e){ return d||""; } }
+function xe(s){ return String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
 
-async function sbFetch(path, opts = {}) {
-  const res = await fetch(SB_URL + path, {
-    ...opts,
-    headers: {
-      "apikey": SB_KEY,
-      "Authorization": "Bearer " + SB_KEY,
-      "Content-Type": "application/json",
-      ...(opts.headers || {})
-    }
-  });
-  const text = await res.text();
-  if(!res.ok) throw new Error(res.status + ": " + text);
-  return text ? JSON.parse(text) : null;
-}
+var params = new URLSearchParams(location.search);
+var oid = params.get("id");
+if(!oid){ showMsg("❌","Ongeldige link","Geen offerte ID gevonden in de link."); }
 
-const fmtEuro = n => "€\u00A0" + Number(n||0).toFixed(2).replace(".", ",").replace(/\B(?=(\d{3})+(?!\d))/g, ".");
-const fmtDate = d => { try { return new Date(d).toLocaleDateString("nl-BE",{day:"2-digit",month:"2-digit",year:"numeric"}); } catch(_){ return d||""; }};
-const xe = s => String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
-
-function calcTotals(lijnen) {
-  const sub = lijnen.reduce((s,l) => s + (l.prijs||0)*(l.aantal||1), 0);
-  const btwGr = {};
-  lijnen.forEach(l => {
-    const r = l.btw || 0;
-    if(r > 0) { if(!btwGr[r]) btwGr[r] = 0; btwGr[r] += (l.prijs||0)*(l.aantal||1)*(r/100); }
-  });
-  const btw = Object.values(btwGr).reduce((s,v) => s+v, 0);
-  return {subtotaal: sub, btw, totaal: sub+btw, btwGroepen: btwGr};
-}
-
-async function load() {
-  if(!offerteId) { show("st-error"); return; }
+async function go(){
   try {
-    const data = await sbFetch("/rest/v1/offerte_shares?id=eq." + offerteId + "&select=offerte_data");
-    if(!data || data.length === 0) {
-      document.getElementById("err-msg").textContent = "Offerte niet gevonden (ID: " + offerteId + "). Contacteer " + (params.get("nr") ? params.get("nr") : "ons") + " voor meer info.";
-      show("st-error");
-      return;
-    }
-
-    const doc = data[0].offerte_data || {};
-    const bed = doc._bed || {};
-    const dc = doc._dc || "#1a2e4a";
-    const lijnen = doc.lijnen || [];
-    const tot = calcTotals(lijnen);
-    const klant = doc.klant || {};
-    const isFactuur = doc.type === "factuur" || (doc.nummer||"").startsWith("FACT");
-    const docType = isFactuur ? "FACTUUR" : "OFFERTE";
-
-    // Track view
-    try {
-      await sbFetch("/rest/v1/offerte_views", {
-        method: "POST",
-        headers: {"Prefer": "return=minimal"},
-        body: JSON.stringify({offerte_id: offerteId, viewed_at: new Date().toISOString(), user_agent: navigator.userAgent})
-      });
-    } catch(_) {}
-
-    // Bouw HTML
-    const logoHtml = (bed.logo && !bed.logo.startsWith("data:"))
-      ? `<img src="${xe(bed.logo)}" alt="${xe(bed.naam)}" style="max-height:40px;max-width:120px;object-fit:contain;margin-bottom:6px"/>`
-      : `<div style="font-weight:900;font-size:20px;color:#fff">${xe(bed.naam)}</div>`;
-
-    // Groepen of plat
-    const groepenMap = {};
-    const groepenVolgorde = [];
-    lijnen.forEach(l => {
-      const g = l.groep || "__geen__";
-      if(!groepenMap[g]) { groepenMap[g] = []; groepenVolgorde.push(g); }
-      groepenMap[g].push(l);
+    var r = await fetch(SB+"/rest/v1/offerte_shares?id=eq."+oid+"&select=offerte_data",{
+      headers:{"apikey":KEY,"Authorization":"Bearer "+KEY,"Content-Type":"application/json"}
     });
-    const heeftGroepen = groepenVolgorde.length > 1 || groepenVolgorde[0] !== "__geen__";
+    var rows = await r.json();
+    if(!r.ok) throw new Error("HTTP "+r.status+": "+JSON.stringify(rows));
+    if(!rows||!rows.length){ showMsg("❌","Offerte niet gevonden","Deze link is niet meer geldig of de offerte werd nog niet gedeeld. Vraag een nieuwe link aan via de afzender."); return; }
 
-    let tabelHtml = `<table class="tbl"><thead><tr>
-      <th style="width:40%">Omschrijving</th>
-      <th>Eenh.</th><th>Aantal</th><th style="text-align:right">Prijs excl.</th>
-      <th style="text-align:right">BTW</th><th style="text-align:right">Totaal</th>
-    </tr></thead><tbody>`;
+    var doc = rows[0].offerte_data||{};
+    var bed = doc._bed||{};
+    var dc = doc._dc||"#1a2e4a";
+    var klant = doc.klant||{};
+    var lijnen = doc.lijnen||[];
+    var isFact = (doc.type==="factuur")||(String(doc.nummer||"").startsWith("FACT"));
+    var docType = isFact?"FACTUUR":"OFFERTE";
 
-    groepenVolgorde.forEach(groep => {
-      const gLijnen = groepenMap[groep];
-      if(heeftGroepen && groep !== "__geen__") {
-        tabelHtml += `<tr><td colspan="6" class="grp-hdr" style="background:${xe(dc)}">${xe(groep)}</td></tr>`;
-      }
-      let grpSub = 0;
-      gLijnen.forEach(l => {
+    // Bereken totalen
+    var sub=0, btwGr={};
+    lijnen.forEach(function(l){
+      sub+=(l.prijs||0)*(l.aantal||1);
+      var r=l.btw||0;
+      if(r>0){ btwGr[r]=(btwGr[r]||0)+(l.prijs||0)*(l.aantal||1)*(r/100); }
+    });
+    var btw=Object.values(btwGr).reduce(function(a,b){return a+b;},0);
+    var tot=sub+btw;
+
+    // Track view (niet blokkeren bij fout)
+    fetch(SB+"/rest/v1/offerte_views",{method:"POST",headers:{"apikey":KEY,"Authorization":"Bearer "+KEY,"Content-Type":"application/json","Prefer":"return=minimal"},body:JSON.stringify({offerte_id:oid,viewed_at:new Date().toISOString()})}).catch(function(){});
+
+    // Groepen
+    var grMap={}, grVlg=[];
+    lijnen.forEach(function(l){ var g=l.groep||"__"; if(!grMap[g]){ grMap[g]=[]; grVlg.push(g); } grMap[g].push(l); });
+    var hasGr = grVlg.length>1 || grVlg[0]!=="__";
+
+    var tbl = "<table><thead><tr><th>Omschrijving</th><th>Eenh.</th><th style='text-align:center'>Aantal</th><th style='text-align:right'>Prijs</th><th style='text-align:right'>BTW</th><th style='text-align:right'>Totaal</th></tr></thead><tbody>";
+    var grpSubs = [];
+    grVlg.forEach(function(g){
+      var ls=grMap[g], gsub=0;
+      if(hasGr && g!=="__") tbl+="<tr><td colspan='6' class='grp' style='background-color:"+xe(dc)+"'>"+xe(g)+"</td></tr>";
+      ls.forEach(function(l){
         if(!l.naam) return;
-        const ext = (l.prijs||0)*(l.aantal||1);
-        grpSub += ext;
-        tabelHtml += `<tr>
-          <td><div style="font-weight:600">${xe(l.naam)}</div>${l.omschr?`<div style="font-size:11px;color:#64748b;font-style:italic">${xe(l.omschr)}</div>`:""}${l.merk?`<div style="font-size:10px;color:#94a3b8">${xe(l.merk)}</div>`:""}</td>
-          <td style="color:#64748b">${xe(l.eenheid||"stuk")}</td>
-          <td>${l.aantal||1}</td>
-          <td style="text-align:right">${fmtEuro(l.prijs||0)}</td>
-          <td style="text-align:right;color:#64748b">${l.btw||0}%</td>
-          <td style="text-align:right;font-weight:600">${fmtEuro(ext)}</td>
-        </tr>`;
+        var ext=(l.prijs||0)*(l.aantal||1);
+        gsub+=ext;
+        tbl+="<tr><td><b style='font-size:13px'>"+xe(l.naam)+"</b>"+(l.omschr?"<br><span style='font-size:11px;color:#64748b;font-style:italic'>"+xe(l.omschr)+"</span>":"")+"</td><td style='color:#64748b'>"+xe(l.eenheid||"stuk")+"</td><td style='text-align:center'>"+(l.aantal||1)+"</td><td style='text-align:right'>"+euro(l.prijs||0)+"</td><td style='text-align:right;color:#64748b'>"+(l.btw||0)+"%</td><td style='text-align:right;font-weight:700'>"+euro(ext)+"</td></tr>";
       });
-      if(heeftGroepen && groep !== "__geen__") {
-        tabelHtml += `</tbody></table><div class="grp-sub"><span>Subtotaal ${xe(groep)}:</span><span>${fmtEuro(grpSub)}</span></div><table class="tbl"><tbody>`;
-      }
+      if(hasGr && g!=="__") grpSubs.push("<div style='display:flex;justify-content:flex-end;padding:6px 11px;background:#f0f4f8;border:1px solid #e2e8f0;border-top:none;font-size:12px;font-weight:700;margin-bottom:8px'><span>Subtotaal "+xe(g)+": "+euro(gsub)+"</span></div>");
     });
-    tabelHtml += "</tbody></table>";
+    tbl+="</tbody></table>"+grpSubs.join("");
 
-    // Totalen
-    let totenHtml = `<div class="totalen"><div class="tot-box">
-      <div class="tot-row"><span class="tot-lbl">Subtotaal excl. BTW</span><span>${fmtEuro(tot.subtotaal)}</span></div>`;
-    Object.entries(tot.btwGroepen).forEach(([pct, bedrag]) => {
-      totenHtml += `<div class="tot-row"><span class="tot-lbl">BTW ${pct}%</span><span>${fmtEuro(bedrag)}</span></div>`;
-    });
-    totenHtml += `<div class="tot-row"><span>TOTAAL incl. BTW</span><span style="color:${xe(dc)}">${fmtEuro(tot.totaal)}</span></div>
-    </div></div>`;
+    var totHtml="<div class='totbox'><div class='totinn'><div class='trow'><span style='color:#64748b'>Subtotaal excl. BTW</span><span>"+euro(sub)+"</span></div>";
+    Object.entries(btwGr).forEach(function(e){ totHtml+="<div class='trow'><span style='color:#64748b'>BTW "+e[0]+"%</span><span>"+euro(e[1])+"</span></div>"; });
+    totHtml+="<div class='trow'><span>TOTAAL incl. BTW</span><span style='color:"+xe(dc)+"'>"+euro(tot)+"</span></div></div></div>";
 
-    // Betaalinformatie
-    const betaalHtml = !isFactuur && bed.iban ? `<div class="betaal">
-      <strong>Betaling:</strong> IBAN ${xe(bed.iban)}${bed.bic?" · BIC "+xe(bed.bic):""}${doc.nummer?" · Mededeling: "+xe(doc.nummer):""}
-    </div>` : (isFactuur && bed.iban ? `<div class="betaal">
-      <strong>Betaling vóór ${fmtDate(doc.vervaldatum)}:</strong> IBAN ${xe(bed.iban)}${bed.bic?" · BIC "+xe(bed.bic):""}${doc.nummer?" · Referentie: "+xe(doc.nummer):""}
-    </div>` : "");
+    var betHtml = bed.iban?"<div class='betaal'><b>Betaling:</b> IBAN "+xe(bed.iban)+(bed.bic?" · BIC "+xe(bed.bic):"")+" · Mededeling: "+xe(doc.nummer||"")+"</div>":"";
+    var vsHtml = (doc.voorschot||doc._voorschot)&&!isFact?"<div class='vscot'>💡 <b>Voorschot:</b> "+xe(doc.voorschot||doc._voorschot)+" te betalen vóór aanvang van de werken.</div>":"";
+    var toonAk = doc._sj?doc._sj.toonBevestigingslink!==false:true;
+    var akHtml = !isFact&&toonAk?"<div class='akkoord'><div class='aklbl'>📋 Digitaal akkoord</div><p class='akp'>Gaat u akkoord met deze offerte? Klik dan hieronder.</p><div class='btns'><button class='btn btn-ok' id='bok'>✅ Ik ga akkoord</button><button class='btn btn-af' id='baf'>❌ Niet akkoord</button></div></div>":"";
+    var vwHtml = doc._voorwaarden?"<div class='card'><div class='body'><div style='font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;margin-bottom:8px'>Algemene voorwaarden</div><div class='vw'>"+xe(doc._voorwaarden)+"</div></div></div>":"";
+    var logoH = (bed.logo&&!bed.logo.startsWith("data:"))?"<img src='"+xe(bed.logo)+"' style='max-height:36px;max-width:110px;object-fit:contain;margin-bottom:5px'/>":"";
 
-    const voorschotHtml = (doc.voorschot || doc._voorschot) && !isFactuur
-      ? `<div class="voorschot">💡 <strong>Voorschot:</strong> ${xe(doc.voorschot||doc._voorschot)} te betalen vóór aanvang van de werken.</div>` : "";
+    showMain("<div class='card'><div class='hdr' style='background:"+xe(dc)+"'><div>"+logoH+"<div class='hdr-naam'>"+xe(bed.naam||"")+"</div><div class='hdr-info'>"+xe(bed.adres||"")+" · "+xe(bed.gemeente||"")+"<br>"+xe(bed.tel||"")+" · "+xe(bed.email||"")+"</div></div><div><div class='hdr-type'>"+docType+"</div><div class='hdr-nr'>"+xe(doc.nummer||"")+"</div></div></div><div class='body'><div class='meta'><div class='mi'><div class='ml'>Datum</div><div class='mv'>"+datum(doc.datum||doc.aangemaakt)+"</div></div><div class='mi'><div class='ml'>"+(isFact?"Vervaldatum":"Geldig tot")+"</div><div class='mv'>"+datum(doc.vervaldatum)+"</div></div><div class='mi'><div class='ml'>BTW-regime</div><div class='mv'>"+(doc.btwRegime==="verlegd"?"BTW verlegd":doc.btwRegime==="vrijgesteld"?"Vrijgesteld":"Standaard")+"</div></div><div class='mi'><div class='ml'>Betaling</div><div class='mv'>14 dagen</div></div></div><div class='parties'><div class='party'><div class='pl'>Van</div><div class='pn'>"+xe(bed.naam||"")+"</div><div class='pi'>"+xe(bed.adres||"")+" "+xe(bed.gemeente||"")+"<br>BTW: "+xe(bed.btwnr||"")+(bed.iban?"<br>IBAN: "+xe(bed.iban):"")+(bed.tel?"<br>"+xe(bed.tel):"")+"</div></div><div class='party'><div class='pl'>Klant</div><div class='pn'>"+xe(klant.naam||klant.bedrijf||"")+"</div><div class='pi'>"+xe(klant.adres||"")+" "+xe(klant.gemeente||"")+(klant.btwnr?"<br>BTW: "+xe(klant.btwnr):"")+(klant.tel?"<br>"+xe(klant.tel):"")+"</div></div></div>"+tbl+totHtml+betHtml+vsHtml+akHtml+"</div><div class='ftr' style='background:"+xe(dc)+"'><div class='ft'><b>"+xe(bed.naam||"")+"</b> · "+xe(bed.adres||"")+" · "+xe(bed.gemeente||"")+"</div><div class='ft'>BTW: "+xe(bed.btwnr||"")+" · IBAN: "+xe(bed.iban||"")+"</div></div></div>"+vwHtml);
 
-    // Akkoord blok (enkel voor offertes)
-    const toonBevestigingslink = doc._sj?.toonBevestigingslink !== false;
-    const akkoordHtml = !isFactuur && toonBevestigingslink ? `
-      <div class="akkoord-blok">
-        <div class="akkoord-lbl">📋 Digitaal akkoord</div>
-        <p style="font-size:13px;color:#475569;margin-bottom:14px">Gaat u akkoord met deze offerte? Klik dan op de knop hieronder.</p>
-        <div class="btn-wrap">
-          <button class="btn btn-ok" id="btn-akkoord">✅ Ik ga akkoord</button>
-          <button class="btn btn-af" id="btn-afwijzen">❌ Niet akkoord</button>
-        </div>
-      </div>` : "";
-
-    // Handtekening blok
-    const handtekeningTekst = doc._sj?.handtekeningTekst || "Geldig voor akkoord — datum, handtekening & naam";
-    const signHtml = !isFactuur ? `<div class="sign-box">
-      <div class="sign-lbl">${xe(handtekeningTekst)}</div>
-      <div style="font-size:11px;color:#94a3b8;margin-top:4px">Gelieve ondertekend terug te bezorgen of digitaal te bevestigen via bovenstaande knop.</div>
-    </div>` : "";
-
-    // Algemene voorwaarden
-    const voorwHtml = doc._voorwaarden ? `<div class="card"><div class="body">
-      <div style="font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.6px;margin-bottom:10px">📋 Algemene voorwaarden</div>
-      <div class="voorwaarden">${xe(doc._voorwaarden)}</div>
-    </div></div>` : "";
-
-    // Meta-bar
-    const metaItems = [
-      {l:"Datum", v: fmtDate(doc.datum||doc.aangemaakt)},
-      !isFactuur ? {l:"Geldig tot", v: fmtDate(doc.vervaldatum)} : {l:"Vervaldatum betaling", v: fmtDate(doc.vervaldatum)},
-      {l:"BTW-regime", v: doc.btwRegime==="verlegd"?"BTW verlegd":doc.btwRegime==="vrijgesteld"?"Vrijgesteld":(doc.btwRegime||"Standaard")},
-      {l:"Betaling", v: (doc.voorwaarden?.betalingstermijn||14) + " dagen"},
-    ];
-
-    document.getElementById("main").innerHTML = `
-      <div class="card">
-        <div class="hdr" style="background:${xe(dc)}">
-          <div class="hdr-from">
-            ${logoHtml}
-            <div class="hdr-from-info">${xe(bed.adres||"")} · ${xe(bed.gemeente||"")}<br>${xe(bed.tel||"")} · ${xe(bed.email||"")}</div>
-          </div>
-          <div class="hdr-doc">
-            <div class="hdr-type">${docType}</div>
-            <div class="hdr-nr">${xe(doc.nummer||"")}</div>
-          </div>
-        </div>
-        <div class="body">
-          <div class="meta-bar">
-            ${metaItems.map(m=>`<div class="meta-item"><div class="meta-lbl">${xe(m.l)}</div><div class="meta-val">${xe(m.v)}</div></div>`).join("")}
-          </div>
-          <div class="parties">
-            <div class="party">
-              <div class="party-lbl">Van</div>
-              <div class="party-naam">${xe(bed.naam||"")}</div>
-              <div class="party-info">${xe(bed.adres||"")} ${xe(bed.gemeente||"")}<br>BTW: ${xe(bed.btwnr||"")}${bed.iban?`<br>IBAN: ${xe(bed.iban)}`:""}${bed.tel?`<br>${xe(bed.tel)}`:""}${bed.email?`<br>${xe(bed.email)}`:""}</div>
-            </div>
-            <div class="party">
-              <div class="party-lbl">Klant</div>
-              <div class="party-naam">${xe(klant.naam||klant.bedrijf||"")}</div>
-              <div class="party-info">${klant.bedrijf&&klant.naam!==klant.bedrijf?xe(klant.bedrijf)+"<br>":""}${xe(klant.adres||"")} ${xe(klant.gemeente||"")}${klant.btwnr?`<br>BTW: ${xe(klant.btwnr)}`:""}${klant.tel?`<br>${xe(klant.tel)}`:""}${klant.email?`<br>${xe(klant.email)}`:""}</div>
-            </div>
-          </div>
-          ${tabelHtml}
-          ${totenHtml}
-          ${betaalHtml}
-          ${voorschotHtml}
-          ${akkoordHtml}
-          ${signHtml}
-        </div>
-        <div class="footer" style="background:${xe(dc)}">
-          <div class="footer-txt"><strong>${xe(bed.naam||"")}</strong> · ${xe(bed.adres||"")} · ${xe(bed.gemeente||"")}</div>
-          <div class="footer-txt">BTW: ${xe(bed.btwnr||"")} · IBAN: ${xe(bed.iban||"")}</div>
-        </div>
-      </div>
-      ${voorwHtml}
-    `;
-
-    show("main");
-
-    // Akkoord buttons
-    const btnOk = document.getElementById("btn-akkoord");
-    const btnAf = document.getElementById("btn-afwijzen");
-
-    async function stuurReactie(status) {
-      btnOk && (btnOk.disabled = true);
-      btnAf && (btnAf.disabled = true);
-      try {
-        await sbFetch("/rest/v1/offerte_responses", {
-          method: "POST",
-          headers: {"Prefer": "return=minimal"},
-          body: JSON.stringify({
-            offerte_id: offerteId,
-            status: status,
-            submitted_at: new Date().toISOString(),
-            opmerkingen: ""
-          })
-        });
-        show(status === "akkoord" ? "st-ok" : "st-af");
-      } catch(e) {
-        console.error("Reactie fout:", e);
-        // Fallback: open mailto
-        const s = status === "akkoord" ? "Akkoord met offerte" : "Offerte afgewezen";
-        const b = encodeURIComponent((status === "akkoord" ? "Ik ga akkoord met offerte " : "Ik ga NIET akkoord met offerte ") + (doc.nummer||""));
-        window.location.href = "mailto:" + (bed.email||"") + "?subject=" + encodeURIComponent(s + " " + (doc.nummer||"")) + "&body=" + b;
-        if(btnOk) btnOk.disabled = false;
-        if(btnAf) btnAf.disabled = false;
+    var bok=$("bok"), baf=$("baf");
+    async function reageer(st){
+      if(bok){bok.disabled=true;} if(baf){baf.disabled=true;}
+      try{
+        var res=await fetch(SB+"/rest/v1/offerte_responses",{method:"POST",headers:{"apikey":KEY,"Authorization":"Bearer "+KEY,"Content-Type":"application/json","Prefer":"return=minimal"},body:JSON.stringify({offerte_id:oid,status:st,submitted_at:new Date().toISOString(),opmerkingen:""})});
+        if(!res.ok) throw new Error("HTTP "+res.status);
+        showMsg(st==="akkoord"?"✅":"❌",st==="akkoord"?"Akkoord ontvangen!":"Offerte afgewezen",st==="akkoord"?"Uw bevestiging werd geregistreerd. Wij nemen contact op.":"Uw reactie werd geregistreerd.");
+      } catch(e){
+        if(bok){bok.disabled=false;} if(baf){baf.disabled=false;}
+        var sub2=encodeURIComponent((st==="akkoord"?"Akkoord: ":"Afgewezen: ")+(doc.nummer||""));
+        var bod2=encodeURIComponent((st==="akkoord"?"Ik ga akkoord met offerte ":"Ik ga niet akkoord met offerte ")+(doc.nummer||""));
+        location.href="mailto:"+encodeURIComponent(bed.email||"")+"?subject="+sub2+"&body="+bod2;
       }
     }
+    if(bok) bok.onclick=function(){ if(confirm("Bevestig uw akkoord met offerte "+(doc.nummer||"")+"?")) reageer("akkoord"); };
+    if(baf) baf.onclick=function(){ if(confirm("Offerte "+(doc.nummer||"")+" afwijzen?")) reageer("afgewezen"); };
 
-    if(btnOk) btnOk.addEventListener("click", () => {
-      if(window.confirm("Bevestig uw akkoord met offerte " + (doc.nummer||"") + "?")) stuurReactie("akkoord");
-    });
-    if(btnAf) btnAf.addEventListener("click", () => {
-      if(window.confirm("Weet u zeker dat u deze offerte wil afwijzen?")) stuurReactie("afgewezen");
-    });
-
-  } catch(e) {
-    console.error("Laad fout:", e);
-    document.getElementById("err-msg").textContent = "Fout bij laden: " + e.message + " — controleer de Supabase RLS instellingen voor de tabel offerte_shares.";
-    show("st-error");
+  } catch(e){
+    showMsg("❌","Fout bij laden","Technische fout: "+e.message+"<br><br>Probeer de pagina te vernieuwen of contacteer ons.");
   }
 }
-
-load();
+if(oid) go();
 </script>
 </body>
 </html>
