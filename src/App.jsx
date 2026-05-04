@@ -256,12 +256,7 @@ function calcTotals(lijnen=[], bebatTarief=BEBAT_TARIEF) {
   lijnen.forEach(l=>{
     const r=l.btw||0; // 0 als verlegd, 6 of 21 anders
     if(r>0){if(!gr[r])gr[r]=0;gr[r]+=l.prijs*l.aantal*(r/100);}
-    if(l.bebatKg && l.bebatKg>0 && isBebatProduct(l.naam,l.cat||"")) {
-      const bebatEx = l.bebatKg * l.aantal * bebatTarief;
-      const bebatBtw = l.btw || BEBAT_BTW;
-      if(!gr[bebatBtw])gr[bebatBtw]=0;
-      gr[bebatBtw]+=bebatEx*(bebatBtw/100);
-    }
+    if(l.bebatKg&&l.bebatKg>0&&isBebatProduct(l.naam,l.cat||"")){const bebatEx=l.bebatKg*l.aantal*bebatTarief;const bebatBtw=l.btw||BEBAT_BTW;if(!gr[bebatBtw])gr[bebatBtw]=0;gr[bebatBtw]+=bebatEx*(bebatBtw/100);}
   });
   const btw=Object.values(gr).reduce((s,v)=>s+v,0);
   const bebatSub = lijnen.reduce((s,l)=>{
@@ -1718,16 +1713,7 @@ tr.row-active td{border-top:2px solid #2563eb}
   .no-print{display:none!important}
   
   /* ═══ PRINT — Elke doc-page = exact 1 A4 (297mm) ═══ */
-  .doc-page{
-    box-shadow:none!important;border-radius:0!important;
-    margin:0!important;width:210mm!important;max-width:210mm!important;
-    height:297mm!important;min-height:297mm!important;max-height:297mm!important;
-    overflow:hidden!important;
-    display:flex!important;flex-direction:column!important;
-    break-after:page!important;page-break-after:always!important;
-    break-inside:avoid!important;page-break-inside:avoid!important;
-    box-sizing:border-box!important;position:relative!important;
-  }
+  .doc-page{box-shadow:none!important;border-radius:0!important;margin:0!important;width:210mm!important;max-width:210mm!important;height:297mm!important;min-height:297mm!important;max-height:297mm!important;overflow:hidden!important;display:flex!important;flex-direction:column!important;break-after:page!important;page-break-after:always!important;break-inside:avoid!important;page-break-inside:avoid!important;box-sizing:border-box!important;position:relative!important}
   .doc-page:last-child{break-after:auto!important;page-break-after:auto!important}
   .prod-page{padding:8mm 12mm!important;box-sizing:border-box!important;flex:1!important;overflow:hidden!important;min-height:0!important}
   .fct-pg{padding:8mm 12mm!important;box-sizing:border-box!important;flex:1!important;overflow:hidden!important;min-height:0!important}
@@ -1744,7 +1730,7 @@ tr.row-active td{border-top:2px solid #2563eb}
   .qt-meta-item{padding:8px 14px!important;border-right:1px solid #e2e8f0!important;border-bottom:1px solid #e2e8f0!important}
   .qt-meta-item:nth-child(2n){border-right:none!important}
   .qt-meta-item:nth-last-child(-n+2){border-bottom:none!important}
-  .qt-meta-lbl{font-size:9px!important;font-weight:700!important;text-transform:uppercase!important;letter-spacing:.8px!important;color:#94a3b8!important;margin-bottom:2px!important}
+  .qt-meta-lbl{font-size:9px!important;font-weight:700!important;text-transform:uppercase!important;color:#94a3b8!important;margin-bottom:2px!important}
   .qt-meta-val{font-size:12px!important;font-weight:700!important;color:#1e293b!important}
   .qt-footer{margin-top:auto!important;flex-shrink:0!important;break-inside:avoid!important;page-break-inside:avoid!important}
   
@@ -1764,10 +1750,11 @@ tr.row-active td{border-top:2px solid #2563eb}
   .fiche-screen-embed{display:none!important}
   .fiche-print-images{display:block!important}
   
+  /* Tabel regels: niet splitsen */
   .qt-tbl tr{break-inside:avoid!important;page-break-inside:avoid!important}
   .qt-totals,.qt-sign,.qt-betaal,.qt-voorschot,.qt-notes,.qt-confirm-link,.qt-fiches{break-inside:avoid!important;page-break-inside:avoid!important}
   .grp-hdr{break-after:avoid!important;page-break-after:avoid!important}
-  .grp-sub,.prod-item,.qt-meta-bar{break-inside:avoid!important;page-break-inside:avoid!important}
+  .grp-sub,.prod-item,.qt-meta-bar,.qt-parties{break-inside:avoid!important;page-break-inside:avoid!important}
   
   /* Modal chrome verbergen */
   .mo{position:static!important;background:transparent!important;padding:0!important;display:block!important}
@@ -1978,13 +1965,14 @@ export default function App() {
   const saveTodos = (lijst) => {
     setTodos(lijst);
     try { localStorage.setItem("b4_todo", JSON.stringify(lijst)); } catch(_){}
-    localTimestamps.current["b4_todo"] = Date.now() + 60000;
-    try { localStorage.setItem("billr_ts", JSON.stringify(localTimestamps.current)); } catch(_){}
+    localTimestamps.current["b4_todo"]=Date.now()+60000;
+    try{localStorage.setItem("billr_ts",JSON.stringify(localTimestamps.current));}catch(_){}
     if(!userRef.current?.id) return;
+    const json = JSON.stringify(lijst);
     sb.from("user_data").upsert(
-      {user_id: userRef.current.id, key:"b4_todo", value: JSON.stringify(lijst), updated_at: new Date().toISOString()},
+      {user_id: userRef.current.id, key:"b4_todo", value: json, updated_at: new Date().toISOString()},
       {onConflict:"user_id,key"}
-    ).then(r => { if(r?.error) console.warn("Todo save:", r.error.message); });
+    ).then(r=>{if(r?.error)console.warn("Todo save:",r.error.message);});
   };
   const [producten, setProducten] = useState(INIT_PRODUCTS);
   const [sbWidth, setSbWidth] = useState(()=>{try{const w=parseInt(localStorage.getItem("billr_sb_w"));return(!isNaN(w)&&w>=60&&w<=360)?w:220;}catch(_){return 220;}});
@@ -2412,12 +2400,7 @@ export default function App() {
       else if(filter === "behandeld") q = q.eq("status","behandeld");
       const { data, error } = await q;
       if(!error && data) {
-        const normalized = data.map(lead => {
-          let fotos = lead.fotos;
-          if(typeof fotos === "string") { try { fotos = JSON.parse(fotos); } catch(_) { fotos = []; } }
-          if(!Array.isArray(fotos)) fotos = fotos ? [fotos] : [];
-          return {...lead, fotos};
-        });
+        const normalized=data.map(lead=>{let f=lead.fotos;if(typeof f==="string"){try{f=JSON.parse(f);}catch(_){f=[];}}if(!Array.isArray(f))f=f?[f]:[];return{...lead,fotos:f};});
         setWebsiteLeads(normalized);
         const nieuw = normalized.filter(l => l.status === "nieuw").length;
         if(nieuw > 0) document.title = `(${nieuw}) BILLR`;
@@ -2837,13 +2820,10 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
           setOffertes(freshOffs);
         }
         const freshFcts = await sbLoadFacturen(user.id);
-        if(freshFcts.length > 0) {
-          const recentEdit = localTimestamps.current["b4_fct"] && (Date.now() - localTimestamps.current["b4_fct"] < 120000);
-          if(!recentEdit) setFacturen(freshFcts);
-        }
+        if(freshFcts.length>0){const re=localTimestamps.current["b4_fct"]&&(Date.now()-localTimestamps.current["b4_fct"]<120000);if(!re)setFacturen(freshFcts);}
         if(allData["b4_at"]&&sbTs("b4_at")>lcTs("b4_at")) setAcceptTokens(p("b4_at",{}));
         if(allData["b4_wo"]&&sbTs("b4_wo")>lcTs("b4_wo")) setWidgetOrder(p("b4_wo",null));
-        if(allData["b4_todo"]&&sbTs("b4_todo")>lcTs("b4_todo")) { const v=p("b4_todo",[]); if(Array.isArray(v)&&v.length) setTodos(v); }
+        if(allData["b4_todo"]&&sbTs("b4_todo")>lcTs("b4_todo")){const v=p("b4_todo",[]);if(Array.isArray(v)&&v.length)setTodos(v);}
         console.log("Tab sync OK — enkel gelezen, nooit geschreven");
       } catch(e) { console.warn("Tab sync mislukt:",e); }
     };
@@ -3022,14 +3002,7 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
     setFacturen(prev => {
       const next = prev.map(f=>f.id===id?{...f,...upd,log:[...(f.log||[]),logEntry(upd.logActie||(upd.status?"Status → "+(FACT_STATUS[upd.status]?.l||upd.status):"Gewijzigd"))]}:f);
       const gewijzigd = next.find(f=>f.id===id);
-      if(gewijzigd?.nummer) {
-        const u=userRef.current;
-        if(u) {
-          localTimestamps.current["b4_fct"] = Date.now() + 120000;
-          try{localStorage.setItem("billr_ts",JSON.stringify(localTimestamps.current));}catch(_){}
-          sbSaveFactuur(gewijzigd, u.id);
-        }
-      }
+      if(gewijzigd?.nummer){const u=userRef.current;if(u){localTimestamps.current["b4_fct"]=Date.now()+120000;try{localStorage.setItem("billr_ts",JSON.stringify(localTimestamps.current));}catch(_){}sbSaveFactuur(gewijzigd,u.id);}}
       return next;
     });
   };
@@ -3189,6 +3162,12 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
       const sj = settings?.sjabloon || {};
       const lyt = settings?.layout || {};
       const dc = sj.accentKleur || settings?.thema?.kleur || bed.kleur || "#1a2e4a";
+      // Capture rendered HTML van het document (exact zelfde als HTML download knop)
+      let _renderedHtml = null;
+      try {
+        const docWrap = document.querySelector(".mb-body .doc-wrap");
+        if(docWrap) _renderedHtml = buildPrintHtml(docWrap.outerHTML, offerte.nummer);
+      } catch(e) { console.warn("[Share] HTML capture mislukt:", e.message); }
 
       // Haal fiches op uit product_fiches en embed ze in shareData
       // Zodat offerte.html ze kan tonen zonder auth
@@ -3218,10 +3197,7 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
         return clean;
       });
 
-      // Logo: bewaar alleen URL, strip base64 (te groot voor Supabase row ~1MB limit)
-      // Dit was de ROOT CAUSE van "offerte niet beschikbaar": upsert faalde silently door te grote payload
       const logoSafe = bed.logo && !bed.logo.startsWith("data:") ? bed.logo : "";
-
       const shareData = {
         ...offerte,
         lijnen: cleanLijnen,
@@ -3232,36 +3208,27 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
         _voorwaarden: settings?.voorwaarden?.tekst || "",
         _voorschot: settings?.voorwaarden?.voorschot || "50%"
       };
+      // Voeg rendered HTML toe (exact zelfde als in-app preview)
+      if(_renderedHtml) shareData._renderedHtml = _renderedHtml;
 
-      // Controleer payload grootte vóór upsert
-      const payloadJson = JSON.stringify({ id: offerte.id, nummer: offerte.nummer, offerte_data: shareData });
-      const payloadKB = Math.round(payloadJson.length / 1024);
-      console.log(`[Share] Payload grootte: ${payloadKB}KB`);
-      if(payloadKB > 900) {
-        console.warn("[Share] Payload te groot! Fiches weggooien...");
-        shareData.lijnen = shareData.lijnen.map(l => ({...l, technischeFiches: null}));
-      }
+      // Payload size check — strip als te groot
+      let payload = { id: offerte.id, nummer: offerte.nummer, offerte_data: shareData };
+      let payloadKB = Math.round(JSON.stringify(payload).length / 1024);
+      console.log(`[Share] Payload: ${payloadKB}KB`);
+      if(payloadKB > 850) { delete shareData._renderedHtml; payloadKB = Math.round(JSON.stringify(payload).length/1024); console.warn("[Share] HTML te groot, weggooien"); }
+      if(payloadKB > 850) { shareData.lijnen = shareData.lijnen.map(l=>({...l,technischeFiches:null})); console.warn("[Share] Fiches weggooien"); }
 
-      const { error: upsertErr } = await sb.from("offerte_shares").upsert(
-        { id: offerte.id, nummer: offerte.nummer, offerte_data: shareData },
-        { onConflict: "id" }
-      );
-      if(upsertErr) {
-        console.error("[Share] Upsert FAILED:", upsertErr.message, "- Payload was", payloadKB, "KB");
-        // Probeer opnieuw zonder fiches
-        shareData.lijnen = shareData.lijnen.map(l => ({...l, technischeFiches: null}));
-        const { error: retryErr } = await sb.from("offerte_shares").upsert(
-          { id: offerte.id, nummer: offerte.nummer, offerte_data: shareData },
-          { onConflict: "id" }
-        );
-        if(retryErr) throw new Error("Share opslaan mislukt: " + retryErr.message);
-        else console.log("✅ Offerte gedeeld (zonder fiches):", offerte.nummer);
-      } else {
-        console.log("✅ Offerte gedeeld:", offerte.nummer, `(${payloadKB}KB)`);
+      const { error: uErr } = await sb.from("offerte_shares").upsert(payload, { onConflict: "id" });
+      if(uErr) {
+        console.error("[Share] Upsert FAILED:", uErr.message);
+        delete shareData._renderedHtml;
+        shareData.lijnen = shareData.lijnen.map(l=>({...l,technischeFiches:null}));
+        const { error: retryErr } = await sb.from("offerte_shares").upsert(payload, { onConflict: "id" });
+        if(retryErr) throw new Error(retryErr.message);
       }
+      console.log("✅ Offerte gedeeld:", offerte.nummer, payloadKB+"KB");
     } catch(e) {
-      console.error("[Share] KRITIEKE FOUT:", e.message);
-      // Gooi de fout niet door — email kan nog steeds verzonden worden
+      console.error("[Share] FOUT:", e.message);
     }
   };
 
@@ -3386,8 +3353,8 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
     const pubKey = emailCfg.emailjsPublicKey;
     if(!serviceId || !templateId || !pubKey) { notify("\u274c EmailJS niet geconfigureerd in Instellingen.", "er"); return false; }
     window.emailjs.init(pubKey);
-    const klantUitLijst = klanten.find(k => k.id === offerte.klantId);
-    const klantData = klantUitLijst ? { ...offerte.klant, ...klantUitLijst } : (offerte.klant || {});
+    const klantUitLijst=klanten.find(k=>k.id===offerte.klantId);
+    const klantData=klantUitLijst?{...offerte.klant,...klantUitLijst}:(offerte.klant||{});
     const bed = settings?.bedrijf || {};
     const dc = settings?.sjabloon?.accentKleur || settings?.thema?.kleur || bed.kleur || "#1a2e4a";
     const totals = calcTotals(offerte.lijnen || []);
@@ -3951,9 +3918,7 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
             if(opgeslagen && userRef.current?.id) {
               localTimestamps.current["b4_fct"] = Date.now() + 120000;
               try{localStorage.setItem("billr_ts",JSON.stringify(localTimestamps.current));}catch(_){}
-              sbSaveFactuur(opgeslagen, userRef.current.id)
-                .then(ok=>console.log(ok?"✅ Factuur opgeslagen:":"❌",opgeslagen.nummer))
-                .catch(e=>console.error("❌",e));
+              sbSaveFactuur(opgeslagen, userRef.current.id).then(ok=>console.log(ok?"✅":"❌",opgeslagen.nummer)).catch(e=>console.error("❌",e));
             }
             return merged;
           });
@@ -4002,19 +3967,18 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
                 const dc2 = settings?.sjabloon?.accentKleur || bed2.kleur || "#1a2e4a";
                 // Strip logo base64 om database klein te houden
                 const bed2Stripped = {...bed2, logo: bed2.logo?.startsWith('data:') ? '' : (bed2.logo||'')};
-                const factuurShareData = {
-                  ...emailModal.doc,
-                  _bed: bed2Stripped,
-                  _dc: dc2,
-                  _sj: {accentKleur:dc2},
-                  _voorwaarden: settings?.voorwaarden?.tekst || ""
-                };
-                const { error: fctShareErr } = await sb.from("offerte_shares").upsert(
-                  { id: emailModal.doc.id, nummer: emailModal.doc.nummer, offerte_data: factuurShareData },
-                  { onConflict: "id" }
-                );
-                if(fctShareErr) console.error("Factuur share FAILED:", fctShareErr.message);
-                else console.log("✅ Factuur share opgeslagen voor publieke link");
+                await sb.from("offerte_shares").upsert({
+                  id: emailModal.doc.id,
+                  nummer: emailModal.doc.nummer,
+                  offerte_data: {
+                    ...emailModal.doc,
+                    _bed: bed2Stripped,
+                    _dc: dc2,
+                    _sj: {accentKleur:dc2},
+                    _voorwaarden: settings?.voorwaarden?.tekst || ""
+                  }
+                });
+                console.log("✅ Factuur share opgeslagen voor publieke link");
               } catch(e2) { console.warn("Factuur share opslaan mislukt:", e2.message); }
             }
             notify(`📧 ${emailModal.type==="offerte"?"Offerte":"Factuur"} ${emailModal.doc.nummer} verzonden!`);
@@ -4028,8 +3992,8 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
       {aanmaningModal&&<AanmaningModal factuur={aanmaningModal} settings={settings} onSend={(am)=>{
         setAanmaningen(p=>[{...am,id:uid(),aangemaakt:new Date().toISOString(),status:"verzonden",verzonden:today()},...p]);
         const ts=new Date().toLocaleString("nl-BE",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"});
-        updFact(aanmaningModal.id, {logActie:`🔔 ${am.niveau===1?"1e Herinnering":am.niveau===2?"2e Herinnering":"Ingebrekestelling"} verstuurd naar ${aanmaningModal.klant?.email||"klant"} (${ts})`});
-        notify("Aanmaning verzonden naar " + (aanmaningModal.klant?.email||"klant") + " ✓");
+        updFact(aanmaningModal.id,{logActie:`🔔 ${am.niveau===1?"1e Herinnering":am.niveau===2?"2e Herinnering":"Ingebrekestelling"} verstuurd naar ${aanmaningModal.klant?.email||"klant"} (${ts})`});
+        notify("Aanmaning verzonden naar "+(aanmaningModal.klant?.email||"klant")+" ✓");
         setAanmaningModal(null);
       }} onClose={()=>setAanmaningModal(null)}/>}
       {dossierModal!==null&&<DossierModal dossier={dossierModal} klanten={klanten} offertes={offertes} facturen={facturen} onSave={d=>{if(d.id){setDossiers(p=>p.map(x=>x.id===d.id?d:x));}else{setDossiers(p=>[{...d,id:uid(),aangemaakt:new Date().toISOString()},...p]);}notify("Dossier opgeslagen ✓");setDossierModal(null);}} onClose={()=>setDossierModal(null)} notify={notify}/>}
@@ -4072,10 +4036,7 @@ function AgendaPage({offertes, settings, onPlan, onPlanDelete}) {
   const [maand, setMaand] = React.useState(now.getMonth());
   const [geselecteerd, setGeselecteerd] = React.useState(null);
 
-  const afspraken = offertes.filter(o =>
-    o.planDatum && o.planStatus !== "geannuleerd" &&
-    o.status !== "uitgevoerd" && o.status !== "afgewezen" && o.status !== "concept"
-  );
+  const afspraken = offertes.filter(o=>o.planDatum&&o.planStatus!=="geannuleerd"&&o.status!=="uitgevoerd"&&o.status!=="afgewezen"&&o.status!=="concept");
 
   // Per datum groeperen
   const perDatum = {};
@@ -4301,7 +4262,7 @@ function Dashboard({offertes, facturen, onGoto, onNew, onFactuur, settings, offe
   const openstaand = openFact.reduce((s,f)=>s+calcTotals(f.lijnen||[]).totaal,0);
   const conv = offertes.length ? Math.round(offertes.filter(o=>["goedgekeurd","gefactureerd"].includes(o.status)).length/offertes.length*100) : 0;
   const recOff = [...offertes].sort((a,b)=>new Date(b.aangemaakt)-new Date(a.aangemaakt)).slice(0,5);
-  const goedgekeurdDoorKlant = offertes.filter(o=>o.klantAkkoord && o.status!=="gefactureerd" && o.planStatus!=="uitgevoerd");
+  const goedgekeurdDoorKlant = offertes.filter(o=>o.klantAkkoord&&o.status!=="gefactureerd"&&o.planStatus!=="uitgevoerd");
 
   // ── ACTIE INBOX: detecteer openstaande acties ──
   const actiesVereist = [];
@@ -5095,11 +5056,11 @@ function DocIcons({doc, type}) {
 }
 
 function DocLog({log=[]}) {
-  const fmt = ts => { try{ const d=new Date(ts); return d.toLocaleDateString("nl-BE",{day:"2-digit",month:"2-digit",year:"numeric"})+" "+d.toLocaleTimeString("nl-BE",{hour:"2-digit",minute:"2-digit"}); }catch(_){return ts||"";} };
-  const getIco = a => { a=(a||"").toLowerCase(); if(a.includes("peppol"))return{ico:"🇧🇪",k:"#7c3aed"};if(a.includes("email")||a.includes("verzonden"))return{ico:"📧",k:"#2563eb"};if(a.includes("afgedrukt")||a.includes("print"))return{ico:"🖨️",k:"#8b5cf6"};if(a.includes("betaald"))return{ico:"💶",k:"#10b981"};if(a.includes("aangemaakt"))return{ico:"✨",k:"#0ea5e9"};if(a.includes("goedgekeurd")||a.includes("akkoord"))return{ico:"✅",k:"#10b981"};if(a.includes("afgewezen"))return{ico:"❌",k:"#ef4444"};if(a.includes("aanmaning"))return{ico:"🔔",k:"#ef4444"};if(a.includes("afspraak")||a.includes("ingepland"))return{ico:"📅",k:"#0ea5e9"};return{ico:"•",k:"#94a3b8"}; };
+  const fmt=ts=>{try{const d=new Date(ts);return d.toLocaleDateString("nl-BE",{day:"2-digit",month:"2-digit",year:"numeric"})+" "+d.toLocaleTimeString("nl-BE",{hour:"2-digit",minute:"2-digit"});}catch(_){return ts||"";}};
+  const getIco=a=>{a=(a||"").toLowerCase();if(a.includes("peppol"))return{i:"🇧🇪",k:"#7c3aed"};if(a.includes("email")||a.includes("verzonden"))return{i:"📧",k:"#2563eb"};if(a.includes("afgedrukt"))return{i:"🖨️",k:"#8b5cf6"};if(a.includes("betaald"))return{i:"💶",k:"#10b981"};if(a.includes("aangemaakt"))return{i:"✨",k:"#0ea5e9"};if(a.includes("goedgekeurd")||a.includes("akkoord"))return{i:"✅",k:"#10b981"};if(a.includes("afgewezen"))return{i:"❌",k:"#ef4444"};if(a.includes("aanmaning"))return{i:"🔔",k:"#ef4444"};if(a.includes("afspraak")||a.includes("ingepland"))return{i:"📅",k:"#0ea5e9"};return{i:"•",k:"#94a3b8"};};
   const clean=[...(log||[])].filter(l=>l.actie||l.txt);
   if(!clean.length) return <div className="doc-log-empty">Nog geen acties geregistreerd</div>;
-  return <div>{[...clean].reverse().map((l,i)=>{const{ico,k}=getIco(l.actie||l.txt);return<div key={i} style={{display:"flex",gap:8,alignItems:"flex-start",padding:"6px 0",borderBottom:i<clean.length-1?"1px solid #f1f5f9":"none"}}><span style={{fontSize:14,flexShrink:0,marginTop:1}}>{ico}</span><div style={{flex:1,minWidth:0}}><div style={{fontSize:12.5,fontWeight:600,color:k,lineHeight:1.4}}>{l.actie||l.txt}</div><div style={{fontSize:10.5,color:"#94a3b8",marginTop:1}}>{fmt(l.ts)}</div></div></div>;})}</div>;
+  return <div>{[...clean].reverse().map((l,i)=>{const{i:ico,k}=getIco(l.actie||l.txt);return <div key={i} style={{display:"flex",gap:8,alignItems:"flex-start",padding:"6px 0",borderBottom:i<clean.length-1?"1px solid #f1f5f9":"none"}}><span style={{fontSize:14,flexShrink:0,marginTop:1}}>{ico}</span><div style={{flex:1,minWidth:0}}><div style={{fontSize:12.5,fontWeight:600,color:k,lineHeight:1.4}}>{l.actie||l.txt}</div><div style={{fontSize:10.5,color:"#94a3b8",marginTop:1}}>{fmt(l.ts)}</div></div></div>;})}</div>;
 }
 
 
@@ -7748,17 +7709,12 @@ function DocModal({doc,type,settings,onClose,onFactuur,onStatusOff,onStatusFact,
       const val = rootStyle.getPropertyValue(v).trim();
       if(val) pr.style.setProperty(v, val);
     });
-    pr.querySelectorAll(".doc-page").forEach(page => {
-      const content = (page.innerText || page.textContent || "").trim();
-      if(content.length < 10) { page.remove(); return; }
-      Object.assign(page.style, {height:"297mm",minHeight:"297mm",maxHeight:"297mm",overflow:"hidden",display:"flex",flexDirection:"column",boxSizing:"border-box",width:"210mm",margin:"0",breakAfter:"page",pageBreakAfter:"always"});
-    });
-    pr.querySelectorAll(".fct-pg,.qt-pg,.fct-pg2,.prod-page").forEach(el=>{ Object.assign(el.style,{flex:"1",overflow:"hidden",minHeight:"0",boxSizing:"border-box"}); });
-    pr.querySelectorAll(".qt-meta-bar").forEach(el=>{ Object.assign(el.style,{display:"grid",gridTemplateColumns:"1fr 1fr",overflow:"hidden"}); });
-    pr.querySelectorAll(".qt-footer").forEach(el=>{ Object.assign(el.style,{marginTop:"auto",flexShrink:"0"}); });
-    pr.querySelectorAll(".qt-parties").forEach(el=>{ Object.assign(el.style,{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"22px"}); });
-    pr.querySelectorAll(".cov").forEach(el=>{ Object.assign(el.style,{height:"297mm",maxHeight:"297mm",overflow:"hidden"}); });
-
+    pr.querySelectorAll(".doc-page").forEach(page=>{const c=(page.innerText||page.textContent||"").trim();if(c.length<10){page.remove();return;}Object.assign(page.style,{height:"297mm",minHeight:"297mm",maxHeight:"297mm",overflow:"hidden",display:"flex",flexDirection:"column",boxSizing:"border-box",width:"210mm",margin:"0"});});
+    pr.querySelectorAll(".fct-pg,.qt-pg,.fct-pg2,.prod-page").forEach(el=>Object.assign(el.style,{flex:"1",overflow:"hidden",minHeight:"0"}));
+    pr.querySelectorAll(".qt-meta-bar").forEach(el=>Object.assign(el.style,{display:"grid",gridTemplateColumns:"1fr 1fr",overflow:"hidden"}));
+    pr.querySelectorAll(".qt-footer").forEach(el=>Object.assign(el.style,{marginTop:"auto",flexShrink:"0"}));
+    pr.querySelectorAll(".qt-parties").forEach(el=>Object.assign(el.style,{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"22px"}));
+    pr.querySelectorAll(".cov").forEach(el=>Object.assign(el.style,{height:"297mm",maxHeight:"297mm",overflow:"hidden"}));
     const prev = document.title;
     document.title = doc.nummer || "document";
     requestAnimationFrame(()=>{ setTimeout(()=>{
@@ -7809,13 +7765,7 @@ function DocModal({doc,type,settings,onClose,onFactuur,onStatusOff,onStatusFact,
             </select>
           )}
           {type==="offerte"&&doc.status==="goedgekeurd"&&!doc.factuurId&&<button className="btn bg btn-sm" onClick={()=>onFactuur(doc)}>🧾 Factuur</button>}
-          {type==="offerte"&&!["goedgekeurd","afgewezen","gefactureerd"].includes(doc.status)&&(
-            <button className="btn btn-sm" style={{background:"#10b981",color:"#fff",fontWeight:700}}
-              onClick={()=>{if(window.confirm("Offerte "+doc.nummer+" goedgekeurd via email?")) {
-                const ts=new Date().toLocaleString("nl-BE",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"});
-                onStatusOff("goedgekeurd",`✅ Goedgekeurd door klant via email (${ts})`);
-              }}}>✅ Goedgekeurd via email</button>
-          )}
+          {type==="offerte"&&!["goedgekeurd","afgewezen","gefactureerd"].includes(doc.status)&&<button className="btn btn-sm" style={{background:"#10b981",color:"#fff",fontWeight:700}} onClick={()=>{if(window.confirm("Goedgekeurd via email?"))onStatusOff("goedgekeurd",`✅ Goedgekeurd door klant via email (${new Date().toLocaleString("nl-BE",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"})})`)}}>✅ Goedgekeurd via email</button>}
           <button className="btn bs btn-sm" onClick={onEmail}>📧 Verzenden</button>
           {type==="factuur"&&onPeppol&&settings?.integraties?.peppolEnabled&&(
   doc.peppolVerstuurd
