@@ -141,23 +141,37 @@ async function go(){
     document.title=nr;document.getElementById("docnr").textContent=nr;
     fetch(SB+"/rest/v1/offerte_views",{method:"POST",headers:{"apikey":KEY,"Authorization":"Bearer "+KEY,"Content-Type":"application/json","Prefer":"return=minimal"},body:JSON.stringify({offerte_id:oid,viewed_at:new Date().toISOString()})}).catch(function(){});
     
-    // Haal technische fiches op uit product_fiches tabel (directe fetch, geen payload limiet)
-    var productIds=[...new Set((doc.lijnen||[]).map(function(l){return l.productId;}).filter(Boolean))];
-    var ficheMap={};
-    if(productIds.length>0){
-      try{
+    // STAP 1: Controleer of fiches al ingebed zijn in de lijnen data
+    var heeftFiches=(doc.lijnen||[]).some(function(l){return l.technischeFiches&&l.technischeFiches.length>0;});
+    
+    // STAP 2: Fiches ophalen uit product_fiches tabel als ze niet ingebed zijn
+    if(!heeftFiches){
+      var productIds=[...new Set((doc.lijnen||[]).map(function(l){return l.productId;}).filter(Boolean))];
+      if(productIds.length>0){
+        var ficheMap={};
         var userId=doc._userId||"";
-        var ficheUrl=SB+"/rest/v1/product_fiches?select=product_id,fiches&product_id=in.("+productIds.join(",")+")"+(userId?"&user_id=eq."+userId:"");
-        var fr=await fetch(ficheUrl,{headers:{"apikey":KEY,"Authorization":"Bearer "+KEY}});
-        var frows=await fr.json();
-        if(Array.isArray(frows))frows.forEach(function(r){if(r.fiches)ficheMap[r.product_id]=r.fiches;});
-      }catch(e){console.warn("Fiches laden mislukt:",e);}
+        // Probeer eerst met user_id filter, dan zonder
+        var urls=userId
+          ?[SB+"/rest/v1/product_fiches?select=product_id,fiches&product_id=in.("+productIds.join(",")+")"+"&user_id=eq."+userId,
+            SB+"/rest/v1/product_fiches?select=product_id,fiches&product_id=in.("+productIds.join(",")+")" ]
+          :[SB+"/rest/v1/product_fiches?select=product_id,fiches&product_id=in.("+productIds.join(",")+")" ];
+        for(var ui=0;ui<urls.length;ui++){
+          try{
+            var fr=await fetch(urls[ui],{headers:{"apikey":KEY,"Authorization":"Bearer "+KEY}});
+            var frows=await fr.json();
+            if(Array.isArray(frows)&&frows.length>0){
+              frows.forEach(function(r){if(r.fiches&&r.fiches.length)ficheMap[r.product_id]=r.fiches;});
+              console.log("[Fiches] fetch "+urls[ui]+" → "+Object.keys(ficheMap).length+" producten met fiches");
+        if(Object.keys(ficheMap).length>0)break; // gevonden, stop
+            }
+          }catch(e){console.warn("Fiches fetch poging "+(ui+1)+" mislukt:",e);}
+        }
+        doc.lijnen=(doc.lijnen||[]).map(function(l){
+          if(l.productId&&ficheMap[l.productId])return Object.assign({},l,{technischeFiches:ficheMap[l.productId]});
+          return l;
+        });
+      }
     }
-    // Embed fiches in lijnen
-    doc.lijnen=(doc.lijnen||[]).map(function(l){
-      if(l.productId&&ficheMap[l.productId])return Object.assign({},l,{technischeFiches:ficheMap[l.productId]});
-      return l;
-    });
     render(doc,nr);
   }catch(e){err("❌","Fout",e.message);}
 }
@@ -257,22 +271,25 @@ function render(doc,nr){
     +"</div>";
 
   // === TECHNISCHE FICHES PAGINA'S ===
+  console.log("[Fiches] lijnen met fiches:", lijnen.filter(function(l){return l.technischeFiches&&l.technischeFiches.length;}).length);
   var ficheHtml="";
   lijnen.forEach(function(l){
     if(!l.naam)return;
     var fiches=l.technischeFiches||[];
     fiches.forEach(function(f){
-      if(!f.data)return;
-      var raw=f.data;
+      // data kan in verschillende velden zitten
+      var raw=f.data||f.base64||f.content||f.pdf||"";
+      if(!raw)return;
       // data kan al een volledige data-URL zijn of enkel base64
       var src=raw.startsWith("data:")?raw:("data:"+(f.type||"application/pdf")+";base64,"+raw);
+      var fType=f.type||"application/pdf";
       ficheHtml+="<div class='doc-page' style='overflow:hidden'>"
         +"<div style='background:"+xe(dc)+";padding:8px 20px;display:flex;align-items:center;gap:10px'>"
         +"<span style='color:rgba(255,255,255,.7);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.7px'>Technische fiche</span>"
         +"<span style='color:#fff;font-size:12px;font-weight:700'>"+xe(l.naam)+"</span>"
         +(f.naam?"<span style='color:rgba(255,255,255,.5);font-size:10px;margin-left:auto'>"+xe(f.naam)+"</span>":"")
         +"</div>"
-        +(f.type&&f.type.includes("pdf")
+        +(fType&&fType.includes("pdf")
           ? "<div style='flex:1;overflow:hidden'><iframe src='"+src+"' style='width:100%;height:calc(297mm - 40px);border:none;display:block'></iframe></div>"
           : "<div style='flex:1;overflow:hidden;display:flex;align-items:center;justify-content:center;background:#f8fafc'><img src='"+src+"' style='max-width:100%;max-height:calc(297mm - 60px);object-fit:contain'/></div>"
         )
