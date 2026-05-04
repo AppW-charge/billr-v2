@@ -3208,13 +3208,29 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
         _voorschot: settings?.voorwaarden?.voorschot || "50%",
         _userId: userRef.current?.id || ""
       };
+      // Sla fiches op in APART record (id = offerteId + "_fiches") om grootte te vermijden
+      const fichePayload = cleanLijnen
+        .filter(l => l.technischeFiches && l.technischeFiches.length > 0)
+        .map(l => ({productId: l.productId, naam: l.naam, fiches: l.technischeFiches}));
+      if(fichePayload.length > 0) {
+        try {
+          await sb.from("offerte_shares").upsert({
+            id: offerte.id + "_fiches",
+            nummer: offerte.nummer + "_fiches",
+            offerte_data: {fiches: fichePayload}
+          }, {onConflict:"id"});
+          console.log("✅ Fiches apart opgeslagen:", fichePayload.length, "producten");
+        } catch(e) { console.warn("[Share] Fiches opslaan mislukt:", e.message); }
+      }
+
+      // Sla hoofddata op zonder fiches (zodat het altijd past)
+      shareData.lijnen = shareData.lijnen.map(l => ({...l, technischeFiches: null}));
       if(_docHtml) shareData._docHtml = _docHtml;
       let payload={id:offerte.id,nummer:offerte.nummer,offerte_data:shareData};
       const kb=Math.round(JSON.stringify(payload).length/1024);
       if(kb>850){delete shareData._docHtml;}
-      if(Math.round(JSON.stringify(payload).length/1024)>850){shareData.lijnen=shareData.lijnen.map(l=>({...l,technischeFiches:null}));}
       const{error:uErr}=await sb.from("offerte_shares").upsert(payload,{onConflict:"id"});
-      if(uErr){delete shareData._docHtml;shareData.lijnen=shareData.lijnen.map(l=>({...l,technischeFiches:null}));await sb.from("offerte_shares").upsert(payload,{onConflict:"id"});}
+      if(uErr){ console.error("[Share] FAILED:",uErr.message); }
       console.log("✅ Offerte gedeeld:",offerte.nummer,kb+"KB");
     } catch(e) {
       console.error("[Share]",e.message);
