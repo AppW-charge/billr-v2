@@ -256,7 +256,12 @@ function calcTotals(lijnen=[], bebatTarief=BEBAT_TARIEF) {
   lijnen.forEach(l=>{
     const r=l.btw||0; // 0 als verlegd, 6 of 21 anders
     if(r>0){if(!gr[r])gr[r]=0;gr[r]+=l.prijs*l.aantal*(r/100);}
-    if(l.bebatKg&&l.bebatKg>0&&isBebatProduct(l.naam,l.cat||"")){const bEx=l.bebatKg*l.aantal*bebatTarief;const bBtw=l.btw||BEBAT_BTW;if(!gr[bBtw])gr[bBtw]=0;gr[bBtw]+=bEx*(bBtw/100);}
+    // BEBAT toeslag — altijd 21% BTW
+    if(l.bebatKg && l.bebatKg>0 && isBebatProduct(l.naam,l.cat||"")) {
+      const bebatEx = l.bebatKg * l.aantal * bebatTarief;
+      if(!gr[BEBAT_BTW])gr[BEBAT_BTW]=0;
+      gr[BEBAT_BTW]+=bebatEx*(BEBAT_BTW/100);
+    }
   });
   const btw=Object.values(gr).reduce((s,v)=>s+v,0);
   const bebatSub = lijnen.reduce((s,l)=>{
@@ -1235,6 +1240,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--txt);font-s
   .doc-page .qt-tbl{font-size:10px!important}
   .doc-page .qt-tbl th,.doc-page .qt-tbl td{padding:4px 5px!important}
   .doc-page .qt-parties{grid-template-columns:1fr!important;gap:12px!important}
+  @media print{.doc-page .qt-parties{grid-template-columns:1fr 1fr!important;gap:22px!important}}
   .doc-page .qt-meta-bar{flex-wrap:wrap!important;gap:6px!important}
   .doc-page .qt-totals{max-width:100%!important}
   .doc-page .qt-tot-box{min-width:0!important}
@@ -1712,22 +1718,50 @@ tr.row-active td{border-top:2px solid #2563eb}
   .print-only{display:block!important}
   .no-print{display:none!important}
   
-  /* ═══ PRINT — 297mm per pagina ═══ */
-  .doc-page{box-shadow:none!important;border-radius:0!important;margin:0!important;width:210mm!important;max-width:210mm!important;height:297mm!important;min-height:297mm!important;max-height:297mm!important;overflow:hidden!important;display:flex!important;flex-direction:column!important;break-after:page!important;page-break-after:always!important;break-inside:avoid!important;box-sizing:border-box!important}
+  /* ═══ Elke doc-page in print: auto hoogte, content vloeit vrij ═══ */
+  .doc-page{
+    box-shadow:none!important;border-radius:0!important;
+    margin:0!important;max-width:100%!important;width:210mm!important;
+    height:auto!important;min-height:100mm!important;max-height:none!important;
+    overflow:visible!important;
+    display:flex!important;flex-direction:column!important;
+    break-after:page!important;page-break-after:always!important;
+    box-sizing:border-box!important;position:relative!important;
+  }
   .doc-page:last-child{break-after:auto!important;page-break-after:auto!important}
-  .prod-page,.fct-pg,.qt-pg,.fct-pg2{padding:8mm 12mm!important;box-sizing:border-box!important;flex:1!important;overflow:hidden!important;min-height:0!important}
-  .cov{width:100%!important;height:297mm!important;min-height:297mm!important;max-height:297mm!important;display:grid!important;grid-template-columns:42% 58%!important;overflow:hidden!important}
-  .cov-l{height:100%!important}
-  .cov-r{height:100%!important;box-sizing:border-box!important}
+  /* Herstel 2-kolom layout - override mobile CSS */
+  .qt-parties{display:grid!important;grid-template-columns:1fr 1fr!important;gap:22px!important}
+  .doc-page .qt-parties{display:grid!important;grid-template-columns:1fr 1fr!important;gap:22px!important}
+  #print-root .qt-parties{display:grid!important;grid-template-columns:1fr 1fr!important;gap:22px!important}
+  .qt-header{display:flex!important;flex-direction:row!important;justify-content:space-between!important}
+  .qt-meta-bar{display:flex!important;flex-wrap:wrap!important}
+  .qt-footer{margin-top:auto!important}
+  .fct-pg,.fct-pg2,.qt-pg,.prod-page{flex:1!important;overflow:visible!important}
+  /* print-root breedte forceren zodat mobile CSS niet triggert */
   #print-root{width:210mm!important;min-width:210mm!important}
   .doc-page-lbl{display:none!important}
-  .qt-parties,.doc-page .qt-parties{display:grid!important;grid-template-columns:1fr 1fr!important;gap:22px!important}
-  .qt-header{display:flex!important;flex-direction:row!important;justify-content:space-between!important;align-items:flex-start!important}
-  .qt-meta-bar{display:grid!important;grid-template-columns:1fr 1fr!important;background:#f8fafc!important;border:1px solid #e2e8f0!important;border-radius:6px!important;overflow:hidden!important;margin-bottom:14px!important}
-  .qt-meta-item{padding:8px 14px!important;border-right:1px solid #e2e8f0!important;border-bottom:1px solid #e2e8f0!important}
-  .qt-meta-item:nth-child(2n){border-right:none!important}
-  .qt-meta-item:nth-last-child(-n+2){border-bottom:none!important}
-  .qt-footer{margin-top:auto!important;flex-shrink:0!important;break-inside:avoid!important}
+  
+  /* Coverpagina */
+  .cov{
+    width:100%!important;height:297mm!important;
+    min-height:297mm!important;max-height:297mm!important;
+    display:grid!important;grid-template-columns:42% 58%!important;
+    overflow:hidden!important;
+  }
+  .cov-l{height:100%!important;min-height:100%!important}
+  .cov-r{height:100%!important;box-sizing:border-box!important}
+  
+  /* Content pagina's: interne padding (omdat @page margin=0) */
+  .prod-page{padding:8mm 12mm!important;box-sizing:border-box!important;flex:1!important;overflow:visible!important}
+  .fct-pg{padding:8mm 12mm!important;box-sizing:border-box!important;flex:1!important;overflow:visible!important}
+  .qt-pg{padding:8mm 12mm!important;box-sizing:border-box!important;flex:1!important;overflow:visible!important}
+  .fct-pg2{padding:8mm 12mm!important;box-sizing:border-box!important;flex:1!important;overflow:visible!important}
+  
+  /* Footer: altijd onderaan de pagina */
+  .qt-footer{
+    margin-top:auto!important;flex-shrink:0!important;
+    break-inside:avoid!important;page-break-inside:avoid!important;
+  }
   
   /* Technische fiche pagina's */
   .fiche-print-page{
@@ -1960,7 +1994,6 @@ export default function App() {
   const saveTodos = (lijst) => {
     setTodos(lijst);
     try { localStorage.setItem("b4_todo", JSON.stringify(lijst)); } catch(_){}
-    localTimestamps.current["b4_todo"]=Date.now()+60000;try{localStorage.setItem("billr_ts",JSON.stringify(localTimestamps.current));}catch(_){}
     if(!userRef.current?.id) return;
     const json = JSON.stringify(lijst);
     sb.from("user_data").upsert(
@@ -2394,9 +2427,8 @@ export default function App() {
       else if(filter === "behandeld") q = q.eq("status","behandeld");
       const { data, error } = await q;
       if(!error && data) {
-        const normalized=data.map(l=>{let f=l.fotos;if(typeof f==="string"){try{f=JSON.parse(f);}catch(_){f=[];}}if(!Array.isArray(f))f=f?[f]:[];return{...l,fotos:f};});
-        setWebsiteLeads(normalized);
-        const nieuw = normalized.filter(l => l.status === "nieuw").length;
+        setWebsiteLeads(data);
+        const nieuw = data.filter(l => l.status === "nieuw").length;
         if(nieuw > 0) document.title = `(${nieuw}) BILLR`;
         else document.title = "BILLR";
       }
@@ -2813,11 +2845,10 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
           console.log("Tab sync: herlaad", freshOffs.length, "offertes van Supabase");
           setOffertes(freshOffs);
         }
-        const freshFcts=await sbLoadFacturen(user.id);
-        if(freshFcts.length>0){const re=localTimestamps.current["b4_fct"]&&(Date.now()-localTimestamps.current["b4_fct"]<120000);if(!re)setFacturen(freshFcts);}
+        const freshFcts = await sbLoadFacturen(user.id);
+        if(freshFcts.length > 0) setFacturen(freshFcts);
         if(allData["b4_at"]&&sbTs("b4_at")>lcTs("b4_at")) setAcceptTokens(p("b4_at",{}));
         if(allData["b4_wo"]&&sbTs("b4_wo")>lcTs("b4_wo")) setWidgetOrder(p("b4_wo",null));
-        if(allData["b4_todo"]&&sbTs("b4_todo")>lcTs("b4_todo")){const v=p("b4_todo",[]);if(Array.isArray(v)&&v.length)setTodos(v);}
         console.log("Tab sync OK — enkel gelezen, nooit geschreven");
       } catch(e) { console.warn("Tab sync mislukt:",e); }
     };
@@ -2994,9 +3025,9 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
   };
   const updFact = (id,upd) => {
     setFacturen(prev => {
-      const next = prev.map(f=>f.id===id?{...f,...upd,log:[...(f.log||[]),logEntry(upd.logActie||(upd.status?"Status → "+(FACT_STATUS[upd.status]?.l||upd.status):"Gewijzigd"))]}:f);
+      const next = prev.map(f=>f.id===id?{...f,...upd,log:[...(f.log||[]),logEntry(upd.status?"Status → "+(FACT_STATUS[upd.status]?.l||upd.status):upd.logActie||"Gewijzigd")]}:f);
       const gewijzigd = next.find(f=>f.id===id);
-      if(gewijzigd?.nummer){const u=userRef.current;if(u){localTimestamps.current["b4_fct"]=Date.now()+120000;try{localStorage.setItem("billr_ts",JSON.stringify(localTimestamps.current));}catch(_){}sbSaveFactuur(gewijzigd,u.id);}}
+      if(gewijzigd?.nummer) { const u=userRef.current; if(u) sbSaveFactuur(gewijzigd, u.id); }
       return next;
     });
   };
@@ -3188,7 +3219,7 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
       const shareData = {
         ...offerte,
         lijnen: cleanLijnen,
-        _bed: { naam:bed.naam, adres:bed.adres, gemeente:bed.gemeente, tel:bed.tel, email:bed.email, btwnr:bed.btwnr, iban:bed.iban, bic:bed.bic, website:bed.website, logo:(bed.logo&&!bed.logo.startsWith("data:")?bed.logo:"") },
+        _bed: { naam:bed.naam, adres:bed.adres, gemeente:bed.gemeente, tel:bed.tel, email:bed.email, btwnr:bed.btwnr, iban:bed.iban, bic:bed.bic, website:bed.website, logo:bed.logo },
         _dc: dc,
         _sj: { voorbladTitel:sj.voorbladTitel, handtekeningTekst:sj.handtekeningTekst, footerTekst:sj.footerTekst, toonProductpagina:sj.toonProductpagina, toonBevestigingslink:sj.toonBevestigingslink, accentKleur:sj.accentKleur },
         _lyt: { font:lyt.font, fontSize:lyt.fontSize },
@@ -3196,11 +3227,11 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
         _voorschot: settings?.voorwaarden?.voorschot || "50%"
       };
 
-      const{error:uErr}=await sb.from("offerte_shares").upsert({id:offerte.id,nummer:offerte.nummer,offerte_data:shareData},{onConflict:"id"});
-      if(uErr)console.error("[Share]",uErr.message);
-      else console.log("✅ Offerte gedeeld:",offerte.nummer);
+      await sb.from('offerte_shares').upsert({ id: offerte.id, nummer: offerte.nummer, offerte_data: shareData });
+      console.log("✅ Offerte gedeeld:", offerte.nummer);
+      // offerte_fiches wordt NIET meer gevuld — fiches staan in product_fiches tabel
     } catch(e) {
-      console.error("[Share] FOUT:", e.message);
+      console.warn("Offerte share failed:", e.message);
     }
   };
 
@@ -3325,8 +3356,7 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
     const pubKey = emailCfg.emailjsPublicKey;
     if(!serviceId || !templateId || !pubKey) { notify("\u274c EmailJS niet geconfigureerd in Instellingen.", "er"); return false; }
     window.emailjs.init(pubKey);
-    const kUL=klanten.find(k=>k.id===offerte.klantId);
-    const klantData=kUL?{...offerte.klant,...kUL}:(offerte.klant||{});
+    const klantData = klanten.find(k => k.id === offerte.klantId) || offerte.klant || {};
     const bed = settings?.bedrijf || {};
     const dc = settings?.sjabloon?.accentKleur || settings?.thema?.kleur || bed.kleur || "#1a2e4a";
     const totals = calcTotals(offerte.lijnen || []);
@@ -3884,7 +3914,7 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
         if(newProds.length>0){setProducten(p=>[...newProds,...p]);notify(`${newProds.length} nieuw${newProds.length>1?"e":""} product${newProds.length>1?"en":""} aangemaakt`,"in");}
         const ff = {...f, lijnen: updLijnen};
         if(ff.id) {
-          setFacturen(prev=>{const merged=prev.map(x=>x.id!==ff.id?x:{...x,...ff});const op=merged.find(x=>x.id===ff.id);if(op&&userRef.current?.id){localTimestamps.current["b4_fct"]=Date.now()+120000;try{localStorage.setItem("billr_ts",JSON.stringify(localTimestamps.current));}catch(_){}sbSaveFactuur(op,userRef.current.id).catch(e=>console.error(e));}return merged;});
+          setFacturen(p=>p.map(x=>x.id===ff.id?{...x,...ff}:x));
           notify("Factuur bijgewerkt ✓");
         } else {
           const nr = ff.nummerOverride || nextNr("FACT",facturen,"nummer");
@@ -3952,7 +3982,7 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
       />}
       {creditnotaModal!==null&&<CreditnotaModal facturen={facturen} creditnota={creditnotaModal} settings={settings} onSave={cn=>{if(cn.id){setCreditnotas(p=>p.map(x=>x.id===cn.id?cn:x));}else{const n={...cn,id:uid(),nummer:nextNr("CN",creditnotas,"nummer"),aangemaakt:new Date().toISOString(),type:"creditnota"};setCreditnotas(p=>[n,...p]);if(cn.factuurId){updFact(cn.factuurId,{gecrediteerd:true});}}notify("Creditnota opgeslagen ✓");setCreditnotaModal(null);}} onClose={()=>setCreditnotaModal(null)}/>}
       {betalingModal&&<BetalingModal factuur={betalingModal} betalingen={betalingen.filter(b=>b.factuurId===betalingModal.id)} onSave={b=>{const nb={...b,id:uid(),factuurId:betalingModal.id,datum:b.datum||today(),aangemaakt:new Date().toISOString()};setBetalingen(p=>[nb,...p]);const totBet=betalingen.filter(x=>x.factuurId===betalingModal.id).reduce((s,x)=>s+x.bedrag,0)+nb.bedrag;const factTot=calcTotals(betalingModal.lijnen||[]).totaal;if(totBet>=factTot-0.01)updFact(betalingModal.id,{status:"betaald"});else updFact(betalingModal.id,{status:"gedeeltelijk"});notify("Betaling geregistreerd ✓");setBetalingModal(null);}} onClose={()=>setBetalingModal(null)}/>}
-      {aanmaningModal&&<AanmaningModal factuur={aanmaningModal} settings={settings} onSend={(am)=>{setAanmaningen(p=>[{...am,id:uid(),aangemaakt:new Date().toISOString(),status:"verzonden",verzonden:today()},...p]);const ts=new Date().toLocaleString("nl-BE",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"});updFact(aanmaningModal.id,{logActie:`🔔 ${am.niveau===1?"1e Herinnering":am.niveau===2?"2e Herinnering":"Ingebrekestelling"} verstuurd naar ${aanmaningModal.klant?.email||"klant"} (${ts})`});notify("Aanmaning verzonden naar "+(aanmaningModal.klant?.email||"klant")+" ✓");setAanmaningModal(null);}} onClose={()=>setAanmaningModal(null)}/>}
+      {aanmaningModal&&<AanmaningModal factuur={aanmaningModal} settings={settings} onSend={(am)=>{setAanmaningen(p=>[{...am,id:uid(),aangemaakt:new Date().toISOString(),status:"verzonden",verzonden:today()},...p]);notify("Aanmaning verzonden ✓");setAanmaningModal(null);}} onClose={()=>setAanmaningModal(null)}/>}
       {dossierModal!==null&&<DossierModal dossier={dossierModal} klanten={klanten} offertes={offertes} facturen={facturen} onSave={d=>{if(d.id){setDossiers(p=>p.map(x=>x.id===d.id?d:x));}else{setDossiers(p=>[{...d,id:uid(),aangemaakt:new Date().toISOString()},...p]);}notify("Dossier opgeslagen ✓");setDossierModal(null);}} onClose={()=>setDossierModal(null)} notify={notify}/>}
       {tijdModal!==null&&<TijdModal tijdslot={tijdModal} klanten={klanten} offertes={offertes} onSave={t=>{if(t.id){setTijdslots(p=>p.map(x=>x.id===t.id?t:x));}else{setTijdslots(p=>[{...t,id:uid(),aangemaakt:new Date().toISOString()},...p]);}notify("Tijd opgeslagen ✓");setTijdModal(null);}} onClose={()=>setTijdModal(null)}/>}
       {planningModal&&<PlanningModal offerte={planningModal} settings={settings} klanten={klanten} planningProposals={planningProposals} onSave={(id,planData)=>{
@@ -4262,7 +4292,6 @@ function Dashboard({offertes, facturen, onGoto, onNew, onFactuur, settings, offe
   const toggleTodo = (id) => saveTodos(todos.map(t=>t.id===id?{...t,gedaan:!t.gedaan}:t));
   const deleteTodo = (id) => saveTodos(todos.filter(t=>t.id!==id));
   const [todoFilter, setTodoFilter] = useState("open");
-  const [leadFilter, setLeadFilter] = useState("alle");
   const defaultOrder = ["todoLijst","websiteAanvragen","statistieken","recenteOffertes","openFacturen","goedgekeurdeOffertes","offerteLogboek","afspraken","snelleActies","agenda"];
   // Zorg dat todoLijst altijd in de order zit
   const rawOrder = widgetOrder || settings.dashboardWidgets?.widgetOrder || defaultOrder;
@@ -5013,11 +5042,15 @@ function DocIcons({doc, type}) {
 }
 
 function DocLog({log=[]}) {
-  const fmt=ts=>{try{const d=new Date(ts);return d.toLocaleDateString("nl-BE",{day:"2-digit",month:"2-digit",year:"numeric"})+" "+d.toLocaleTimeString("nl-BE",{hour:"2-digit",minute:"2-digit"});}catch(_){return ts||"";}};
-  const getIco=a=>{a=(a||"").toLowerCase();if(a.includes("peppol"))return{i:"🇧🇪",k:"#7c3aed"};if(a.includes("email")||a.includes("verzonden"))return{i:"📧",k:"#2563eb"};if(a.includes("afgedrukt"))return{i:"🖨️",k:"#8b5cf6"};if(a.includes("betaald"))return{i:"💶",k:"#10b981"};if(a.includes("aangemaakt"))return{i:"✨",k:"#0ea5e9"};if(a.includes("goedgekeurd")||a.includes("akkoord"))return{i:"✅",k:"#10b981"};if(a.includes("afgewezen"))return{i:"❌",k:"#ef4444"};if(a.includes("aanmaning"))return{i:"🔔",k:"#ef4444"};if(a.includes("afspraak")||a.includes("ingepland"))return{i:"📅",k:"#0ea5e9"};return{i:"•",k:"#94a3b8"};};
-  const clean=[...(log||[])].filter(l=>l.actie||l.txt);
+  const fmt = ts => { try{ const d=new Date(ts); return `${d.toLocaleDateString("nl-BE")} ${d.toLocaleTimeString("nl-BE",{hour:"2-digit",minute:"2-digit"})}`; }catch(_){ return ts; }};
+  const clean = log.filter(l => l.actie || l.txt); // Filter lege entries
   if(!clean.length) return <div className="doc-log-empty">Nog geen acties geregistreerd</div>;
-  return <div>{[...clean].reverse().map((l,i)=>{const{i:ico,k}=getIco(l.actie||l.txt);return <div key={i} style={{display:"flex",gap:8,alignItems:"flex-start",padding:"6px 0",borderBottom:i<clean.length-1?"1px solid #f1f5f9":"none"}}><span style={{fontSize:14,flexShrink:0,marginTop:1}}>{ico}</span><div style={{flex:1,minWidth:0}}><div style={{fontSize:12.5,fontWeight:600,color:k,lineHeight:1.4}}>{l.actie||l.txt}</div><div style={{fontSize:10.5,color:"#94a3b8",marginTop:1}}>{fmt(l.ts)}</div></div></div>;})}</div>;
+  return [...clean].reverse().map((l,i)=>(
+    <div key={i} className="doc-log-entry">
+      <span className="doc-log-ts">{fmt(l.ts)}</span>
+      <span className="doc-log-act">{l.actie || l.txt}</span>
+    </div>
+  ));
 }
 
 
@@ -6273,10 +6306,10 @@ function FactuurWizard({klanten,producten,settings,editData,onSave,onClose,notif
                   </div>
                   <div style={{flex:"0 0 70px",minWidth:64}}>
                     <div style={{fontSize:10.5,color:"#64748b",marginBottom:2,fontWeight:600}}>Prijs</div>
-                    <input type="text" inputMode="decimal" className="fc" value={l.prijs===0&&document.activeElement?.dataset?.lid===l.id?"":l.prijs} data-lid={l.id}
-                      onFocus={e=>{if(l.prijs===0)e.target.value="";}}
-                      onChange={e=>{const v=e.target.value.replace(",",".");if(v===""||v==="-"||/^-?\d*\.?\d*$/.test(v))updLijn(l.id,{prijs:v===""?0:isNaN(parseFloat(v))?0:parseFloat(v)});}}
-                      onBlur={e=>updLijn(l.id,{prijs:parseFloat(e.target.value.replace(",","."))||0})}
+                    <input type="text" inputMode="decimal" className="fc" value={l._prijsStr!==undefined?l._prijsStr:(l.prijs===0?"":String(l.prijs))} data-lid={l.id}
+                      onFocus={e=>{e.target.select();}}
+                      onChange={e=>{const raw=e.target.value;const v=raw.replace(",",".");if(raw===""||/^-?\d*[.,]?\d*$/.test(raw)){updLijn(l.id,{_prijsStr:raw,prijs:parseFloat(v)||0});}}}
+                      onBlur={e=>{const v=parseFloat(e.target.value.replace(",","."))||0;updLijn(l.id,{_prijsStr:undefined,prijs:v});}}
                       style={{padding:"5px 7px",textAlign:"right"}}/>
                   </div>
                   <div style={{flex:"0 0 50px",minWidth:44}}>
@@ -7666,11 +7699,22 @@ function DocModal({doc,type,settings,onClose,onFactuur,onStatusOff,onStatusFact,
       const val = rootStyle.getPropertyValue(v).trim();
       if(val) pr.style.setProperty(v, val);
     });
-    pr.querySelectorAll(".doc-page").forEach(p=>{const c=(p.innerText||p.textContent||"").trim();if(c.length<10){p.remove();return;}Object.assign(p.style,{height:"297mm",minHeight:"297mm",maxHeight:"297mm",overflow:"hidden",display:"flex",flexDirection:"column",boxSizing:"border-box",width:"210mm",margin:"0"});});
-    pr.querySelectorAll(".fct-pg,.qt-pg,.fct-pg2,.prod-page").forEach(el=>Object.assign(el.style,{flex:"1",overflow:"hidden",minHeight:"0"}));
-    pr.querySelectorAll(".qt-meta-bar").forEach(el=>Object.assign(el.style,{display:"grid",gridTemplateColumns:"1fr 1fr",overflow:"hidden"}));
-    pr.querySelectorAll(".qt-footer").forEach(el=>Object.assign(el.style,{marginTop:"auto",flexShrink:"0"}));
-    pr.querySelectorAll(".qt-parties").forEach(el=>Object.assign(el.style,{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"22px"}));
+    // Verwijder lege doc-pages + forceer 2-kolom parties voor print
+    pr.querySelectorAll(".doc-page").forEach(page => {
+      const txt = page.innerText || page.textContent || "";
+      if(txt.trim().length < 10) page.remove();
+    });
+    // Forceer 2-kolom layout voor parties (mobile CSS override)
+    pr.querySelectorAll(".qt-parties").forEach(el => {
+      el.style.setProperty("display","grid","important");
+      el.style.setProperty("grid-template-columns","1fr 1fr","important");
+      el.style.setProperty("gap","22px","important");
+    });
+    // Zorg dat content niet afgesneden wordt
+    pr.querySelectorAll(".qt-pg,.prod-page,.fct-pg,.fct-pg2").forEach(el => {
+      el.style.setProperty("overflow","visible","important");
+    });
+
     const prev = document.title;
     document.title = doc.nummer || "document";
     requestAnimationFrame(()=>{ setTimeout(()=>{
@@ -7721,7 +7765,6 @@ function DocModal({doc,type,settings,onClose,onFactuur,onStatusOff,onStatusFact,
             </select>
           )}
           {type==="offerte"&&doc.status==="goedgekeurd"&&!doc.factuurId&&<button className="btn bg btn-sm" onClick={()=>onFactuur(doc)}>🧾 Factuur</button>}
-          {type==="offerte"&&!["goedgekeurd","afgewezen","gefactureerd"].includes(doc.status)&&<button className="btn btn-sm" style={{background:"#10b981",color:"#fff",fontWeight:700}} onClick={()=>{if(window.confirm("Goedgekeurd via email?"))onStatusOff("goedgekeurd",`✅ Goedgekeurd door klant via email (${new Date().toLocaleString("nl-BE",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"})})`)}}>✅ Goedgekeurd via email</button>}
           <button className="btn bs btn-sm" onClick={onEmail}>📧 Verzenden</button>
           {type==="factuur"&&onPeppol&&settings?.integraties?.peppolEnabled&&(
   doc.peppolVerstuurd
@@ -9675,35 +9718,6 @@ function CreditnotaModal({facturen,creditnota,settings,onSave,onClose}) {
 }
 
 // ─── AANMANINGEN PAGE ─────────────────────────────────────────────
-function AanmaningModal({factuur, settings, onSend, onClose}) {
-  const f=factuur,t=calcTotals(f.lijnen||[]).totaal,dagen=Math.max(0,Math.floor((new Date()-new Date(f.vervaldatum))/(1000*60*60*24))),rente=t*(0.01/30*dagen),bed=settings?.bedrijf||{},dc=bed.kleur||"#1a2e4a";
-  const [niveau,setNiveau]=useState(1),[sending,setSending]=useState(false),[preview,setPreview]=useState(false);
-  const templates=[{l:"1e Herinnering",c:"#3b82f6",tekst:`Geachte ${f.klant?.naam||""},
-
-Onze factuur ${f.nummer} ten bedrage van ${fmtEuro(t)} is nog niet betaald.
-
-Wij verzoeken u dit bedrag vóór ${addDays(today(),7)} te storten op rekening ${bed.iban||""} met vermelding van referentie ${f.nummer}.
-
-Met vriendelijke groeten,
-${bed.naam||""}
-${bed.tel||""}`},{l:"2e Herinnering",c:"#f59e0b",tekst:`Geachte ${f.klant?.naam||""},
-
-Ondanks onze eerste herinnering is factuur ${f.nummer} (${fmtEuro(t)}) nog steeds onbetaald.
-Wettelijke intrest: ${fmtEuro(rente)} (1%/maand).
-
-Met vriendelijke groeten,
-${bed.naam||""}`},{l:"Ingebrekestelling",c:"#ef4444",tekst:`Geachte ${f.klant?.naam||""},
-
-ONDANKS ONZE HERINNERINGEN is factuur ${f.nummer} (${fmtEuro(t)}) nog steeds onbetaald.
-TOTAAL OPEISBAAR: ${fmtEuro(t+rente+t*0.15)}
-
-${bed.naam||""}`}];
-  const tmpl=templates[Math.min(niveau-1,templates.length-1)];
-  const buildHtml=()=>{const factuurLink=window.location.origin+"/offerte.html?id="+(f.offerteId||f.id)+"&nr="+encodeURIComponent(f.nummer||"")+"&type=factuur";return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:Arial,sans-serif;background:#f1f5f9;padding:20px}.w{max-width:620px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden}.h{background:${dc};padding:24px 28px;display:flex;justify-content:space-between;align-items:center}.ht{color:#fff;font-weight:900;font-size:22px}.hn{color:rgba(255,255,255,.65);font-size:12px;margin-top:3px}.badge{background:${tmpl.c};color:#fff;border-radius:8px;padding:5px 13px;font-weight:800;font-size:12px}.b{padding:28px}.al{background:${tmpl.c}18;border-left:4px solid ${tmpl.c};border-radius:0 8px 8px 0;padding:14px 18px;margin-bottom:22px}.alt{font-weight:800;font-size:15px;color:${tmpl.c};margin-bottom:3px}.tot{background:#f8fafc;border:2px solid #e2e8f0;border-radius:10px;padding:18px 22px;margin-bottom:24px;display:flex;justify-content:space-between;align-items:center}.tl{font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;margin-bottom:4px}.tv{font-size:26px;font-weight:900;color:#1e293b}.btn-w{text-align:center;margin-bottom:24px}.btn{display:inline-block;background:${dc};color:#fff;padding:14px 32px;border-radius:10px;text-decoration:none;font-weight:800;font-size:15px}.betaal{background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:14px 18px;margin-bottom:16px}.bl{font-size:11px;font-weight:700;color:#15803d;text-transform:uppercase;margin-bottom:5px}.bv{font-weight:600;font-size:13px;color:#1e293b;margin-bottom:2px}.ftr{background:#f8fafc;border-top:1px solid #e2e8f0;padding:16px 28px;font-size:11px;color:#94a3b8;line-height:1.8;text-align:center}</style></head><body><div class="w"><div class="h"><div><div class="ht">⚠️ ${tmpl.l}</div><div class="hn">Factuur ${f.nummer} · ${f.klant?.naam||""}</div></div><div class="badge">${tmpl.l.toUpperCase()}</div></div><div class="b"><div class="al"><div class="alt">Factuur ${f.nummer} is nog onbetaald</div><div style="font-size:13px;color:#475569">Vervaldatum: ${fmtDate(f.vervaldatum)} · ${dagen} dagen te laat</div></div><div style="font-size:14px;color:#475569;line-height:1.9;margin-bottom:24px">${tmpl.tekst.split("\n").join("<br>")}</div><div class="tot"><div><div class="tl">Te betalen</div><div class="tv">${fmtEuro(t+rente)}</div></div><div style="text-align:right;font-size:12px;color:#94a3b8"><div>Factuur</div><div style="font-weight:700;color:#1e293b;font-size:14px">${f.nummer}</div></div></div><div class="btn-w"><a href="${factuurLink}" class="btn">📄 Bekijk factuur online</a></div><div class="betaal"><div class="bl">💳 Betaalinstructies</div><div class="bv">IBAN: ${bed.iban||""}</div><div class="bv">BIC: ${bed.bic||""}</div><div class="bv">Referentie: <strong>${f.nummer}</strong></div></div></div><div class="ftr"><strong>${bed.naam||""}</strong> · ${bed.adres||""} · ${bed.gemeente||""}<br>BTW: ${fmtBtwnr(bed.btwnr)} · ${bed.email||""} · ${bed.tel||""}</div></div></body></html>`;};
-  const verzend=async()=>{setSending(true);try{const pk=settings?.email?.emailjsPublicKey,si=settings?.email?.emailjsServiceId,ti=settings?.email?.emailjsTemplateFactuur,html=buildHtml();if(pk&&si&&ti&&window.emailjs){await window.emailjs.send(si,ti,{to_email:f.klant?.email||"",to_name:f.klant?.naam||"",subject:`${tmpl.l} — Factuur ${f.nummer}`,html_body:html,text_body:tmpl.tekst},pk);}else{const blob=new Blob([html],{type:"text/html"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=`aanmaning_${f.nummer}.html`;a.click();window.open(`mailto:${f.klant?.email||""}?subject=${encodeURIComponent(tmpl.l+" — Factuur "+f.nummer)}&body=${encodeURIComponent(tmpl.tekst)}`);}onSend({factuurId:f.id,factuurNr:f.nummer,niveau,bedrag:t,rente});}catch(e){alert("Fout: "+e.message);}setSending(false);};
-  return <div className="mo"><div className="mdl" style={{maxWidth:700}}><div className="mh"><div className="mt-m">🔔 Aanmaning — {f.nummer} · {f.klant?.naam}</div><button className="xbtn" onClick={onClose}>×</button></div><div className="mb-body" style={{padding:20}}><div style={{marginBottom:18}}><div style={{fontSize:11,fontWeight:700,color:"#64748b",textTransform:"uppercase",letterSpacing:".6px",marginBottom:10}}>Type aanmaning</div><div style={{display:"flex",gap:8}}>{templates.map((tt,i)=><button key={i} onClick={()=>setNiveau(i+1)} style={{padding:"10px 16px",borderRadius:10,border:`2px solid ${niveau===i+1?tt.c:"#e2e8f0"}`,background:niveau===i+1?tt.c+"22":"#fff",color:tt.c,fontWeight:700,fontSize:13,cursor:"pointer"}}>{tt.l}</button>)}</div></div><div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12,marginBottom:18}}>{[["Factuur",fmtEuro(t),"#1e293b"],["Intrest",fmtEuro(rente),"#f59e0b"],["Totaal",fmtEuro(t+rente),"#ef4444"]].map(([l,v,c])=><div key={l} style={{background:"#f8fafc",borderRadius:10,padding:"12px 14px",border:"1px solid #e2e8f0"}}><div style={{fontSize:10.5,color:"#94a3b8",fontWeight:600,textTransform:"uppercase",marginBottom:4}}>{l}</div><div style={{fontWeight:800,fontSize:16,color:c}}>{v}</div></div>)}</div><div style={{marginBottom:14}}><button onClick={()=>setPreview(p=>!p)} style={{fontSize:12,background:"#f1f5f9",border:"1px solid #e2e8f0",borderRadius:6,padding:"6px 12px",cursor:"pointer"}}>{preview?"▲ Verberg":"▼ Preview"}</button></div>{preview&&<div style={{border:"1px solid #e2e8f0",borderRadius:10,overflow:"hidden",marginBottom:14}}><iframe srcDoc={buildHtml()} style={{width:"100%",height:380,border:"none"}} title="preview"/></div>}<div style={{background:"#f0f9ff",border:"1px solid #bae6fd",borderRadius:8,padding:"10px 14px",marginBottom:14,display:"flex",alignItems:"center",gap:8}}><span style={{fontSize:16}}>📧</span><div><div style={{fontSize:11,fontWeight:700,color:"#0369a1",textTransform:"uppercase"}}>Verzenden naar</div><div style={{fontSize:13,fontWeight:600,color:"#1e293b"}}>{f.klant?.email||<span style={{color:"#ef4444"}}>❌ Geen emailadres</span>}</div></div></div><div style={{display:"flex",gap:10}}><button onClick={verzend} disabled={sending||!f.klant?.email} style={{flex:1,padding:"13px",background:tmpl.c,color:"#fff",border:"none",borderRadius:10,fontWeight:700,fontSize:14,cursor:"pointer",opacity:(sending||!f.klant?.email)?0.5:1}}>{sending?"Bezig...":"🔔 Aanmaning versturen"}</button><button onClick={()=>{const blob=new Blob([buildHtml()],{type:"text/html"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=`aanmaning_${f.nummer}.html`;a.click();}} style={{padding:"13px 18px",background:"#f1f5f9",border:"2px solid #e2e8f0",borderRadius:10,fontWeight:600,fontSize:13,cursor:"pointer"}}>⬇ HTML</button></div></div></div></div>;
-}
-
 function AanmaningenPage({facturen,aanmaningen,onVerzend,onCreate,settings}) {
   const openFact=facturen.filter(f=>["verstuurd","afgedrukt","onbetaald","vervallen"].includes(f.status));
   const getAanmaningen=fid=>aanmaningen.filter(a=>a.factuurId===fid);
@@ -10263,33 +10277,182 @@ function EmailJSTestBtn({settings, notify}) {
 // AANVRAGEN PAGE — Website leads + aanvraag beheer
 // ═══════════════════════════════════════════════════════════════════════
 function AanvragenPage({leads=[], onRefresh, onStatus, onToKlant, onToOfferte, notify, sbClient}) {
-  const [filter,setFilter]=useState("nieuw"),[selected,setSelected]=useState(null),[fotoIdx,setFotoIdx]=useState(null),[toKlantDone,setToKlantDone]=useState(new Set());
-  const stIco={nieuw:"🔵","in behandeling":"🟡",behandeld:"🟢",afgewezen:"🔴"},stKleur={nieuw:"#3b82f6","in behandeling":"#f59e0b",behandeld:"#10b981",afgewezen:"#ef4444"};
-  const gefilterd=filter==="alle"?leads:leads.filter(l=>l.status===filter),aantalNieuw=leads.filter(l=>l.status==="nieuw").length;
-  const fmtDt=ts=>{try{return new Date(ts).toLocaleString("nl-BE",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"});}catch(_){return ts||"";}};
-  const getFotos=l=>{if(!l)return[];let f=l.fotos;if(!f)return[];if(typeof f==="string"){try{f=JSON.parse(f);}catch(_){return[];}}return Array.isArray(f)?f:[];};
-  const getFotoSrc=f=>!f?"":typeof f==="string"?f:f.url||f.data||"";
-  const getFotoLabel=(f,i)=>!f||typeof f==="string"?`Foto ${i+1}`:f.label||f.naam||`Foto ${i+1}`;
-  const fotos=getFotos(selected);
-  useEffect(()=>{const h=e=>{if(e.key==="Escape"){if(fotoIdx!==null)setFotoIdx(null);else setSelected(null);}if(e.key==="ArrowLeft"&&fotoIdx!==null&&fotos.length>1)setFotoIdx(p=>p>0?p-1:fotos.length-1);if(e.key==="ArrowRight"&&fotoIdx!==null&&fotos.length>1)setFotoIdx(p=>p<fotos.length-1?p+1:0);};window.addEventListener("keydown",h);return()=>window.removeEventListener("keydown",h);},[fotoIdx,fotos.length,selected]);
-  const IR=({label,waarde})=>waarde?<div style={{display:"flex",gap:12,padding:"7px 0",borderBottom:"1px solid #f1f5f9",alignItems:"flex-start"}}><span style={{color:"#94a3b8",fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:".5px",minWidth:110,flexShrink:0,paddingTop:2}}>{label}</span><span style={{fontWeight:600,color:"#1e293b",fontSize:13,wordBreak:"break-word",lineHeight:1.5}}>{waarde}</span></div>:null;
-  return (<div style={{padding:"0 0 40px"}}>
-    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:20,flexWrap:"wrap",gap:12}}><div><h1 style={{fontWeight:900,fontSize:22,color:"#1e293b",margin:0}}>📥 Aanvragen</h1><p style={{fontSize:13,color:"#64748b",margin:"3px 0 0"}}>Klantaanvragen via de website</p></div><div style={{display:"flex",gap:8,alignItems:"center"}}>{aantalNieuw>0&&<span style={{background:"#ef4444",color:"#fff",borderRadius:20,padding:"4px 14px",fontWeight:800,fontSize:13}}>{aantalNieuw} nieuw</span>}<button className="btn bs" onClick={onRefresh}>🔄 Vernieuwen</button><a href="/aanvraag.html" target="_blank" className="btn b2">🔗 Aanvraagpagina</a></div></div>
-    <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:20}}>{["alle","nieuw","in behandeling","behandeld","afgewezen"].map(s=><button key={s} onClick={()=>setFilter(s)} style={{padding:"7px 16px",borderRadius:20,border:"2px solid",cursor:"pointer",fontWeight:600,fontSize:13,borderColor:filter===s?(stKleur[s]||"#1a2e4a"):"#e2e8f0",background:filter===s?(stKleur[s]||"#1a2e4a"):"#fff",color:filter===s?"#fff":(stKleur[s]||"#64748b")}}>{stIco[s]||"📋"} {s==="alle"?"Alle":s}{s==="nieuw"&&aantalNieuw?` (${aantalNieuw})`:""}</button>)}</div>
-    {gefilterd.length===0?<div style={{textAlign:"center",padding:"80px 20px",color:"#94a3b8",background:"#fff",borderRadius:14,border:"2px dashed #e2e8f0"}}><div style={{fontSize:56,marginBottom:16}}>📭</div><div style={{fontSize:17,fontWeight:700,color:"#64748b"}}>Geen aanvragen</div></div>:<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(300px,1fr))",gap:12}}>{gefilterd.map(lead=>{const lF=getFotos(lead);return(<div key={lead.id} onClick={()=>{setSelected(lead);setFotoIdx(null);}} style={{background:"#fff",border:`2px solid ${selected?.id===lead.id?"#3b82f6":"#e2e8f0"}`,borderRadius:14,padding:"16px",cursor:"pointer",transition:"all .15s"}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8,marginBottom:8}}><div style={{fontWeight:800,fontSize:15,color:"#1e293b"}}>{lead.naam||"Onbekend"}</div><span style={{background:stKleur[lead.status]+"22",color:stKleur[lead.status],border:`1.5px solid ${stKleur[lead.status]}`,borderRadius:8,padding:"3px 9px",fontSize:11,fontWeight:700,whiteSpace:"nowrap",flexShrink:0}}>{stIco[lead.status]} {lead.status}</span></div><div style={{fontSize:12,color:"#64748b",marginBottom:3}}>📅 {fmtDt(lead.created_at)}</div>{lead.email&&<div style={{fontSize:12,color:"#475569",marginBottom:3}}>✉ {lead.email}</div>}{lead.tel&&<div style={{fontSize:12,color:"#475569",marginBottom:3}}>📞 {lead.tel}</div>}{lF.length>0&&<div style={{marginTop:10,display:"flex",gap:4}}>{lF.slice(0,4).map((f,i)=>{const src=getFotoSrc(f);return src?<img key={i} src={src} alt="" style={{width:40,height:40,objectFit:"cover",borderRadius:6,border:"1px solid #e2e8f0"}} onError={e=>{e.target.style.display="none";}}/>:null;})}</div>}</div>);})}
-    </div>}
-    {selected&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.6)",zIndex:9000,display:"flex",alignItems:"flex-start",justifyContent:"center",padding:"20px 16px",overflowY:"auto"}} onClick={e=>{if(e.target===e.currentTarget)setSelected(null);}}><div style={{background:"#fff",borderRadius:18,width:"100%",maxWidth:880,boxShadow:"0 24px 80px rgba(0,0,0,.35)",overflow:"hidden",marginBottom:20}}><div style={{background:"#0f1e35",padding:"20px 24px",display:"flex",justifyContent:"space-between",alignItems:"center"}}><div><div style={{color:"#fff",fontWeight:900,fontSize:20}}>{selected.naam}</div><div style={{color:"rgba(255,255,255,.5)",fontSize:12,marginTop:3}}>📅 {fmtDt(selected.created_at)}</div></div><div style={{display:"flex",gap:8}}><span style={{background:stKleur[selected.status]+"44",color:stKleur[selected.status],border:`1.5px solid ${stKleur[selected.status]}`,borderRadius:10,padding:"5px 12px",fontSize:12,fontWeight:700}}>{stIco[selected.status]} {selected.status}</span><button onClick={()=>setSelected(null)} style={{background:"rgba(255,255,255,.15)",border:"none",color:"#fff",borderRadius:10,width:36,height:36,cursor:"pointer",fontSize:20}}>✕</button></div></div>
-    <div style={{padding:"24px",display:"grid",gridTemplateColumns:"1fr 1fr",gap:20}}>
-      <div style={{display:"flex",flexDirection:"column",gap:14}}>
-        <div style={{background:"#f8fafc",borderRadius:12,padding:"14px",border:"1px solid #e2e8f0"}}><div style={{fontWeight:700,fontSize:11,color:"#94a3b8",textTransform:"uppercase",letterSpacing:".8px",marginBottom:10}}>Status</div><div style={{display:"flex",gap:6,flexWrap:"wrap"}}>{["nieuw","in behandeling","behandeld","afgewezen"].map(s=><button key={s} onClick={()=>{onStatus(selected.id,s);setSelected({...selected,status:s});}} style={{padding:"6px 12px",borderRadius:8,border:`2px solid ${stKleur[s]}`,background:selected.status===s?stKleur[s]:"#fff",color:selected.status===s?"#fff":stKleur[s],fontWeight:700,fontSize:12,cursor:"pointer"}}>{stIco[s]} {s}</button>)}</div></div>
-        <div style={{background:"#f8fafc",borderRadius:12,padding:"14px",border:"1px solid #e2e8f0",flex:1}}><div style={{fontWeight:700,fontSize:11,color:"#94a3b8",textTransform:"uppercase",letterSpacing:".8px",marginBottom:10}}>👤 Klant</div><IR label="Naam" waarde={selected.naam}/><IR label="Email" waarde={selected.email}/><IR label="Telefoon" waarde={selected.tel}/><IR label="Adres" waarde={selected.adres}/><IR label="Gemeente" waarde={[selected.postcode,selected.gemeente].filter(Boolean).join(" ")}/></div>
-        <div style={{display:"flex",flexDirection:"column",gap:8}}><button onClick={()=>{onToKlant(selected);setToKlantDone(p=>new Set(p).add(selected.id));}} style={{width:"100%",padding:"13px",background:toKlantDone.has(selected.id)?"#10b981":"#0f1e35",color:"#fff",border:"none",borderRadius:10,fontWeight:700,fontSize:14,cursor:"pointer"}}>{toKlantDone.has(selected.id)?"✅ Klant toegevoegd":"👤 Toevoegen als klant"}</button><button onClick={()=>onToOfferte(selected)} style={{width:"100%",padding:"13px",background:"#2563eb",color:"#fff",border:"none",borderRadius:10,fontWeight:700,fontSize:14,cursor:"pointer"}}>📋 Offerte aanmaken</button></div>
+  const [filter, setFilter] = useState("nieuw");
+  const [selected, setSelected] = useState(null);
+  const [toKlantDone, setToKlantDone] = useState(new Set());
+
+  const statussen = ["nieuw","in behandeling","behandeld","afgewezen"];
+  const stIco = {nieuw:"🔵",["in behandeling"]:"🟡",behandeld:"🟢",afgewezen:"🔴"};
+  const stKleur = {nieuw:"#3b82f6",["in behandeling"]:"#f59e0b",behandeld:"#10b981",afgewezen:"#ef4444"};
+
+  const gefilterd = filter === "alle" ? leads : leads.filter(l=>l.status===filter);
+  const aantalNieuw = leads.filter(l=>l.status==="nieuw").length;
+
+  const fmtDt = ts => { try { return new Date(ts).toLocaleString("nl-BE",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"}); } catch(_){return ts||"";} };
+
+  return (
+    <div className="page-wrap">
+      <div className="ph">
+        <div>
+          <h1 className="pt">📥 Aanvragen</h1>
+          <p className="ps">Klantaanvragen via de website</p>
+        </div>
+        <div style={{display:"flex",gap:8,alignItems:"center"}}>
+          {aantalNieuw>0&&<span style={{background:"#ef4444",color:"#fff",borderRadius:20,padding:"4px 12px",fontWeight:700,fontSize:13}}>{aantalNieuw} nieuw</span>}
+          <button className="btn bs" onClick={onRefresh}>🔄 Vernieuwen</button>
+          <a href="/aanvraag.html" target="_blank" className="btn b2">🔗 Aanvraagpagina</a>
+        </div>
       </div>
-      <div style={{display:"flex",flexDirection:"column",gap:14}}>
-        <div style={{background:"#f8fafc",borderRadius:12,padding:"14px",border:"1px solid #e2e8f0"}}><div style={{fontWeight:700,fontSize:11,color:"#94a3b8",textTransform:"uppercase",letterSpacing:".8px",marginBottom:10}}>⚡ Aanvraag</div><IR label="Service" waarde={selected.service}/><IR label="Voertuig" waarde={selected.voertuig}/>{(selected.opmerking||selected.bericht)&&<div style={{marginTop:10,padding:"12px",background:"#fffbeb",borderRadius:8,border:"1px solid #fde68a"}}><div style={{fontSize:11,fontWeight:700,color:"#92400e",marginBottom:6}}>💬 Opmerking</div><div style={{fontSize:13,color:"#1e293b",lineHeight:1.7,whiteSpace:"pre-wrap"}}>{selected.opmerking||selected.bericht}</div></div>}</div>
-        <div style={{background:"#f8fafc",borderRadius:12,padding:"14px",border:"1px solid #e2e8f0",flex:1}}><div style={{fontWeight:700,fontSize:11,color:"#94a3b8",textTransform:"uppercase",letterSpacing:".8px",marginBottom:12}}>📸 Foto's {fotos.length>0?`(${fotos.length})`:""}</div>{fotos.length>0?<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(120px,1fr))",gap:8}}>{fotos.map((foto,i)=>{const src=getFotoSrc(foto);return(<div key={i} onClick={()=>setFotoIdx(i)} style={{cursor:"zoom-in"}}><div style={{borderRadius:10,overflow:"hidden",border:"2px solid #e2e8f0",aspectRatio:"1",background:"#e8edf2"}}>{src?<img src={src} alt={getFotoLabel(foto,i)} style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}} onError={e=>{e.target.style.display="none";}}/>:null}</div><div style={{fontSize:11,color:"#64748b",textAlign:"center",marginTop:4,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{getFotoLabel(foto,i)}</div></div>);})}</div>:<div style={{textAlign:"center",color:"#94a3b8",padding:"20px 0"}}><div style={{fontSize:32}}>📷</div><div style={{fontSize:12,marginTop:6}}>Geen foto's</div></div>}</div>
+
+      {/* Filter tabs */}
+      <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:16,padding:"0 4px"}}>
+        {["alle","nieuw","in behandeling","behandeld","afgewezen"].map(s=>(
+          <button key={s} onClick={()=>setFilter(s)} style={{
+            padding:"6px 14px",borderRadius:20,border:"2px solid",cursor:"pointer",fontWeight:600,fontSize:13,
+            borderColor:filter===s?(stKleur[s]||"#1a2e4a"):"#e2e8f0",
+            background:filter===s?(stKleur[s]||"#1a2e4a"):"#fff",
+            color:filter===s?"#fff":(stKleur[s]||"#64748b")
+          }}>
+            {stIco[s]||"📋"} {s==="alle"?"Alle":s} {s==="nieuw"&&aantalNieuw?`(${aantalNieuw})`:""}
+          </button>
+        ))}
       </div>
-    </div></div></div>}
-    {selected&&fotoIdx!==null&&fotos.length>0&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.94)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center"}} onClick={()=>setFotoIdx(null)}>{fotos.length>1&&<button onClick={e=>{e.stopPropagation();setFotoIdx(p=>p>0?p-1:fotos.length-1);}} style={{position:"absolute",left:16,top:"50%",transform:"translateY(-50%)",background:"rgba(255,255,255,.2)",border:"none",color:"#fff",borderRadius:"50%",width:52,height:52,fontSize:28,cursor:"pointer"}}>‹</button>}<div style={{maxWidth:"90vw",maxHeight:"90vh",textAlign:"center",padding:fotos.length>1?"0 80px":"0 20px"}} onClick={e=>e.stopPropagation()}><img src={getFotoSrc(fotos[fotoIdx])} alt="" style={{maxWidth:"100%",maxHeight:"82vh",objectFit:"contain",borderRadius:12}}/></div>{fotos.length>1&&<button onClick={e=>{e.stopPropagation();setFotoIdx(p=>p<fotos.length-1?p+1:0);}} style={{position:"absolute",right:16,top:"50%",transform:"translateY(-50%)",background:"rgba(255,255,255,.2)",border:"none",color:"#fff",borderRadius:"50%",width:52,height:52,fontSize:28,cursor:"pointer"}}>›</button>}<button onClick={()=>setFotoIdx(null)} style={{position:"absolute",top:16,right:16,background:"rgba(255,255,255,.2)",border:"none",color:"#fff",borderRadius:10,width:42,height:42,fontSize:22,cursor:"pointer"}}>✕</button></div>}
-  </div>);
+
+      <div style={{display:"grid",gridTemplateColumns:selected?"1fr 1fr":"1fr",gap:16}}>
+        {/* Lijst */}
+        <div>
+          {gefilterd.length===0
+            ? <div style={{textAlign:"center",padding:"60px 20px",color:"#94a3b8"}}>
+                <div style={{fontSize:48,marginBottom:12}}>📭</div>
+                <div style={{fontSize:16,fontWeight:600}}>Geen aanvragen</div>
+                <div style={{fontSize:13,marginTop:4}}>
+                  <a href="/aanvraag.html" target="_blank" style={{color:"#2563eb"}}>Deel de aanvraaglink</a> met klanten
+                </div>
+              </div>
+            : gefilterd.map(lead=>(
+            <div key={lead.id} onClick={()=>setSelected(lead)} style={{
+              background:selected?.id===lead.id?"#eff6ff":"#fff",
+              border:`2px solid ${selected?.id===lead.id?"#3b82f6":"#e2e8f0"}`,
+              borderRadius:12,padding:"14px 16px",marginBottom:10,cursor:"pointer",
+              transition:"all .15s"
+            }}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8}}>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{fontWeight:700,fontSize:15,color:"#1e293b"}}>{lead.naam||"Onbekend"}</div>
+                  <div style={{fontSize:12,color:"#64748b",marginTop:2}}>
+                    {lead.service||lead.type||"Aanvraag"} · {fmtDt(lead.created_at)}
+                  </div>
+                  {lead.email&&<div style={{fontSize:12,color:"#475569",marginTop:2}}>✉ {lead.email}</div>}
+                </div>
+                <span style={{
+                  background:stKleur[lead.status]+"22",color:stKleur[lead.status],
+                  border:`1px solid ${stKleur[lead.status]}`,
+                  borderRadius:8,padding:"3px 8px",fontSize:11,fontWeight:700,whiteSpace:"nowrap",flexShrink:0
+                }}>{stIco[lead.status]} {lead.status}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Detail panel */}
+        {selected&&(
+          <div style={{background:"#fff",border:"2px solid #e2e8f0",borderRadius:14,overflow:"hidden",position:"sticky",top:80,maxHeight:"calc(100vh - 120px)",overflowY:"auto"}}>
+            {/* Header */}
+            <div style={{background:"#1a2e4a",padding:"16px 20px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <div>
+                <div style={{color:"#fff",fontWeight:800,fontSize:17}}>{selected.naam}</div>
+                <div style={{color:"rgba(255,255,255,.6)",fontSize:12,marginTop:2}}>{fmtDt(selected.created_at)}</div>
+              </div>
+              <button onClick={()=>setSelected(null)} style={{background:"rgba(255,255,255,.2)",border:"none",color:"#fff",borderRadius:8,width:32,height:32,cursor:"pointer",fontSize:18}}>✕</button>
+            </div>
+
+            <div style={{padding:"20px"}}>
+              {/* Status wijzigen */}
+              <div style={{marginBottom:16}}>
+                <label style={{fontSize:12,fontWeight:700,color:"#64748b",display:"block",marginBottom:6}}>STATUS</label>
+                <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                  {statussen.map(s=>(
+                    <button key={s} onClick={()=>{onStatus(selected.id,s);setSelected({...selected,status:s});}}
+                      style={{padding:"6px 12px",borderRadius:8,border:`2px solid ${stKleur[s]}`,
+                        background:selected.status===s?stKleur[s]:"#fff",
+                        color:selected.status===s?"#fff":stKleur[s],
+                        fontWeight:600,fontSize:12,cursor:"pointer"}}>
+                      {stIco[s]} {s}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Klantgegevens */}
+              <div style={{background:"#f8fafc",borderRadius:10,padding:"14px",marginBottom:14}}>
+                <div style={{fontWeight:700,fontSize:13,color:"#1e293b",marginBottom:10}}>👤 Klantgegevens</div>
+                {[
+                  ["Naam",selected.naam],["Email",selected.email],["Tel",selected.tel],
+                  ["Type",selected.klantType],["Bedrijf",selected.bedrijf],["BTW nr",selected.btwnr],
+                  ["Adres",selected.adres],["Gemeente",[selected.postcode,selected.gemeente].filter(Boolean).join(" ")],
+                ].filter(([,v])=>v).map(([l,v])=>(
+                  <div key={l} style={{display:"flex",gap:8,marginBottom:6,fontSize:13}}>
+                    <span style={{color:"#64748b",minWidth:70,flexShrink:0}}>{l}</span>
+                    <span style={{fontWeight:600,color:"#1e293b"}}>{v}</span>
+                  </div>
+                ))}
+              </div>
+
+              {/* Aanvraagdetails */}
+              <div style={{background:"#f8fafc",borderRadius:10,padding:"14px",marginBottom:14}}>
+                <div style={{fontWeight:700,fontSize:13,color:"#1e293b",marginBottom:10}}>⚡ Aanvraagdetails</div>
+                {[
+                  ["Service",selected.service],["Omschrijving",selected.opmerking||selected.bericht],
+                  ["Installatietype",selected.installatieType],["Voertuig",selected.voertuig],
+                  ["Stroom",selected.stroom],["Netbeheerder",selected.netbeheerder],
+                ].filter(([,v])=>v).map(([l,v])=>(
+                  <div key={l} style={{display:"flex",gap:8,marginBottom:6,fontSize:13}}>
+                    <span style={{color:"#64748b",minWidth:100,flexShrink:0}}>{l}</span>
+                    <span style={{fontWeight:600,color:"#1e293b",wordBreak:"break-word"}}>{v}</span>
+                  </div>
+                ))}
+              </div>
+
+              {/* Foto's */}
+              {selected.fotos && selected.fotos.length > 0 && (
+                <div style={{marginBottom:14}}>
+                  <div style={{fontWeight:700,fontSize:13,color:"#1e293b",marginBottom:10}}>📸 Foto's ({selected.fotos.length})</div>
+                  <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(120px,1fr))",gap:8}}>
+                    {selected.fotos.map((foto,i)=>(
+                      <a key={i} href={foto.url||foto} target="_blank" style={{display:"block"}}>
+                        <img src={foto.url||foto} alt={foto.label||`Foto ${i+1}`}
+                          style={{width:"100%",aspectRatio:"1",objectFit:"cover",borderRadius:8,border:"1px solid #e2e8f0"}}
+                          onError={e=>{e.target.style.display="none";}}/>
+                        {foto.label&&<div style={{fontSize:10,color:"#64748b",textAlign:"center",marginTop:4}}>{foto.label}</div>}
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Acties */}
+              <div style={{display:"flex",flexDirection:"column",gap:10,marginTop:20}}>
+                <button onClick={()=>{onToKlant(selected);setToKlantDone(p=>new Set(p).add(selected.id));}}
+                  style={{width:"100%",padding:"14px",background:toKlantDone.has(selected.id)?"#10b981":"#1a2e4a",
+                    color:"#fff",border:"none",borderRadius:10,fontWeight:700,fontSize:15,cursor:"pointer"}}>
+                  {toKlantDone.has(selected.id)?"✅ Klant toegevoegd":"👤 Toevoegen als klant"}
+                </button>
+                <button onClick={()=>{onToOfferte(selected);}}
+                  style={{width:"100%",padding:"14px",background:"#2563eb",
+                    color:"#fff",border:"none",borderRadius:10,fontWeight:700,fontSize:15,cursor:"pointer"}}>
+                  📋 Offerte aanmaken
+                </button>
+                <a href={`mailto:${selected.email}?subject=Uw aanvraag bij W-charge BV`}
+                  style={{display:"block",width:"100%",padding:"12px",background:"#f1f5f9",
+                    color:"#475569",border:"2px solid #e2e8f0",borderRadius:10,fontWeight:600,
+                    fontSize:14,textAlign:"center",textDecoration:"none"}}>
+                  ✉ Email versturen
+                </a>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }
