@@ -1242,7 +1242,6 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--txt);font-s
   .doc-page .qt-parties{grid-template-columns:1fr!important;gap:12px!important}
   @media print{.doc-page .qt-parties{grid-template-columns:1fr 1fr!important;gap:22px!important}}
   .doc-page .qt-meta-bar{flex-wrap:wrap!important;gap:6px!important}
-  @media print{.doc-page .qt-meta-bar{display:grid!important;grid-template-columns:1fr 1fr!important;flex-wrap:unset!important;gap:0!important}}
   .doc-page .qt-totals{max-width:100%!important}
   .doc-page .qt-tot-box{min-width:0!important}
   .doc-page .grp-hdr{font-size:12px!important;padding:6px 10px!important}
@@ -1716,6 +1715,7 @@ tr.row-active td{border-top:2px solid #2563eb}
   #print-root .doc-wrap{display:block!important;width:100%!important;padding:0!important;background:#fff!important}
   
   .screen-only{display:none!important}
+  .fiche-dl-pill{display:none!important}
   .print-only{display:block!important}
   .no-print{display:none!important}
   
@@ -1739,8 +1739,8 @@ tr.row-active td{border-top:2px solid #2563eb}
   .qt-meta-item{padding:8px 14px!important;border-right:1px solid #e2e8f0!important;border-bottom:1px solid #e2e8f0!important}
   .qt-meta-item:nth-child(2n){border-right:none!important}
   .qt-meta-item:nth-last-child(-n+2){border-bottom:none!important}
-  .qt-footer{margin-top:auto!important}
-  .fct-pg,.fct-pg2,.qt-pg,.prod-page{flex:1!important;overflow:visible!important}
+  .qt-footer{margin-top:auto!important;flex-shrink:0!important}
+  .fct-pg,.fct-pg2,.qt-pg,.prod-page{flex:1!important;overflow:visible!important;min-height:0!important}
   /* print-root breedte forceren zodat mobile CSS niet triggert */
   #print-root{width:210mm!important;min-width:210mm!important}
   .doc-page-lbl{display:none!important}
@@ -7264,7 +7264,7 @@ function OfferteDocument({doc, settings, ficheCache={}, producten=[]}) {
                   )}
                   {i<uniqueProds.length-1&&<div style={{height:1,background:"#e2e8f0",marginTop:20}}/>}
                   {/* Technische fiches — download links */}
-                  {((l.technischeFiches||[]).some(f=>f.data||f.url)||l.technischeFiche)&&<div style={{marginTop:8,display:"flex",flexWrap:"wrap",gap:4}}>
+                  {((l.technischeFiches||[]).some(f=>f.data||f.url)||l.technischeFiche)&&<div className="fiche-dl-pill" style={{marginTop:8,display:"flex",flexWrap:"wrap",gap:4}}>
                     {(l.technischeFiches||[]).filter(f=>f.data||f.url).map((f,fi)=>(
                       <a key={fi} href={f.data||f.url} download={f.naam||"fiche.pdf"} style={{display:"inline-flex",alignItems:"center",gap:5,background:"#eff6ff",border:"1px solid #bfdbfe",borderRadius:6,padding:"5px 12px",fontSize:11.5,color:"#2563eb",textDecoration:"none",fontWeight:600}}>📎 {f.naam||"Technische fiche"}</a>
                     ))}
@@ -7708,24 +7708,16 @@ function DocModal({doc,type,settings,onClose,onFactuur,onStatusOff,onStatusFact,
       const txt = page.innerText || page.textContent || "";
       if(txt.trim().length < 10) page.remove();
     });
+    // Footer altijd onderaan
+    pr.querySelectorAll(".qt-footer").forEach(el => {
+      el.style.setProperty("margin-top","auto","important");
+      el.style.setProperty("flex-shrink","0","important");
+    });
     // Forceer 2-kolom layout voor parties (mobile CSS override)
     pr.querySelectorAll(".qt-parties").forEach(el => {
       el.style.setProperty("display","grid","important");
       el.style.setProperty("grid-template-columns","1fr 1fr","important");
       el.style.setProperty("gap","22px","important");
-    });
-    // Forceer meta-bar als 2x2 grid
-    pr.querySelectorAll(".qt-meta-bar").forEach(el => {
-      el.style.setProperty("display","grid","important");
-      el.style.setProperty("grid-template-columns","1fr 1fr","important");
-      el.style.removeProperty("flex-wrap");
-    });
-    pr.querySelectorAll(".qt-meta-item").forEach(function(el,i,all){
-      el.style.setProperty("padding","8px 14px","important");
-      el.style.setProperty("border-right","1px solid #e2e8f0","important");
-      el.style.setProperty("border-bottom","1px solid #e2e8f0","important");
-      if((i+1)%2===0) el.style.setProperty("border-right","none","important");
-      if(i>=all.length-2) el.style.setProperty("border-bottom","none","important");
     });
     // Zorg dat content niet afgesneden wordt
     pr.querySelectorAll(".qt-pg,.prod-page,.fct-pg,.fct-pg2").forEach(el => {
