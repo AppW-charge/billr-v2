@@ -1242,6 +1242,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--txt);font-s
   .doc-page .qt-parties{grid-template-columns:1fr!important;gap:12px!important}
   @media print{.doc-page .qt-parties{grid-template-columns:1fr 1fr!important;gap:22px!important}}
   .doc-page .qt-meta-bar{flex-wrap:wrap!important;gap:6px!important}
+  @media print{.doc-page .qt-meta-bar{display:grid!important;grid-template-columns:1fr 1fr!important;flex-wrap:unset!important;gap:0!important}}
   .doc-page .qt-totals{max-width:100%!important}
   .doc-page .qt-tot-box{min-width:0!important}
   .doc-page .grp-hdr{font-size:12px!important;padding:6px 10px!important}
@@ -1734,7 +1735,10 @@ tr.row-active td{border-top:2px solid #2563eb}
   .doc-page .qt-parties{display:grid!important;grid-template-columns:1fr 1fr!important;gap:22px!important}
   #print-root .qt-parties{display:grid!important;grid-template-columns:1fr 1fr!important;gap:22px!important}
   .qt-header{display:flex!important;flex-direction:row!important;justify-content:space-between!important}
-  .qt-meta-bar{display:flex!important;flex-wrap:wrap!important}
+  .qt-meta-bar{display:grid!important;grid-template-columns:1fr 1fr!important;background:#f8fafc!important;border:1px solid #e2e8f0!important;border-radius:6px!important;overflow:hidden!important}
+  .qt-meta-item{padding:8px 14px!important;border-right:1px solid #e2e8f0!important;border-bottom:1px solid #e2e8f0!important}
+  .qt-meta-item:nth-child(2n){border-right:none!important}
+  .qt-meta-item:nth-last-child(-n+2){border-bottom:none!important}
   .qt-footer{margin-top:auto!important}
   .fct-pg,.fct-pg2,.qt-pg,.prod-page{flex:1!important;overflow:visible!important}
   /* print-root breedte forceren zodat mobile CSS niet triggert */
@@ -7709,6 +7713,19 @@ function DocModal({doc,type,settings,onClose,onFactuur,onStatusOff,onStatusFact,
       el.style.setProperty("display","grid","important");
       el.style.setProperty("grid-template-columns","1fr 1fr","important");
       el.style.setProperty("gap","22px","important");
+    });
+    // Forceer meta-bar als 2x2 grid
+    pr.querySelectorAll(".qt-meta-bar").forEach(el => {
+      el.style.setProperty("display","grid","important");
+      el.style.setProperty("grid-template-columns","1fr 1fr","important");
+      el.style.removeProperty("flex-wrap");
+    });
+    pr.querySelectorAll(".qt-meta-item").forEach(function(el,i,all){
+      el.style.setProperty("padding","8px 14px","important");
+      el.style.setProperty("border-right","1px solid #e2e8f0","important");
+      el.style.setProperty("border-bottom","1px solid #e2e8f0","important");
+      if((i+1)%2===0) el.style.setProperty("border-right","none","important");
+      if(i>=all.length-2) el.style.setProperty("border-bottom","none","important");
     });
     // Zorg dat content niet afgesneden wordt
     pr.querySelectorAll(".qt-pg,.prod-page,.fct-pg,.fct-pg2").forEach(el => {
