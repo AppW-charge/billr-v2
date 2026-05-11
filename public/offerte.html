@@ -499,7 +499,7 @@ tr.row-active td{border-top:2px solid #2563eb}
     display:grid!important;grid-template-columns:42% 58%!important;
     overflow:hidden!important;
   }
-  .cov-l{height:100%!important;min-height:100%!important;background-size:cover!important;background-position:center!important}
+  .cov-l{height:100%!important;min-height:100%!important;background-size:100% 100%!important}
   .cov-r{height:100%!important;box-sizing:border-box!important}
   
   /* Content pagina's: interne padding (omdat @page margin=0) */
@@ -967,7 +967,7 @@ function OfferteDocument({doc, settings, ficheCache={}, producten=[]}) {
           return <div className="cov" style={{gridTemplateColumns:`${colW}% ${100-colW}%`}}>
             {/* Linker strook: banner als ingesteld, anders kleurgradiënt */}
             <div className="cov-l" style={vImg
-              ?{backgroundImage:`url(${vImg})`,backgroundSize:"cover",backgroundPosition:"center",backgroundRepeat:"no-repeat",padding:0}
+              ?{backgroundImage:`url(${vImg})`,backgroundSize:"100% 100%",backgroundRepeat:"no-repeat",padding:0}
               :{background:`linear-gradient(155deg,${dc} 0%,${dc}ee 70%,#0f172a 100%)`}}>
               {!vImg&&<CovBedrijf light/>}
               {!vImg&&inst&&<div className="cov-inst-badge"><span style={{fontSize:20}}>{inst.icon}</span>{inst.l}</div>}
@@ -1099,7 +1099,7 @@ function OfferteDocument({doc, settings, ficheCache={}, producten=[]}) {
                     </div>}
                     <div style={{flex:1}}>
                       <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
-                        <span style={{background:dc,color:"#fff",borderRadius:5,padding:"2px 9px",fontSize:10,fontWeight:700}}>{groepen.find(g=>g.id===l.groepId)?.naam||l.cat||"Product"}</span>
+                        <span style={{background:dc,color:"#fff",borderRadius:5,padding:"2px 9px",fontSize:10,fontWeight:700}}>{l.cat||groepen.find(g=>g.id===l.groepId)?.naam||"Product"}</span>
                         <span style={{fontSize:11,color:"#94a3b8"}}>×{l.aantal} {l.eenheid}</span>
                       </div>
                       <div style={{fontWeight:800,fontSize:16,color:"#1e293b",lineHeight:1.3,marginBottom:4}}>{l.naam}</div>
