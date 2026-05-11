@@ -2329,6 +2329,7 @@ export default function App() {
       // Filter op eigen offerte IDs - geen data van andere gebruikers ophalen
       const offerteIds = offertes_ref.current.map(o => o.id).filter(Boolean);
       if(offerteIds.length === 0) return;
+      console.log("🔄 fetchOfferteTracking:", offerteIds.length, "offertes");
       const { data: views } = await sb.from('offerte_views').select('offerte_id, viewed_at, user_agent')
         .in('offerte_id', offerteIds).order('viewed_at', {ascending:false}).limit(200);
       const { data: responses } = await sb.from('offerte_responses').select('offerte_id, status, periode, opmerkingen, submitted_at')
