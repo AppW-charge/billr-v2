@@ -7682,7 +7682,21 @@ ${styles}
 </style>
 <style>
 @page{size:A4 portrait;margin:0mm}
-@media print{*{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important;box-shadow:none!important}.printbar{display:none!important}body{background:#fff!important}}
+@media print{
+  *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important;box-shadow:none!important}
+  .printbar{display:none!important}
+  body{background:#fff!important}
+  /* KRITIEK: geen overflow:hidden in print — Chrome's marges knippen anders content af */
+  .doc-page{height:auto!important;min-height:0!important;max-height:none!important;overflow:visible!important;break-after:page!important;page-break-after:always!important;display:block!important}
+  .doc-page:last-child{break-after:auto!important;page-break-after:auto!important}
+  .fiche-print-page{height:auto!important;max-height:none!important;overflow:visible!important;break-after:page!important;page-break-after:always!important}
+  .fiche-print-page:last-child{break-after:auto!important;page-break-after:auto!important}
+  .cov{height:auto!important;max-height:none!important;overflow:visible!important;min-height:230mm!important}
+  .prod-page,.qt-pg,.fct-pg,.fct-pg2{overflow:visible!important;min-height:0!important}
+  .qt-footer{margin-top:20px!important;flex-shrink:0!important}
+  .fiche-print-images{display:block!important}
+  .fiche-screen-embed{display:none!important}
+}
 </style>
 </head><body>
 <div id="print-root" style="width:210mm;min-width:210mm">
