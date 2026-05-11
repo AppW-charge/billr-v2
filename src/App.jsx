@@ -7715,65 +7715,60 @@ function DocModal({doc,type,settings,onClose,onFactuur,onStatusOff,onStatusFact,
     const btn = document.getElementById("doc-print-btn");
     if(btn){ btn.textContent="⏳ Laden..."; btn.disabled=true; }
 
-    // 2.5s wachten zodat PDF-fiches volledig geladen zijn
+    // Wacht 2.5s zodat PDF-fiches volledig geladen zijn
     setTimeout(()=>{
       if(btn){ btn.textContent="🖨 Afdrukken / PDF"; btn.disabled=false; }
 
       let pr = document.getElementById("print-root");
-      if(!pr){ pr = document.createElement("div"); pr.id = "print-root"; document.body.appendChild(pr); }
+      if(!pr){ pr = document.createElement("div"); pr.id="print-root"; document.body.appendChild(pr); }
 
-      // 210mm = boven 768px breakpoint, mobiele CSS triggert niet
-      pr.style.width = "210mm";
-      pr.style.minWidth = "210mm";
-      pr.style.maxWidth = "210mm";
+      // 210mm = boven 768px breakpoint zodat mobiele CSS niet triggert
+      pr.style.cssText = "width:210mm;min-width:210mm;max-width:210mm;margin:0;padding:0;";
       pr.innerHTML = docWrap.outerHTML;
 
-      const rootStyle = getComputedStyle(document.documentElement);
-      ["--theme","--p","--p2","--sb-txt-rgb","--bdr","--bg","--txt"].forEach(v => {
-        const val = rootStyle.getPropertyValue(v).trim();
-        if(val) pr.style.setProperty(v, val);
+      const rs = getComputedStyle(document.documentElement);
+      ["--theme","--p","--p2","--sb-txt-rgb","--bdr","--bg","--txt"].forEach(v=>{
+        const val=rs.getPropertyValue(v).trim(); if(val) pr.style.setProperty(v,val);
       });
 
-      // Doc-pages: vaste hoogte + flex kolom
-      pr.querySelectorAll(".doc-page").forEach(page => {
-        const c=(page.innerText||page.textContent||"").trim();
-        if(c.length<10){page.remove();return;}
-        page.style.setProperty("height","297mm","important");
-        page.style.setProperty("min-height","297mm","important");
-        page.style.setProperty("max-height","297mm","important");
-        page.style.setProperty("overflow","visible","important");
-        page.style.setProperty("display","flex","important");
-        page.style.setProperty("flex-direction","column","important");
-        page.style.setProperty("padding","0","important");
-        page.style.setProperty("box-sizing","border-box","important");
+      // ── Doc-pages: exact A4 (210×297mm), overflow:hidden → 100% schaal in Chrome ──
+      pr.querySelectorAll(".doc-page").forEach(page=>{
+        if((page.innerText||"").trim().length<10){page.remove();return;}
+        page.style.cssText+= [
+          "height:297mm","min-height:297mm","max-height:297mm",
+          "overflow:hidden",   // ← KRITIEK: hidden = geen auto-scale door Chrome
+          "display:flex","flex-direction:column",
+          "padding:0","margin:0 auto","box-sizing:border-box",
+          "width:210mm","break-after:page","page-break-after:always"
+        ].map(s=>`${s}!important`).join(";") + ";";
       });
 
-      // Groene balkjes
+      // Groene balkjes bovenaan elke pagina
       pr.querySelectorAll(".screen-accent-bar").forEach(el=>{
         el.style.setProperty("display","block","important");
         el.style.setProperty("height","5px","important");
         el.style.setProperty("flex-shrink","0","important");
       });
 
-      // Footer: altijd onderaan
+      // Footer onderaan
       pr.querySelectorAll(".qt-footer").forEach(el=>{
         el.style.setProperty("display","flex","important");
         el.style.setProperty("margin-top","auto","important");
         el.style.setProperty("flex-shrink","0","important");
-        el.style.setProperty("position","static","important");
+        el.style.setProperty("padding","8px 20px","important");
       });
 
-      // Content secties: vullen resterende ruimte
+      // Content-secties: flex:1 = vult ruimte tussen balk en footer
       pr.querySelectorAll(".qt-pg,.prod-page,.fct-pg,.fct-pg2").forEach(el=>{
         el.style.setProperty("flex","1","important");
-        el.style.setProperty("overflow","visible","important");
+        el.style.setProperty("overflow","hidden","important");
         el.style.setProperty("min-height","0","important");
         el.style.setProperty("padding","6px 20px","important");
         el.style.setProperty("box-sizing","border-box","important");
       });
 
-      // ── OFFERTE SPACING: inline styles = hoogste prioriteit, wint van alle CSS ──
-      // Zodat betaling + voorschot + handtekening + digitaal akkoord ALTIJD zichtbaar zijn
+      // ── OFFERTE: inline spacing = hoogste prioriteit, wint van alle CSS ──
+      // Doel: betaling+voorschot+handtekening+digitaal akkoord altijd zichtbaar
 
       pr.querySelectorAll(".qt-header").forEach(el=>{
         el.style.setProperty("margin-bottom","8px","important");
@@ -7829,29 +7824,25 @@ function DocModal({doc,type,settings,onClose,onFactuur,onStatusOff,onStatusFact,
         el.style.setProperty("padding","8px","important");
         el.style.setProperty("min-height","32px","important");
       });
-      pr.querySelectorAll(".qt-sign-lbl").forEach(el=>{
-        el.style.setProperty("margin-bottom","2px","important");
-      });
       pr.querySelectorAll(".qt-confirm-link").forEach(el=>{
         el.style.setProperty("margin-top","4px","important");
         el.style.setProperty("padding","5px 10px","important");
       });
-
       pr.querySelectorAll(".qt-tbl thead").forEach(el=>{
         el.style.setProperty("display","table-row-group","important");
       });
-      try{const covEl=pr.querySelector(".cov");if(covEl&&!covEl.style.gridTemplateColumns)covEl.style.gridTemplateColumns="42% 58%";}catch(_){}
+      try{const cov=pr.querySelector(".cov");if(cov&&!cov.style.gridTemplateColumns)cov.style.gridTemplateColumns="42% 58%";}catch(_){}
 
-      const prev = document.title;
-      document.title = doc.nummer || "document";
-      requestAnimationFrame(()=>{ setTimeout(()=>{
+      const prev=document.title;
+      document.title=doc.nummer||"document";
+      requestAnimationFrame(()=>setTimeout(()=>{
         window.print();
-        setTimeout(()=>{ pr.innerHTML = ""; document.title = prev; }, 2000);
-      }, 300); });
+        setTimeout(()=>{pr.innerHTML="";document.title=prev;},2000);
+      },300));
 
       if(type==="offerte") onStatusOff("afgedrukt");
       else onStatusFact("afgedrukt");
-    }, 2500);
+    },2500);
   };
 
   // Ctrl+P shortcut
