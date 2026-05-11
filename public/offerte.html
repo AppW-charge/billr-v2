@@ -457,10 +457,10 @@ tr.row-active td{border-top:2px solid #2563eb}
 /* -- PRINT: verwijder browser-header (URL, datum, paginanr) -- */
 @page{
   size:A4 portrait;
-  margin:0;
+  margin:8mm 10mm;
 }
 @media print{
-  @page{size:A4 portrait;margin:0}
+  @page{size:A4 portrait;margin:8mm 10mm}
   
   /* Kleur behouden */
   *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important;box-shadow:none!important}
@@ -479,8 +479,8 @@ tr.row-active td{border-top:2px solid #2563eb}
   /* --- Elke doc-page = exacte A4 pagina (210×297mm) --- */
   .doc-page{
     box-shadow:none!important;border-radius:0!important;
-    margin:0 auto!important;max-width:100%!important;width:210mm!important;
-    height:297mm!important;max-height:297mm!important;
+    margin:0 auto!important;max-width:100%!important;width:190mm!important;
+    height:281mm!important;max-height:281mm!important;
     overflow:hidden!important;
     display:flex!important;flex-direction:column!important;
     break-after:page!important;page-break-after:always!important;
@@ -494,8 +494,8 @@ tr.row-active td{border-top:2px solid #2563eb}
   .prod-page-wrap .prod-page{overflow:visible!important;height:auto!important;max-height:none!important}
   /* Coverpagina */
   .cov{
-    width:100%!important;height:297mm!important;
-    min-height:297mm!important;max-height:297mm!important;
+    width:100%!important;height:281mm!important;
+    min-height:281mm!important;max-height:281mm!important;
     display:grid!important;grid-template-columns:42% 58%!important;
     overflow:hidden!important;
   }
@@ -516,7 +516,7 @@ tr.row-active td{border-top:2px solid #2563eb}
   
   /* Technische fiche pagina's */
   .fiche-print-page{
-    width:210mm!important;height:297mm!important;
+    width:190mm!important;height:281mm!important;
     overflow:hidden!important;box-sizing:border-box!important;
     break-after:page!important;page-break-after:always!important;
     display:flex!important;flex-direction:column!important;
