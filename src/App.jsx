@@ -7281,19 +7281,23 @@ function OfferteDocument({doc, settings, ficheCache={}, producten=[]}) {
       </>}
       {/* PAGE 2: PRODUCTINFO + TECHNISCHE FICHES */}
       {sj.toonProductpagina!==false&&uniqueProds.length>0&&<>
-        <div className="doc-page-lbl">Pagina 2 — Productinformatie & Technische fiches</div>
-        <div className="doc-page prod-page-wrap">
+        {[...Array(Math.ceil(uniqueProds.length/6))].map((_,pageIdx)=>{
+          const pageProdList=uniqueProds.slice(pageIdx*6,(pageIdx+1)*6);
+          const totPages=Math.ceil(uniqueProds.length/6);
+          return <div key={pageIdx}>
+        <div className="doc-page-lbl">Pagina {2+pageIdx} — Productinformatie</div>
+        <div className="doc-page">
           <div style={{height:5,background:dc,borderRadius:"4px 4px 0 0",flexShrink:0}}/>
           <div className="prod-page">
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end",marginBottom:6}}>
               <div>
-                <div style={{fontWeight:900,fontSize:20,color:dc,letterSpacing:"-.5px"}}>{inst?.icon} Productinformatie & Technische Fiches</div>
+                <div style={{fontWeight:900,fontSize:20,color:dc,letterSpacing:"-.5px"}}>{inst?.icon} Productinformatie & Technische Fiches{totPages>1?` (${pageIdx+1}/${totPages})`:""}</div>
                 <div style={{fontSize:12,color:"#64748b",marginTop:2}}>Geselecteerde producten voor {doc.klant?.naam||"de klant"}</div>
               </div>
               <div style={{fontSize:10,color:"#94a3b8",textAlign:"right"}}>{bed.naam} · {doc.nummer}</div>
             </div>
             <div style={{height:1,background:"#e2e8f0",marginBottom:20}}/>
-            {uniqueProds.map((l,i)=>{
+            {pageProdList.map((l,i)=>{
               const rawSpecs = l.specs||[];
               const specRows = rawSpecs.filter(s=>s.includes(":")||s.includes("="))
                 .map(s=>{const ci=s.indexOf(":");const eq=s.indexOf("=");const si=ci>=0&&(eq<0||ci<=eq)?ci:eq;return si>=0?{key:s.slice(0,si).trim(),val:s.slice(si+1).trim()}:{key:s.trim(),val:""};});
@@ -7353,6 +7357,8 @@ function OfferteDocument({doc, settings, ficheCache={}, producten=[]}) {
           </div>
           <div className="qt-footer" style={{background:dc,marginTop:"auto"}}><div className="qt-footer-txt"><strong>{bed.naam}</strong></div><div className="qt-footer-txt">{bed.tel} · {bed.email}</div><div className="qt-footer-txt">{bed.website}</div></div>
         </div>
+        </div>;
+        })}
       </>}
 
       {/* PAGE 3: OFFERTEDETAIL */}
