@@ -1572,7 +1572,7 @@ tr.row-active td{border-top:2px solid #2563eb}
 .no-print{display:block}
 
 /* Page 1 Cover */
-.cov{display:grid;grid-template-columns:42% 58%;min-height:240mm;height:100%;align-items:stretch}
+.cov{display:grid;grid-template-columns:42% 58%;height:100%;flex:1;align-items:stretch;min-height:0}
 @media(max-width:768px){
   /* Document preview schaal + scroll */
   .doc-wrap{width:100%!important;overflow-x:auto!important}
@@ -1754,7 +1754,7 @@ tr.row-active td{border-top:2px solid #2563eb}
   .cov{
     width:100%!important;height:297mm!important;
     min-height:297mm!important;max-height:297mm!important;
-    display:grid!important;grid-template-columns:42% 58%!important;
+    display:grid!important;
     overflow:hidden!important;
   }
   .cov-l{height:100%!important;min-height:100%!important;align-self:stretch!important}
@@ -7108,7 +7108,7 @@ function OfferteDocument({doc, settings, ficheCache={}, producten=[]}) {
           return <div className="cov" style={{gridTemplateColumns:`${colW}% ${100-colW}%`}}>
           {/* Linker kolom */}
           <div className="cov-l" style={lyt.voorbladAfbeelding
-            ?{backgroundImage:`url(${lyt.voorbladAfbeelding})`,backgroundSize:"cover",backgroundPosition:"center",backgroundRepeat:"no-repeat",padding:0}
+            ?{backgroundImage:`url(${lyt.voorbladAfbeelding})`,backgroundSize:`${lyt.voorbladZoom||100}%`,backgroundPosition:"center",backgroundRepeat:"no-repeat",padding:0}
             :{background:`linear-gradient(155deg,${dc} 0%,${dc}ee 70%,#0f172a 100%)`}}>
             {/* Als eigen afbeelding: geen logo/gegevens tonen */}
             {!lyt.voorbladAfbeelding&&<>
@@ -7745,6 +7745,8 @@ function DocModal({doc,type,settings,onClose,onFactuur,onStatusOff,onStatusFact,
     pr.querySelectorAll(".qt-parties").forEach(el=>{el.style.setProperty("display","grid","important");el.style.setProperty("grid-template-columns","1fr 1fr","important");el.style.setProperty("gap","22px","important");});
     pr.querySelectorAll(".qt-meta-bar").forEach(el=>{el.style.setProperty("display","grid","important");el.style.setProperty("grid-template-columns","1fr 1fr","important");});
     pr.querySelectorAll(".qt-tbl thead").forEach(el=>{el.style.setProperty("display","table-row-group","important");});
+    // Herstel cov breedte vanuit instellingen
+    try{const covEl=pr.querySelector(".cov");if(covEl){const sw=covEl.style.gridTemplateColumns;if(!sw)covEl.style.gridTemplateColumns="42% 58%";}}catch(_){}
 
     const prev = document.title;
     document.title = doc.nummer || "document";
@@ -9177,10 +9179,20 @@ function InstellingenPage({settings,setSettings,notify,onExportBackup,onImportBa
                 <div style={{marginTop:12}}>
                   <label className="fl">Breedte linker kolom</label>
                   <div style={{display:"flex",alignItems:"center",gap:8}}>
-                    <input type="range" min={25} max={65} value={lyt.voorbladKolombreedte||42} onChange={e=>setLObj("voorbladKolombreedte",+e.target.value)} style={{flex:1}}/>
+                    <input type="range" min={25} max={75} value={lyt.voorbladKolombreedte||42} onChange={e=>setLObj("voorbladKolombreedte",+e.target.value)} style={{flex:1}}/>
                     <button onClick={()=>setLObj("voorbladKolombreedte",Math.max(25,(lyt.voorbladKolombreedte||42)-5))} style={{width:24,height:24,border:"1px solid #e2e8f0",borderRadius:4,background:"#fff",cursor:"pointer",fontWeight:700}}>−</button>
                     <span style={{fontSize:12,fontWeight:700,minWidth:32,textAlign:"center"}}>{lyt.voorbladKolombreedte||42}%</span>
-                    <button onClick={()=>setLObj("voorbladKolombreedte",Math.min(65,(lyt.voorbladKolombreedte||42)+5))} style={{width:24,height:24,border:"1px solid #e2e8f0",borderRadius:4,background:"#fff",cursor:"pointer",fontWeight:700}}>+</button>
+                    <button onClick={()=>setLObj("voorbladKolombreedte",Math.min(75,(lyt.voorbladKolombreedte||42)+5))} style={{width:24,height:24,border:"1px solid #e2e8f0",borderRadius:4,background:"#fff",cursor:"pointer",fontWeight:700}}>+</button>
+                  </div>
+                </div>
+                {/* Zoom afbeelding */}
+                <div style={{marginTop:10}}>
+                  <label className="fl">Zoom afbeelding</label>
+                  <div style={{display:"flex",alignItems:"center",gap:8}}>
+                    <input type="range" min={50} max={200} value={lyt.voorbladZoom||100} onChange={e=>setLObj("voorbladZoom",+e.target.value)} style={{flex:1}}/>
+                    <button onClick={()=>setLObj("voorbladZoom",Math.max(50,(lyt.voorbladZoom||100)-10))} style={{width:24,height:24,border:"1px solid #e2e8f0",borderRadius:4,background:"#fff",cursor:"pointer",fontWeight:700}}>−</button>
+                    <span style={{fontSize:12,fontWeight:700,minWidth:38,textAlign:"center"}}>{lyt.voorbladZoom||100}%</span>
+                    <button onClick={()=>setLObj("voorbladZoom",Math.min(200,(lyt.voorbladZoom||100)+10))} style={{width:24,height:24,border:"1px solid #e2e8f0",borderRadius:4,background:"#fff",cursor:"pointer",fontWeight:700}}>+</button>
                   </div>
                 </div>
               </div>
