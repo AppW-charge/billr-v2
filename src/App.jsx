@@ -5066,6 +5066,26 @@ function DocLog({log=[]}) {
 }
 
 
+function TrackingCel({vws, rsp, onOpen}) {
+  const lastR = rsp.length ? [...rsp].sort((a,b)=>new Date(b.submitted_at)-new Date(a.submitted_at))[0] : null;
+  return (
+    <td className="mob-hide" style={{cursor:onOpen?"pointer":"default",verticalAlign:"middle"}}
+      onClick={e=>{e.stopPropagation();onOpen&&onOpen();}}>
+      <div style={{display:"flex",flexDirection:"column",gap:3,alignItems:"flex-start"}}>
+        <div style={{display:"flex",alignItems:"center",gap:4}}>
+          <span style={{fontSize:12,color:vws.length>0?"#4338ca":"#cbd5e1"}}>👁</span>
+          <span style={{fontSize:12,fontWeight:vws.length>0?700:400,color:vws.length>0?"#4338ca":"#94a3b8"}}>
+            {vws.length}×
+          </span>
+        </div>
+        {lastR?.status==="goedgekeurd"&&<span style={{fontSize:11,fontWeight:700,color:"#059669",background:"#f0fdf4",padding:"1px 5px",borderRadius:4}}>✅ Akkoord</span>}
+        {lastR?.status==="afgewezen"&&<span style={{fontSize:11,fontWeight:700,color:"#dc2626",background:"#fef2f2",padding:"1px 5px",borderRadius:4}}>❌ Afgewezen</span>}
+        {!lastR&&vws.length>0&&<span style={{fontSize:10,color:"#94a3b8"}}>⏳ geen reactie</span>}
+      </div>
+    </td>
+  );
+}
+
 function OffertesPage({offertes,initFilter,onView,onEdit,onStatus,onBulkStatus,onFactuur,onDelete,onNew,onEmail,onPlan,onShare,settings,offerteViews={},offerteResponses={},onLogboek,onRefreshTracking}) {
   const [q,setQ] = useState("");
   const [fs,setFs] = useState(initFilter||"alle");
@@ -5102,6 +5122,7 @@ function OffertesPage({offertes,initFilter,onView,onEdit,onStatus,onBulkStatus,o
       )}
       <div className="flex fca gap2 mb4" style={{flexWrap:"wrap"}}>
         <div className="srch"><span className="srch-ic">🔍</span><input className="srch-i" placeholder="Zoek offerte of klant…" value={q} onChange={e=>setQ(e.target.value)}/></div>
+        {onRefreshTracking&&<button className="btn bs btn-sm" title="Vernieuw views & reacties" onClick={()=>onRefreshTracking()}>🔄 Tracking</button>}
         <div className="flex gap2" style={{flexWrap:"wrap"}}>
           {["alle",...Object.keys(OFF_STATUS)].map(s=>(
             <button key={s} className={`btn btn-sm ${fs===s?"bp":"bs"}`} onClick={()=>setFs(s)}>
@@ -5115,7 +5136,7 @@ function OffertesPage({offertes,initFilter,onView,onEdit,onStatus,onBulkStatus,o
         <div className="tw"><table>
           <thead><tr>
             <th><input type="checkbox" className="chk" checked={sel.size===list.length&&sel.size>0} onChange={selAll}/></th>
-            <th>Nr</th><th className="mob-hide">Klant</th><th className="mob-hide-tb">Type</th><th className="mob-hide">Datum</th><th className="mob-hide">Geldig</th><th>Totaal</th><th>Status</th><th className="mob-hide">Tracking</th><th>Acties</th>
+            <th>Nr</th><th className="mob-hide">Klant</th><th className="mob-hide-tb">Type</th><th className="mob-hide">Datum</th><th className="mob-hide">Geldig</th><th>Totaal</th><th>Status</th><th className="mob-hide" style={{minWidth:80}}>👁 Tracking</th><th>Acties</th>
           </tr></thead>
           <tbody>{list.map(o=>{
             const t=calcTotals(o.lijnen||[]);
@@ -5142,23 +5163,7 @@ function OffertesPage({offertes,initFilter,onView,onEdit,onStatus,onBulkStatus,o
                     {Object.entries(OFF_STATUS).map(([k,v])=><option key={k} value={k}>{v.icon} {v.l}</option>)}
                   </select>
                 </td>
-                <td className="mob-hide" onClick={e=>e.stopPropagation()} style={{cursor:"pointer"}} title="Klik voor logboek" onClick={e=>{e.stopPropagation();onLogboek&&onLogboek(o);}}>
-                  {(()=>{
-                    const vws = offerteViews[o.id]||[];
-                    const rsp = offerteResponses[o.id]||[];
-                    const lastR = rsp.length ? [...rsp].sort((a,b)=>new Date(b.submitted_at)-new Date(a.submitted_at))[0] : null;
-                    return <div style={{display:"flex",flexDirection:"column",gap:2}}>
-                      <div style={{display:"flex",alignItems:"center",gap:4,fontSize:11}}>
-                        <span style={{color:"#6366f1"}}>👁</span>
-                        <span style={{fontWeight:vws.length>0?700:400,color:vws.length>0?"#4338ca":"#94a3b8"}}>{vws.length}×</span>
-                      </div>
-                      {lastR&&<div style={{fontSize:10,fontWeight:700,color:lastR.status==="goedgekeurd"?"#059669":"#dc2626"}}>
-                        {lastR.status==="goedgekeurd"?"✅ Akkoord":"❌ Afgewezen"}
-                      </div>}
-                      {!lastR&&vws.length>0&&<div style={{fontSize:10,color:"#94a3b8"}}>⏳ wacht reactie</div>}
-                    </div>;
-                  })()}
-                </td>
+                <TrackingCel vws={offerteViews[o.id]||[]} rsp={offerteResponses[o.id]||[]} onOpen={()=>onLogboek&&onLogboek(o)}/>
                 <td onClick={e=>e.stopPropagation()}>
                   <div className="flex gap2">
                     <button className="btn bs btn-sm" onClick={()=>onView(o)} title="Bekijken">👁</button>
@@ -5176,12 +5181,12 @@ function OffertesPage({offertes,initFilter,onView,onEdit,onStatus,onBulkStatus,o
               </tr>
               {activeId===o.id&&(
                 <tr className="doc-act-row">
-                  <td colSpan={9}>
+                  <td colSpan={10}>
                     <div className="doc-act-panel">
                       <div className="doc-act-btns">
                         <span className="doc-act-label">⚡ Acties:</span>
                         <button className="btn b2 btn-sm" onClick={()=>onView(o)}>👁 Bekijken</button>
-                        {onLogboek&&<button className="btn btn-sm" style={{background:"#eef2ff",color:"#4338ca",border:"1px solid #c7d2fe"}} onClick={()=>onLogboek(o)}>📊 Logboek{(offerteViews[o.id]||[]).length>0?` (${(offerteViews[o.id]||[]).length}×)`:""}  {(offerteResponses[o.id]||[]).some(r=>r.status==="goedgekeurd")?"✅":(offerteResponses[o.id]||[]).some(r=>r.status==="afgewezen")?"❌":""}</button>}
+                        {onLogboek&&<button className="btn btn-sm" style={{background:"#eef2ff",color:"#4338ca",border:"1px solid #c7d2fe"}} onClick={()=>onLogboek(o)}>📊 Logboek {(offerteViews[o.id]||[]).length>0?`(${(offerteViews[o.id]||[]).length}×) `:""}{(offerteResponses[o.id]||[]).some(r=>r.status==="goedgekeurd")?"✅":(offerteResponses[o.id]||[]).some(r=>r.status==="afgewezen")?"❌":""}</button>}
                         <button className="btn bs btn-sm" onClick={()=>onEdit(o)}>✏️ Bewerken</button>
                         <button className="btn bs btn-sm" onClick={()=>onEmail(o)}>📧 Verzenden</button>
                         <button className="btn bs btn-sm" onClick={()=>onView(o)} title="Opent document → Ctrl+P of klik 🖨">🖨 Afdrukken</button>
