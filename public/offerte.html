@@ -33,11 +33,11 @@ html,body{font-family:'Inter',system-ui,Arial,sans-serif;background:#f1f5f9;colo
 .doc-page{background:#fff;max-width:820px;width:100%;margin:0 auto 20px;box-shadow:0 2px 12px rgba(0,0,0,.1);border-radius:4px;overflow:visible}
 .doc-page-lbl{text-align:center;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#94a3b8;margin-bottom:5px}
 .screen-only{display:block}.print-only{display:none}.no-print{display:block}
-#topbar{position:sticky;top:0;z-index:999;background:#1e293b;padding:10px 18px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
-#topbar strong{color:#fff;font-size:13px;flex:1}
-.tb-btn{background:#3b82f6;color:#fff;border:none;padding:8px 16px;border-radius:7px;cursor:pointer;font-size:13px;font-weight:600;font-family:'Inter',sans-serif}
-.tb-btn:hover{background:#2563eb}
-.tb-tip{color:rgba(255,255,255,.45);font-size:11px}
+#topbar{position:sticky;top:0;z-index:999;background:#1e293b;padding:9px 18px;display:none;align-items:center;gap:10px;flex-wrap:wrap}
+#topbar strong{color:#fff;font-size:13px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tb-btn{background:#3b82f6;color:#fff;border:none;padding:7px 15px;border-radius:7px;cursor:pointer;font-size:13px;font-weight:600;font-family:'Inter',sans-serif;white-space:nowrap}
+.tb-btn.dl{background:#475569}
+.tb-tip{color:rgba(255,255,255,.4);font-size:11px}
 @media print{#topbar{display:none!important}}
 
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600&display=swap');
@@ -554,11 +554,11 @@ tr.row-active td{border-top:2px solid #2563eb}
 
 </head>
 <body>
-<div id="topbar" style="display:none">
-  <strong id="tb-docnr">Document</strong>
-  <button class="tb-btn" id="tb-print">🖨 Afdrukken / PDF</button>
-  <button class="tb-btn" style="background:#475569" id="tb-download">⬇ Download HTML</button>
-  <span class="tb-tip">Gebruik Afdrukken → Opslaan als PDF voor PDF-export</span>
+<div id="topbar">
+  <strong id="tb-nr">Document</strong>
+  <button class="tb-btn" onclick="window.print()">🖨 Afdrukken / PDF</button>
+  <button class="tb-btn dl" id="tb-dl">⬇ Opslaan als HTML</button>
+  <span class="tb-tip">Afdrukken → "Opslaan als PDF" voor PDF</span>
 </div>
 <div id="loader"><div class="spin"></div><div style="font-size:14px;font-weight:600;color:#64748b">Offerte laden...</div></div>
 <div id="err"><h2>Offerte niet beschikbaar</h2><p id="errmsg">Offerte kon niet geladen worden.</p><button class="retry-btn" onclick="location.reload()">Opnieuw proberen</button></div>
@@ -966,16 +966,14 @@ function OfferteDocument({doc, settings, ficheCache={}, producten=[]}) {
 
         {/* ONTWERP 1: Klassiek gesplitst */}
         {ontwerp==="kl_split"&&(()=>{
-          const colW = lyt.voorbladKolombreedte || 42;
+          const colW = lyt.voorbladKolombreedte||42;
+          const vImg = lyt.voorbladAfbeelding||"";
           return <div className="cov" style={{gridTemplateColumns:`${colW}% ${100-colW}%`}}>
-          <div className="cov-l" style={lyt.voorbladAfbeelding
-            ?{backgroundImage:`url(${lyt.voorbladAfbeelding})`,backgroundSize:`${lyt.voorbladZoom||100}%`,backgroundPosition:"center",backgroundRepeat:"no-repeat",padding:0}
+          <div className="cov-l" style={vImg
+            ?{backgroundImage:`url(${vImg})`,backgroundSize:`${lyt.voorbladZoom||100}%`,backgroundPosition:"center",backgroundRepeat:"no-repeat",padding:0,position:"relative"}
             :{background:`linear-gradient(155deg,${dc} 0%,${dc}ee 70%,#0f172a 100%)`}}>
-            {!lyt.voorbladAfbeelding&&<>
-              <CovBedrijf light/>
-              {inst&&<div className="cov-inst-badge"><span style={{fontSize:20}}>{inst.icon}</span>{inst.l}</div>}
-            </>}
-            {lyt.voorbladAfbeelding&&inst&&<div className="cov-inst-badge" style={{background:dc,color:"#fff",border:"none",marginTop:12,alignSelf:"flex-start",position:"absolute",bottom:24,left:24}}><span style={{fontSize:20}}>{inst.icon}</span>{inst.l}</div>}
+            {!vImg&&<><CovBedrijf light/>{inst&&<div className="cov-inst-badge"><span style={{fontSize:20}}>{inst.icon}</span>{inst.l}</div>}</>}
+            {vImg&&inst&&<div className="cov-inst-badge" style={{background:dc,color:"#fff",border:"none",position:"absolute",bottom:24,left:24}}><span style={{fontSize:20}}>{inst.icon}</span>{inst.l}</div>}
           </div>
           <div className="cov-r">
             <div>
@@ -986,8 +984,7 @@ function OfferteDocument({doc, settings, ficheCache={}, producten=[]}) {
             <CovMeta/>
             <div style={{fontSize:11,color:"#94a3b8",marginTop:10}}>{bed.naam} · {fmtBtwnr(bed.btwnr)} · IBAN: {bed.iban}</div>
           </div>
-        </div>;
-        })()}
+        </div>;})()}
 
         {/* ONTWERP 2: Modern top-banner */}
         {ontwerp==="modern_top"&&<div style={{minHeight:"297mm",display:"flex",flexDirection:"column"}}>
@@ -1537,31 +1534,26 @@ function App() {
   document.getElementById("loader").style.display="none";
   const dc = data._dc || "#1a2e4a";
   document.documentElement.style.setProperty("--dc", dc);
-  const docTitle = (data.type==="factuur"||String(data.nummer||"").startsWith("FACT")?"Factuur ":"Offerte ")+(data.nummer||"")+" - "+(data._bed?.naam||"");
-  document.title = docTitle;
-  // Topbar tonen en knoppen instellen
-  const tbEl = document.getElementById("topbar");
-  if(tbEl) {
-    tbEl.style.display = "flex";
-    document.getElementById("tb-docnr").textContent = data.nummer||"Document";
-    document.getElementById("tb-print").onclick = () => window.print();
-    document.getElementById("tb-download").onclick = () => {
-      const html = '<!DOCTYPE html>\n' + document.documentElement.outerHTML;
-      const blob = new Blob([html], {type:"text/html;charset=utf-8"});
-      const a = document.createElement("a");
-      a.href = URL.createObjectURL(blob);
-      a.download = (data.nummer||"document").replace(/[/\\]/g,"_") + ".html";
-      a.click();
-      setTimeout(()=>URL.revokeObjectURL(a.href), 5000);
-    };
-  }
+  const isF = data.type==="factuur" || String(data.nummer||"").startsWith("FACT");
+  document.title = (isF?"Factuur ":"Offerte ")+(data.nummer||"")+" - "+(data._bed?.naam||"");
+  // Topbar
+  const tb = document.getElementById("topbar");
+  tb.style.display = "flex";
+  document.getElementById("tb-nr").textContent = data.nummer || "Document";
+  document.getElementById("tb-dl").onclick = () => {
+    const html = "<!DOCTYPE html>\n" + document.documentElement.outerHTML;
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([html],{type:"text/html;charset=utf-8"}));
+    a.download = (data.nummer||"document").replace(/[\\/]/g,"_")+".html";
+    a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),5000);
+  };
 
   // Build settings from stored data
   const settings = {
     ...INIT_SETTINGS,
     bedrijf: data._bed || INIT_SETTINGS.bedrijf,
     sjabloon: {...INIT_SETTINGS.sjabloon, ...(data._sj||{}), accentKleur:dc},
-    layout: data._lyt ? {...INIT_SETTINGS.layout, ...(data._lyt||{}), voorbladAfbeelding:data._lyt.voorbladAfbeelding||"", voorbladZoom:data._lyt.voorbladZoom||100, voorbladKolombreedte:data._lyt.voorbladKolombreedte||42} : INIT_SETTINGS.layout,
+    layout: data._lyt ? {...INIT_SETTINGS.layout, ...(data._lyt||{}), voorbladAfbeelding:data._lyt.voorbladAfbeelding||'', voorbladZoom:data._lyt.voorbladZoom||100, voorbladKolombreedte:data._lyt.voorbladKolombreedte||42} : INIT_SETTINGS.layout,
     voorwaarden: {...INIT_SETTINGS.voorwaarden, tekst:data._voorwaarden||"", voorschot:data._voorschot||"50%"},
     thema: {kleur:dc},
   };
