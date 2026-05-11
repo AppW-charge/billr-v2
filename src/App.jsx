@@ -1241,6 +1241,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--txt);font-s
   .doc-page .qt-tbl th,.doc-page .qt-tbl td{padding:4px 5px!important}
   .doc-page .qt-parties{grid-template-columns:1fr!important;gap:12px!important}
   @media print{.doc-page .qt-parties{grid-template-columns:1fr 1fr!important;gap:22px!important}}
+  @media print{.doc-page .qt-parties{grid-template-columns:1fr 1fr!important;gap:22px!important}}
   .doc-page .qt-meta-bar{flex-wrap:wrap!important;gap:6px!important}
   .doc-page .qt-totals{max-width:100%!important}
   .doc-page .qt-tot-box{min-width:0!important}
@@ -1740,7 +1741,7 @@ tr.row-active td{border-top:2px solid #2563eb}
   .qt-meta-item:nth-child(2n){border-right:none!important}
   .qt-meta-item:nth-last-child(-n+2){border-bottom:none!important}
   .qt-footer{margin-top:auto!important}
-  .fct-pg,.fct-pg2,.qt-pg,.prod-page{flex:1!important;overflow:visible!important}
+  .fct-pg,.fct-pg2,.qt-pg,.prod-page{flex:1!important;overflow:visible!important;min-height:0!important}
   /* print-root breedte forceren zodat mobile CSS niet triggert */
   #print-root{width:210mm!important;min-width:210mm!important}
   .doc-page-lbl{display:none!important}
@@ -1783,7 +1784,6 @@ tr.row-active td{border-top:2px solid #2563eb}
   .fiche-screen-embed{display:none!important}
   .fiche-print-images{display:block!important}
   
-  /* Tabel: header niet herhalen op volgende pagina */
   .qt-tbl thead{display:table-row-group!important}
   /* Tabel regels: niet splitsen */
   .qt-tbl tr{break-inside:avoid!important;page-break-inside:avoid!important}
@@ -7201,22 +7201,18 @@ function OfferteDocument({doc, settings, ficheCache={}, producten=[]}) {
 
       </>}
       {/* PAGE 2: PRODUCTINFO + TECHNISCHE FICHES */}
-      {sj.toonProductpagina!==false&&uniqueProds.length>0&&(()=>{
-        // Verdeel producten over pagina's van max 5
-        const PRODS_PER_PAGE = 5;
-        const prodPages = [];
-        for(let pi=0;pi<uniqueProds.length;pi+=PRODS_PER_PAGE){
-          prodPages.push(uniqueProds.slice(pi,pi+PRODS_PER_PAGE));
-        }
-        return <>
-        {prodPages.map((pageProdList, pageIdx)=><React.Fragment key={pageIdx}>
+      {sj.toonProductpagina!==false&&uniqueProds.length>0&&<>
+        {[...Array(Math.ceil(uniqueProds.length/5))].map((_,pageIdx)=>{
+          const pageProdList=uniqueProds.slice(pageIdx*5,pageIdx*5+5);
+          const totPages=Math.ceil(uniqueProds.length/5);
+          return <div key={pageIdx}>
         <div className="doc-page-lbl">Pagina {2+pageIdx} — Productinformatie & Technische fiches</div>
         <div className="doc-page">
           <div style={{height:6,background:dc,borderRadius:"4px 4px 0 0",flexShrink:0}}/>
           <div className="prod-page">
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end",marginBottom:6}}>
               <div>
-                <div style={{fontWeight:900,fontSize:20,color:dc,letterSpacing:"-.5px"}}>{inst?.icon} Productinformatie & Technische Fiches{prodPages.length>1?` (${pageIdx+1}/${prodPages.length})`:""}</div>
+                <div style={{fontWeight:900,fontSize:20,color:dc,letterSpacing:"-.5px"}}>{inst?.icon} Productinformatie & Technische Fiches{totPages>1?` (${pageIdx+1}/${totPages})`:""}</div>
                 <div style={{fontSize:12,color:"#64748b",marginTop:2}}>Geselecteerde producten voor {doc.klant?.naam||"de klant"}</div>
               </div>
               <div style={{fontSize:10,color:"#94a3b8",textAlign:"right"}}>{bed.naam} · {doc.nummer}</div>
@@ -7292,10 +7288,9 @@ function OfferteDocument({doc, settings, ficheCache={}, producten=[]}) {
           </div>
           <div className="qt-footer" style={{background:dc}}><div className="qt-footer-txt"><strong>{bed.naam}</strong></div><div className="qt-footer-txt">{bed.tel} · {bed.email}</div><div className="qt-footer-txt">{bed.website}</div></div>
         </div>
-        </React.Fragment>)}
-        </>
-      })()
-      }
+        </div>;
+        })}
+      </>}
 
       {/* PAGE 3: OFFERTEDETAIL */}
       <div className="doc-page-lbl">Pagina 3 — Offertedetail</div>
@@ -7716,37 +7711,20 @@ function DocModal({doc,type,settings,onClose,onFactuur,onStatusOff,onStatusFact,
       const val = rootStyle.getPropertyValue(v).trim();
       if(val) pr.style.setProperty(v, val);
     });
-    // Verwijder lege doc-pages + forceer layout voor print
+    // Verwijder lege doc-pages + forceer 2-kolom parties voor print
     pr.querySelectorAll(".doc-page").forEach(page => {
       const txt = page.innerText || page.textContent || "";
-      if(txt.trim().length < 10) { page.remove(); return; }
-      page.style.setProperty("height","297mm","important");
-      page.style.setProperty("min-height","297mm","important");
-      page.style.setProperty("max-height","297mm","important");
-      page.style.setProperty("overflow","visible","important");
-      page.style.setProperty("display","flex","important");
-      page.style.setProperty("flex-direction","column","important");
+      if(txt.trim().length < 10) page.remove();
     });
-    pr.querySelectorAll(".qt-footer").forEach(el => {
-      el.style.setProperty("margin-top","auto","important");
-      el.style.setProperty("flex-shrink","0","important");
-    });
-    pr.querySelectorAll(".qt-pg,.prod-page,.fct-pg,.fct-pg2").forEach(el => {
-      el.style.setProperty("flex","1","important");
-      el.style.setProperty("overflow","visible","important");
-      el.style.setProperty("min-height","0","important");
-    });
+    // Forceer 2-kolom layout voor parties (mobile CSS override)
     pr.querySelectorAll(".qt-parties").forEach(el => {
       el.style.setProperty("display","grid","important");
       el.style.setProperty("grid-template-columns","1fr 1fr","important");
       el.style.setProperty("gap","22px","important");
     });
-    pr.querySelectorAll(".qt-meta-bar").forEach(el => {
-      el.style.setProperty("display","grid","important");
-      el.style.setProperty("grid-template-columns","1fr 1fr","important");
-    });
-    pr.querySelectorAll(".qt-tbl thead").forEach(el => {
-      el.style.setProperty("display","table-row-group","important");
+    // Zorg dat content niet afgesneden wordt
+    pr.querySelectorAll(".qt-pg,.prod-page,.fct-pg,.fct-pg2").forEach(el => {
+      el.style.setProperty("overflow","visible","important");
     });
 
     const prev = document.title;
