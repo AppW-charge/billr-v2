@@ -7405,7 +7405,7 @@ function OfferteDocument({doc, settings, ficheCache={}, producten=[]}) {
                   );
                   return(
                   <tr key={i} style={l.prijs<0?{color:"#ef4444",fontStyle:"italic"}:{}}>
-                    <td><div className="qt-item-main">{l.naam}</div>{l.omschr&&<div className="qt-item-sub">{l.omschr}</div>}</td>
+                    <td><div className="qt-item-main">{l.naam}</div>{l.omschr&&sj.toonProductpagina===false&&<div className="qt-item-sub">{l.omschr}</div>}</td>
                     <td>{l.eenheid||"stuk"}</td><td className="c">{l.aantal}</td>
                     <td className="r">{fmtEuro(l.prijs)}</td>
                     <td className="r">{l.btw}%</td>
