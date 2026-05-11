@@ -1701,11 +1701,11 @@ tr.row-active td{border-top:2px solid #2563eb}
 /* ── PRINT: verwijder browser-header (URL, datum, paginanr) ── */
 @page{
   size:A4 portrait;
-  margin:0;  /* margin:0 verwijdert de browser-header en -footer volledig */
+  margin:13mm 0mm;  /* 13mm ruimte voor Chrome headers/footers, 0 voor volle breedte */
 }
 @media print{
   /* ═══ KRITIEK: margin:0 verwijdert browser URL + paginanummering ═══ */
-  @page{size:A4 portrait;margin:0}
+  @page{size:A4 portrait;margin:13mm 0mm}
   
   /* Kleur behouden */
   *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important;box-shadow:none!important}
@@ -1725,12 +1725,12 @@ tr.row-active td{border-top:2px solid #2563eb}
   .doc-page{
     box-shadow:none!important;border-radius:0!important;
     margin:0!important;max-width:100%!important;width:210mm!important;
-    height:297mm!important;min-height:297mm!important;max-height:297mm!important;
+    height:271mm!important;min-height:271mm!important;max-height:271mm!important;
     overflow:visible!important;
     display:flex!important;flex-direction:column!important;
     break-after:page!important;page-break-after:always!important;
     box-sizing:border-box!important;position:relative!important;
-    padding-bottom:6mm!important;
+    padding-bottom:4mm!important;
   }
   .doc-page:last-child{break-after:auto!important;page-break-after:auto!important}
   /* Herstel 2-kolom layout - override mobile CSS */
@@ -1753,8 +1753,8 @@ tr.row-active td{border-top:2px solid #2563eb}
   
   /* Coverpagina */
   .cov{
-    width:100%!important;height:297mm!important;
-    min-height:297mm!important;max-height:297mm!important;
+    width:100%!important;height:271mm!important;
+    min-height:271mm!important;max-height:271mm!important;
     display:grid!important;
     overflow:hidden!important;
   }
@@ -1776,7 +1776,7 @@ tr.row-active td{border-top:2px solid #2563eb}
   
   /* Technische fiche pagina's */
   .fiche-print-page{
-    width:210mm!important;height:297mm!important;
+    width:210mm!important;height:271mm!important;
     overflow:hidden!important;box-sizing:border-box!important;
     break-after:page!important;page-break-after:always!important;
     display:flex!important;flex-direction:column!important;
@@ -7659,17 +7659,17 @@ body{margin:0;padding:0;background:#f1f5f9;font-family:Inter,Arial,sans-serif;fo
 ${styles}
 .printbar{padding:8px 12px;background:#f0f4f8;display:flex;gap:10px;align-items:center;font-family:Arial;font-size:12px;border-bottom:1px solid #e2e8f0}
 .doc-wrap{padding:0!important;background:#fff!important}
-.doc-page{box-shadow:none!important;border-radius:0!important;margin:0!important;width:210mm!important;height:297mm!important;max-height:297mm!important;display:flex!important;flex-direction:column!important;overflow:hidden!important;break-after:page;page-break-after:always}
+.doc-page{box-shadow:none!important;border-radius:0!important;margin:0!important;width:210mm!important;height:271mm!important;max-height:271mm!important;display:flex!important;flex-direction:column!important;overflow:visible!important;break-after:page;page-break-after:always}
 .doc-page:last-child{break-after:auto!important;page-break-after:auto!important}
 .doc-page-lbl{display:none!important}
-.cov{width:100%!important;height:297mm!important;max-height:297mm!important;overflow:hidden!important}
+.cov{width:100%!important;height:271mm!important;max-height:271mm!important;overflow:hidden!important}
 .qt-footer{margin-top:auto!important;flex-shrink:0!important}
 .prod-page,.qt-pg,.fct-pg,.fct-pg2{padding:8mm 12mm!important;flex:1!important;overflow:hidden!important}
 .fiche-screen-embed{display:none!important}
 .fiche-print-images{display:block!important}
-.fiche-print-page{width:210mm!important;height:297mm!important;overflow:hidden!important;display:flex!important;flex-direction:column!important;break-after:page!important}
+.fiche-print-page{width:210mm!important;height:271mm!important;overflow:visible!important;display:flex!important;flex-direction:column!important;break-after:page!important}
 .fiche-print-page img{width:100%;height:auto;max-height:270mm;object-fit:contain;display:block}
-@page{size:A4 portrait;margin:0}
+@page{size:A4 portrait;margin:13mm 0mm}
 @media print{
   *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;box-shadow:none!important}
   .printbar{display:none!important}
@@ -7715,59 +7715,59 @@ function DocModal({doc,type,settings,onClose,onFactuur,onStatusOff,onStatusFact,
     const btn = document.getElementById("doc-print-btn");
     if(btn){ btn.textContent = "⏳ Laden..."; btn.disabled = true; }
 
-    // Wacht 2.5s zodat technische fiches (PDF.js canvas) klaar zijn met renderen
+    // Wacht 2.5s zodat technische fiches (PDF.js canvas) klaar zijn
     setTimeout(() => {
       if(btn){ btn.textContent = "🖨 Afdrukken / PDF"; btn.disabled = false; }
 
       // Gebruik print-root - CSS verbergt alles behalve dit bij afdrukken
       let pr = document.getElementById("print-root");
-      if(!pr){ pr = document.createElement("div"); pr.id = "print-root"; document.body.appendChild(pr); }
+    if(!pr){ pr = document.createElement("div"); pr.id = "print-root"; document.body.appendChild(pr); }
 
-      // Breedte forceren zodat mobile CSS (@media max-width:768px) niet triggert
-      pr.style.width = "210mm";
-      pr.style.minWidth = "210mm";
-      pr.style.maxWidth = "210mm";
-      // Kopieer de gerenderde DOM naar print-root
-      pr.innerHTML = docWrap.outerHTML;
+    // Breedte forceren zodat mobile CSS (@media max-width:768px) niet triggert
+    pr.style.width = "210mm";
+    pr.style.minWidth = "210mm";
+    pr.style.maxWidth = "210mm";
+    // Kopieer de gerenderde DOM naar print-root
+    pr.innerHTML = docWrap.outerHTML;
 
-      // Zet CSS variabelen op print-root zodat kleuren correct zijn
-      const rootStyle = getComputedStyle(document.documentElement);
-      ["--theme","--p","--p2","--sb-txt-rgb","--bdr","--bg","--txt"].forEach(v => {
-        const val = rootStyle.getPropertyValue(v).trim();
-        if(val) pr.style.setProperty(v, val);
-      });
-      // Verwijder lege doc-pages + forceer layout
-      pr.querySelectorAll(".doc-page").forEach(page => {
-        const c=(page.innerText||page.textContent||"").trim();
-        if(c.length<10){page.remove();return;}
-        page.style.setProperty("height","297mm","important");
-        page.style.setProperty("min-height","297mm","important");
-        page.style.setProperty("max-height","297mm","important");
-        page.style.setProperty("overflow","visible","important");
-        page.style.setProperty("display","flex","important");
-        page.style.setProperty("flex-direction","column","important");
-        page.style.setProperty("padding-bottom","6mm","important");
-        page.style.setProperty("box-sizing","border-box","important");
-      });
-      pr.querySelectorAll(".screen-accent-bar").forEach(el=>{el.style.setProperty("display","block","important");el.style.setProperty("height","4mm","important");el.style.setProperty("flex-shrink","0","important");});
-      pr.querySelectorAll(".qt-footer").forEach(el=>{el.style.setProperty("margin-top","auto","important");el.style.setProperty("flex-shrink","0","important");el.style.setProperty("position","static","important");});
-      pr.querySelectorAll(".qt-pg,.prod-page,.fct-pg,.fct-pg2").forEach(el=>{el.style.setProperty("flex","1","important");el.style.setProperty("overflow","visible","important");el.style.setProperty("min-height","0","important");});
-      pr.querySelectorAll(".qt-parties").forEach(el=>{el.style.setProperty("display","grid","important");el.style.setProperty("grid-template-columns","1fr 1fr","important");el.style.setProperty("gap","22px","important");});
-      pr.querySelectorAll(".qt-meta-bar").forEach(el=>{el.style.setProperty("display","grid","important");el.style.setProperty("grid-template-columns","1fr 1fr","important");});
-      pr.querySelectorAll(".qt-tbl thead").forEach(el=>{el.style.setProperty("display","table-row-group","important");});
-      // Herstel cov breedte vanuit instellingen
-      try{const covEl=pr.querySelector(".cov");if(covEl){const sw=covEl.style.gridTemplateColumns;if(!sw)covEl.style.gridTemplateColumns="42% 58%";}}catch(_){}
+    // Zet CSS variabelen op print-root zodat kleuren correct zijn
+    const rootStyle = getComputedStyle(document.documentElement);
+    ["--theme","--p","--p2","--sb-txt-rgb","--bdr","--bg","--txt"].forEach(v => {
+      const val = rootStyle.getPropertyValue(v).trim();
+      if(val) pr.style.setProperty(v, val);
+    });
+    // Verwijder lege doc-pages + forceer layout
+    pr.querySelectorAll(".doc-page").forEach(page => {
+      const c=(page.innerText||page.textContent||"").trim();
+      if(c.length<10){page.remove();return;}
+      page.style.setProperty("height","271mm","important");
+      page.style.setProperty("min-height","271mm","important");
+      page.style.setProperty("max-height","271mm","important");
+      page.style.setProperty("overflow","visible","important");
+      page.style.setProperty("display","flex","important");
+      page.style.setProperty("flex-direction","column","important");
+      page.style.setProperty("padding-bottom","6mm","important");
+      page.style.setProperty("box-sizing","border-box","important");
+    });
+    pr.querySelectorAll(".screen-accent-bar").forEach(el=>{el.style.setProperty("display","block","important");el.style.setProperty("height","4mm","important");el.style.setProperty("flex-shrink","0","important");});
+    pr.querySelectorAll(".qt-footer").forEach(el=>{el.style.setProperty("margin-top","auto","important");el.style.setProperty("flex-shrink","0","important");el.style.setProperty("position","static","important");});
+    pr.querySelectorAll(".qt-pg,.prod-page,.fct-pg,.fct-pg2").forEach(el=>{el.style.setProperty("flex","1","important");el.style.setProperty("overflow","visible","important");el.style.setProperty("min-height","0","important");});
+    pr.querySelectorAll(".qt-parties").forEach(el=>{el.style.setProperty("display","grid","important");el.style.setProperty("grid-template-columns","1fr 1fr","important");el.style.setProperty("gap","22px","important");});
+    pr.querySelectorAll(".qt-meta-bar").forEach(el=>{el.style.setProperty("display","grid","important");el.style.setProperty("grid-template-columns","1fr 1fr","important");});
+    pr.querySelectorAll(".qt-tbl thead").forEach(el=>{el.style.setProperty("display","table-row-group","important");});
+    // Herstel cov breedte vanuit instellingen
+    try{const covEl=pr.querySelector(".cov");if(covEl){const sw=covEl.style.gridTemplateColumns;if(!sw)covEl.style.gridTemplateColumns="42% 58%";}}catch(_){}
 
-      const prev = document.title;
-      document.title = doc.nummer || "document";
-      requestAnimationFrame(()=>{ setTimeout(()=>{
-        window.print();
-        setTimeout(()=>{ pr.innerHTML = ""; document.title = prev; }, 2000);
-      }, 300); });
+    const prev = document.title;
+    document.title = doc.nummer || "document";
+    requestAnimationFrame(()=>{ setTimeout(()=>{
+      window.print();
+      setTimeout(()=>{ pr.innerHTML = ""; document.title = prev; }, 2000);
+    }, 300); });
 
-      if(type==="offerte") onStatusOff("afgedrukt");
-      else onStatusFact("afgedrukt");
-    }, 2500);
+    if(type==="offerte") onStatusOff("afgedrukt");
+    else onStatusFact("afgedrukt");
+    }, 2500); // einde fiche-wacht setTimeout
   };
 
   // Ctrl+P shortcut
