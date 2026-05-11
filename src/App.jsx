@@ -2425,7 +2425,7 @@ export default function App() {
     if(!user) return;
     if(pg !== "dashboard" && pg !== "offertes") return;
     fetchOfferteTracking(); // Meteen bij navigatie
-    const interval = pg === "offertes" ? 300000 : 600000; // was 30s/60s → nu 5min/10min
+    const interval = pg === "offertes" ? 90000 : 300000; // offertes: 90s, dashboard: 5min
     const iv = setInterval(fetchOfferteTracking, interval);
     return () => clearInterval(iv);
   }, [user, pg]);
@@ -3234,7 +3234,7 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
         _bed: { naam:bed.naam, adres:bed.adres, gemeente:bed.gemeente, tel:bed.tel, email:bed.email, btwnr:bed.btwnr, iban:bed.iban, bic:bed.bic, website:bed.website, logo:bed.logo },
         _dc: dc,
         _sj: { voorbladTitel:sj.voorbladTitel, handtekeningTekst:sj.handtekeningTekst, footerTekst:sj.footerTekst, toonProductpagina:sj.toonProductpagina, toonBevestigingslink:sj.toonBevestigingslink, accentKleur:sj.accentKleur },
-        _lyt: { font:lyt.font, fontSize:lyt.fontSize, voorbladAfbeelding:lyt.voorbladAfbeelding||'', voorbladZoom:lyt.voorbladZoom||100, voorbladKolombreedte:lyt.voorbladKolombreedte||42 },
+        _lyt: { font:lyt.font, fontSize:lyt.fontSize },
         _voorwaarden: settings?.voorwaarden?.tekst || "",
         _voorschot: settings?.voorwaarden?.voorschot || "50%"
       };
@@ -3883,7 +3883,7 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
               // Per-document verwijderen uit Supabase
               if(toDelete?.nummer && user?.id) sbDeleteOfferte(toDelete.nummer, user.id);
               notify("Verwijderd");
-            }} onNew={()=>{setEditOff(null);setWizOpen(true)}} onEmail={async d=>{try{await shareOfferte(d);}catch(_){}setEmailModal({doc:d,type:"offerte"});}} onPlan={d=>setPlanningModal(d)} onShare={d=>{shareOfferte(d);notify("🔗 Publieke link vernieuwd ✓");}} settings={settings}/>}
+            }} onNew={()=>{setEditOff(null);setWizOpen(true)}} onEmail={async d=>{try{await shareOfferte(d);}catch(_){}setEmailModal({doc:d,type:"offerte"});}} onPlan={d=>setPlanningModal(d)} onShare={d=>{shareOfferte(d);notify("🔗 Publieke link vernieuwd ✓");}} settings={settings} offerteViews={offerteViews} offerteResponses={offerteResponses} onLogboek={o=>setLogboekModal(o)} onRefreshTracking={fetchOfferteTracking}/>}
             {pg==="facturen"&&<FacturenPage facturen={factMet} settings={settings} initFilter={pgFilter} onView={d=>setViewDoc({doc:d,type:"factuur"})} onEdit={f=>{setEditFact(f);setFactuurWizOpen(true);}} onStatus={updFact} onBulkStatus={bulkUpdFact} onDelete={id=>{setFacturen(p=>p.filter(f=>f.id!==id));localTimestamps.current["b4_fct"]=Date.now();try{localStorage.setItem("billr_ts",JSON.stringify(localTimestamps.current));}catch(_){}notify("Verwijderd");setTimeout(()=>flushSavesRef.current(),100);}} notify={notify} onEmail={d=>setEmailModal({doc:d,type:"factuur"})} onBetaling={f=>setBetalingModal(f)} onAanmaning={f=>setAanmaningModal(f)} onNew={()=>{setEditFact(null);setFactuurWizOpen(true)}}/>}
             {pg==="aanvragen"&&<AanvragenPage leads={websiteLeads} onRefresh={fetchWebsiteLeads} onStatus={async(id,s)=>{try{await sb.from("website_leads").update({status:s}).eq("id",id);fetchWebsiteLeads();}catch(_){}}} onToKlant={async(lead)=>{const k={id:uid(),naam:lead.naam||"",bedrijf:lead.bedrijf||"",email:lead.email||"",tel:lead.tel||"",adres:lead.adres||"",gemeente:`${lead.postcode||""} ${lead.gemeente||""}`.trim(),btwnr:lead.btwnr||"",type:lead.klantType||"particulier",notities:`Aanvraag: ${lead.service||""} - ${lead.opmerking||""}`,aangemaakt:new Date().toISOString()};setKlanten(p=>[k,...p]);notify("✅ Klant toegevoegd: "+k.naam);}} onToOfferte={(lead,klantId)=>{setEditOff(null);setWizOpen(true);notify("Aanvraag geladen voor offerte");}} notify={notify} sbClient={sb}/>}
 {pg==="klanten"&&<KlantenPage klanten={klanten} offertes={offertes} facturen={factMet} view={klantView} onEdit={k=>setKlantModal(k)} onDelete={id=>{setKlanten(p=>p.map(k=>k.id===id?{...k,_verwijderd:true}:k));localTimestamps.current["b4_kln"]=Date.now();try{localStorage.setItem("billr_ts",JSON.stringify(localTimestamps.current));}catch(_){}notify("Klant verwijderd");setTimeout(()=>flushSavesRef.current(),100);}}/>}
@@ -5066,7 +5066,7 @@ function DocLog({log=[]}) {
 }
 
 
-function OffertesPage({offertes,initFilter,onView,onEdit,onStatus,onBulkStatus,onFactuur,onDelete,onNew,onEmail,onPlan,onShare,settings}) {
+function OffertesPage({offertes,initFilter,onView,onEdit,onStatus,onBulkStatus,onFactuur,onDelete,onNew,onEmail,onPlan,onShare,settings,offerteViews={},offerteResponses={},onLogboek,onRefreshTracking}) {
   const [q,setQ] = useState("");
   const [fs,setFs] = useState(initFilter||"alle");
   const [sel,setSel] = useState(new Set());
@@ -5115,7 +5115,7 @@ function OffertesPage({offertes,initFilter,onView,onEdit,onStatus,onBulkStatus,o
         <div className="tw"><table>
           <thead><tr>
             <th><input type="checkbox" className="chk" checked={sel.size===list.length&&sel.size>0} onChange={selAll}/></th>
-            <th>Nr</th><th className="mob-hide">Klant</th><th className="mob-hide-tb">Type</th><th className="mob-hide">Datum</th><th className="mob-hide">Geldig</th><th>Totaal</th><th>Status</th><th>Acties</th>
+            <th>Nr</th><th className="mob-hide">Klant</th><th className="mob-hide-tb">Type</th><th className="mob-hide">Datum</th><th className="mob-hide">Geldig</th><th>Totaal</th><th>Status</th><th className="mob-hide">Tracking</th><th>Acties</th>
           </tr></thead>
           <tbody>{list.map(o=>{
             const t=calcTotals(o.lijnen||[]);
@@ -5142,6 +5142,23 @@ function OffertesPage({offertes,initFilter,onView,onEdit,onStatus,onBulkStatus,o
                     {Object.entries(OFF_STATUS).map(([k,v])=><option key={k} value={k}>{v.icon} {v.l}</option>)}
                   </select>
                 </td>
+                <td className="mob-hide" onClick={e=>e.stopPropagation()} style={{cursor:"pointer"}} title="Klik voor logboek" onClick={e=>{e.stopPropagation();onLogboek&&onLogboek(o);}}>
+                  {(()=>{
+                    const vws = offerteViews[o.id]||[];
+                    const rsp = offerteResponses[o.id]||[];
+                    const lastR = rsp.length ? [...rsp].sort((a,b)=>new Date(b.submitted_at)-new Date(a.submitted_at))[0] : null;
+                    return <div style={{display:"flex",flexDirection:"column",gap:2}}>
+                      <div style={{display:"flex",alignItems:"center",gap:4,fontSize:11}}>
+                        <span style={{color:"#6366f1"}}>👁</span>
+                        <span style={{fontWeight:vws.length>0?700:400,color:vws.length>0?"#4338ca":"#94a3b8"}}>{vws.length}×</span>
+                      </div>
+                      {lastR&&<div style={{fontSize:10,fontWeight:700,color:lastR.status==="goedgekeurd"?"#059669":"#dc2626"}}>
+                        {lastR.status==="goedgekeurd"?"✅ Akkoord":"❌ Afgewezen"}
+                      </div>}
+                      {!lastR&&vws.length>0&&<div style={{fontSize:10,color:"#94a3b8"}}>⏳ wacht reactie</div>}
+                    </div>;
+                  })()}
+                </td>
                 <td onClick={e=>e.stopPropagation()}>
                   <div className="flex gap2">
                     <button className="btn bs btn-sm" onClick={()=>onView(o)} title="Bekijken">👁</button>
@@ -5164,6 +5181,7 @@ function OffertesPage({offertes,initFilter,onView,onEdit,onStatus,onBulkStatus,o
                       <div className="doc-act-btns">
                         <span className="doc-act-label">⚡ Acties:</span>
                         <button className="btn b2 btn-sm" onClick={()=>onView(o)}>👁 Bekijken</button>
+                        {onLogboek&&<button className="btn btn-sm" style={{background:"#eef2ff",color:"#4338ca",border:"1px solid #c7d2fe"}} onClick={()=>onLogboek(o)}>📊 Logboek{(offerteViews[o.id]||[]).length>0?` (${(offerteViews[o.id]||[]).length}×)`:""}  {(offerteResponses[o.id]||[]).some(r=>r.status==="goedgekeurd")?"✅":(offerteResponses[o.id]||[]).some(r=>r.status==="afgewezen")?"❌":""}</button>}
                         <button className="btn bs btn-sm" onClick={()=>onEdit(o)}>✏️ Bewerken</button>
                         <button className="btn bs btn-sm" onClick={()=>onEmail(o)}>📧 Verzenden</button>
                         <button className="btn bs btn-sm" onClick={()=>onView(o)} title="Opent document → Ctrl+P of klik 🖨">🖨 Afdrukken</button>
@@ -8558,7 +8576,7 @@ function EmailModal({doc,type,settings,onClose,onSend,onAcceptToken}) {
         {tab==="preview"&&(
           <div style={{border:"1px solid #e2e8f0",borderRadius:8,overflow:"hidden",maxHeight:420,overflowY:"auto"}}>
             {bodyMode==="html"
-              ? <iframe srcDoc={htmlBody} style={{width:"100%",height:480,border:"none",borderRadius:4}} title="Email preview" sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"/>
+              ? <iframe srcDoc={htmlBody} style={{width:"100%",height:480,border:"none",borderRadius:4}} title="Email preview" sandbox="allow-same-origin"/>
               : <pre style={{padding:16,fontSize:12.5,fontFamily:"Arial",margin:0,whiteSpace:"pre-wrap"}}>{txtBody}</pre>
             }
           </div>
