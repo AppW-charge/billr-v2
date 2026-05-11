@@ -1286,6 +1286,7 @@ function Bevestiging({offerteId, status, klantAkkoord, toonBevestigingslink}) {
   const [datum, setDatum] = useState("");
   const [notitie, setNotitie] = useState("");
   const [sending, setSending] = useState(false);
+  const [open, setOpen] = React.useState(false);  // ← moet vóór alle conditional returns staan
 
   if(toonBevestigingslink===false) return null;
   const isOK = status==="goedgekeurd" || klantAkkoord;
@@ -1334,7 +1335,6 @@ function Bevestiging({offerteId, status, klantAkkoord, toonBevestigingslink}) {
   // Minimum datum = vandaag
   const today = new Date().toISOString().split("T")[0];
 
-  const [open, setOpen] = React.useState(false);
 
   return (
     <>
