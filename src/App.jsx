@@ -8558,7 +8558,7 @@ function EmailModal({doc,type,settings,onClose,onSend,onAcceptToken}) {
         {tab==="preview"&&(
           <div style={{border:"1px solid #e2e8f0",borderRadius:8,overflow:"hidden",maxHeight:420,overflowY:"auto"}}>
             {bodyMode==="html"
-              ? <iframe srcDoc={htmlBody} style={{width:"100%",height:480,border:"none",borderRadius:4}} title="Email preview" sandbox="allow-same-origin"/>
+              ? <iframe srcDoc={htmlBody} style={{width:"100%",height:480,border:"none",borderRadius:4}} title="Email preview" sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"/>
               : <pre style={{padding:16,fontSize:12.5,fontFamily:"Arial",margin:0,whiteSpace:"pre-wrap"}}>{txtBody}</pre>
             }
           </div>
