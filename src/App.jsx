@@ -1742,14 +1742,17 @@ tr.row-active td{border-top:2px solid #2563eb}
   .qt-meta-item{padding:8px 14px!important;border-right:1px solid #e2e8f0!important;border-bottom:1px solid #e2e8f0!important}
   .qt-meta-item:nth-child(2n){border-right:none!important}
   .qt-meta-item:nth-last-child(-n+2){border-bottom:none!important}
-  .qt-footer{margin-top:auto!important}
+  /* ─── FIXED GROENE BALKEN: verschijnen op ELKE printpagina, buiten de flow ─── */
+  /* Verberg de in-flow versies — we gebruiken JS om fixed versies toe te voegen */
+  .qt-footer{display:none!important}
+  .screen-accent-bar{display:none!important}
+  /* Ruimte voor de fixed bars */
+  .doc-page{padding-top:7px!important;padding-bottom:12mm!important}
+  .cov{padding-bottom:0!important}
   .fct-pg,.fct-pg2,.qt-pg,.prod-page{flex:1!important;overflow:visible!important;min-height:0!important}
   /* print-root breedte forceren zodat mobile CSS niet triggert */
   #print-root{width:210mm!important;min-width:210mm!important}
   .doc-page-lbl{display:none!important}
-  .doc-page > div:first-child{min-height:4mm!important}
-  .screen-accent-bar{display:block!important;height:4mm!important;flex-shrink:0!important}
-  .qt-footer{margin-top:auto!important;flex-shrink:0!important}
   
   /* Coverpagina */
   .cov{
@@ -1762,41 +1765,38 @@ tr.row-active td{border-top:2px solid #2563eb}
 
   .cov-r{height:100%!important;box-sizing:border-box!important}
   
-  /* Content pagina's: compacte padding zodat offerte op 1 A4 past */
-  .prod-page{padding:6mm 10mm!important;box-sizing:border-box!important;flex:1!important;overflow:visible!important}
-  .fct-pg{padding:6mm 10mm!important;box-sizing:border-box!important;flex:1!important;overflow:visible!important}
-  .fct-pg2{padding:6mm 10mm!important;box-sizing:border-box!important;flex:1!important;overflow:visible!important}
-  /* OFFERTE qt-pg: maximaal compact zodat tabel + totalen + handtekening op 1 pagina past */
-  .qt-pg{padding:4mm 8mm 0mm 8mm!important;box-sizing:border-box!important;flex:1!important;overflow:visible!important}
-  .qt-header{margin-bottom:5px!important}
-  .qt-meta-bar{margin:4px 0!important;font-size:11px!important}
-  .qt-meta-item{padding:5px 10px!important}
-  .qt-parties{margin:5px 0 8px!important;gap:10px!important}
-  .qt-party-name{font-size:13px!important;margin-bottom:2px!important}
-  .qt-party-info{font-size:10.5px!important}
-  .qt-tbl{font-size:10.5px!important;margin-top:0!important}
-  .qt-tbl th,.qt-tbl td{padding:3px 6px!important}
-  .qt-item-main{font-size:11px!important;font-weight:700!important}
-  .qt-item-sub{font-size:9.5px!important}
-  .grp-hdr{font-size:11px!important;padding:4px 8px!important}
-  .grp-sub{padding:3px 8px!important;font-size:10.5px!important}
-  .qt-totals{margin-top:5px!important}
-  .qt-tot-box{padding:4px!important}
-  .qt-tot-row{padding:3px 8px!important;font-size:11px!important}
-  .qt-tot-row.last{padding:5px 8px!important;font-size:13px!important}
-  .qt-betaal{padding:5px 10px!important;font-size:10.5px!important;margin:3px 0!important}
-  .qt-voorschot{padding:5px 10px!important;font-size:10.5px!important;margin:3px 0!important}
-  .qt-notes{padding:5px 10px!important;font-size:10.5px!important;margin:3px 0!important}
-  .qt-sign{padding:5px 8px!important;margin:3px 0!important}
-  .qt-sign-box{padding:8px!important}
-  .qt-sign-lbl{font-size:10px!important}
-  .qt-confirm-link{padding:5px 10px!important;font-size:10.5px!important;margin:3px 0!important}
-  
-  /* Footer: altijd onderaan de pagina */
-  .qt-footer{
-    margin-top:auto!important;flex-shrink:0!important;
-    break-inside:avoid!important;page-break-inside:avoid!important;
-  }
+  /* Content pagina's: compact zodat alles op 1 A4 past */
+  .prod-page{padding:5mm 10mm!important;box-sizing:border-box!important;flex:1!important;overflow:visible!important}
+  .fct-pg{padding:5mm 10mm!important;box-sizing:border-box!important;flex:1!important;overflow:visible!important}
+  .fct-pg2{padding:5mm 10mm!important;box-sizing:border-box!important;flex:1!important;overflow:visible!important}
+  /* qt-pg: maximaal compact — tabel+totalen+handtekening op 1 pagina */
+  .qt-pg{padding:3mm 8mm 2mm 8mm!important;box-sizing:border-box!important;flex:1!important;overflow:visible!important}
+  .qt-header{margin-bottom:4px!important;padding-bottom:4px!important}
+  .qt-from-info{font-size:10px!important}
+  .qt-meta-bar{margin:4px 0!important}
+  .qt-meta-item{padding:4px 10px!important;font-size:10.5px!important}
+  .qt-meta-lbl{font-size:9px!important}
+  .qt-meta-val{font-size:11px!important}
+  .qt-parties{margin:4px 0 6px!important;gap:8px!important}
+  .qt-party-name{font-size:12.5px!important;margin-bottom:1px!important}
+  .qt-party-info,.qt-party-lbl{font-size:10px!important}
+  .qt-tbl{font-size:10px!important}
+  .qt-tbl th,.qt-tbl td{padding:2.5px 5px!important}
+  .qt-item-main{font-size:10.5px!important;font-weight:700!important}
+  .qt-item-sub{font-size:9px!important}
+  .grp-hdr{font-size:10.5px!important;padding:3px 8px!important}
+  .grp-sub{padding:2px 8px!important;font-size:10px!important}
+  .qt-totals{margin-top:4px!important}
+  .qt-tot-box{padding:3px!important}
+  .qt-tot-row{padding:2.5px 8px!important;font-size:10.5px!important}
+  .qt-tot-row.last{padding:4px 8px!important;font-size:12.5px!important}
+  .qt-betaal{padding:4px 8px!important;font-size:10px!important;margin:2px 0!important;border-radius:4px!important}
+  .qt-voorschot{padding:4px 8px!important;font-size:10px!important;margin:2px 0!important}
+  .qt-notes{padding:4px 8px!important;font-size:10px!important;margin:2px 0!important}
+  .qt-sign{padding:4px!important;margin:2px 0!important}
+  .qt-sign-box{padding:7px!important}
+  .qt-sign-lbl{font-size:9.5px!important}
+  .qt-confirm-link{padding:4px 8px!important;font-size:10px!important;margin:2px 0!important;border-radius:4px!important}
   
   /* Technische fiche pagina's */
   .fiche-print-page{
@@ -7737,7 +7737,6 @@ function DocModal({doc,type,settings,onClose,onFactuur,onStatusOff,onStatusFact,
     if(!docWrap){ alert("Kan document niet vinden. Sluit en open het document opnieuw."); return; }
     const btn = document.getElementById("doc-print-btn");
     if(btn){ btn.textContent = "⏳ Laden..."; btn.disabled = true; }
-    // Wacht 2.5s zodat technische fiches (PDF.js canvas rendering) volledig geladen zijn
     setTimeout(() => {
       if(btn){ btn.textContent = "🖨 Afdrukken / PDF"; btn.disabled = false; }
     // Gebruik print-root - CSS verbergt alles behalve dit bij afdrukken
@@ -7779,6 +7778,22 @@ function DocModal({doc,type,settings,onClose,onFactuur,onStatusOff,onStatusFact,
     // Herstel cov breedte vanuit instellingen
     try{const covEl=pr.querySelector(".cov");if(covEl){const sw=covEl.style.gridTemplateColumns;if(!sw)covEl.style.gridTemplateColumns="42% 58%";}}catch(_){}
 
+    // ─── FIXED GROENE BALKEN: zoek kleur + bedrijfsinfo uit de originele footer ───
+    const origFooter = pr.querySelector(".qt-footer");
+    const barColor = origFooter ? (origFooter.style.background || origFooter.style.backgroundColor || "#1a2e4a") : "#1a2e4a";
+    const barHTML = origFooter ? origFooter.innerHTML : "";
+    // Verwijder alle individuele footers en bars (staan via CSS al op display:none, maar ook uit DOM)
+    pr.querySelectorAll(".qt-footer,.screen-accent-bar").forEach(el=>el.remove());
+    // Vaste bovenste groene lijn (verschijnt op ELKE printpagina)
+    const topBar = document.createElement("div");
+    topBar.style.cssText = `position:fixed;top:0;left:0;right:0;height:5px;background:${barColor};z-index:9999;`;
+    pr.appendChild(topBar);
+    // Vaste onderste groene balk met bedrijfsinfo (verschijnt op ELKE printpagina)
+    const botBar = document.createElement("div");
+    botBar.style.cssText = `position:fixed;bottom:0;left:0;right:0;background:${barColor};padding:4px 15px;display:flex;justify-content:space-between;align-items:center;z-index:9999;box-sizing:border-box;`;
+    if(barHTML) botBar.innerHTML = barHTML;
+    pr.appendChild(botBar);
+
     const prev = document.title;
     document.title = doc.nummer || "document";
     requestAnimationFrame(()=>{ setTimeout(()=>{
@@ -7788,7 +7803,7 @@ function DocModal({doc,type,settings,onClose,onFactuur,onStatusOff,onStatusFact,
 
     if(type==="offerte") onStatusOff("afgedrukt");
     else onStatusFact("afgedrukt");
-    }, 2500); // einde fiche-wacht timeout
+    }, 2500);
   };
 
   // Ctrl+P shortcut
