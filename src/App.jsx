@@ -7683,6 +7683,7 @@ ${styles}
 </div>
 ${docWrapHtml}
 </div>
+<script>window.onload=function(){setTimeout(function(){window.print();},400);};<\/script>
 </body></html>`;
 }
 
@@ -7712,51 +7713,12 @@ function DocModal({doc,type,settings,onClose,onFactuur,onStatusOff,onStatusFact,
     const docWrap = document.querySelector(".mb-body .doc-wrap");
     if(!docWrap){ alert("Kan document niet vinden. Sluit en open het document opnieuw."); return; }
 
-    // Gebruik print-root - CSS verbergt alles behalve dit bij afdrukken
-    let pr = document.getElementById("print-root");
-    if(!pr){ pr = document.createElement("div"); pr.id = "print-root"; document.body.appendChild(pr); }
-
-    // Breedte forceren zodat mobile CSS (@media max-width:768px) niet triggert
-    pr.style.width = "210mm";
-    pr.style.minWidth = "210mm";
-    pr.style.maxWidth = "210mm";
-    // Kopieer de gerenderde DOM naar print-root
-    pr.innerHTML = docWrap.outerHTML;
-
-    // Zet CSS variabelen op print-root zodat kleuren correct zijn
-    const rootStyle = getComputedStyle(document.documentElement);
-    ["--theme","--p","--p2","--sb-txt-rgb","--bdr","--bg","--txt"].forEach(v => {
-      const val = rootStyle.getPropertyValue(v).trim();
-      if(val) pr.style.setProperty(v, val);
-    });
-    // Verwijder lege doc-pages + forceer layout
-    pr.querySelectorAll(".doc-page").forEach(page => {
-      const c=(page.innerText||page.textContent||"").trim();
-      if(c.length<10){page.remove();return;}
-      page.style.setProperty("height","297mm","important");
-      page.style.setProperty("min-height","297mm","important");
-      page.style.setProperty("max-height","297mm","important");
-      page.style.setProperty("overflow","visible","important");
-      page.style.setProperty("display","flex","important");
-      page.style.setProperty("flex-direction","column","important");
-      page.style.setProperty("padding-bottom","6mm","important");
-      page.style.setProperty("box-sizing","border-box","important");
-    });
-    pr.querySelectorAll(".screen-accent-bar").forEach(el=>{el.style.setProperty("display","block","important");el.style.setProperty("height","4mm","important");el.style.setProperty("flex-shrink","0","important");});
-    pr.querySelectorAll(".qt-footer").forEach(el=>{el.style.setProperty("margin-top","auto","important");el.style.setProperty("flex-shrink","0","important");el.style.setProperty("position","static","important");});
-    pr.querySelectorAll(".qt-pg,.prod-page,.fct-pg,.fct-pg2").forEach(el=>{el.style.setProperty("flex","1","important");el.style.setProperty("overflow","visible","important");el.style.setProperty("min-height","0","important");});
-    pr.querySelectorAll(".qt-parties").forEach(el=>{el.style.setProperty("display","grid","important");el.style.setProperty("grid-template-columns","1fr 1fr","important");el.style.setProperty("gap","22px","important");});
-    pr.querySelectorAll(".qt-meta-bar").forEach(el=>{el.style.setProperty("display","grid","important");el.style.setProperty("grid-template-columns","1fr 1fr","important");});
-    pr.querySelectorAll(".qt-tbl thead").forEach(el=>{el.style.setProperty("display","table-row-group","important");});
-    // Herstel cov breedte vanuit instellingen
-    try{const covEl=pr.querySelector(".cov");if(covEl){const sw=covEl.style.gridTemplateColumns;if(!sw)covEl.style.gridTemplateColumns="42% 58%";}}catch(_){}
-
-    const prev = document.title;
-    document.title = doc.nummer || "document";
-    requestAnimationFrame(()=>{ setTimeout(()=>{
-      window.print();
-      setTimeout(()=>{ pr.innerHTML = ""; document.title = prev; }, 2000);
-    }, 300); });
+    // Open nieuw venster met standalone HTML — zo verdwijnt de browser URL/paginanummer footer
+    const html = buildPrintHtml(docWrap.outerHTML, doc.nummer);
+    const blob = new Blob([html], {type: "text/html"});
+    const url = URL.createObjectURL(blob);
+    window.open(url, "_blank");
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
 
     if(type==="offerte") onStatusOff("afgedrukt");
     else onStatusFact("afgedrukt");
@@ -7808,19 +7770,7 @@ function DocModal({doc,type,settings,onClose,onFactuur,onStatusOff,onStatusFact,
     : <button className="btn btn-sm" style={{background:"#7c3aed",color:"#fff",fontWeight:700}} onClick={onPeppol} title="Verstuur via Peppol">🇧🇪 Verzenden via PEPPOL</button>
 )}
           <button id="doc-print-btn" className="btn bs btn-sm" title="Afdrukken / Opslaan als PDF" onClick={doPrint}>🖨 Afdrukken / PDF</button>
-          <button className="btn bs btn-sm" style={{background:"#059669",color:"#fff",fontWeight:700}} title="Download factuur als HTML (open → Ctrl+P → Opslaan als PDF)" onClick={()=>{
-            // Genereer standalone HTML voor download
-            const docWrap = document.querySelector(".mb-body .doc-wrap");
-            if(!docWrap) return;
-            const clone = docWrap.cloneNode(true);
-            clone.querySelectorAll("button,input,select,textarea,script,.doc-page-lbl").forEach(el=>el.remove());
-            const styles = Array.from(document.styleSheets).map(s=>{try{return Array.from(s.cssRules).map(r=>r.cssText).join("\n");}catch(_){return "";}}).join("\n");
-            const html = `<!DOCTYPE html><html lang="nl"><head><meta charset="utf-8"><title>${doc.nummer}</title><style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:Inter,Arial,sans-serif;background:#f1f5f9;-webkit-print-color-adjust:exact;print-color-adjust:exact}@media print{body{background:#fff}.doc-page{box-shadow:none!important;border-radius:0!important;margin:0!important}}${styles.substring(0,60000)}</style></head><body>${clone.outerHTML}<script>window.onload=()=>{window.print();}<\/script></body></html>`;
-            const blob = new Blob([html],{type:"text/html"});
-            const url = URL.createObjectURL(blob);
-            const w = window.open(url,"_blank");
-            setTimeout(()=>URL.revokeObjectURL(url),30000);
-          }}>⬇ PDF</button>
+
           <button className="btn bs btn-sm" title="Download als HTML (open in browser → Afdrukken → PDF)" onClick={()=>{
             const docWrap=document.querySelector(".mb-body .doc-wrap");
             if(!docWrap)return;
