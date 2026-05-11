@@ -7642,8 +7642,10 @@ function FactuurDocument({doc, settings}) {
 
 // ─── PRINT/DOWNLOAD HELPER ───────────────────────────────────────
 function buildPrintHtml(docWrapHtml, docNummer) {
+  // Extraheer CSS maar filter ALLE @page regels eruit (voorkomen conflicten met onze eigen @page)
   const styles = Array.from(document.styleSheets)
     .flatMap(ss=>{try{return Array.from(ss.cssRules||[]).map(r=>r.cssText);}catch{return [];}})
+    .filter(r=>!r.trimStart().startsWith("@page"))
     .join("\n");
   // CSS variabelen ophalen van :root - KRITIEK voor kleuren
   const rs = getComputedStyle(document.documentElement);
@@ -7652,12 +7654,14 @@ function buildPrintHtml(docWrapHtml, docNummer) {
     .filter(Boolean).join(";");
   return `<!DOCTYPE html><html lang="nl"><head>
 <meta charset="UTF-8"><title>${docNummer||"document"}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600&display=swap">
 <style>
 :root{${vars}}
 *{box-sizing:border-box;margin:0;padding:0}
-body{margin:0;padding:0;background:#f1f5f9;font-family:Inter,Arial,sans-serif;font-size:13px;color:#1e293b}
+body{margin:0;padding:0;background:#f1f5f9;font-family:'Inter',Arial,sans-serif;font-size:13px;color:#1e293b}
 ${styles}
-.printbar{padding:8px 12px;background:#f0f4f8;display:flex;gap:10px;align-items:center;font-family:Arial;font-size:12px;border-bottom:1px solid #e2e8f0}
+.printbar{padding:8px 12px;background:#f0f4f8;display:flex;gap:10px;align-items:center;font-family:'Inter',Arial,sans-serif;font-size:12px;border-bottom:1px solid #e2e8f0}
 .doc-wrap{padding:0!important;background:#fff!important}
 .doc-page{box-shadow:none!important;border-radius:0!important;margin:0!important;width:210mm!important;height:297mm!important;max-height:297mm!important;display:flex!important;flex-direction:column!important;overflow:hidden!important;break-after:page;page-break-after:always}
 .doc-page:last-child{break-after:auto!important;page-break-after:auto!important}
@@ -7669,12 +7673,12 @@ ${styles}
 .fiche-print-images{display:block!important}
 .fiche-print-page{width:210mm!important;height:297mm!important;overflow:hidden!important;display:flex!important;flex-direction:column!important;break-after:page!important}
 .fiche-print-page img{width:100%;height:auto;max-height:270mm;object-fit:contain;display:block}
-@page{size:A4 portrait;margin:0}
-@media print{
-  *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;box-shadow:none!important}
-  .printbar{display:none!important}
-}
-</style></head><body>
+</style>
+<style>
+@page{size:A4 portrait;margin:0mm}
+@media print{*{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important;box-shadow:none!important}.printbar{display:none!important}body{background:#fff!important}}
+</style>
+</head><body>
 <div id="print-root" style="width:210mm;min-width:210mm">
 <div class="printbar">
   <strong style="color:#1e293b">${docNummer}</strong>
@@ -7683,7 +7687,7 @@ ${styles}
 </div>
 ${docWrapHtml}
 </div>
-<script>window.onload=function(){setTimeout(function(){window.print();},400);};<\/script>
+<script>window.onload=function(){setTimeout(function(){window.print();},600);};<\/script>
 </body></html>`;
 }
 
