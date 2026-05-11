@@ -1698,72 +1698,125 @@ tr.row-active td{border-top:2px solid #2563eb}
 .btw-code{font-family:'JetBrains Mono',monospace;font-weight:800;font-size:16px;color:var(--p);background:#f0f4f8;border-radius:5px;padding:2px 6px;text-align:center}
 .export-btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:7px;border:1.5px solid var(--bdr);background:#fff;font-size:13px;font-weight:600;cursor:pointer;transition:all .1s}
 .export-btn:hover{background:#f0f4f8}
-/* ── PRINT ── */
+/* ── PRINT: verwijder browser-header (URL, datum, paginanr) ── */
 @page{
   size:A4 portrait;
   margin:10mm;
 }
 @media print{
+  /* ═══ KRITIEK: margin:0 verwijdert browser URL + paginanummering ═══ */
   @page{size:A4 portrait;margin:10mm}
+  
+  /* Kleur behouden */
   *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important;box-shadow:none!important}
+  
+  /* Verberg alles behalve #print-root */
   body{margin:0!important;padding:0!important;background:#fff!important}
   body>*:not(#print-root){display:none!important}
-  /* Print-root: 190mm = A4 na 10mm marges links+rechts */
-  #print-root{display:block!important;width:190mm!important;margin:0 auto!important}
+  #print-root{display:block!important;width:100%!important}
   #print-root .doc-wrap{display:block!important;width:100%!important;padding:0!important;background:#fff!important}
+  
   .screen-only{display:none!important}
   .fiche-dl-pill{display:none!important}
   .print-only{display:block!important}
   .no-print{display:none!important}
-  .doc-page-lbl{display:none!important}
-
-  /* ─── Elke doc-page = exact 277mm (190×277 = beschikbare printruimte) ─── */
+  
+  /* ═══ Elke doc-page in print: auto hoogte, content vloeit vrij ═══ */
   .doc-page{
     box-shadow:none!important;border-radius:0!important;
     margin:0 auto!important;width:190mm!important;
     height:277mm!important;min-height:277mm!important;max-height:277mm!important;
-    overflow:hidden!important;
+    overflow:visible!important;
     display:flex!important;flex-direction:column!important;
     break-after:page!important;page-break-after:always!important;
     box-sizing:border-box!important;padding:0!important;
   }
   .doc-page:last-child{break-after:auto!important;page-break-after:auto!important}
-
-  /* ─── Groene balken: ZICHTBAAR ─── */
+  /* Herstel 2-kolom layout - override mobile CSS */
+  .qt-parties{display:grid!important;grid-template-columns:1fr 1fr!important;gap:22px!important}
+  .doc-page .qt-parties{display:grid!important;grid-template-columns:1fr 1fr!important;gap:22px!important}
+  #print-root .qt-parties{display:grid!important;grid-template-columns:1fr 1fr!important;gap:22px!important}
+  .qt-header{display:flex!important;flex-direction:row!important;justify-content:space-between!important}
+  .qt-meta-bar{display:grid!important;grid-template-columns:1fr 1fr!important;background:#f8fafc!important;border:1px solid #e2e8f0!important;border-radius:6px!important;overflow:hidden!important}
+  .qt-meta-item{padding:8px 14px!important;border-right:1px solid #e2e8f0!important;border-bottom:1px solid #e2e8f0!important}
+  .qt-meta-item:nth-child(2n){border-right:none!important}
+  .qt-meta-item:nth-last-child(-n+2){border-bottom:none!important}
+  .qt-footer{margin-top:auto!important}
+  .fct-pg,.fct-pg2,.qt-pg,.prod-page{flex:1!important;overflow:visible!important;min-height:0!important}
+  /* print-root breedte forceren zodat mobile CSS niet triggert */
+  #print-root{width:190mm!important;margin:0 auto!important}
+  .doc-page-lbl{display:none!important}
   .screen-accent-bar{display:block!important;height:5px!important;flex-shrink:0!important;width:100%!important}
   .qt-footer{margin-top:auto!important;flex-shrink:0!important;display:flex!important;break-inside:avoid!important}
-
-  /* ─── Coverpagina vult doc-page ─── */
-  .cov{width:100%!important;flex:1!important;height:auto!important;min-height:0!important;max-height:none!important;display:grid!important;overflow:hidden!important}
+  
+  /* Coverpagina */
+  .cov{
+    width:100%!important;flex:1!important;height:auto!important;
+    min-height:0!important;max-height:none!important;
+    display:grid!important;overflow:hidden!important;
+  }
   .cov-l{height:100%!important;min-height:100%!important;align-self:stretch!important}
+
   .cov-r{height:100%!important;box-sizing:border-box!important}
-
-  /* ─── Content secties: flex:1 + padding gereduceerd (niet font size) ─── */
-  .qt-pg{flex:1!important;overflow:hidden!important;min-height:0!important;padding:12px 24px!important;box-sizing:border-box!important}
-  .prod-page{flex:1!important;overflow:hidden!important;min-height:0!important;padding:12px 24px!important;box-sizing:border-box!important}
-  .fct-pg{flex:1!important;overflow:hidden!important;min-height:0!important;padding:12px 24px!important;box-sizing:border-box!important}
-  .fct-pg2{flex:1!important;overflow:hidden!important;min-height:0!important;padding:12px 24px!important;box-sizing:border-box!important}
-
-  /* ─── Layout herstel (mobile CSS override) ─── */
-  .qt-parties{display:grid!important;grid-template-columns:1fr 1fr!important;gap:18px!important}
-  .qt-header{display:flex!important;flex-direction:row!important;justify-content:space-between!important}
-  .qt-meta-bar{display:grid!important;grid-template-columns:1fr 1fr!important;overflow:hidden!important}
-
-  /* ─── Technische fiches ─── */
-  .fiche-print-page{width:190mm!important;height:277mm!important;overflow:hidden!important;box-sizing:border-box!important;margin:0 auto!important;break-after:page!important;page-break-after:always!important;display:flex!important;flex-direction:column!important}
+  
+  /* Content: schermgrootte behouden, ALLEEN spacing gereduceerd */
+  .prod-page{padding:8px 20px!important;box-sizing:border-box!important;flex:1!important;overflow:visible!important;min-height:0!important}
+  .fct-pg{padding:8px 20px!important;box-sizing:border-box!important;flex:1!important;overflow:visible!important;min-height:0!important}
+  .fct-pg2{padding:8px 20px!important;box-sizing:border-box!important;flex:1!important;overflow:visible!important;min-height:0!important}
+  .qt-pg{padding:6px 20px!important;box-sizing:border-box!important;flex:1!important;overflow:visible!important;min-height:0!important}
+  /* qt-header: minder witruimte onder */
+  .qt-header{margin-bottom:8px!important;padding-bottom:6px!important;border-bottom:1px solid #f0f4f8!important}
+  /* meta-bar: compacter */
+  .qt-meta-item{padding:5px 12px!important}
+  /* parties: minder ruimte */
+  .qt-parties{margin:4px 0 8px!important;gap:14px!important}
+  /* tabel: minder celpadding */
+  .qt-tbl td,.qt-tbl th{padding:3px 6px!important}
+  /* groepen */
+  .grp-hdr{padding:4px 8px!important;margin-top:6px!important}
+  .grp-hdr:first-child{margin-top:0!important}
+  .grp-sub{padding:3px 8px!important}
+  /* totalen */
+  .qt-totals{margin-top:6px!important}
+  .qt-tot-row{padding:4px 10px!important}
+  .qt-tot-row.last{padding:6px 10px!important}
+  /* betaling/voorschot/notes: compacter maar volledig zichtbaar */
+  .qt-betaal{margin-top:6px!important;padding:6px 10px!important}
+  .qt-voorschot{margin-top:4px!important;padding:6px 10px!important}
+  .qt-notes{margin-top:4px!important;padding:6px 10px!important}
+  /* handtekening: smaller min-height maar volledig zichtbaar */
+  .qt-sign{padding:4px!important;margin:4px 0!important}
+  .qt-sign-box{padding:8px!important;min-height:36px!important}
+  .qt-sign-lbl{margin-bottom:2px!important}
+  /* digitaal akkoord */
+  .qt-confirm-link{margin-top:4px!important;padding:6px 10px!important}
+  /* footer altijd onderaan */
+  .qt-footer{margin-top:auto!important;flex-shrink:0!important;break-inside:avoid!important}
+  
+  /* Technische fiche pagina's */
+  .fiche-print-page{
+    width:190mm!important;height:277mm!important;
+    overflow:hidden!important;box-sizing:border-box!important;margin:0 auto!important;
+    break-after:page!important;page-break-after:always!important;
+    display:flex!important;flex-direction:column!important;
+  }
   .fiche-print-page:last-child{break-after:auto!important;page-break-after:auto!important}
-  .fiche-print-page img{width:100%!important;height:auto!important;max-height:255mm!important;object-fit:contain!important;display:block!important}
+  .fiche-print-page img{
+    width:100%!important;height:auto!important;
+    max-height:255mm!important;
+    object-fit:contain!important;display:block!important;
+  }
   .fiche-screen-embed{display:none!important}
   .fiche-print-images{display:block!important}
-
-  /* ─── Tabel ─── */
+  
   .qt-tbl thead{display:table-row-group!important}
+  /* Tabel regels: niet splitsen */
   .qt-tbl tr{break-inside:avoid!important;page-break-inside:avoid!important}
-  .qt-totals,.qt-sign,.qt-betaal,.qt-voorschot,.qt-notes,.qt-confirm-link{break-inside:avoid!important;page-break-inside:avoid!important}
+  .qt-totals,.qt-sign,.qt-betaal,.qt-voorschot,.qt-notes,.qt-confirm-link,.qt-fiches{break-inside:avoid!important;page-break-inside:avoid!important}
   .grp-hdr{break-after:avoid!important;page-break-after:avoid!important}
   .grp-sub,.prod-item,.qt-meta-bar,.qt-parties{break-inside:avoid!important;page-break-inside:avoid!important}
-
-  /* ─── UI verbergen ─── */
+  
+  /* Modal chrome verbergen */
   .mo{position:static!important;background:transparent!important;padding:0!important;display:block!important}
   .mdl{box-shadow:none!important;border-radius:0!important;max-width:100%!important;max-height:none!important;overflow:visible!important;height:auto!important;display:block!important}
   .mh,.mf,.bulk-bar,.mob-nav,.fab-menu,.topbar,.sb{display:none!important}
@@ -7679,37 +7732,27 @@ function DocModal({doc,type,settings,onClose,onFactuur,onStatusOff,onStatusFact,
     if(!docWrap){ alert("Kan document niet vinden."); return; }
     const btn = document.getElementById("doc-print-btn");
     if(btn){ btn.textContent="⏳ Laden..."; btn.disabled=true; }
-    // 2.5s: fiches laden via PDF.js
     setTimeout(()=>{
       if(btn){ btn.textContent="🖨 Afdrukken / PDF"; btn.disabled=false; }
       let pr = document.getElementById("print-root");
-      if(!pr){ pr = document.createElement("div"); pr.id = "print-root"; document.body.appendChild(pr); }
-      // 190mm = A4 breedte min 10mm marge links+rechts
-      pr.style.width = "190mm";
-      pr.style.minWidth = "190mm";
-      pr.style.maxWidth = "190mm";
-      pr.style.margin = "0 auto";
+      if(!pr){ pr = document.createElement("div"); pr.id="print-root"; document.body.appendChild(pr); }
+      pr.style.width="190mm"; pr.style.minWidth="190mm"; pr.style.maxWidth="190mm"; pr.style.margin="0 auto";
       pr.innerHTML = docWrap.outerHTML;
-      // CSS variabelen voor kleuren
       const rs = getComputedStyle(document.documentElement);
       ["--theme","--p","--p2","--sb-txt-rgb","--bdr","--bg","--txt"].forEach(v=>{
-        const val=rs.getPropertyValue(v).trim();
-        if(val) pr.style.setProperty(v,val);
+        const val=rs.getPropertyValue(v).trim(); if(val) pr.style.setProperty(v,val);
       });
-      // Elke doc-page: 277mm = A4 hoogte min 10mm marge boven+onder
       pr.querySelectorAll(".doc-page").forEach(page=>{
-        const txt=(page.innerText||page.textContent||"").trim();
-        if(txt.length<10){page.remove();return;}
+        if((page.innerText||"").trim().length<10){page.remove();return;}
         page.style.setProperty("height","277mm","important");
         page.style.setProperty("min-height","277mm","important");
         page.style.setProperty("max-height","277mm","important");
-        page.style.setProperty("overflow","hidden","important");
+        page.style.setProperty("overflow","visible","important");
         page.style.setProperty("display","flex","important");
         page.style.setProperty("flex-direction","column","important");
-        page.style.setProperty("box-sizing","border-box","important");
         page.style.setProperty("padding","0","important");
+        page.style.setProperty("box-sizing","border-box","important");
       });
-      // Groene balken tonen
       pr.querySelectorAll(".screen-accent-bar").forEach(el=>{
         el.style.setProperty("display","block","important");
         el.style.setProperty("height","5px","important");
@@ -7720,26 +7763,22 @@ function DocModal({doc,type,settings,onClose,onFactuur,onStatusOff,onStatusFact,
         el.style.setProperty("margin-top","auto","important");
         el.style.setProperty("flex-shrink","0","important");
       });
-      // Content secties vullen beschikbare ruimte
       pr.querySelectorAll(".qt-pg,.prod-page,.fct-pg,.fct-pg2").forEach(el=>{
         el.style.setProperty("flex","1","important");
-        el.style.setProperty("overflow","hidden","important");
+        el.style.setProperty("overflow","visible","important");
         el.style.setProperty("min-height","0","important");
       });
-      // Layout herstel
-      pr.querySelectorAll(".qt-parties").forEach(el=>{el.style.setProperty("display","grid","important");el.style.setProperty("grid-template-columns","1fr 1fr","important");el.style.setProperty("gap","18px","important");});
+      pr.querySelectorAll(".qt-parties").forEach(el=>{el.style.setProperty("display","grid","important");el.style.setProperty("grid-template-columns","1fr 1fr","important");el.style.setProperty("gap","14px","important");});
       pr.querySelectorAll(".qt-meta-bar").forEach(el=>{el.style.setProperty("display","grid","important");el.style.setProperty("grid-template-columns","1fr 1fr","important");});
       pr.querySelectorAll(".qt-tbl thead").forEach(el=>{el.style.setProperty("display","table-row-group","important");});
       try{const cov=pr.querySelector(".cov");if(cov&&!cov.style.gridTemplateColumns)cov.style.gridTemplateColumns="42% 58%";}catch(_){}
-      const prev=document.title;
-      document.title=doc.nummer||"document";
+      const prev=document.title; document.title=doc.nummer||"document";
       requestAnimationFrame(()=>setTimeout(()=>{
         window.print();
         setTimeout(()=>{pr.innerHTML="";document.title=prev;},2000);
       },300));
-      if(type==="offerte") onStatusOff("afgedrukt");
-      else onStatusFact("afgedrukt");
-    }, 2500);
+      if(type==="offerte") onStatusOff("afgedrukt"); else onStatusFact("afgedrukt");
+    },2500);
   };
 
   // Ctrl+P shortcut
