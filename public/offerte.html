@@ -456,10 +456,10 @@ tr.row-active td{border-top:2px solid #2563eb}
 /* -- PRINT: verwijder browser-header (URL, datum, paginanr) -- */
 @page{
   size:A4 portrait;
-  margin:10mm 14mm;
+  margin:0;
 }
 @media print{
-  @page{size:A4 portrait;margin:10mm 14mm}
+  @page{size:A4 portrait;margin:0}
   
   /* Kleur behouden */
   *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important;box-shadow:none!important}
@@ -478,8 +478,8 @@ tr.row-active td{border-top:2px solid #2563eb}
   /* --- Elke doc-page = exacte A4 pagina (210×297mm) --- */
   .doc-page{
     box-shadow:none!important;border-radius:0!important;
-    margin:0 auto!important;max-width:100%!important;width:182mm!important;
-    height:277mm!important;max-height:277mm!important;
+    margin:0 auto!important;max-width:100%!important;width:210mm!important;
+    height:297mm!important;max-height:297mm!important;
     overflow:hidden!important;
     display:flex!important;flex-direction:column!important;
     break-after:page!important;page-break-after:always!important;
@@ -493,8 +493,8 @@ tr.row-active td{border-top:2px solid #2563eb}
   .prod-page-wrap .prod-page{overflow:visible!important;height:auto!important;max-height:none!important}
   /* Coverpagina */
   .cov{
-    width:100%!important;height:277mm!important;
-    min-height:277mm!important;max-height:277mm!important;
+    width:100%!important;height:297mm!important;
+    min-height:297mm!important;max-height:297mm!important;
     display:grid!important;grid-template-columns:42% 58%!important;
     overflow:hidden!important;
   }
@@ -502,9 +502,9 @@ tr.row-active td{border-top:2px solid #2563eb}
   .cov-r{height:100%!important;box-sizing:border-box!important}
   
   /* Content pagina's: interne padding (omdat @page margin=0) */
-  .prod-page{padding:8mm 12mm!important;box-sizing:border-box!important;flex:1!important;overflow:visible!important}
+  .prod-page{padding:8mm 14mm!important;box-sizing:border-box!important;flex:1!important;overflow:visible!important}
   .fct-pg{padding:8mm 12mm!important;box-sizing:border-box!important;flex:1!important;overflow:hidden!important}
-  .qt-pg{padding:8mm 12mm!important;box-sizing:border-box!important;flex:1!important;overflow:hidden!important}
+  .qt-pg{padding:8mm 14mm!important;box-sizing:border-box!important;flex:1!important;overflow:hidden!important}
   .fct-pg2{padding:8mm 12mm!important;box-sizing:border-box!important;flex:1!important;overflow:hidden!important}
   
   /* Footer: altijd onderaan de pagina */
@@ -515,7 +515,7 @@ tr.row-active td{border-top:2px solid #2563eb}
   
   /* Technische fiche pagina's */
   .fiche-print-page{
-    width:182mm!important;height:277mm!important;
+    width:210mm!important;height:297mm!important;
     overflow:hidden!important;box-sizing:border-box!important;
     break-after:page!important;page-break-after:always!important;
     display:flex!important;flex-direction:column!important;
@@ -1298,11 +1298,16 @@ function Bevestiging({offerteId, status, klantAkkoord, toonBevestigingslink}) {
   const [datum, setDatum] = useState("");
   const [notitie, setNotitie] = useState("");
   const [sending, setSending] = useState(false);
-  const [open, setOpen] = React.useState(false);  // ← moet vóór alle conditional returns staan
+  const [open, setOpen] = React.useState(false);
 
   if(toonBevestigingslink===false) return null;
-  const isOK = status==="goedgekeurd" || klantAkkoord;
-  const isNOK = status==="afgewezen";
+  // Controleer ook localStorage zodat reactie persistent is na page refresh
+  const lsKey = "offerte_reactie_" + offerteId;
+  const [gereageerd, setGereageerd] = React.useState(()=>{
+    try { return localStorage.getItem(lsKey) || null; } catch(_){ return null; }
+  });
+  const isOK = status==="goedgekeurd" || klantAkkoord || gereageerd==="goedgekeurd";
+  const isNOK = status==="afgewezen" || gereageerd==="afgewezen";
 
   if(isOK || fase==="ok") return (
     <div style={{position:"fixed",bottom:24,right:24,zIndex:9999,maxWidth:380,background:"#d1fae5",border:"2px solid #10b981",borderRadius:14,padding:"18px 22px",boxShadow:"0 8px 32px rgba(0,0,0,.18)"}}>
@@ -1328,6 +1333,8 @@ function Bevestiging({offerteId, status, klantAkkoord, toonBevestigingslink}) {
         submitted_at: new Date().toISOString()
       });
       if(!ok) throw new Error("Opslaan mislukt (code 400/422)");
+      try { localStorage.setItem(lsKey, "goedgekeurd"); } catch(_){}
+      setGereageerd("goedgekeurd");
       setFase("ok");
     } catch(e) {
       console.error("doAkkoord fout:", e.message);
@@ -1345,6 +1352,8 @@ function Bevestiging({offerteId, status, klantAkkoord, toonBevestigingslink}) {
         submitted_at: new Date().toISOString()
       });
       if(!ok) throw new Error("Opslaan mislukt (code 400/422)");
+      try { localStorage.setItem(lsKey, "afgewezen"); } catch(_){}
+      setGereageerd("afgewezen");
       setFase("nok");
     } catch(e) {
       console.error("doAfwijzen fout:", e.message);
