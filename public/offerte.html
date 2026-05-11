@@ -469,6 +469,7 @@ tr.row-active td{border-top:2px solid #2563eb}
   body{margin:0!important;padding:0!important;background:#fff!important}
   body>*:not(#print-root){display:none!important}
   #print-root{display:block!important;width:210mm!important;margin:0 auto!important}
+  .doc-page{margin-left:auto!important;margin-right:auto!important}
   #print-root .doc-wrap{display:block!important;width:100%!important;padding:0!important;background:#fff!important}
   
   .screen-only{display:none!important}
@@ -488,6 +489,9 @@ tr.row-active td{border-top:2px solid #2563eb}
   .doc-page:last-child{break-after:auto!important;page-break-after:auto!important}
   .doc-page-lbl{display:none!important}
   
+  /* Productpagina: vaste hoogte loslaten zodat items niet worden afgeknipt */
+  .prod-page-wrap{height:auto!important;max-height:none!important;overflow:visible!important}
+  .prod-page-wrap .prod-page{overflow:visible!important}
   /* Coverpagina */
   .cov{
     width:100%!important;height:297mm!important;
@@ -495,11 +499,11 @@ tr.row-active td{border-top:2px solid #2563eb}
     display:grid!important;grid-template-columns:42% 58%!important;
     overflow:hidden!important;
   }
-  .cov-l{height:100%!important;min-height:100%!important}
+  .cov-l{height:100%!important;min-height:100%!important;background-size:cover!important;background-position:center!important}
   .cov-r{height:100%!important;box-sizing:border-box!important}
   
   /* Content pagina's: interne padding (omdat @page margin=0) */
-  .prod-page{padding:8mm 12mm!important;box-sizing:border-box!important;flex:1!important;overflow:hidden!important}
+  .prod-page{padding:8mm 12mm!important;box-sizing:border-box!important;flex:1!important;overflow:visible!important}
   .fct-pg{padding:8mm 12mm!important;box-sizing:border-box!important;flex:1!important;overflow:hidden!important}
   .qt-pg{padding:8mm 12mm!important;box-sizing:border-box!important;flex:1!important;overflow:hidden!important}
   .fct-pg2{padding:8mm 12mm!important;box-sizing:border-box!important;flex:1!important;overflow:hidden!important}
@@ -531,6 +535,7 @@ tr.row-active td{border-top:2px solid #2563eb}
   .qt-totals,.qt-sign,.qt-betaal,.qt-voorschot,.qt-notes,.qt-confirm-link,.qt-fiches{break-inside:avoid!important;page-break-inside:avoid!important}
   .grp-hdr{break-after:avoid!important;page-break-after:avoid!important}
   .grp-sub,.prod-item,.qt-meta-bar,.qt-parties{break-inside:avoid!important;page-break-inside:avoid!important}
+  .prod-page>div>div{break-inside:avoid!important;page-break-inside:avoid!important}
   
   /* Modal chrome verbergen */
   .mo{position:static!important;background:transparent!important;padding:0!important;display:block!important}
@@ -968,7 +973,7 @@ function OfferteDocument({doc, settings, ficheCache={}, producten=[]}) {
           return <div className="cov" style={{gridTemplateColumns:`${colW}% ${100-colW}%`}}>
             {/* Linker strook: banner als ingesteld, anders kleurgradiënt */}
             <div className="cov-l" style={vImg
-              ?{backgroundImage:`url(${vImg})`,backgroundSize:`${vZoom}%`,backgroundPosition:"center",backgroundRepeat:"no-repeat",padding:0}
+              ?{backgroundImage:`url(${vImg})`,backgroundSize:"cover",backgroundPosition:"center",backgroundRepeat:"no-repeat",padding:0}
               :{background:`linear-gradient(155deg,${dc} 0%,${dc}ee 70%,#0f172a 100%)`}}>
               {!vImg&&<CovBedrijf light/>}
               {!vImg&&inst&&<div className="cov-inst-badge"><span style={{fontSize:20}}>{inst.icon}</span>{inst.l}</div>}
@@ -1073,7 +1078,7 @@ function OfferteDocument({doc, settings, ficheCache={}, producten=[]}) {
       {/* PAGE 2: PRODUCTINFO + TECHNISCHE FICHES */}
       {sj.toonProductpagina!==false&&uniqueProds.length>0&&<>
         <div className="doc-page-lbl">Pagina 2 - Productinformatie & Technische fiches</div>
-        <div className="doc-page">
+        <div className="doc-page prod-page-wrap">
           <div style={{height:6,background:dc,borderRadius:"4px 4px 0 0",flexShrink:0}}/>
           <div className="prod-page">
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end",marginBottom:6}}>
