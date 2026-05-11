@@ -27,6 +27,40 @@ body{font-family:Inter,Arial,sans-serif;background:#f1f5f9;min-height:100vh}
 .abtn:disabled{opacity:.5;cursor:not-allowed}
 iframe{width:100%;border:none;display:block;min-height:600px}
 @media print{#topbar,#akbalk{display:none!important}}
+/* Fallback renderer styles */
+.fb-wrap{max-width:860px;margin:0 auto;padding:20px}
+.fb-page{background:#fff;border-radius:6px;box-shadow:0 2px 16px rgba(0,0,0,.1);padding:40px 48px;margin-bottom:20px}
+.fb-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:32px;padding-bottom:24px;border-bottom:3px solid var(--ac,#1a2e4a)}
+.fb-logo{max-height:70px;max-width:180px;object-fit:contain}
+.fb-bedrijf{font-size:12px;color:#64748b;line-height:1.7;text-align:right}
+.fb-bedrijf strong{display:block;font-size:15px;color:#1e293b;margin-bottom:4px}
+.fb-doctype{font-size:28px;font-weight:900;color:var(--ac,#1a2e4a);margin-bottom:4px}
+.fb-docnr{font-size:14px;color:#64748b}
+.fb-meta{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:28px}
+.fb-klant-box,.fb-datum-box{background:#f8fafc;border-radius:8px;padding:16px}
+.fb-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#94a3b8;margin-bottom:6px}
+.fb-val{font-size:13px;color:#1e293b;line-height:1.6}
+.fb-val strong{font-size:15px;font-weight:700;display:block}
+table.fb-tbl{width:100%;border-collapse:collapse;margin-bottom:24px;font-size:13px}
+table.fb-tbl th{background:var(--ac,#1a2e4a);color:#fff;padding:10px 12px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px}
+table.fb-tbl td{padding:10px 12px;border-bottom:1px solid #f1f5f9;vertical-align:top}
+table.fb-tbl tr:hover td{background:#f8fafc}
+.fb-grp-hdr td{background:#f1f5f9!important;font-weight:700;font-size:12px;color:#475569;letter-spacing:.5px;padding:8px 12px}
+.fb-totals{display:flex;justify-content:flex-end}
+.fb-tot-box{width:300px;font-size:13px}
+.fb-tot-row{display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid #f1f5f9}
+.fb-tot-row.final{font-size:16px;font-weight:800;color:var(--ac,#1a2e4a);padding-top:10px;border-top:2px solid var(--ac,#1a2e4a);border-bottom:none}
+.fb-notities{background:#f8fafc;border-left:4px solid var(--ac,#1a2e4a);padding:14px 16px;border-radius:0 6px 6px 0;margin-bottom:24px;font-size:13px;color:#475569;line-height:1.6}
+.fb-vw{font-size:11px;color:#94a3b8;line-height:1.7;border-top:1px solid #e2e8f0;padding-top:16px;margin-top:16px;white-space:pre-wrap}
+.fb-sign{margin-top:32px;padding-top:24px;border-top:1px solid #e2e8f0;display:flex;justify-content:space-between;align-items:flex-end}
+.fb-sign-box{font-size:11px;color:#94a3b8}
+.fb-sign-line{width:200px;height:40px;border-bottom:1px solid #94a3b8;margin-bottom:4px}
+@media print{
+  #topbar,#akbalk{display:none!important}
+  .fb-wrap{padding:0}
+  .fb-page{box-shadow:none;border-radius:0;padding:20mm 18mm;break-after:page;margin:0}
+  .fb-page:last-child{break-after:auto}
+}
 </style>
 </head>
 <body>
@@ -34,14 +68,126 @@ iframe{width:100%;border:none;display:block;min-height:600px}
 <div id="err"><div class="ico" id="eico">❌</div><h2 id="eh">Niet beschikbaar</h2><p id="ep">Link niet geldig.</p></div>
 <div id="main">
   <div id="topbar"><strong id="docnr">Document</strong><button id="prbtn">🖨 Afdrukken / PDF</button><span class="tip">Kies "Opslaan als PDF"</span></div>
-  <iframe id="frm"></iframe>
+  <div id="doc-container"></div>
   <div id="akbalk"><p>Gaat u akkoord met deze offerte?</p><button class="abtn aok" id="bok">✅ Ik ga akkoord</button><button class="abtn aaf" id="baf">❌ Niet akkoord</button></div>
 </div>
 
 <script>
 var SB="https://qxnxbqkdvvblfkihmjxy.supabase.co",KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF4bnhicWtkdnZibGZraWhtanh5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMzNTI3MTMsImV4cCI6MjA4ODkyODcxM30.1JDvrHgxLpU1GZqSjDVGtfnFJg8PHuD-aFpHOxAY1To";
 var p=new URLSearchParams(location.search),oid=p.get("id");
+
 function err(ico,h,msg){document.getElementById("spin").style.display="none";var b=document.getElementById("err");b.style.display="block";document.getElementById("eico").textContent=ico;document.getElementById("eh").textContent=h;document.getElementById("ep").innerHTML=msg;}
+
+function fmtEuro(v){return"€ "+parseFloat(v||0).toFixed(2).replace(".",",").replace(/\B(?=(\d{3})+(?!\d))/g,".");}
+function fmtDatum(s){if(!s)return"—";try{return new Date(s).toLocaleDateString("nl-BE",{day:"2-digit",month:"long",year:"numeric"});}catch(e){return s;}}
+function esc(s){return String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");}
+
+function calcTotals(lijnen){
+  var subtotaal=0,btwMap={};
+  (lijnen||[]).forEach(function(l){
+    if(l._isGroep||l._isTekst)return;
+    var qty=parseFloat(l.qty||1),pr=parseFloat(l.prijs||0),kor=parseFloat(l.korting||0);
+    var lijnTotaal=qty*pr*(1-kor/100);
+    subtotaal+=lijnTotaal;
+    var btwPct=parseFloat(l.btw||21);
+    btwMap[btwPct]=(btwMap[btwPct]||0)+lijnTotaal*btwPct/100;
+  });
+  var btwTotaal=Object.values(btwMap).reduce(function(a,b){return a+b;},0);
+  return{subtotaal:subtotaal,btwMap:btwMap,btwTotaal:btwTotaal,totaal:subtotaal+btwTotaal};
+}
+
+function renderFallback(doc, container, ac){
+  var bed=doc._bed||{};
+  var klant=doc.klant||{};
+  var lijnen=doc.lijnen||[];
+  var sj=doc._sj||{};
+  var t=calcTotals(lijnen);
+  var isF=(doc.type==="factuur")||String(doc.nummer||"").startsWith("FACT");
+  var docLabel=isF?"FACTUUR":"OFFERTE";
+
+  // bouw HTML
+  var html='<div class="fb-wrap" style="--ac:'+esc(ac)+'">';
+  html+='<div class="fb-page">';
+
+  // Header
+  html+='<div class="fb-header">';
+  html+='<div>';
+  if(bed.logo){html+='<img class="fb-logo" src="'+esc(bed.logo)+'" alt="logo">';}
+  else{html+='<div style="font-size:22px;font-weight:900;color:'+esc(ac)+'">'+esc(bed.naam||"")+'</div>';}
+  html+='</div>';
+  html+='<div class="fb-bedrijf"><strong>'+esc(bed.naam||"")+'</strong>'+esc(bed.adres||"")+'<br>'+esc(bed.gemeente||"")+'<br>BTW: '+esc(bed.btwnr||"")+'<br>'+esc(bed.email||"")+(bed.tel?'<br>'+esc(bed.tel):"")+(bed.iban?'<br>IBAN: '+esc(bed.iban):"")+'</div>';
+  html+='</div>';
+
+  // Doc type + nummer
+  html+='<div style="margin-bottom:24px">';
+  html+='<div class="fb-doctype">'+docLabel+'</div>';
+  html+='<div class="fb-docnr">'+esc(doc.nummer||"")+'</div>';
+  html+='</div>';
+
+  // Meta
+  html+='<div class="fb-meta">';
+  html+='<div class="fb-klant-box"><div class="fb-label">Klant</div><div class="fb-val"><strong>'+esc(klant.naam||"—")+'</strong>'+(klant.bedrijf?esc(klant.bedrijf)+'<br>':"")+(klant.adres?esc(klant.adres)+'<br>':"")+(klant.gemeente?esc(klant.gemeente)+'<br>':"")+(klant.email?esc(klant.email)+'<br>':"")+(klant.btwnr?'BTW: '+esc(klant.btwnr):"")+'</div></div>';
+  html+='<div class="fb-datum-box"><div class="fb-label">Details</div><div class="fb-val">Datum: <strong>'+fmtDatum(doc.datum||doc.aangemaakt)+'</strong>';
+  if(!isF)html+='<br>Geldig tot: <strong>'+fmtDatum(doc.vervaldatum)+'</strong>';
+  else html+='<br>Vervaldatum: <strong>'+fmtDatum(doc.vervaldatum)+'</strong>';
+  html+='</div></div></div>';
+
+  // Lijnen tabel
+  html+='<table class="fb-tbl"><thead><tr><th style="width:45%">Omschrijving</th><th style="width:8%;text-align:center">Qty</th><th style="width:10%;text-align:right">Eenheid</th><th style="width:12%;text-align:right">Prijs</th><th style="width:8%;text-align:center">BTW</th><th style="width:12%;text-align:right">Totaal</th></tr></thead><tbody>';
+
+  lijnen.forEach(function(l){
+    if(l._isGroep){
+      html+='<tr class="fb-grp-hdr"><td colspan="6">'+esc(l.omschrijving||"")+'</td></tr>';
+      return;
+    }
+    if(l._isTekst){
+      html+='<tr><td colspan="6" style="color:#64748b;font-style:italic;font-size:12px">'+esc(l.omschrijving||"")+'</td></tr>';
+      return;
+    }
+    var qty=parseFloat(l.qty||1),pr=parseFloat(l.prijs||0),kor=parseFloat(l.korting||0);
+    var lijnTot=qty*pr*(1-kor/100);
+    html+='<tr>';
+    html+='<td><div style="font-weight:600">'+esc(l.omschrijving||"")+'</div>'+(l.details?'<div style="font-size:11px;color:#64748b;margin-top:2px">'+esc(l.details)+'</div>':"")+'</td>';
+    html+='<td style="text-align:center">'+qty+'</td>';
+    html+='<td style="text-align:right;font-size:11px;color:#64748b">'+esc(l.eenheid||"")+'</td>';
+    html+='<td style="text-align:right">'+fmtEuro(pr)+'</td>';
+    html+='<td style="text-align:center">'+parseFloat(l.btw||21)+'%'+(kor>0?'<div style="font-size:10px;color:#f59e0b">-'+kor+'%</div>':"")+'</td>';
+    html+='<td style="text-align:right;font-weight:600">'+fmtEuro(lijnTot)+'</td>';
+    html+='</tr>';
+  });
+  html+='</tbody></table>';
+
+  // Totalen
+  html+='<div class="fb-totals"><div class="fb-tot-box">';
+  html+='<div class="fb-tot-row"><span>Subtotaal</span><span>'+fmtEuro(t.subtotaal)+'</span></div>';
+  Object.entries(t.btwMap).forEach(function(kv){
+    html+='<div class="fb-tot-row"><span>BTW '+kv[0]+'%</span><span>'+fmtEuro(kv[1])+'</span></div>';
+  });
+  if(doc.btwRegime==="verlegd"||doc.btwRegime==="medecontractant"){
+    html+='<div class="fb-tot-row"><span style="font-size:11px;color:#64748b">BTW verlegd</span><span>€ 0,00</span></div>';
+  }
+  html+='<div class="fb-tot-row final"><span>TOTAAL</span><span>'+fmtEuro((doc.btwRegime==="verlegd"||doc.btwRegime==="medecontractant")?t.subtotaal:t.totaal)+'</span></div>';
+  html+='</div></div>';
+
+  // Notities
+  if(doc.notities){
+    html+='<div class="fb-notities" style="margin-top:24px"><strong style="display:block;margin-bottom:4px;font-size:11px;text-transform:uppercase;color:#94a3b8">Opmerkingen</strong>'+esc(doc.notities)+'</div>';
+  }
+
+  // Handtekening + voorwaarden
+  if(!isF&&sj.handtekeningTekst!==false){
+    html+='<div class="fb-sign"><div class="fb-sign-box"><div class="fb-sign-line"></div>Datum &amp; Handtekening klant</div>';
+    if(sj.handtekeningTekst)html+='<div style="font-size:11px;color:#64748b;max-width:300px;text-align:right">'+esc(sj.handtekeningTekst)+'</div>';
+    html+='</div>';
+  }
+
+  if(doc._voorwaarden){
+    html+='<div class="fb-vw">'+esc(doc._voorwaarden)+'</div>';
+  }
+
+  html+='</div></div>'; // fb-page + fb-wrap
+  container.innerHTML=html;
+}
 
 async function go(){
   if(!oid){err("❌","Ongeldige link","Geen document ID.");return;}
@@ -54,32 +200,41 @@ async function go(){
     document.title=nr;document.getElementById("docnr").textContent=nr;
     fetch(SB+"/rest/v1/offerte_views",{method:"POST",headers:{"apikey":KEY,"Authorization":"Bearer "+KEY,"Content-Type":"application/json","Prefer":"return=minimal"},body:JSON.stringify({offerte_id:oid,viewed_at:new Date().toISOString()})}).catch(function(){});
 
-    if(!doc._docHtml){err("❌","Offerte niet beschikbaar","Stuur de offerte opnieuw vanuit BILLR.<br>De nieuwe link zal correct werken.");return;}
+    var ac=doc._dc||(doc._sj&&doc._sj.accentKleur)||"#1a2e4a";
+    var container=document.getElementById("doc-container");
 
-    // Laad app CSS
-    var cssLink="";
-    try{
-      var ap=await fetch("https://billr-v2.pages.dev/");
-      var ht=await ap.text();
-      var m=ht.match(/href="(\/assets\/index[^"]+\.css)"/);
-      if(m)cssLink='<link href="https://billr-v2.pages.dev'+m[1]+'" rel="stylesheet">';
-    }catch(e){}
-
-    // Bouw volledige HTML pagina met app CSS + opgeslagen doc HTML
-    var html='<!DOCTYPE html><html lang="nl"><head><meta charset="UTF-8">'
-      +'<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">'
-      +cssLink
-      +'<style>*{box-sizing:border-box}body{margin:0;padding:0;background:#f1f5f9;font-family:Inter,Arial,sans-serif;font-size:13px;color:#1e293b}'
-      +'@media print{body{background:#fff}@page{size:A4;margin:0}.doc-page{box-shadow:none!important;border-radius:0!important;margin:0!important;width:210mm!important;height:297mm!important;max-height:297mm!important;overflow:hidden!important;break-after:page;page-break-after:always;display:flex;flex-direction:column}.doc-page:last-child{break-after:auto;page-break-after:auto}.qt-footer{margin-top:auto;flex-shrink:0}.qt-pg,.fct-pg,.fct-pg2,.prod-page{flex:1;overflow:hidden}*{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}}</style>'
-      +'</head><body>'+doc._docHtml+'</body></html>';
-
-    var blob=new Blob([html],{type:"text/html;charset=utf-8"});
-    var frm=document.getElementById("frm");
-    frm.src=URL.createObjectURL(blob);
-    frm.onload=function(){try{var h=frm.contentDocument.documentElement.scrollHeight;frm.style.height=Math.max(h,600)+"px";}catch(e){frm.style.height="1400px";}};
-    document.getElementById("prbtn").onclick=function(){frm.contentWindow.print();};
     document.getElementById("spin").style.display="none";
     document.getElementById("main").style.display="block";
+
+    if(doc._docHtml){
+      // Gebruik pre-rendered HTML (optimale weergave)
+      var cssLink="";
+      try{
+        var ap=await fetch("https://billr-v2.pages.dev/");
+        var ht=await ap.text();
+        var m=ht.match(/href="(\/assets\/index[^"]+\.css)"/);
+        if(m)cssLink='<link href="https://billr-v2.pages.dev'+m[1]+'" rel="stylesheet">';
+      }catch(e){}
+
+      var html='<!DOCTYPE html><html lang="nl"><head><meta charset="UTF-8">'
+        +'<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">'
+        +cssLink
+        +'<style>*{box-sizing:border-box}body{margin:0;padding:0;background:#f1f5f9;font-family:Inter,Arial,sans-serif;font-size:13px;color:#1e293b}'
+        +'@media print{body{background:#fff}@page{size:A4;margin:0}.doc-page{box-shadow:none!important;border-radius:0!important;margin:0!important;width:210mm!important;height:297mm!important;max-height:297mm!important;overflow:hidden!important;break-after:page;page-break-after:always;display:flex;flex-direction:column}.doc-page:last-child{break-after:auto;page-break-after:auto}.qt-footer{margin-top:auto;flex-shrink:0}.qt-pg,.fct-pg,.fct-pg2,.prod-page{flex:1;overflow:hidden}*{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}}</style>'
+        +'</head><body>'+doc._docHtml+'</body></html>';
+
+      var blob=new Blob([html],{type:"text/html;charset=utf-8"});
+      var frm=document.createElement("iframe");
+      frm.style.cssText="width:100%;border:none;display:block;min-height:600px";
+      container.appendChild(frm);
+      frm.src=URL.createObjectURL(blob);
+      frm.onload=function(){try{var h=frm.contentDocument.documentElement.scrollHeight;frm.style.height=Math.max(h,600)+"px";}catch(e){frm.style.height="1400px";}};
+      document.getElementById("prbtn").onclick=function(){frm.contentWindow.print();};
+    } else {
+      // Fallback: render direct van ruwe data
+      renderFallback(doc, container, ac);
+      document.getElementById("prbtn").onclick=function(){window.print();};
+    }
 
     var isF=(doc.type==="factuur")||String(nr).startsWith("FACT");
     var toonAk=!isF&&(doc._sj?doc._sj.toonBevestigingslink!==false:true);
