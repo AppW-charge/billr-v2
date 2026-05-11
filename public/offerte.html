@@ -456,11 +456,10 @@ tr.row-active td{border-top:2px solid #2563eb}
 /* -- PRINT: verwijder browser-header (URL, datum, paginanr) -- */
 @page{
   size:A4 portrait;
-  margin:0;  /* margin:0 verwijdert de browser-header en -footer volledig */
+  margin:10mm 14mm;
 }
 @media print{
-  /* --- KRITIEK: margin:0 verwijdert browser URL + paginanummering --- */
-  @page{size:A4 portrait;margin:0}
+  @page{size:A4 portrait;margin:10mm 14mm}
   
   /* Kleur behouden */
   *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important;box-shadow:none!important}
@@ -479,8 +478,8 @@ tr.row-active td{border-top:2px solid #2563eb}
   /* --- Elke doc-page = exacte A4 pagina (210×297mm) --- */
   .doc-page{
     box-shadow:none!important;border-radius:0!important;
-    margin:0!important;max-width:100%!important;width:210mm!important;
-    height:297mm!important;max-height:297mm!important;
+    margin:0 auto!important;max-width:100%!important;width:182mm!important;
+    height:277mm!important;max-height:277mm!important;
     overflow:hidden!important;
     display:flex!important;flex-direction:column!important;
     break-after:page!important;page-break-after:always!important;
@@ -489,13 +488,13 @@ tr.row-active td{border-top:2px solid #2563eb}
   .doc-page:last-child{break-after:auto!important;page-break-after:auto!important}
   .doc-page-lbl{display:none!important}
   
-  /* Productpagina: vaste hoogte loslaten zodat items niet worden afgeknipt */
-  .prod-page-wrap{height:auto!important;max-height:none!important;overflow:visible!important}
-  .prod-page-wrap .prod-page{overflow:visible!important}
+  /* Productpagina: vloeit vrij over meerdere A4s */
+  .prod-page-wrap{height:auto!important;max-height:none!important;overflow:visible!important;break-after:page!important;page-break-after:always!important}
+  .prod-page-wrap .prod-page{overflow:visible!important;height:auto!important;max-height:none!important}
   /* Coverpagina */
   .cov{
-    width:100%!important;height:297mm!important;
-    min-height:297mm!important;max-height:297mm!important;
+    width:100%!important;height:277mm!important;
+    min-height:277mm!important;max-height:277mm!important;
     display:grid!important;grid-template-columns:42% 58%!important;
     overflow:hidden!important;
   }
@@ -516,7 +515,7 @@ tr.row-active td{border-top:2px solid #2563eb}
   
   /* Technische fiche pagina's */
   .fiche-print-page{
-    width:210mm!important;height:297mm!important;
+    width:182mm!important;height:277mm!important;
     overflow:hidden!important;box-sizing:border-box!important;
     break-after:page!important;page-break-after:always!important;
     display:flex!important;flex-direction:column!important;
@@ -535,7 +534,7 @@ tr.row-active td{border-top:2px solid #2563eb}
   .qt-totals,.qt-sign,.qt-betaal,.qt-voorschot,.qt-notes,.qt-confirm-link,.qt-fiches{break-inside:avoid!important;page-break-inside:avoid!important}
   .grp-hdr{break-after:avoid!important;page-break-after:avoid!important}
   .grp-sub,.prod-item,.qt-meta-bar,.qt-parties{break-inside:avoid!important;page-break-inside:avoid!important}
-  .prod-page>div>div{break-inside:avoid!important;page-break-inside:avoid!important}
+  .prod-info-item{break-inside:avoid!important;page-break-inside:avoid!important;display:block!important}
   
   /* Modal chrome verbergen */
   .mo{position:static!important;background:transparent!important;padding:0!important;display:block!important}
@@ -1097,7 +1096,7 @@ function OfferteDocument({doc, settings, ficheCache={}, producten=[]}) {
                 .map(s=>{const ci=s.indexOf(":");const eq=s.indexOf("=");const si=ci>=0&&(eq<0||ci<=eq)?ci:eq;return si>=0?{key:s.slice(0,si).trim(),val:s.slice(si+1).trim()}:{key:s.trim(),val:""};});
               const bulletSpecs = rawSpecs.filter(s=>!s.includes(":")||specRows.find(r=>r.key+" :"+r.val===s));
               return(
-                <div key={i} style={{marginBottom:28,pageBreakInside:"avoid"}}>
+                <div key={i} className="prod-info-item" style={{marginBottom:28}}>
                   {/* Product header with image + naam */}
                   <div style={{display:"flex",gap:16,alignItems:"flex-start",marginBottom:10}}>
                     {l.imageUrl&&<div style={{flexShrink:0,width:90,height:90,borderRadius:10,overflow:"hidden",border:"1px solid #e2e8f0",background:"#f8fafc",display:"flex",alignItems:"center",justifyContent:"center"}}>
