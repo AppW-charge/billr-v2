@@ -1787,6 +1787,10 @@ tr.row-active td{border-top:2px solid #2563eb}
     max-height:270mm!important;
     object-fit:contain!important;display:block!important;
   }
+  .prod-page-wrap{height:auto!important;max-height:none!important;overflow:visible!important}
+  .prod-page-wrap .prod-page{overflow:visible!important}
+  .prod-page>div>div{break-inside:avoid!important;page-break-inside:avoid!important}
+  .doc-page{margin-left:auto!important;margin-right:auto!important}
   .fiche-screen-embed{display:none!important}
   .fiche-print-images{display:block!important}
   
@@ -7163,7 +7167,7 @@ function OfferteDocument({doc, settings, ficheCache={}, producten=[]}) {
           return <div className="cov" style={{gridTemplateColumns:`${colW}% ${100-colW}%`}}>
           {/* Linker kolom */}
           <div className="cov-l" style={lyt.voorbladAfbeelding
-            ?{backgroundImage:`url(${lyt.voorbladAfbeelding})`,backgroundSize:`${lyt.voorbladZoom||100}%`,backgroundPosition:"center",backgroundRepeat:"no-repeat",padding:0}
+            ?{backgroundImage:`url(${lyt.voorbladAfbeelding})`,backgroundSize:"cover",backgroundPosition:"center",backgroundRepeat:"no-repeat",padding:0}
             :{background:`linear-gradient(155deg,${dc} 0%,${dc}ee 70%,#0f172a 100%)`}}>
             {/* Als eigen afbeelding: geen logo/gegevens tonen */}
             {!lyt.voorbladAfbeelding&&<>
