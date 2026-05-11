@@ -1701,11 +1701,11 @@ tr.row-active td{border-top:2px solid #2563eb}
 /* ── PRINT: verwijder browser-header (URL, datum, paginanr) ── */
 @page{
   size:A4 portrait;
-  margin:0;  /* margin:0 verwijdert de browser-header en -footer volledig */
+  margin:8mm 10mm;
 }
 @media print{
   /* ═══ KRITIEK: margin:0 verwijdert browser URL + paginanummering ═══ */
-  @page{size:A4 portrait;margin:0}
+  @page{size:A4 portrait;margin:8mm 10mm}
   
   /* Kleur behouden */
   *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important;box-shadow:none!important}
@@ -1724,8 +1724,8 @@ tr.row-active td{border-top:2px solid #2563eb}
   /* ═══ Elke doc-page in print: auto hoogte, content vloeit vrij ═══ */
   .doc-page{
     box-shadow:none!important;border-radius:0!important;
-    margin:0!important;max-width:100%!important;width:210mm!important;
-    height:297mm!important;min-height:297mm!important;max-height:297mm!important;
+    margin:0 auto!important;max-width:100%!important;width:190mm!important;
+    height:281mm!important;min-height:281mm!important;max-height:281mm!important;
     overflow:visible!important;
     display:flex!important;flex-direction:column!important;
     break-after:page!important;page-break-after:always!important;
@@ -7714,7 +7714,7 @@ ${styles}
 .fiche-print-images{display:block!important}
 .fiche-print-page{width:210mm!important;height:297mm!important;overflow:hidden!important;display:flex!important;flex-direction:column!important;break-after:page!important}
 .fiche-print-page img{width:100%;height:auto;max-height:270mm;object-fit:contain;display:block}
-@page{size:A4 portrait;margin:0}
+@page{size:A4 portrait;margin:8mm 10mm}
 @media print{
   *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;box-shadow:none!important}
   .printbar{display:none!important}
@@ -7768,7 +7768,7 @@ function DocModal({doc,type,settings,onClose,onFactuur,onStatusOff,onStatusFact,
       if(!pr){ pr = document.createElement("div"); pr.id="print-root"; document.body.appendChild(pr); }
 
       // 210mm = boven 768px breakpoint zodat mobiele CSS niet triggert
-      pr.style.cssText = "width:210mm;min-width:210mm;max-width:210mm;margin:0;padding:0;";
+      pr.style.cssText = "width:190mm;min-width:190mm;max-width:190mm;margin:8mm auto;padding:0;";
       pr.innerHTML = docWrap.outerHTML;
 
       const rs = getComputedStyle(document.documentElement);
