@@ -1088,6 +1088,7 @@ const INIT_SETTINGS = {
     logoPositie:"links-boven",
     logoBreedte:140,
     logoHoogte:52,
+    voorbladAfbeelding:"", // custom achtergrond afbeelding voorblad linker paneel
     ficheWeergave:"eigen-pagina",   // "eigen-pagina" | "half" | "inline"
     ficheMarge:8,                   // mm marge rondom fiche
     ficheHoogte:220,                // mm hoogte van de fiche embed (bij half/inline)
@@ -1747,6 +1748,7 @@ tr.row-active td{border-top:2px solid #2563eb}
   #print-root{width:210mm!important;min-width:210mm!important}
   .doc-page-lbl{display:none!important}
   .doc-page > div:first-child{min-height:4mm!important}
+  .screen-accent-bar{display:block!important;min-height:4mm!important}
   
   /* Coverpagina */
   .cov{
@@ -6949,7 +6951,7 @@ function FichePages({fiche, naam, fichNaam, omschr, dc, bed, docNummer}) {
       <div>
         <div className="doc-page-lbl">Technische fiche — {naam}</div>
         <div className="doc-page" style={{pageBreakBefore:"always"}}>
-          <div style={{height:5,background:dc,flexShrink:0}}/>
+          <div className="screen-accent-bar" style={{height:5,background:dc,flexShrink:0,display:"none"}}/>
           <div style={{padding:"30mm 20mm",textAlign:"center"}}>
             <div style={{fontSize:36,marginBottom:16}}>📋</div>
             <div style={{fontWeight:800,fontSize:20,color:"#1e293b",marginBottom:8}}>{naam}</div>
@@ -6976,7 +6978,7 @@ function FichePages({fiche, naam, fichNaam, omschr, dc, bed, docNummer}) {
         <div key={`fp-${i}`}>
           <div className="doc-page-lbl">Technische fiche — {naam} (pagina {i+1}/{pageImages.length})</div>
           <div className="doc-page fiche-print-page" style={{pageBreakBefore:"always",breakBefore:"page"}}>
-            <div style={{height:5,background:dc,flexShrink:0}}/>
+            <div className="screen-accent-bar" style={{height:5,background:dc,flexShrink:0,display:"none"}}/>
             {i === 0 && (
               <div style={{padding:"4mm 8mm 2mm",display:"flex",justifyContent:"space-between",alignItems:"center",borderBottom:"1px solid #e2e8f0"}}>
                 <div>
@@ -7102,7 +7104,7 @@ function OfferteDocument({doc, settings, ficheCache={}, producten=[]}) {
 
         {/* ONTWERP 1: Klassiek gesplitst */}
         {ontwerp==="kl_split"&&<div className="cov">
-          <div className="cov-l" style={{background:`linear-gradient(155deg,${dc} 0%,${dc}ee 70%,#0f172a 100%)`}}>
+          <div className="cov-l" style={lyt.voorbladAfbeelding?{backgroundImage:`url(${lyt.voorbladAfbeelding})`,backgroundSize:"cover",backgroundPosition:"center",backgroundRepeat:"no-repeat"}:{background:`linear-gradient(155deg,${dc} 0%,${dc}ee 70%,#0f172a 100%)`}}>
             <CovBedrijf light/>
             {inst&&<div className="cov-inst-badge"><span style={{fontSize:20}}>{inst.icon}</span>{inst.l}</div>}
           </div>
@@ -7210,7 +7212,7 @@ function OfferteDocument({doc, settings, ficheCache={}, producten=[]}) {
           return <div key={pageIdx}>
         <div className="doc-page-lbl">Pagina {2+pageIdx} — Productinformatie & Technische fiches</div>
         <div className="doc-page">
-          <div style={{height:5,background:dc,borderRadius:"4px 4px 0 0",flexShrink:0}}/>
+          <div className="screen-accent-bar" style={{height:5,background:dc,borderRadius:"4px 4px 0 0",flexShrink:0,display:"none"}}/>
           <div className="prod-page">
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end",marginBottom:6}}>
               <div>
@@ -7297,7 +7299,7 @@ function OfferteDocument({doc, settings, ficheCache={}, producten=[]}) {
       {/* PAGE 3: OFFERTEDETAIL */}
       <div className="doc-page-lbl">Pagina 3 — Offertedetail</div>
       <div className="doc-page">
-        <div style={{height:5,background:dc,flexShrink:0}}/>
+        <div className="screen-accent-bar" style={{height:5,background:dc,flexShrink:0,display:"none"}}/>
         <div className="qt-pg">
           <div className="qt-header">
             <div>
@@ -7376,7 +7378,7 @@ function OfferteDocument({doc, settings, ficheCache={}, producten=[]}) {
       {/* PAGE 4: VOORWAARDEN */}
       <div className="doc-page-lbl">Pagina 4 — Voorwaarden</div>
       <div className="doc-page">
-        <div style={{height:5,background:dc,flexShrink:0}}/>
+        <div className="screen-accent-bar" style={{height:5,background:dc,flexShrink:0,display:"none"}}/>
         <div style={{padding:"30px 36px",flex:1,overflow:"hidden"}}>
           <div style={{fontWeight:900,fontSize:18,color:dc,marginBottom:16,letterSpacing:"-.4px"}}>Algemene Verkoopsvoorwaarden & Verklaringen</div>
           <div className="legal-txt" style={{fontSize:11,lineHeight:1.6}}>{settings?.voorwaarden?.tekst||INIT_SETTINGS.voorwaarden.tekst}</div>
@@ -7407,7 +7409,7 @@ function OfferteDocument({doc, settings, ficheCache={}, producten=[]}) {
                 <div key={`fiche-ph-${fi}-${ffi}`}>
                   <div className="doc-page-lbl">Technische fiche — {f.naam||l.naam}</div>
                   <div className="doc-page" style={{pageBreakBefore:"always"}}>
-                    <div style={{height:5,background:dc,flexShrink:0}}/>
+                    <div className="screen-accent-bar" style={{height:5,background:dc,flexShrink:0,display:"none"}}/>
                     <div style={{padding:"30mm 20mm",textAlign:"center"}}>
                       <div style={{fontSize:36,marginBottom:16}}>📋</div>
                       <div style={{fontWeight:800,fontSize:20,color:"#1e293b",marginBottom:8}}>{l.naam}</div>
@@ -7454,7 +7456,7 @@ function FactuurDocument({doc, settings}) {
       <div className="doc-page-lbl">Pagina 1 — Factuur</div>
       <div className="doc-page">
         {/* Kleurband: alleen bij classic/modern/colored */}
-        {(ontwerp==="classic"||ontwerp==="modern"||ontwerp==="colored")&&<div style={{height:6,background:dc,borderRadius:"4px 4px 0 0",flexShrink:0}}/>}
+        {(ontwerp==="classic"||ontwerp==="modern"||ontwerp==="colored")&&<div className="screen-accent-bar" style={{height:6,background:dc,borderRadius:"4px 4px 0 0",flexShrink:0,display:"none"}}/>}
 
         <div className="fct-pg">
           {/* ONTWERP: classic (default) */}
@@ -7558,7 +7560,7 @@ function FactuurDocument({doc, settings}) {
         return fctProds.length>0?(<>
           <div className="doc-page-lbl">Pagina {overvloeit?"3":"2"} — Productinformatie & Technische Fiches</div>
           <div className="doc-page">
-            <div style={{height:5,background:dc,borderRadius:"4px 4px 0 0",flexShrink:0}}/>
+            <div className="screen-accent-bar" style={{height:5,background:dc,borderRadius:"4px 4px 0 0",flexShrink:0,display:"none"}}/>
             <div className="prod-page">
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end",marginBottom:6}}>
                 <div>
@@ -7612,7 +7614,7 @@ function FactuurDocument({doc, settings}) {
       {settings?.voorwaarden?.tekst&&<>
       <div className="doc-page-lbl">{overvloeit?"Pagina 3":"Pagina 2"} — Verkoopsvoorwaarden</div>
       <div className="doc-page">
-        <div style={{height:5,background:dc,flexShrink:0}}/>
+        <div className="screen-accent-bar" style={{height:5,background:dc,flexShrink:0,display:"none"}}/>
         <div className="fct-pg2">
           <div className="fct-pg2-title" style={{color:dc}}>Algemene Verkoopsvoorwaarden</div>
           <div className="legal-txt">{settings?.voorwaarden?.tekst||INIT_SETTINGS.voorwaarden.tekst}</div>
@@ -9137,6 +9139,29 @@ function InstellingenPage({settings,setSettings,notify,onExportBackup,onImportBa
                 {form.bedrijf?.logo&&<img src={form.bedrijf.logo} alt="" style={{maxWidth:lyt.logo?.offerte?.breedte||140,maxHeight:lyt.logo?.offerte?.hoogte||52,objectFit:"contain",border:"1px solid #e2e8f0",borderRadius:5,marginTop:8}}/>}
               </div>
               
+              {/* ── Voorblad achtergrond afbeelding ── */}
+              <div style={{marginBottom:12,padding:12,background:"#f0fdf4",border:"1px solid #86efac",borderRadius:8}}>
+                <div style={{fontWeight:700,fontSize:12,color:"#166534",marginBottom:8,textTransform:"uppercase",letterSpacing:.5}}>🖼 Voorblad achtergrond (linker paneel)</div>
+                <div style={{fontSize:12,color:"#64748b",marginBottom:10}}>Vervang de gekleurde achtergrond door een eigen afbeelding.</div>
+                {lyt.voorbladAfbeelding
+                  ?<div style={{position:"relative",marginBottom:8}}>
+                      <img src={lyt.voorbladAfbeelding} alt="" style={{width:"100%",maxHeight:120,objectFit:"cover",borderRadius:8,border:"1px solid #e2e8f0",display:"block"}}/>
+                      <button onClick={()=>setLObj("voorbladAfbeelding","")} style={{position:"absolute",top:6,right:6,background:"rgba(0,0,0,.6)",color:"#fff",border:"none",borderRadius:6,padding:"3px 10px",fontSize:12,cursor:"pointer"}}>✕ Verwijderen</button>
+                    </div>
+                  :<div style={{background:"#f8fafc",border:"2px dashed #e2e8f0",borderRadius:8,padding:20,textAlign:"center",marginBottom:8}}>
+                      <div style={{fontSize:32,marginBottom:6}}>🖼</div>
+                      <div style={{fontSize:12,color:"#64748b"}}>Nog geen afbeelding</div>
+                    </div>
+                }
+                <label style={{display:"inline-flex",alignItems:"center",gap:8,background:"#166534",color:"#fff",padding:"8px 16px",borderRadius:7,cursor:"pointer",fontWeight:600,fontSize:13}}>
+                  📂 Afbeelding uploaden
+                  <input type="file" accept="image/*" style={{display:"none"}} onChange={e=>{
+                    const f=e.target.files?.[0]; if(!f) return;
+                    const r=new FileReader(); r.onload=ev=>setLObj("voorbladAfbeelding",ev.target.result); r.readAsDataURL(f);
+                  }}/>
+                </label>
+                {lyt.voorbladAfbeelding&&<div style={{fontSize:11,color:"#94a3b8",marginTop:6}}>Tip: gebruik een verticaal formaat (portret) voor best resultaat</div>}
+              </div>
               {!form.bedrijf?.logo&&<div style={{fontSize:11.5,color:"#f59e0b",marginTop:4,padding:10,background:"#fffbeb",border:"1px solid #fde68a",borderRadius:6}}>⚠ Geen logo — upload via Instellingen → Bedrijf</div>}
             </AccRow>
 
