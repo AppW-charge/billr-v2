@@ -7642,18 +7642,22 @@ function FactuurDocument({doc, settings}) {
 
 // ─── PRINT/DOWNLOAD HELPER ───────────────────────────────────────
 function buildPrintHtml(docWrapHtml, docNummer) {
-  // Extraheer CSS maar filter ALLE @page regels eruit (voorkomen conflicten met onze eigen @page)
+  // Extraheer ALLEEN document-relevante CSS (niet de volledige app-UI, anders te groot voor parsing)
+  const docTokens = ['doc-page','doc-wrap','qt-','cov','fct-','prod-page','grp-hdr','screen-accent','fiche-'];
   const styles = Array.from(document.styleSheets)
     .flatMap(ss=>{try{return Array.from(ss.cssRules||[]).map(r=>r.cssText);}catch{return [];}})
-    .filter(r=>!r.trimStart().startsWith("@page"))
-    .join("\n");
-  // CSS variabelen ophalen van :root - KRITIEK voor kleuren
-  const rs = getComputedStyle(document.documentElement);
-  const vars = ["--theme","--p","--p2","--sb-txt-rgb","--bdr","--bg","--txt","--dc","--sb-w"]
+    .filter(css=>{
+      const t=css.trimStart();
+      if(t.startsWith('@page')) return false;
+      return docTokens.some(tok=>css.includes(tok));
+    })
+    .join('\n');
+  const rs=getComputedStyle(document.documentElement);
+  const vars=['--theme','--p','--p2','--sb-txt-rgb','--bdr','--bg','--txt','--dc','--sb-w']
     .map(v=>{const val=rs.getPropertyValue(v).trim();return val?`${v}:${val}`:null;})
-    .filter(Boolean).join(";");
+    .filter(Boolean).join(';');
   return `<!DOCTYPE html><html lang="nl"><head>
-<meta charset="UTF-8"><title>${docNummer||"document"}</title>
+<meta charset="UTF-8"><title>${docNummer||'document'}</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600&display=swap">
 <style>
@@ -7661,14 +7665,16 @@ function buildPrintHtml(docWrapHtml, docNummer) {
 *{box-sizing:border-box;margin:0;padding:0}
 body{margin:0;padding:0;background:#f1f5f9;font-family:'Inter',Arial,sans-serif;font-size:13px;color:#1e293b}
 ${styles}
-.printbar{padding:8px 12px;background:#f0f4f8;display:flex;gap:10px;align-items:center;font-family:'Inter',Arial,sans-serif;font-size:12px;border-bottom:1px solid #e2e8f0}
+.printbar{padding:10px 14px;background:#1e3a5f;display:flex;gap:10px;align-items:center;font-family:'Inter',Arial,sans-serif;font-size:12px;color:#fff;flex-wrap:wrap}
+.printbar strong{color:#fff;font-size:13px}
+.printbar .tip{background:#fff3cd;color:#856404;border:1px solid #ffc107;border-radius:5px;padding:5px 10px;font-size:11.5px;font-weight:600;line-height:1.4}
 .doc-wrap{padding:0!important;background:#fff!important}
 .doc-page{box-shadow:none!important;border-radius:0!important;margin:0!important;width:210mm!important;height:297mm!important;max-height:297mm!important;display:flex!important;flex-direction:column!important;overflow:hidden!important;break-after:page;page-break-after:always}
 .doc-page:last-child{break-after:auto!important;page-break-after:auto!important}
 .doc-page-lbl{display:none!important}
 .cov{width:100%!important;height:297mm!important;max-height:297mm!important;overflow:hidden!important}
 .qt-footer{margin-top:auto!important;flex-shrink:0!important}
-.prod-page,.qt-pg,.fct-pg,.fct-pg2{padding:8mm 12mm!important;flex:1!important;overflow:hidden!important}
+.prod-page,.qt-pg,.fct-pg,.fct-pg2{padding:8mm 12mm!important;flex:1!important;min-height:0!important;overflow:hidden!important}
 .fiche-screen-embed{display:none!important}
 .fiche-print-images{display:block!important}
 .fiche-print-page{width:210mm!important;height:297mm!important;overflow:hidden!important;display:flex!important;flex-direction:column!important;break-after:page!important}
@@ -7681,13 +7687,17 @@ ${styles}
 </head><body>
 <div id="print-root" style="width:210mm;min-width:210mm">
 <div class="printbar">
-  <strong style="color:#1e293b">${docNummer}</strong>
-  <button onclick="window.print()" style="background:#2563eb;color:#fff;border:none;padding:5px 12px;border-radius:5px;cursor:pointer;font-size:12px;font-weight:600">🖨 Afdrukken / PDF</button>
-  <span style="color:#64748b;font-size:11px">Kies bij printer "Microsoft Print to PDF" of "Opslaan als PDF"</span>
+  <strong>📄 ${docNummer}</strong>
+  <button onclick="window.print()" style="background:#2563eb;color:#fff;border:none;padding:6px 14px;border-radius:5px;cursor:pointer;font-size:13px;font-weight:700">🖨 Afdrukken / PDF</button>
+  <div class="tip">⚠️ Printdialoog: <b>Marges → Geen</b> &amp; <b>Kopteksten en voetteksten → UIT</b></div>
 </div>
 ${docWrapHtml}
 </div>
-<script>window.onload=function(){setTimeout(function(){window.print();},600);};<\/script>
+<script>
+// @page margin:0 drie keer injecteren: bij parse, DOMContentLoaded en onload
+(function(){var s=document.createElement('style');s.textContent='@page{size:A4 portrait;margin:0mm!important}';document.head&&document.head.appendChild(s);})();
+document.addEventListener('DOMContentLoaded',function(){var s=document.createElement('style');s.textContent='@page{size:A4 portrait;margin:0mm!important}';document.head.appendChild(s);});
+window.onload=function(){var s=document.createElement('style');s.textContent='@page{size:A4 portrait;margin:0mm!important}';document.head.appendChild(s);setTimeout(function(){window.print();},1200);};<\/script>
 </body></html>`;
 }
 
@@ -7716,16 +7726,19 @@ function DocModal({doc,type,settings,onClose,onFactuur,onStatusOff,onStatusFact,
   const doPrint = () => {
     const docWrap = document.querySelector(".mb-body .doc-wrap");
     if(!docWrap){ alert("Kan document niet vinden. Sluit en open het document opnieuw."); return; }
-
-    // Open nieuw venster met standalone HTML — zo verdwijnt de browser URL/paginanummer footer
-    const html = buildPrintHtml(docWrap.outerHTML, doc.nummer);
-    const blob = new Blob([html], {type: "text/html"});
-    const url = URL.createObjectURL(blob);
-    window.open(url, "_blank");
-    setTimeout(() => URL.revokeObjectURL(url), 60000);
-
-    if(type==="offerte") onStatusOff("afgedrukt");
-    else onStatusFact("afgedrukt");
+    // Wacht 2.5s zodat technische fiches klaar zijn met renderen (PDF.js canvas rendering)
+    const btn = document.getElementById("doc-print-btn");
+    if(btn){ btn.textContent = "⏳ Voorbereiden..."; btn.disabled = true; }
+    setTimeout(() => {
+      if(btn){ btn.textContent = "🖨 Afdrukken / PDF"; btn.disabled = false; }
+      const html = buildPrintHtml(docWrap.outerHTML, doc.nummer);
+      const blob = new Blob([html], {type: "text/html"});
+      const url = URL.createObjectURL(blob);
+      window.open(url, "_blank");
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+      if(type==="offerte") onStatusOff("afgedrukt");
+      else onStatusFact("afgedrukt");
+    }, 2500);
   };
 
   // Ctrl+P shortcut
