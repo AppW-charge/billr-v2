@@ -3245,7 +3245,7 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
         _bed: { naam:bed.naam, adres:bed.adres, gemeente:bed.gemeente, tel:bed.tel, email:bed.email, btwnr:bed.btwnr, iban:bed.iban, bic:bed.bic, website:bed.website, logo:bed.logo },
         _dc: dc,
         _sj: { voorbladTitel:sj.voorbladTitel, handtekeningTekst:sj.handtekeningTekst, footerTekst:sj.footerTekst, toonProductpagina:sj.toonProductpagina, toonBevestigingslink:sj.toonBevestigingslink, accentKleur:sj.accentKleur },
-        _lyt: { font:lyt.font, fontSize:lyt.fontSize },
+        _lyt: { font:lyt.font, fontSize:lyt.fontSize, voorbladAfbeelding:lyt.voorbladAfbeelding||'', voorbladZoom:lyt.voorbladZoom||100, voorbladKolombreedte:lyt.voorbladKolombreedte||42 },
         _voorwaarden: settings?.voorwaarden?.tekst || "",
         _voorschot: settings?.voorwaarden?.voorschot || "50%",
         _docHtml: capturedDocHtml
