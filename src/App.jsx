@@ -1791,6 +1791,10 @@ tr.row-active td{border-top:2px solid #2563eb}
   .prod-page-wrap .prod-page{overflow:visible!important}
   .prod-page>div>div{break-inside:avoid!important;page-break-inside:avoid!important}
   .doc-page{margin-left:auto!important;margin-right:auto!important}
+  .prod-page-wrap{height:auto!important;max-height:none!important;overflow:visible!important;break-after:page!important}
+  .prod-page-wrap .prod-page{overflow:visible!important;height:auto!important}
+  .prod-info-item{break-inside:avoid!important;page-break-inside:avoid!important;display:block!important}
+  .prod-info-omschr{display:block!important;overflow:hidden!important;max-height:8.5em!important}
   .fiche-screen-embed{display:none!important}
   .fiche-print-images{display:block!important}
   
@@ -7167,7 +7171,7 @@ function OfferteDocument({doc, settings, ficheCache={}, producten=[]}) {
           return <div className="cov" style={{gridTemplateColumns:`${colW}% ${100-colW}%`}}>
           {/* Linker kolom */}
           <div className="cov-l" style={lyt.voorbladAfbeelding
-            ?{backgroundImage:`url(${lyt.voorbladAfbeelding})`,backgroundSize:"cover",backgroundPosition:"center",backgroundRepeat:"no-repeat",padding:0}
+            ?{backgroundImage:`url(${lyt.voorbladAfbeelding})`,backgroundSize:"100% 100%",backgroundRepeat:"no-repeat",padding:0}
             :{background:`linear-gradient(155deg,${dc} 0%,${dc}ee 70%,#0f172a 100%)`}}>
             {/* Als eigen afbeelding: geen logo/gegevens tonen */}
             {!lyt.voorbladAfbeelding&&<>
@@ -7277,43 +7281,35 @@ function OfferteDocument({doc, settings, ficheCache={}, producten=[]}) {
       </>}
       {/* PAGE 2: PRODUCTINFO + TECHNISCHE FICHES */}
       {sj.toonProductpagina!==false&&uniqueProds.length>0&&<>
-        {[...Array(Math.ceil(uniqueProds.length/5))].map((_,pageIdx)=>{
-          const pageProdList=uniqueProds.slice(pageIdx*5,pageIdx*5+5);
-          const totPages=Math.ceil(uniqueProds.length/5);
-          return <div key={pageIdx}>
-        <div className="doc-page-lbl">Pagina {2+pageIdx} — Productinformatie & Technische fiches</div>
-        <div className="doc-page">
-          <div className="screen-accent-bar" style={{height:5,background:dc,borderRadius:"4px 4px 0 0",flexShrink:0,display:"none"}}/>
+        <div className="doc-page-lbl">Pagina 2 — Productinformatie & Technische fiches</div>
+        <div className="doc-page prod-page-wrap">
+          <div style={{height:5,background:dc,borderRadius:"4px 4px 0 0",flexShrink:0}}/>
           <div className="prod-page">
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end",marginBottom:6}}>
               <div>
-                <div style={{fontWeight:900,fontSize:20,color:dc,letterSpacing:"-.5px"}}>{inst?.icon} Productinformatie & Technische Fiches{totPages>1?` (${pageIdx+1}/${totPages})`:""}</div>
+                <div style={{fontWeight:900,fontSize:20,color:dc,letterSpacing:"-.5px"}}>{inst?.icon} Productinformatie & Technische Fiches</div>
                 <div style={{fontSize:12,color:"#64748b",marginTop:2}}>Geselecteerde producten voor {doc.klant?.naam||"de klant"}</div>
               </div>
               <div style={{fontSize:10,color:"#94a3b8",textAlign:"right"}}>{bed.naam} · {doc.nummer}</div>
             </div>
             <div style={{height:1,background:"#e2e8f0",marginBottom:20}}/>
-            {pageProdList.map((l,i)=>{
-              // Parse technische fiche specs
+            {uniqueProds.map((l,i)=>{
               const rawSpecs = l.specs||[];
-              // Group specs: first 3 regular, rest as table entries
               const specRows = rawSpecs.filter(s=>s.includes(":")||s.includes("="))
                 .map(s=>{const ci=s.indexOf(":");const eq=s.indexOf("=");const si=ci>=0&&(eq<0||ci<=eq)?ci:eq;return si>=0?{key:s.slice(0,si).trim(),val:s.slice(si+1).trim()}:{key:s.trim(),val:""};});
-              const bulletSpecs = rawSpecs.filter(s=>!s.includes(":")||specRows.find(r=>r.key+" :"+r.val===s));
               return(
-                <div key={i} style={{marginBottom:28,pageBreakInside:"avoid"}}>
-                  {/* Product header with image + naam */}
+                <div key={i} className="prod-info-item" style={{marginBottom:28}}>
                   <div style={{display:"flex",gap:16,alignItems:"flex-start",marginBottom:10}}>
                     {l.imageUrl&&<div style={{flexShrink:0,width:90,height:90,borderRadius:10,overflow:"hidden",border:"1px solid #e2e8f0",background:"#f8fafc",display:"flex",alignItems:"center",justifyContent:"center"}}>
                       <img src={l.imageUrl} alt="" style={{width:"100%",height:"100%",objectFit:"contain"}} onError={e=>{e.target.parentElement.style.display="none"}}/>
                     </div>}
                     <div style={{flex:1}}>
                       <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
-                        <span style={{background:dc,color:"#fff",borderRadius:5,padding:"2px 9px",fontSize:10,fontWeight:700}}>{groepen.find(g=>g.id===l.groepId)?.naam||l.cat||"Product"}</span>
+                        <span style={{background:dc,color:"#fff",borderRadius:5,padding:"2px 9px",fontSize:10,fontWeight:700}}>{l.cat||groepen.find(g=>g.id===l.groepId)?.naam||"Product"}</span>
                         <span style={{fontSize:11,color:"#94a3b8"}}>×{l.aantal} {l.eenheid}</span>
                       </div>
                       <div style={{fontWeight:800,fontSize:16,color:"#1e293b",lineHeight:1.3,marginBottom:4}}>{l.naam}</div>
-                      {l.omschr&&<div style={{fontSize:12.5,color:"#475569",lineHeight:1.6}}>{l.omschr}</div>}
+                      {l.omschr&&<div className="prod-info-omschr" style={{fontSize:12,color:"#475569",lineHeight:1.55,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:7,WebkitBoxOrient:"vertical"}}>{l.omschr}</div>}
                     </div>
                     <div style={{flexShrink:0,textAlign:"right",background:"#f8fafc",borderRadius:8,padding:"10px 14px",border:"1px solid #e2e8f0"}}>
                       <div style={{fontSize:10,color:"#94a3b8",fontWeight:600}}>EENHEIDSPRIJS</div>
@@ -7321,7 +7317,6 @@ function OfferteDocument({doc, settings, ficheCache={}, producten=[]}) {
                       <div style={{fontSize:10,color:"#94a3b8"}}>BTW {l.btw}%</div>
                     </div>
                   </div>
-                  {/* Technische fiche als tabel indien specs aanwezig */}
                   {rawSpecs.length>0&&(
                     <div style={{background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:8,padding:"12px 14px"}}>
                       <div style={{fontWeight:700,fontSize:11,letterSpacing:.8,textTransform:"uppercase",color:dc,marginBottom:8}}>📋 Technische specificaties</div>
@@ -7344,7 +7339,6 @@ function OfferteDocument({doc, settings, ficheCache={}, producten=[]}) {
                     </div>
                   )}
                   {i<uniqueProds.length-1&&<div style={{height:1,background:"#e2e8f0",marginTop:20}}/>}
-                  {/* Technische fiches — download links */}
                   {((l.technischeFiches||[]).some(f=>f.data||f.url)||l.technischeFiche)&&<div className="fiche-dl-pill" style={{marginTop:8,display:"flex",flexWrap:"wrap",gap:4}}>
                     {(l.technischeFiches||[]).filter(f=>f.data||f.url).map((f,fi)=>(
                       <a key={fi} href={f.data||f.url} download={f.naam||"fiche.pdf"} style={{display:"inline-flex",alignItems:"center",gap:5,background:"#eff6ff",border:"1px solid #bfdbfe",borderRadius:6,padding:"5px 12px",fontSize:11.5,color:"#2563eb",textDecoration:"none",fontWeight:600}}>📎 {f.naam||"Technische fiche"}</a>
@@ -7352,19 +7346,13 @@ function OfferteDocument({doc, settings, ficheCache={}, producten=[]}) {
                     {l.technischeFiche&&l.technischeFiche!=="[PDF]"&&!(l.technischeFiches||[]).length&&(
                       <a href={l.technischeFiche} download={l.fichNaam||"fiche.pdf"} style={{display:"inline-flex",alignItems:"center",gap:5,background:"#eff6ff",border:"1px solid #bfdbfe",borderRadius:6,padding:"5px 12px",fontSize:11.5,color:"#2563eb",textDecoration:"none",fontWeight:600}}>📎 {l.fichNaam||"Technische fiche"}</a>
                     )}
-                    {/* Fiches zonder data — toon als label (cache nog niet geladen) */}
-                    {(l.technischeFiches||[]).filter(f=>!f.data&&!f.url).map((f,fi)=>(
-                      <span key={"lbl"+fi} style={{display:"inline-flex",alignItems:"center",gap:4,background:"#f1f5f9",border:"1px solid #e2e8f0",borderRadius:5,padding:"3px 10px",fontSize:11,color:"#64748b"}}>📎 {f.naam||"Fiche "+(fi+1)}</span>
-                    ))}
                   </div>}
                 </div>
               );
             })}
           </div>
-          <div className="qt-footer" style={{background:dc}}><div className="qt-footer-txt"><strong>{bed.naam}</strong></div><div className="qt-footer-txt">{bed.tel} · {bed.email}</div><div className="qt-footer-txt">{bed.website}</div></div>
+          <div className="qt-footer" style={{background:dc,marginTop:"auto"}}><div className="qt-footer-txt"><strong>{bed.naam}</strong></div><div className="qt-footer-txt">{bed.tel} · {bed.email}</div><div className="qt-footer-txt">{bed.website}</div></div>
         </div>
-        </div>;
-        })}
       </>}
 
       {/* PAGE 3: OFFERTEDETAIL */}
