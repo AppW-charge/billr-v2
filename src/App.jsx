@@ -1572,7 +1572,7 @@ tr.row-active td{border-top:2px solid #2563eb}
 .no-print{display:block}
 
 /* Page 1 Cover */
-.cov{display:grid;grid-template-columns:42% 58%;min-height:240mm;height:100%}
+.cov{display:grid;grid-template-columns:42% 58%;min-height:240mm;height:100%;align-items:stretch}
 @media(max-width:768px){
   /* Document preview schaal + scroll */
   .doc-wrap{width:100%!important;overflow-x:auto!important}
@@ -1599,7 +1599,7 @@ tr.row-active td{border-top:2px solid #2563eb}
   .prod-img,.prod-img-ph{width:80px!important;height:70px!important}
   .fct-pg,.fct-pg2{padding:12px!important}
 }
-.cov-l{display:flex;flex-direction:column;padding:44px 32px;position:relative;overflow:hidden}
+.cov-l{display:flex;flex-direction:column;padding:44px 32px;position:relative;overflow:hidden;background-size:cover!important;background-position:center!important}
 .cov-l::after{content:'';position:absolute;bottom:-80px;right:-80px;width:240px;height:240px;border-radius:50%;background:rgba(255,255,255,.06)}
 .cov-logo{max-width:140px;max-height:52px;object-fit:contain;margin-bottom:14px;filter:brightness(0) invert(1)}
 .cov-logo-mark{width:52px;height:52px;border-radius:10px;background:rgba(255,255,255,.15);border:1.5px solid rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;font-size:26px;margin-bottom:12px}
@@ -1757,7 +1757,7 @@ tr.row-active td{border-top:2px solid #2563eb}
     display:grid!important;grid-template-columns:42% 58%!important;
     overflow:hidden!important;
   }
-  .cov-l{height:100%!important;min-height:100%!important}
+  .cov-l{height:100%!important;min-height:100%!important;align-self:stretch!important}
   .cov-r{height:100%!important;box-sizing:border-box!important}
   
   /* Content pagina's: interne padding (omdat @page margin=0) */
@@ -7103,21 +7103,33 @@ function OfferteDocument({doc, settings, ficheCache={}, producten=[]}) {
       <div className="doc-page">
 
         {/* ONTWERP 1: Klassiek gesplitst */}
-        {ontwerp==="kl_split"&&<div className="cov">
-          <div className="cov-l" style={lyt.voorbladAfbeelding?{backgroundImage:`url(${lyt.voorbladAfbeelding})`,backgroundSize:"cover",backgroundPosition:"center",backgroundRepeat:"no-repeat"}:{background:`linear-gradient(155deg,${dc} 0%,${dc}ee 70%,#0f172a 100%)`}}>
-            <CovBedrijf light/>
-            {inst&&<div className="cov-inst-badge"><span style={{fontSize:20}}>{inst.icon}</span>{inst.l}</div>}
+        {ontwerp==="kl_split"&&(()=>{
+          const colW = lyt.voorbladKolombreedte || 42;
+          return <div className="cov" style={{gridTemplateColumns:`${colW}% ${100-colW}%`}}>
+          {/* Linker kolom */}
+          <div className="cov-l" style={lyt.voorbladAfbeelding
+            ?{backgroundImage:`url(${lyt.voorbladAfbeelding})`,backgroundSize:"cover",backgroundPosition:"center",backgroundRepeat:"no-repeat",padding:0}
+            :{background:`linear-gradient(155deg,${dc} 0%,${dc}ee 70%,#0f172a 100%)`}}>
+            {/* Als eigen afbeelding: geen logo/gegevens tonen */}
+            {!lyt.voorbladAfbeelding&&<>
+              <CovBedrijf light/>
+              {inst&&<div className="cov-inst-badge"><span style={{fontSize:20}}>{inst.icon}</span>{inst.l}</div>}
+            </>}
           </div>
+          {/* Rechter kolom */}
           <div className="cov-r">
             <div>
               {titelFormaat!=="geen"&&<div className="cov-doctype" style={{color:dc,fontSize:titelFontSize,textTransform:titelHoofdletters?"uppercase":"none"}}>{titelTekst}</div>}
               <div className="cov-docnum">{doc.nummer}</div>
             </div>
             <CovKlantInfo/>
+            {/* Installatietype rechts tonen als afbeelding actief */}
+            {lyt.voorbladAfbeelding&&inst&&<div className="cov-inst-badge" style={{background:dc,color:"#fff",border:"none",marginTop:12,alignSelf:"flex-start"}}><span style={{fontSize:20}}>{inst.icon}</span>{inst.l}</div>}
             <CovMeta/>
             <div style={{fontSize:11,color:"#94a3b8",marginTop:10}}>{bed.naam} · {fmtBtwnr(bed.btwnr)} · IBAN: {bed.iban}</div>
           </div>
-        </div>}
+        </div>;
+        })()}
 
         {/* ONTWERP 2: Modern top-banner */}
         {ontwerp==="modern_top"&&<div style={{minHeight:"297mm",display:"flex",flexDirection:"column"}}>
@@ -9161,6 +9173,16 @@ function InstellingenPage({settings,setSettings,notify,onExportBackup,onImportBa
                   }}/>
                 </label>
                 {lyt.voorbladAfbeelding&&<div style={{fontSize:11,color:"#94a3b8",marginTop:6}}>Tip: gebruik een verticaal formaat (portret) voor best resultaat</div>}
+                {/* Breedte kolom */}
+                <div style={{marginTop:12}}>
+                  <label className="fl">Breedte linker kolom</label>
+                  <div style={{display:"flex",alignItems:"center",gap:8}}>
+                    <input type="range" min={25} max={65} value={lyt.voorbladKolombreedte||42} onChange={e=>setLObj("voorbladKolombreedte",+e.target.value)} style={{flex:1}}/>
+                    <button onClick={()=>setLObj("voorbladKolombreedte",Math.max(25,(lyt.voorbladKolombreedte||42)-5))} style={{width:24,height:24,border:"1px solid #e2e8f0",borderRadius:4,background:"#fff",cursor:"pointer",fontWeight:700}}>−</button>
+                    <span style={{fontSize:12,fontWeight:700,minWidth:32,textAlign:"center"}}>{lyt.voorbladKolombreedte||42}%</span>
+                    <button onClick={()=>setLObj("voorbladKolombreedte",Math.min(65,(lyt.voorbladKolombreedte||42)+5))} style={{width:24,height:24,border:"1px solid #e2e8f0",borderRadius:4,background:"#fff",cursor:"pointer",fontWeight:700}}>+</button>
+                  </div>
+                </div>
               </div>
               {!form.bedrijf?.logo&&<div style={{fontSize:11.5,color:"#f59e0b",marginTop:4,padding:10,background:"#fffbeb",border:"1px solid #fde68a",borderRadius:6}}>⚠ Geen logo — upload via Instellingen → Bedrijf</div>}
             </AccRow>
