@@ -1723,7 +1723,7 @@ tr.row-active td{border-top:2px solid #2563eb}
   .doc-page{
     box-shadow:none!important;border-radius:0!important;
     margin:0!important;max-width:100%!important;width:210mm!important;
-    height:auto!important;min-height:100mm!important;max-height:none!important;
+    height:297mm!important;min-height:297mm!important;max-height:297mm!important;
     overflow:visible!important;
     display:flex!important;flex-direction:column!important;
     break-after:page!important;page-break-after:always!important;
@@ -1756,10 +1756,10 @@ tr.row-active td{border-top:2px solid #2563eb}
   .cov-r{height:100%!important;box-sizing:border-box!important}
   
   /* Content pagina's: interne padding (omdat @page margin=0) */
-  .prod-page{padding:8mm 12mm!important;box-sizing:border-box!important;flex:1!important;overflow:visible!important}
-  .fct-pg{padding:8mm 12mm!important;box-sizing:border-box!important;flex:1!important;overflow:visible!important}
-  .qt-pg{padding:8mm 12mm!important;box-sizing:border-box!important;flex:1!important;overflow:visible!important}
-  .fct-pg2{padding:8mm 12mm!important;box-sizing:border-box!important;flex:1!important;overflow:visible!important}
+  .prod-page{padding:8mm 12mm!important;box-sizing:border-box!important;flex:1!important;overflow:visible!important;min-height:0!important}
+  .fct-pg{padding:8mm 12mm!important;box-sizing:border-box!important;flex:1!important;overflow:visible!important;min-height:0!important}
+  .qt-pg{padding:8mm 12mm!important;box-sizing:border-box!important;flex:1!important;overflow:visible!important;min-height:0!important}
+  .fct-pg2{padding:8mm 12mm!important;box-sizing:border-box!important;flex:1!important;overflow:visible!important;min-height:0!important}
   
   /* Footer: altijd onderaan de pagina */
   .qt-footer{
@@ -1783,11 +1783,14 @@ tr.row-active td{border-top:2px solid #2563eb}
   .fiche-screen-embed{display:none!important}
   .fiche-print-images{display:block!important}
   
+  /* Tabel: header niet herhalen op volgende pagina */
+  .qt-tbl thead{display:table-row-group!important}
   /* Tabel regels: niet splitsen */
   .qt-tbl tr{break-inside:avoid!important;page-break-inside:avoid!important}
   .qt-totals,.qt-sign,.qt-betaal,.qt-voorschot,.qt-notes,.qt-confirm-link,.qt-fiches{break-inside:avoid!important;page-break-inside:avoid!important}
   .grp-hdr{break-after:avoid!important;page-break-after:avoid!important}
-  .grp-sub,.prod-item,.qt-meta-bar,.qt-parties{break-inside:avoid!important;page-break-inside:avoid!important}
+  .grp-sub,.qt-meta-bar,.qt-parties{break-inside:avoid!important;page-break-inside:avoid!important}
+  .prod-item{break-inside:avoid!important;page-break-inside:avoid!important;overflow:hidden!important}
   
   /* Modal chrome verbergen */
   .mo{position:static!important;background:transparent!important;padding:0!important;display:block!important}
@@ -7633,7 +7636,7 @@ body{margin:0;padding:0;background:#f1f5f9;font-family:Inter,Arial,sans-serif;fo
 ${styles}
 .printbar{padding:8px 12px;background:#f0f4f8;display:flex;gap:10px;align-items:center;font-family:Arial;font-size:12px;border-bottom:1px solid #e2e8f0}
 .doc-wrap{padding:0!important;background:#fff!important}
-.doc-page{box-shadow:none!important;border-radius:0!important;margin:0!important;width:210mm!important;height:297mm!important;max-height:297mm!important;display:flex!important;flex-direction:column!important;overflow:hidden!important;break-after:page;page-break-after:always}
+.doc-page{box-shadow:none!important;border-radius:0!important;margin:0!important;width:210mm!important;height:297mm!important;min-height:297mm!important;max-height:297mm!important;display:flex!important;flex-direction:column!important;overflow:visible!important;break-after:page;page-break-after:always}
 .doc-page:last-child{break-after:auto!important;page-break-after:auto!important}
 .doc-page-lbl{display:none!important}
 .cov{width:100%!important;height:297mm!important;max-height:297mm!important;overflow:hidden!important}
@@ -7707,6 +7710,14 @@ function DocModal({doc,type,settings,onClose,onFactuur,onStatusOff,onStatusFact,
     pr.querySelectorAll(".doc-page").forEach(page => {
       const txt = page.innerText || page.textContent || "";
       if(txt.trim().length < 10) page.remove();
+      else {
+        page.style.setProperty("height","297mm","important");
+        page.style.setProperty("min-height","297mm","important");
+        page.style.setProperty("max-height","297mm","important");
+        page.style.setProperty("overflow","visible","important");
+        page.style.setProperty("display","flex","important");
+        page.style.setProperty("flex-direction","column","important");
+      }
     });
     // Footer altijd onderaan
     pr.querySelectorAll(".qt-footer").forEach(el => {
@@ -7721,7 +7732,13 @@ function DocModal({doc,type,settings,onClose,onFactuur,onStatusOff,onStatusFact,
     });
     // Zorg dat content niet afgesneden wordt
     pr.querySelectorAll(".qt-pg,.prod-page,.fct-pg,.fct-pg2").forEach(el => {
+      el.style.setProperty("flex","1","important");
       el.style.setProperty("overflow","visible","important");
+      el.style.setProperty("min-height","0","important");
+    });
+    // Verberg thead op overloop-pagina's niet - browser doet dat automatisch
+    pr.querySelectorAll(".qt-tbl thead").forEach(el => {
+      el.style.setProperty("display","table-row-group","important");
     });
 
     const prev = document.title;
