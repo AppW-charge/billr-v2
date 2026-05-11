@@ -7281,9 +7281,9 @@ function OfferteDocument({doc, settings, ficheCache={}, producten=[]}) {
       </>}
       {/* PAGE 2: PRODUCTINFO + TECHNISCHE FICHES */}
       {sj.toonProductpagina!==false&&uniqueProds.length>0&&<>
-        {[...Array(Math.ceil(uniqueProds.length/6))].map((_,pageIdx)=>{
-          const pageProdList=uniqueProds.slice(pageIdx*6,(pageIdx+1)*6);
-          const totPages=Math.ceil(uniqueProds.length/6);
+        {[...Array(Math.ceil(uniqueProds.length/5))].map((_,pageIdx)=>{
+          const pageProdList=uniqueProds.slice(pageIdx*5,(pageIdx+1)*5);
+          const totPages=Math.ceil(uniqueProds.length/5);
           return <div key={pageIdx}>
         <div className="doc-page-lbl">Pagina {2+pageIdx} — Productinformatie</div>
         <div className="doc-page">
@@ -7313,7 +7313,7 @@ function OfferteDocument({doc, settings, ficheCache={}, producten=[]}) {
                         <span style={{fontSize:11,color:"#94a3b8"}}>×{l.aantal} {l.eenheid}</span>
                       </div>
                       <div style={{fontWeight:800,fontSize:16,color:"#1e293b",lineHeight:1.3,marginBottom:4}}>{l.naam}</div>
-                      {l.omschr&&<div className="prod-info-omschr" style={{fontSize:12,color:"#475569",lineHeight:1.55,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:7,WebkitBoxOrient:"vertical"}}>{l.omschr}</div>}
+                      {l.omschr&&<div style={{fontSize:12,color:"#475569",lineHeight:1.55}}>{l.omschr}</div>}
                     </div>
                     <div style={{flexShrink:0,textAlign:"right",background:"#f8fafc",borderRadius:8,padding:"10px 14px",border:"1px solid #e2e8f0"}}>
                       <div style={{fontSize:10,color:"#94a3b8",fontWeight:600}}>EENHEIDSPRIJS</div>
