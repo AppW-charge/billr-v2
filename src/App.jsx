@@ -7286,7 +7286,7 @@ function OfferteDocument({doc, settings, ficheCache={}, producten=[]}) {
         for(const l of uniqueProds){const lw=prodWeight(l);if(pp.length>0&&pw+lw>5){ppages.push(pp);pp=[l];pw=lw;}else{pp.push(l);pw+=lw;}}
         if(pp.length)ppages.push(pp);
         const totPages=ppages.length;
-        return <React.Fragment>{ppages.map((pageProdList,pageIdx)=>(<div key={pageIdx}>
+        return <>{ppages.map((pageProdList,pageIdx)=>(<div key={pageIdx}>
         <div className="doc-page-lbl">Pagina {2+pageIdx} — Productinformatie</div>
         <div className="doc-page">
           <div style={{height:5,background:dc,borderRadius:"4px 4px 0 0",flexShrink:0}}/>
@@ -7359,7 +7359,7 @@ function OfferteDocument({doc, settings, ficheCache={}, producten=[]}) {
           </div>
           <div className="qt-footer" style={{background:dc,marginTop:"auto"}}><div className="qt-footer-txt"><strong>{bed.naam}</strong></div><div className="qt-footer-txt">{bed.tel} · {bed.email}</div><div className="qt-footer-txt">{bed.website}</div></div>
         </div>
-        </div>))}</React.Fragment>;})()}
+        </div>))}</>;})()}
 
       {/* PAGE 3: OFFERTEDETAIL */}
       <div className="doc-page-lbl">Pagina 3 — Offertedetail</div>
