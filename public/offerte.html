@@ -560,7 +560,15 @@ if(window.pdfjsLib) pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdnjs.cloudf
 var SB="https://qxnxbqkdvvblfkihmjxy.supabase.co";
 var KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF4bnhicWtkdnZibGZraWhtanh5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMzNTI3MTMsImV4cCI6MjA4ODkyODcxM30.1JDvrHgxLpU1GZqSjDVGtfnFJg8PHuD-aFpHOxAY1To";
 async function sbGet(p){var r=await fetch(SB+p,{headers:{"apikey":KEY,"Authorization":"Bearer "+KEY}});if(!r.ok)throw new Error(r.status);return r.json();}
-async function sbPost(p,b){var r=await fetch(SB+p,{method:"POST",headers:{"apikey":KEY,"Authorization":"Bearer "+KEY,"Content-Type":"application/json","Prefer":"return=minimal"},body:JSON.stringify(b)});return r.ok||r.status===201;}
+async function sbPost(p,b){
+  var r=await fetch(SB+p,{method:"POST",headers:{"apikey":KEY,"Authorization":"Bearer "+KEY,"Content-Type":"application/json","Prefer":"return=minimal"},body:JSON.stringify(b)});
+  if(!r.ok&&r.status!==201){
+    var txt=""; try{var j=await r.clone().json();txt=j.message||j.hint||JSON.stringify(j);}catch(_){}
+    console.error("sbPost fout",r.status,txt,p);
+    return false;
+  }
+  return true;
+}
 </script>
 
 <script type="text/babel">
@@ -1308,28 +1316,36 @@ function Bevestiging({offerteId, status, klantAkkoord, toonBevestigingslink}) {
   const doAkkoord = async () => {
     setSending(true);
     try {
-      await sbPost("/rest/v1/offerte_responses", {
+      const ok = await sbPost("/rest/v1/offerte_responses", {
         offerte_id: offerteId,
         status: "goedgekeurd",
         periode: datum || null,
         opmerkingen: notitie || null,
         submitted_at: new Date().toISOString()
       });
+      if(!ok) throw new Error("Opslaan mislukt (code 400/422)");
       setFase("ok");
-    } catch(e) { alert("Er ging iets mis. Probeer opnieuw."); }
+    } catch(e) {
+      console.error("doAkkoord fout:", e.message);
+      alert("Fout bij verzenden: " + e.message + "\n\nProbeer opnieuw of stuur een email naar de aannemer.");
+    }
     setSending(false);
   };
 
   const doAfwijzen = async () => {
     if(!window.confirm("Bent u zeker dat u deze offerte wilt afwijzen?")) return;
     try {
-      await sbPost("/rest/v1/offerte_responses", {
+      const ok = await sbPost("/rest/v1/offerte_responses", {
         offerte_id: offerteId,
         status: "afgewezen",
         submitted_at: new Date().toISOString()
       });
+      if(!ok) throw new Error("Opslaan mislukt (code 400/422)");
       setFase("nok");
-    } catch(e) { alert("Er ging iets mis."); }
+    } catch(e) {
+      console.error("doAfwijzen fout:", e.message);
+      alert("Fout bij verzenden: " + e.message + "\n\nProbeer opnieuw of stuur een email naar de aannemer.");
+    }
   };
 
   // Minimum datum = vandaag
