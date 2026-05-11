@@ -2326,14 +2326,22 @@ export default function App() {
   // ═══ OFFERTE TRACKING — fetch views + responses from Supabase ═══
   const fetchOfferteTracking = useCallback(async () => {
     try {
-      // Filter op eigen offerte IDs - geen data van andere gebruikers ophalen
       const offerteIds = offertes_ref.current.map(o => o.id).filter(Boolean);
-      if(offerteIds.length === 0) return;
-      console.log("🔄 fetchOfferteTracking:", offerteIds.length, "offertes");
-      const { data: views } = await sb.from('offerte_views').select('offerte_id, viewed_at, user_agent')
+      if(offerteIds.length === 0) {
+        console.warn("⚠️ fetchOfferteTracking: geen offerte IDs beschikbaar");
+        return;
+      }
+      console.log("🔄 fetchOfferteTracking:", offerteIds.length, "offertes, eerste ID:", offerteIds[0]);
+
+      const { data: views, error: vErr } = await sb.from('offerte_views').select('offerte_id, viewed_at, user_agent')
         .in('offerte_id', offerteIds).order('viewed_at', {ascending:false}).limit(200);
-      const { data: responses } = await sb.from('offerte_responses').select('offerte_id, status, periode, opmerkingen, submitted_at')
+      if(vErr) console.error("❌ offerte_views SELECT fout:", vErr.message, vErr.hint);
+      else console.log("👁 offerte_views resultaat:", views?.length ?? 0, "rijen");
+
+      const { data: responses, error: rErr } = await sb.from('offerte_responses').select('offerte_id, status, periode, opmerkingen, submitted_at')
         .in('offerte_id', offerteIds).order('submitted_at', {ascending:false}).limit(200);
+      if(rErr) console.error("❌ offerte_responses SELECT fout:", rErr.message, rErr.hint);
+      else console.log("💬 offerte_responses resultaat:", responses?.length ?? 0, "rijen", responses?.slice(0,3));
       let proposals = null;
       try { const r = await sb.from('planning_proposals').select('*')
         .in('offerte_id', offerteIds).limit(100); proposals = r.data; } catch(_){}
@@ -2421,14 +2429,15 @@ export default function App() {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   // Fetch tracking on load AND when offertes_ref gets populated
   useEffect(() => { if(user && offertes.length > 0) { fetchOfferteTracking(); } }, [user, offertes.length > 0]);
-  // Auto-poll tracking: 5 min op offertes, 10 min op dashboard
+  // Auto-poll tracking: 90s op offertes, 5min op dashboard
   useEffect(() => {
     if(!user) return;
     if(pg !== "dashboard" && pg !== "offertes") return;
-    fetchOfferteTracking(); // Meteen bij navigatie
-    const interval = pg === "offertes" ? 90000 : 300000; // offertes: 90s, dashboard: 5min
+    // Kleine delay zodat offertes zeker geladen zijn (race condition fix)
+    const t = setTimeout(() => fetchOfferteTracking(), 1500);
+    const interval = pg === "offertes" ? 90000 : 300000;
     const iv = setInterval(fetchOfferteTracking, interval);
-    return () => clearInterval(iv);
+    return () => { clearTimeout(t); clearInterval(iv); };
   }, [user, pg]);
 
   // Website leads laden
