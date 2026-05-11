@@ -1560,7 +1560,7 @@ tr.row-active td{border-top:2px solid #2563eb}
 
 /* ─── PRINT / DOCUMENT STYLES ─── */
 .doc-wrap{background:#f0f4f8;padding:16px}
-.doc-page{background:#fff;max-width:820px;width:100%;margin:0 auto 20px;box-shadow:0 2px 12px rgba(0,0,0,.1);border-radius:4px;overflow:visible;box-sizing:border-box;display:flex;flex-direction:column;position:relative}
+.doc-page{background:#fff;max-width:820px;width:100%;margin:0 auto 20px;box-shadow:0 2px 12px rgba(0,0,0,.1);border-radius:4px;overflow:visible;box-sizing:border-box;display:flex;flex-direction:column;position:relative;min-height:297mm}
 .doc-page:first-child{page-break-before:avoid}
 .doc-page-lbl{text-align:center;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#94a3b8;margin-bottom:5px}
 
@@ -1619,7 +1619,7 @@ tr.row-active td{border-top:2px solid #2563eb}
 .cov-total{font-size:22px;font-weight:900;letter-spacing:-.5px}
 
 /* Page 2 – Product specs */
-.prod-page{padding:30px 40px}
+.prod-page{padding:30px 40px;flex:1}
 /* print rules consolidated below */
 .prod-item{display:grid;grid-template-columns:130px 1fr;gap:22px;margin-bottom:26px;padding-bottom:26px;border-bottom:1px solid #f1f5f9}
 .prod-item:last-child{border-bottom:none;margin-bottom:0;padding-bottom:0}
@@ -1739,8 +1739,8 @@ tr.row-active td{border-top:2px solid #2563eb}
   .qt-meta-item{padding:8px 14px!important;border-right:1px solid #e2e8f0!important;border-bottom:1px solid #e2e8f0!important}
   .qt-meta-item:nth-child(2n){border-right:none!important}
   .qt-meta-item:nth-last-child(-n+2){border-bottom:none!important}
-  .qt-footer{margin-top:auto!important;flex-shrink:0!important}
-  .fct-pg,.fct-pg2,.qt-pg,.prod-page{flex:1!important;overflow:visible!important;min-height:0!important}
+  .qt-footer{margin-top:auto!important}
+  .fct-pg,.fct-pg2,.qt-pg,.prod-page{flex:1!important;overflow:visible!important}
   /* print-root breedte forceren zodat mobile CSS niet triggert */
   #print-root{width:210mm!important;min-width:210mm!important}
   .doc-page-lbl{display:none!important}
@@ -1756,10 +1756,10 @@ tr.row-active td{border-top:2px solid #2563eb}
   .cov-r{height:100%!important;box-sizing:border-box!important}
   
   /* Content pagina's: interne padding (omdat @page margin=0) */
-  .prod-page{padding:8mm 12mm!important;box-sizing:border-box!important;flex:1!important;overflow:visible!important;min-height:0!important}
-  .fct-pg{padding:8mm 12mm!important;box-sizing:border-box!important;flex:1!important;overflow:visible!important;min-height:0!important}
-  .qt-pg{padding:8mm 12mm!important;box-sizing:border-box!important;flex:1!important;overflow:visible!important;min-height:0!important}
-  .fct-pg2{padding:8mm 12mm!important;box-sizing:border-box!important;flex:1!important;overflow:visible!important;min-height:0!important}
+  .prod-page{padding:8mm 12mm!important;box-sizing:border-box!important;flex:1!important;overflow:visible!important}
+  .fct-pg{padding:8mm 12mm!important;box-sizing:border-box!important;flex:1!important;overflow:visible!important}
+  .qt-pg{padding:8mm 12mm!important;box-sizing:border-box!important;flex:1!important;overflow:visible!important}
+  .fct-pg2{padding:8mm 12mm!important;box-sizing:border-box!important;flex:1!important;overflow:visible!important}
   
   /* Footer: altijd onderaan de pagina */
   .qt-footer{
@@ -1789,8 +1789,7 @@ tr.row-active td{border-top:2px solid #2563eb}
   .qt-tbl tr{break-inside:avoid!important;page-break-inside:avoid!important}
   .qt-totals,.qt-sign,.qt-betaal,.qt-voorschot,.qt-notes,.qt-confirm-link,.qt-fiches{break-inside:avoid!important;page-break-inside:avoid!important}
   .grp-hdr{break-after:avoid!important;page-break-after:avoid!important}
-  .grp-sub,.qt-meta-bar,.qt-parties{break-inside:avoid!important;page-break-inside:avoid!important}
-  .prod-item{break-inside:avoid!important;page-break-inside:avoid!important;overflow:hidden!important}
+  .grp-sub,.prod-item,.qt-meta-bar,.qt-parties{break-inside:avoid!important;page-break-inside:avoid!important}
   
   /* Modal chrome verbergen */
   .mo{position:static!important;background:transparent!important;padding:0!important;display:block!important}
@@ -7202,20 +7201,28 @@ function OfferteDocument({doc, settings, ficheCache={}, producten=[]}) {
 
       </>}
       {/* PAGE 2: PRODUCTINFO + TECHNISCHE FICHES */}
-      {sj.toonProductpagina!==false&&uniqueProds.length>0&&<>
-        <div className="doc-page-lbl">Pagina 2 — Productinformatie & Technische fiches</div>
+      {sj.toonProductpagina!==false&&uniqueProds.length>0&&(()=>{
+        // Verdeel producten over pagina's van max 5
+        const PRODS_PER_PAGE = 5;
+        const prodPages = [];
+        for(let pi=0;pi<uniqueProds.length;pi+=PRODS_PER_PAGE){
+          prodPages.push(uniqueProds.slice(pi,pi+PRODS_PER_PAGE));
+        }
+        return <>
+        {prodPages.map((pageProdList, pageIdx)=><React.Fragment key={pageIdx}>
+        <div className="doc-page-lbl">Pagina {2+pageIdx} — Productinformatie & Technische fiches</div>
         <div className="doc-page">
           <div style={{height:6,background:dc,borderRadius:"4px 4px 0 0",flexShrink:0}}/>
           <div className="prod-page">
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end",marginBottom:6}}>
               <div>
-                <div style={{fontWeight:900,fontSize:20,color:dc,letterSpacing:"-.5px"}}>{inst?.icon} Productinformatie & Technische Fiches</div>
+                <div style={{fontWeight:900,fontSize:20,color:dc,letterSpacing:"-.5px"}}>{inst?.icon} Productinformatie & Technische Fiches{prodPages.length>1?` (${pageIdx+1}/${prodPages.length})`:""}</div>
                 <div style={{fontSize:12,color:"#64748b",marginTop:2}}>Geselecteerde producten voor {doc.klant?.naam||"de klant"}</div>
               </div>
               <div style={{fontSize:10,color:"#94a3b8",textAlign:"right"}}>{bed.naam} · {doc.nummer}</div>
             </div>
             <div style={{height:1,background:"#e2e8f0",marginBottom:20}}/>
-            {uniqueProds.map((l,i)=>{
+            {pageProdList.map((l,i)=>{
               // Parse technische fiche specs
               const rawSpecs = l.specs||[];
               // Group specs: first 3 regular, rest as table entries
@@ -7285,7 +7292,10 @@ function OfferteDocument({doc, settings, ficheCache={}, producten=[]}) {
           </div>
           <div className="qt-footer" style={{background:dc}}><div className="qt-footer-txt"><strong>{bed.naam}</strong></div><div className="qt-footer-txt">{bed.tel} · {bed.email}</div><div className="qt-footer-txt">{bed.website}</div></div>
         </div>
-      </>}
+        </React.Fragment>)}
+        </>
+      })()
+      }
 
       {/* PAGE 3: OFFERTEDETAIL */}
       <div className="doc-page-lbl">Pagina 3 — Offertedetail</div>
@@ -7636,7 +7646,7 @@ body{margin:0;padding:0;background:#f1f5f9;font-family:Inter,Arial,sans-serif;fo
 ${styles}
 .printbar{padding:8px 12px;background:#f0f4f8;display:flex;gap:10px;align-items:center;font-family:Arial;font-size:12px;border-bottom:1px solid #e2e8f0}
 .doc-wrap{padding:0!important;background:#fff!important}
-.doc-page{box-shadow:none!important;border-radius:0!important;margin:0!important;width:210mm!important;height:297mm!important;min-height:297mm!important;max-height:297mm!important;display:flex!important;flex-direction:column!important;overflow:visible!important;break-after:page;page-break-after:always}
+.doc-page{box-shadow:none!important;border-radius:0!important;margin:0!important;width:210mm!important;height:297mm!important;max-height:297mm!important;display:flex!important;flex-direction:column!important;overflow:hidden!important;break-after:page;page-break-after:always}
 .doc-page:last-child{break-after:auto!important;page-break-after:auto!important}
 .doc-page-lbl{display:none!important}
 .cov{width:100%!important;height:297mm!important;max-height:297mm!important;overflow:hidden!important}
@@ -7706,37 +7716,35 @@ function DocModal({doc,type,settings,onClose,onFactuur,onStatusOff,onStatusFact,
       const val = rootStyle.getPropertyValue(v).trim();
       if(val) pr.style.setProperty(v, val);
     });
-    // Verwijder lege doc-pages + forceer 2-kolom parties voor print
+    // Verwijder lege doc-pages + forceer layout voor print
     pr.querySelectorAll(".doc-page").forEach(page => {
       const txt = page.innerText || page.textContent || "";
-      if(txt.trim().length < 10) page.remove();
-      else {
-        page.style.setProperty("height","297mm","important");
-        page.style.setProperty("min-height","297mm","important");
-        page.style.setProperty("max-height","297mm","important");
-        page.style.setProperty("overflow","visible","important");
-        page.style.setProperty("display","flex","important");
-        page.style.setProperty("flex-direction","column","important");
-      }
+      if(txt.trim().length < 10) { page.remove(); return; }
+      page.style.setProperty("height","297mm","important");
+      page.style.setProperty("min-height","297mm","important");
+      page.style.setProperty("max-height","297mm","important");
+      page.style.setProperty("overflow","visible","important");
+      page.style.setProperty("display","flex","important");
+      page.style.setProperty("flex-direction","column","important");
     });
-    // Footer altijd onderaan
     pr.querySelectorAll(".qt-footer").forEach(el => {
       el.style.setProperty("margin-top","auto","important");
       el.style.setProperty("flex-shrink","0","important");
     });
-    // Forceer 2-kolom layout voor parties (mobile CSS override)
-    pr.querySelectorAll(".qt-parties").forEach(el => {
-      el.style.setProperty("display","grid","important");
-      el.style.setProperty("grid-template-columns","1fr 1fr","important");
-      el.style.setProperty("gap","22px","important");
-    });
-    // Zorg dat content niet afgesneden wordt
     pr.querySelectorAll(".qt-pg,.prod-page,.fct-pg,.fct-pg2").forEach(el => {
       el.style.setProperty("flex","1","important");
       el.style.setProperty("overflow","visible","important");
       el.style.setProperty("min-height","0","important");
     });
-    // Verberg thead op overloop-pagina's niet - browser doet dat automatisch
+    pr.querySelectorAll(".qt-parties").forEach(el => {
+      el.style.setProperty("display","grid","important");
+      el.style.setProperty("grid-template-columns","1fr 1fr","important");
+      el.style.setProperty("gap","22px","important");
+    });
+    pr.querySelectorAll(".qt-meta-bar").forEach(el => {
+      el.style.setProperty("display","grid","important");
+      el.style.setProperty("grid-template-columns","1fr 1fr","important");
+    });
     pr.querySelectorAll(".qt-tbl thead").forEach(el => {
       el.style.setProperty("display","table-row-group","important");
     });
