@@ -1701,11 +1701,11 @@ tr.row-active td{border-top:2px solid #2563eb}
 /* ── PRINT: verwijder browser-header (URL, datum, paginanr) ── */
 @page{
   size:A4 portrait;
-  margin:13mm 0mm;  /* 13mm ruimte voor Chrome headers/footers, 0 voor volle breedte */
+  margin:0;  /* margin:0 verwijdert de browser-header en -footer volledig */
 }
 @media print{
   /* ═══ KRITIEK: margin:0 verwijdert browser URL + paginanummering ═══ */
-  @page{size:A4 portrait;margin:13mm 0mm}
+  @page{size:A4 portrait;margin:0}
   
   /* Kleur behouden */
   *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important;box-shadow:none!important}
@@ -1725,12 +1725,12 @@ tr.row-active td{border-top:2px solid #2563eb}
   .doc-page{
     box-shadow:none!important;border-radius:0!important;
     margin:0!important;max-width:100%!important;width:210mm!important;
-    height:271mm!important;min-height:271mm!important;max-height:271mm!important;
+    height:297mm!important;min-height:297mm!important;max-height:297mm!important;
     overflow:visible!important;
     display:flex!important;flex-direction:column!important;
     break-after:page!important;page-break-after:always!important;
     box-sizing:border-box!important;position:relative!important;
-    padding-bottom:4mm!important;
+    padding-bottom:6mm!important;
   }
   .doc-page:last-child{break-after:auto!important;page-break-after:auto!important}
   /* Herstel 2-kolom layout - override mobile CSS */
@@ -1753,8 +1753,8 @@ tr.row-active td{border-top:2px solid #2563eb}
   
   /* Coverpagina */
   .cov{
-    width:100%!important;height:271mm!important;
-    min-height:271mm!important;max-height:271mm!important;
+    width:100%!important;height:297mm!important;
+    min-height:297mm!important;max-height:297mm!important;
     display:grid!important;
     overflow:hidden!important;
   }
@@ -1762,11 +1762,35 @@ tr.row-active td{border-top:2px solid #2563eb}
 
   .cov-r{height:100%!important;box-sizing:border-box!important}
   
-  /* Content pagina's: interne padding (omdat @page margin=0) */
-  .prod-page{padding:8mm 12mm!important;box-sizing:border-box!important;flex:1!important;overflow:visible!important}
-  .fct-pg{padding:8mm 12mm!important;box-sizing:border-box!important;flex:1!important;overflow:visible!important}
-  .qt-pg{padding:8mm 12mm!important;box-sizing:border-box!important;flex:1!important;overflow:visible!important}
-  .fct-pg2{padding:8mm 12mm!important;box-sizing:border-box!important;flex:1!important;overflow:visible!important}
+  /* Content pagina's: compacte padding zodat offerte op 1 A4 past */
+  .prod-page{padding:6mm 10mm!important;box-sizing:border-box!important;flex:1!important;overflow:visible!important}
+  .fct-pg{padding:6mm 10mm!important;box-sizing:border-box!important;flex:1!important;overflow:visible!important}
+  .fct-pg2{padding:6mm 10mm!important;box-sizing:border-box!important;flex:1!important;overflow:visible!important}
+  /* OFFERTE qt-pg: maximaal compact zodat tabel + totalen + handtekening op 1 pagina past */
+  .qt-pg{padding:4mm 8mm 0mm 8mm!important;box-sizing:border-box!important;flex:1!important;overflow:visible!important}
+  .qt-header{margin-bottom:5px!important}
+  .qt-meta-bar{margin:4px 0!important;font-size:11px!important}
+  .qt-meta-item{padding:5px 10px!important}
+  .qt-parties{margin:5px 0 8px!important;gap:10px!important}
+  .qt-party-name{font-size:13px!important;margin-bottom:2px!important}
+  .qt-party-info{font-size:10.5px!important}
+  .qt-tbl{font-size:10.5px!important;margin-top:0!important}
+  .qt-tbl th,.qt-tbl td{padding:3px 6px!important}
+  .qt-item-main{font-size:11px!important;font-weight:700!important}
+  .qt-item-sub{font-size:9.5px!important}
+  .grp-hdr{font-size:11px!important;padding:4px 8px!important}
+  .grp-sub{padding:3px 8px!important;font-size:10.5px!important}
+  .qt-totals{margin-top:5px!important}
+  .qt-tot-box{padding:4px!important}
+  .qt-tot-row{padding:3px 8px!important;font-size:11px!important}
+  .qt-tot-row.last{padding:5px 8px!important;font-size:13px!important}
+  .qt-betaal{padding:5px 10px!important;font-size:10.5px!important;margin:3px 0!important}
+  .qt-voorschot{padding:5px 10px!important;font-size:10.5px!important;margin:3px 0!important}
+  .qt-notes{padding:5px 10px!important;font-size:10.5px!important;margin:3px 0!important}
+  .qt-sign{padding:5px 8px!important;margin:3px 0!important}
+  .qt-sign-box{padding:8px!important}
+  .qt-sign-lbl{font-size:10px!important}
+  .qt-confirm-link{padding:5px 10px!important;font-size:10.5px!important;margin:3px 0!important}
   
   /* Footer: altijd onderaan de pagina */
   .qt-footer{
@@ -1776,7 +1800,7 @@ tr.row-active td{border-top:2px solid #2563eb}
   
   /* Technische fiche pagina's */
   .fiche-print-page{
-    width:210mm!important;height:271mm!important;
+    width:210mm!important;height:297mm!important;
     overflow:hidden!important;box-sizing:border-box!important;
     break-after:page!important;page-break-after:always!important;
     display:flex!important;flex-direction:column!important;
@@ -7659,17 +7683,17 @@ body{margin:0;padding:0;background:#f1f5f9;font-family:Inter,Arial,sans-serif;fo
 ${styles}
 .printbar{padding:8px 12px;background:#f0f4f8;display:flex;gap:10px;align-items:center;font-family:Arial;font-size:12px;border-bottom:1px solid #e2e8f0}
 .doc-wrap{padding:0!important;background:#fff!important}
-.doc-page{box-shadow:none!important;border-radius:0!important;margin:0!important;width:210mm!important;height:271mm!important;max-height:271mm!important;display:flex!important;flex-direction:column!important;overflow:visible!important;break-after:page;page-break-after:always}
+.doc-page{box-shadow:none!important;border-radius:0!important;margin:0!important;width:210mm!important;height:297mm!important;max-height:297mm!important;display:flex!important;flex-direction:column!important;overflow:hidden!important;break-after:page;page-break-after:always}
 .doc-page:last-child{break-after:auto!important;page-break-after:auto!important}
 .doc-page-lbl{display:none!important}
-.cov{width:100%!important;height:271mm!important;max-height:271mm!important;overflow:hidden!important}
+.cov{width:100%!important;height:297mm!important;max-height:297mm!important;overflow:hidden!important}
 .qt-footer{margin-top:auto!important;flex-shrink:0!important}
 .prod-page,.qt-pg,.fct-pg,.fct-pg2{padding:8mm 12mm!important;flex:1!important;overflow:hidden!important}
 .fiche-screen-embed{display:none!important}
 .fiche-print-images{display:block!important}
-.fiche-print-page{width:210mm!important;height:271mm!important;overflow:visible!important;display:flex!important;flex-direction:column!important;break-after:page!important}
+.fiche-print-page{width:210mm!important;height:297mm!important;overflow:hidden!important;display:flex!important;flex-direction:column!important;break-after:page!important}
 .fiche-print-page img{width:100%;height:auto;max-height:270mm;object-fit:contain;display:block}
-@page{size:A4 portrait;margin:13mm 0mm}
+@page{size:A4 portrait;margin:0}
 @media print{
   *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;box-shadow:none!important}
   .printbar{display:none!important}
@@ -7711,16 +7735,13 @@ function DocModal({doc,type,settings,onClose,onFactuur,onStatusOff,onStatusFact,
   const doPrint = () => {
     const docWrap = document.querySelector(".mb-body .doc-wrap");
     if(!docWrap){ alert("Kan document niet vinden. Sluit en open het document opnieuw."); return; }
-
     const btn = document.getElementById("doc-print-btn");
     if(btn){ btn.textContent = "⏳ Laden..."; btn.disabled = true; }
-
-    // Wacht 2.5s zodat technische fiches (PDF.js canvas) klaar zijn
+    // Wacht 2.5s zodat technische fiches (PDF.js canvas rendering) volledig geladen zijn
     setTimeout(() => {
       if(btn){ btn.textContent = "🖨 Afdrukken / PDF"; btn.disabled = false; }
-
-      // Gebruik print-root - CSS verbergt alles behalve dit bij afdrukken
-      let pr = document.getElementById("print-root");
+    // Gebruik print-root - CSS verbergt alles behalve dit bij afdrukken
+    let pr = document.getElementById("print-root");
     if(!pr){ pr = document.createElement("div"); pr.id = "print-root"; document.body.appendChild(pr); }
 
     // Breedte forceren zodat mobile CSS (@media max-width:768px) niet triggert
@@ -7740,9 +7761,9 @@ function DocModal({doc,type,settings,onClose,onFactuur,onStatusOff,onStatusFact,
     pr.querySelectorAll(".doc-page").forEach(page => {
       const c=(page.innerText||page.textContent||"").trim();
       if(c.length<10){page.remove();return;}
-      page.style.setProperty("height","271mm","important");
-      page.style.setProperty("min-height","271mm","important");
-      page.style.setProperty("max-height","271mm","important");
+      page.style.setProperty("height","297mm","important");
+      page.style.setProperty("min-height","297mm","important");
+      page.style.setProperty("max-height","297mm","important");
       page.style.setProperty("overflow","visible","important");
       page.style.setProperty("display","flex","important");
       page.style.setProperty("flex-direction","column","important");
@@ -7767,7 +7788,7 @@ function DocModal({doc,type,settings,onClose,onFactuur,onStatusOff,onStatusFact,
 
     if(type==="offerte") onStatusOff("afgedrukt");
     else onStatusFact("afgedrukt");
-    }, 2500); // einde fiche-wacht setTimeout
+    }, 2500); // einde fiche-wacht timeout
   };
 
   // Ctrl+P shortcut
