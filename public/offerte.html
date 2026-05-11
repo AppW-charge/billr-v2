@@ -33,10 +33,10 @@ html,body{font-family:'Inter',system-ui,Arial,sans-serif;background:#f1f5f9;colo
 .doc-page{background:#fff;max-width:820px;width:100%;margin:0 auto 20px;box-shadow:0 2px 12px rgba(0,0,0,.1);border-radius:4px;overflow:visible}
 .doc-page-lbl{text-align:center;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#94a3b8;margin-bottom:5px}
 .screen-only{display:block}.print-only{display:none}.no-print{display:block}
-#topbar{position:sticky;top:0;z-index:999;background:#1e293b;padding:9px 18px;display:none;align-items:center;gap:10px;flex-wrap:wrap}
+#topbar{position:sticky;top:0;z-index:999;background:#1e293b;padding:9px 18px;display:none;align-items:center;gap:10px;flex-wrap:wrap;font-family:'Inter',Arial,sans-serif}
 #topbar strong{color:#fff;font-size:13px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.tb-btn{background:#3b82f6;color:#fff;border:none;padding:7px 15px;border-radius:7px;cursor:pointer;font-size:13px;font-weight:600;font-family:'Inter',sans-serif;white-space:nowrap}
-.tb-btn.dl{background:#475569}
+.tb-btn{background:#3b82f6;color:#fff;border:none;padding:7px 15px;border-radius:7px;cursor:pointer;font-size:13px;font-weight:600;font-family:inherit;white-space:nowrap}
+.tb-btn:hover{background:#2563eb}
 .tb-tip{color:rgba(255,255,255,.4);font-size:11px}
 @media print{#topbar{display:none!important}}
 
@@ -556,10 +556,59 @@ tr.row-active td{border-top:2px solid #2563eb}
 <body>
 <div id="topbar">
   <strong id="tb-nr">Document</strong>
-  <button class="tb-btn" onclick="window.print()">🖨 Afdrukken / PDF</button>
-  <button class="tb-btn dl" id="tb-dl">⬇ Opslaan als HTML</button>
-  <span class="tb-tip">Afdrukken → "Opslaan als PDF" voor PDF</span>
+  <button class="tb-btn" id="tb-print">🖨 Afdrukken / PDF</button>
+  <button class="tb-btn" style="background:#10b981" id="tb-pdf">⬇ Downloaden als PDF</button>
+  <span class="tb-tip">Kies bij printer "Opslaan als PDF"</span>
 </div>
+<script>
+function doPrint(){
+  var dw=document.querySelector(".doc-wrap");
+  if(!dw){alert("Document nog niet geladen, probeer opnieuw.");return;}
+  var clone=dw.cloneNode(true);
+  clone.querySelectorAll("button,input,select,textarea,script,.doc-page-lbl,#topbar").forEach(function(el){el.remove();});
+  var styles=Array.from(document.styleSheets).flatMap(function(ss){try{return Array.from(ss.cssRules||[]).map(function(r){return r.cssText;});}catch(e){return [];}}).join("\n");
+  var rs=getComputedStyle(document.documentElement);
+  var vars=["--theme","--p","--p2","--sb-txt-rgb","--bdr","--bg","--txt","--dc","--sb-w"].map(function(v){var val=rs.getPropertyValue(v).trim();return val?v+":"+val:null;}).filter(Boolean).join(";");
+  var nr=document.getElementById("tb-nr").textContent||"document";
+  var html="<!DOCTYPE html><html lang=\"nl\"><head>\n"
+    +"<meta charset=\"UTF-8\"><title>"+nr+"</title>\n"
+    +"<link href=\"https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600&display=swap\" rel=\"stylesheet\">\n"
+    +"<style>\n"
+    +":root{"+vars+"}\n"
+    +"*{box-sizing:border-box;margin:0;padding:0}\n"
+    +"body{margin:0;padding:0;background:#f1f5f9;font-family:Inter,Arial,sans-serif;font-size:13px;color:#1e293b;-webkit-print-color-adjust:exact;print-color-adjust:exact}\n"
+    +styles+"\n"
+    +".doc-wrap{padding:0!important;background:#fff!important}\n"
+    +".doc-page-lbl{display:none!important}\n"
+    +".doc-page{box-shadow:none!important;border-radius:0!important;margin:0!important;width:210mm!important;height:297mm!important;max-height:297mm!important;display:flex!important;flex-direction:column!important;overflow:hidden!important;break-after:page;page-break-after:always;box-sizing:border-box!important}\n"
+    +".doc-page:last-child{break-after:auto!important;page-break-after:auto!important}\n"
+    +".cov{width:100%!important;height:297mm!important;min-height:297mm!important;max-height:297mm!important;overflow:hidden!important;display:grid!important}\n"
+    +".cov-l{height:100%!important;min-height:100%!important;align-self:stretch!important}\n"
+    +".cov-r{height:100%!important;box-sizing:border-box!important}\n"
+    +".qt-footer{margin-top:auto!important;flex-shrink:0!important}\n"
+    +".prod-page,.qt-pg,.fct-pg,.fct-pg2{padding:8mm 12mm!important;flex:1!important;overflow:visible!important;box-sizing:border-box!important}\n"
+    +".qt-parties{display:grid!important;grid-template-columns:1fr 1fr!important;gap:22px!important}\n"
+    +".qt-meta-bar{display:grid!important;grid-template-columns:1fr 1fr!important}\n"
+    +".qt-header{display:flex!important;flex-direction:row!important;justify-content:space-between!important}\n"
+    +".fiche-screen-embed{display:none!important}\n"
+    +".fiche-print-images{display:block!important}\n"
+    +".fiche-print-page{width:210mm!important;height:297mm!important;overflow:hidden!important;display:flex!important;flex-direction:column!important;break-after:page!important;page-break-after:always!important}\n"
+    +".fiche-print-page:last-child{break-after:auto!important;page-break-after:auto!important}\n"
+    +".fiche-print-page img{width:100%;height:auto;max-height:270mm;object-fit:contain;display:block}\n"
+    +"@page{size:A4 portrait;margin:0}\n"
+    +"@media print{*{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;box-shadow:none!important}}\n"
+    +"</style></head><body>\n"
+    +"<div id=\"print-root\" style=\"width:210mm;min-width:210mm;margin:0 auto\">\n"
+    +clone.outerHTML+"\n"
+    +"</div>\n"
+    +"</body></html>";
+  var w=window.open("","_blank");
+  if(!w){alert("Pop-up geblokkeerd! Sta pop-ups toe voor deze site.");return;}
+  w.document.write(html);
+  w.document.close();
+  setTimeout(function(){w.print();},900);
+}
+</script>
 <div id="loader"><div class="spin"></div><div style="font-size:14px;font-weight:600;color:#64748b">Offerte laden...</div></div>
 <div id="err"><h2>Offerte niet beschikbaar</h2><p id="errmsg">Offerte kon niet geladen worden.</p><button class="retry-btn" onclick="location.reload()">Opnieuw proberen</button></div>
 <div id="root"></div>
@@ -966,25 +1015,26 @@ function OfferteDocument({doc, settings, ficheCache={}, producten=[]}) {
 
         {/* ONTWERP 1: Klassiek gesplitst */}
         {ontwerp==="kl_split"&&(()=>{
-          const colW = lyt.voorbladKolombreedte||42;
-          const vImg = lyt.voorbladAfbeelding||"";
+          const colW=lyt.voorbladKolombreedte||42;
+          const vImg=lyt.voorbladAfbeelding||"";
           return <div className="cov" style={{gridTemplateColumns:`${colW}% ${100-colW}%`}}>
-          <div className="cov-l" style={vImg
-            ?{backgroundImage:`url(${vImg})`,backgroundSize:`${lyt.voorbladZoom||100}%`,backgroundPosition:"center",backgroundRepeat:"no-repeat",padding:0,position:"relative"}
-            :{background:`linear-gradient(155deg,${dc} 0%,${dc}ee 70%,#0f172a 100%)`}}>
-            {!vImg&&<><CovBedrijf light/>{inst&&<div className="cov-inst-badge"><span style={{fontSize:20}}>{inst.icon}</span>{inst.l}</div>}</>}
-            {vImg&&inst&&<div className="cov-inst-badge" style={{background:dc,color:"#fff",border:"none",position:"absolute",bottom:24,left:24}}><span style={{fontSize:20}}>{inst.icon}</span>{inst.l}</div>}
-          </div>
-          <div className="cov-r">
-            <div>
-              {titelFormaat!=="geen"&&<div className="cov-doctype" style={{color:dc,fontSize:titelFontSize,textTransform:titelHoofdletters?"uppercase":"none"}}>{titelTekst}</div>}
-              <div className="cov-docnum">{doc.nummer}</div>
+            <div className="cov-l" style={vImg
+              ?{backgroundImage:`url(${vImg})`,backgroundSize:`${lyt.voorbladZoom||100}%`,backgroundPosition:"center",backgroundRepeat:"no-repeat",padding:0,position:"relative"}
+              :{background:`linear-gradient(155deg,${dc} 0%,${dc}ee 70%,#0f172a 100%)`}}>
+              {!vImg&&<><CovBedrijf light/>{inst&&<div className="cov-inst-badge"><span style={{fontSize:20}}>{inst.icon}</span>{inst.l}</div>}</>}
+              {vImg&&inst&&<div className="cov-inst-badge" style={{background:dc,color:"#fff",border:"none",position:"absolute",bottom:24,left:24}}><span style={{fontSize:20}}>{inst.icon}</span>{inst.l}</div>}
             </div>
-            <CovKlantInfo/>
-            <CovMeta/>
-            <div style={{fontSize:11,color:"#94a3b8",marginTop:10}}>{bed.naam} · {fmtBtwnr(bed.btwnr)} · IBAN: {bed.iban}</div>
-          </div>
-        </div>;})()}
+            <div className="cov-r">
+              <div>
+                {titelFormaat!=="geen"&&<div className="cov-doctype" style={{color:dc,fontSize:titelFontSize,textTransform:titelHoofdletters?"uppercase":"none"}}>{titelTekst}</div>}
+                <div className="cov-docnum">{doc.nummer}</div>
+              </div>
+              <CovKlantInfo/>
+              <CovMeta/>
+              <div style={{fontSize:11,color:"#94a3b8",marginTop:10}}>{bed.naam} · {fmtBtwnr(bed.btwnr)} · IBAN: {bed.iban}</div>
+            </div>
+          </div>;
+        })()}
 
         {/* ONTWERP 2: Modern top-banner */}
         {ontwerp==="modern_top"&&<div style={{minHeight:"297mm",display:"flex",flexDirection:"column"}}>
@@ -1534,19 +1584,15 @@ function App() {
   document.getElementById("loader").style.display="none";
   const dc = data._dc || "#1a2e4a";
   document.documentElement.style.setProperty("--dc", dc);
-  const isF = data.type==="factuur" || String(data.nummer||"").startsWith("FACT");
-  document.title = (isF?"Factuur ":"Offerte ")+(data.nummer||"")+" - "+(data._bed?.naam||"");
-  // Topbar
-  const tb = document.getElementById("topbar");
-  tb.style.display = "flex";
-  document.getElementById("tb-nr").textContent = data.nummer || "Document";
-  document.getElementById("tb-dl").onclick = () => {
-    const html = "<!DOCTYPE html>\n" + document.documentElement.outerHTML;
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(new Blob([html],{type:"text/html;charset=utf-8"}));
-    a.download = (data.nummer||"document").replace(/[\\/]/g,"_")+".html";
-    a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),5000);
-  };
+  const isFactuur = data.type==="factuur"||String(data.nummer||"").startsWith("FACT");
+  document.title=(isFactuur?"Factuur ":"Offerte ")+(data.nummer||"")+" - "+(data._bed?.naam||"");
+  const tb=document.getElementById("topbar");
+  if(tb){
+    tb.style.display="flex";
+    document.getElementById("tb-nr").textContent=data.nummer||"Document";
+    document.getElementById("tb-print").onclick=function(){doPrint();};
+    document.getElementById("tb-pdf").onclick=function(){doPrint();};
+  }
 
   // Build settings from stored data
   const settings = {
