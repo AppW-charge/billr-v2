@@ -2331,33 +2331,53 @@ export default function App() {
         console.warn("⚠️ fetchOfferteTracking: geen offerte IDs beschikbaar");
         return;
       }
-      console.log("🔄 fetchOfferteTracking:", offerteIds.length, "offertes, eerste ID:", offerteIds[0]);
+      console.log("🔄 fetchOfferteTracking:", offerteIds.length, "offertes");
+
+      // Bouw nummer→id mapping (voor ID-mismatch na dataverlies)
+      const nummerToId = {};
+      offertes_ref.current.forEach(o => { if(o.nummer && o.id) nummerToId[o.nummer] = o.id; });
+      const nummers = Object.keys(nummerToId);
+
+      // Haal share-records op via nummer → geeft ons ook OUDE share-IDs
+      let shareIdMap = {}; // shareId → billrOfferteId
+      if(nummers.length > 0) {
+        const { data: shares } = await sb.from('offerte_shares').select('id, nummer').in('nummer', nummers);
+        if(shares) shares.forEach(s => {
+          if(nummerToId[s.nummer]) shareIdMap[s.id] = nummerToId[s.nummer];
+        });
+      }
+      // Zoek op alle mogelijke IDs: huidige BILLR IDs + oude share IDs
+      const allIds = [...new Set([...offerteIds, ...Object.keys(shareIdMap)])];
+      console.log("🔍 Zoek op", allIds.length, "IDs (incl. oude share IDs)");
 
       const { data: views, error: vErr } = await sb.from('offerte_views').select('offerte_id, viewed_at, user_agent')
-        .in('offerte_id', offerteIds).order('viewed_at', {ascending:false}).limit(200);
-      if(vErr) console.error("❌ offerte_views SELECT fout:", vErr.message, vErr.hint);
-      else console.log("👁 offerte_views resultaat:", views?.length ?? 0, "rijen");
+        .in('offerte_id', allIds).order('viewed_at', {ascending:false}).limit(200);
+      if(vErr) console.error("❌ views fout:", vErr.message);
+      else console.log("👁 views:", views?.length ?? 0);
 
       const { data: responses, error: rErr } = await sb.from('offerte_responses').select('offerte_id, status, periode, opmerkingen, submitted_at')
-        .in('offerte_id', offerteIds).order('submitted_at', {ascending:false}).limit(200);
-      if(rErr) console.error("❌ offerte_responses SELECT fout:", rErr.message, rErr.hint);
-      else console.log("💬 offerte_responses resultaat:", responses?.length ?? 0, "rijen", responses?.slice(0,3));
+        .in('offerte_id', allIds).order('submitted_at', {ascending:false}).limit(200);
+      if(rErr) console.error("❌ responses fout:", rErr.message);
+      else console.log("💬 responses:", responses?.length ?? 0, responses?.slice(0,2));
       let proposals = null;
       try { const r = await sb.from('planning_proposals').select('*')
         .in('offerte_id', offerteIds).limit(100); proposals = r.data; } catch(_){}
       if(views) {
         const grouped = {};
         views.forEach(v => {
-          if(!grouped[v.offerte_id]) grouped[v.offerte_id] = [];
-          grouped[v.offerte_id].push(v);
+          // Gebruik de echte BILLR offerte ID (oplossing ID-mismatch)
+          const billrId = shareIdMap[v.offerte_id] || v.offerte_id;
+          if(!grouped[billrId]) grouped[billrId] = [];
+          grouped[billrId].push(v);
         });
         setOfferteViews(grouped);
       }
       if(responses) {
         const grouped = {};
         responses.forEach(r => {
-          if(!grouped[r.offerte_id]) grouped[r.offerte_id] = [];
-          grouped[r.offerte_id].push(r);
+          const billrId = shareIdMap[r.offerte_id] || r.offerte_id;
+          if(!grouped[billrId]) grouped[billrId] = [];
+          grouped[billrId].push(r);
         });
         setOfferteResponses(grouped);
 
