@@ -1746,6 +1746,7 @@ tr.row-active td{border-top:2px solid #2563eb}
   /* print-root breedte forceren zodat mobile CSS niet triggert */
   #print-root{width:210mm!important;min-width:210mm!important}
   .doc-page-lbl{display:none!important}
+  .doc-page > div:first-child{min-height:4mm!important}
   
   /* Coverpagina */
   .cov{
@@ -6948,7 +6949,7 @@ function FichePages({fiche, naam, fichNaam, omschr, dc, bed, docNummer}) {
       <div>
         <div className="doc-page-lbl">Technische fiche — {naam}</div>
         <div className="doc-page" style={{pageBreakBefore:"always"}}>
-          <div style={{height:"4mm",background:dc,flexShrink:0}}/>
+          <div style={{height:5,background:dc,flexShrink:0}}/>
           <div style={{padding:"30mm 20mm",textAlign:"center"}}>
             <div style={{fontSize:36,marginBottom:16}}>📋</div>
             <div style={{fontWeight:800,fontSize:20,color:"#1e293b",marginBottom:8}}>{naam}</div>
@@ -6975,7 +6976,7 @@ function FichePages({fiche, naam, fichNaam, omschr, dc, bed, docNummer}) {
         <div key={`fp-${i}`}>
           <div className="doc-page-lbl">Technische fiche — {naam} (pagina {i+1}/{pageImages.length})</div>
           <div className="doc-page fiche-print-page" style={{pageBreakBefore:"always",breakBefore:"page"}}>
-            <div style={{height:"4mm",background:dc,flexShrink:0}}/>
+            <div style={{height:5,background:dc,flexShrink:0}}/>
             {i === 0 && (
               <div style={{padding:"4mm 8mm 2mm",display:"flex",justifyContent:"space-between",alignItems:"center",borderBottom:"1px solid #e2e8f0"}}>
                 <div>
@@ -7209,7 +7210,7 @@ function OfferteDocument({doc, settings, ficheCache={}, producten=[]}) {
           return <div key={pageIdx}>
         <div className="doc-page-lbl">Pagina {2+pageIdx} — Productinformatie & Technische fiches</div>
         <div className="doc-page">
-          <div style={{height:"4mm",background:dc,borderRadius:"4px 4px 0 0",flexShrink:0}}/>
+          <div style={{height:5,background:dc,borderRadius:"4px 4px 0 0",flexShrink:0}}/>
           <div className="prod-page">
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end",marginBottom:6}}>
               <div>
@@ -7296,7 +7297,7 @@ function OfferteDocument({doc, settings, ficheCache={}, producten=[]}) {
       {/* PAGE 3: OFFERTEDETAIL */}
       <div className="doc-page-lbl">Pagina 3 — Offertedetail</div>
       <div className="doc-page">
-        <div style={{height:"4mm",background:dc,flexShrink:0}}/>
+        <div style={{height:5,background:dc,flexShrink:0}}/>
         <div className="qt-pg">
           <div className="qt-header">
             <div>
@@ -7375,7 +7376,7 @@ function OfferteDocument({doc, settings, ficheCache={}, producten=[]}) {
       {/* PAGE 4: VOORWAARDEN */}
       <div className="doc-page-lbl">Pagina 4 — Voorwaarden</div>
       <div className="doc-page">
-        <div style={{height:"4mm",background:dc,flexShrink:0}}/>
+        <div style={{height:5,background:dc,flexShrink:0}}/>
         <div style={{padding:"30px 36px",flex:1,overflow:"hidden"}}>
           <div style={{fontWeight:900,fontSize:18,color:dc,marginBottom:16,letterSpacing:"-.4px"}}>Algemene Verkoopsvoorwaarden & Verklaringen</div>
           <div className="legal-txt" style={{fontSize:11,lineHeight:1.6}}>{settings?.voorwaarden?.tekst||INIT_SETTINGS.voorwaarden.tekst}</div>
@@ -7406,7 +7407,7 @@ function OfferteDocument({doc, settings, ficheCache={}, producten=[]}) {
                 <div key={`fiche-ph-${fi}-${ffi}`}>
                   <div className="doc-page-lbl">Technische fiche — {f.naam||l.naam}</div>
                   <div className="doc-page" style={{pageBreakBefore:"always"}}>
-                    <div style={{height:"4mm",background:dc,flexShrink:0}}/>
+                    <div style={{height:5,background:dc,flexShrink:0}}/>
                     <div style={{padding:"30mm 20mm",textAlign:"center"}}>
                       <div style={{fontSize:36,marginBottom:16}}>📋</div>
                       <div style={{fontWeight:800,fontSize:20,color:"#1e293b",marginBottom:8}}>{l.naam}</div>
@@ -7557,7 +7558,7 @@ function FactuurDocument({doc, settings}) {
         return fctProds.length>0?(<>
           <div className="doc-page-lbl">Pagina {overvloeit?"3":"2"} — Productinformatie & Technische Fiches</div>
           <div className="doc-page">
-            <div style={{height:"4mm",background:dc,borderRadius:"4px 4px 0 0",flexShrink:0}}/>
+            <div style={{height:5,background:dc,borderRadius:"4px 4px 0 0",flexShrink:0}}/>
             <div className="prod-page">
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end",marginBottom:6}}>
                 <div>
@@ -7611,7 +7612,7 @@ function FactuurDocument({doc, settings}) {
       {settings?.voorwaarden?.tekst&&<>
       <div className="doc-page-lbl">{overvloeit?"Pagina 3":"Pagina 2"} — Verkoopsvoorwaarden</div>
       <div className="doc-page">
-        <div style={{height:"4mm",background:dc,flexShrink:0}}/>
+        <div style={{height:5,background:dc,flexShrink:0}}/>
         <div className="fct-pg2">
           <div className="fct-pg2-title" style={{color:dc}}>Algemene Verkoopsvoorwaarden</div>
           <div className="legal-txt">{settings?.voorwaarden?.tekst||INIT_SETTINGS.voorwaarden.tekst}</div>
