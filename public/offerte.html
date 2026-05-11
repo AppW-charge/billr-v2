@@ -378,6 +378,7 @@ tr.row-active td{border-top:2px solid #2563eb}
 
 /* Page 2 – Product specs */
 .prod-page{padding:30px 40px}
+.prod-info-omschr{display:-webkit-box;-webkit-line-clamp:7;-webkit-box-orient:vertical;overflow:hidden;max-height:10em}
 /* print rules consolidated below */
 .prod-item{display:grid;grid-template-columns:130px 1fr;gap:22px;margin-bottom:26px;padding-bottom:26px;border-bottom:1px solid #f1f5f9}
 .prod-item:last-child{border-bottom:none;margin-bottom:0;padding-bottom:0}
@@ -534,7 +535,8 @@ tr.row-active td{border-top:2px solid #2563eb}
   .qt-totals,.qt-sign,.qt-betaal,.qt-voorschot,.qt-notes,.qt-confirm-link,.qt-fiches{break-inside:avoid!important;page-break-inside:avoid!important}
   .grp-hdr{break-after:avoid!important;page-break-after:avoid!important}
   .grp-sub,.prod-item,.qt-meta-bar,.qt-parties{break-inside:avoid!important;page-break-inside:avoid!important}
-  .prod-info-item{break-inside:avoid!important;page-break-inside:avoid!important;display:block!important}
+  .prod-info-item{break-inside:avoid!important;page-break-inside:avoid!important;display:block!important;max-height:none!important}
+  .prod-info-omschr{display:block!important;overflow:hidden!important;max-height:8.5em!important;-webkit-line-clamp:unset!important}
   
   /* Modal chrome verbergen */
   .mo{position:static!important;background:transparent!important;padding:0!important;display:block!important}
@@ -788,14 +790,7 @@ function FichePages({fiche, naam, fichNaam, omschr, dc, bed, docNummer}) {
     render();
   }, [fiche]);
 
-  if(loading) return (
-    <div className="doc-page" style={{pageBreakBefore:"always",display:"flex",alignItems:"center",justifyContent:"center",minHeight:200}}>
-      <div style={{textAlign:"center",color:"#64748b",padding:40}}>
-        <div style={{fontSize:24,marginBottom:8}}>⟳</div>
-        <div style={{fontSize:13}}>Technische fiche laden: {naam}...</div>
-      </div>
-    </div>
-  );
+  if(loading) return null; // Geen lege wacht-pagina
 
   // No images rendered - show download fallback
   if(pageImages.length === 0) {
@@ -1108,7 +1103,7 @@ function OfferteDocument({doc, settings, ficheCache={}, producten=[]}) {
                         <span style={{fontSize:11,color:"#94a3b8"}}>×{l.aantal} {l.eenheid}</span>
                       </div>
                       <div style={{fontWeight:800,fontSize:16,color:"#1e293b",lineHeight:1.3,marginBottom:4}}>{l.naam}</div>
-                      {l.omschr&&<div style={{fontSize:12.5,color:"#475569",lineHeight:1.6}}>{l.omschr}</div>}
+                      {l.omschr&&<div className="prod-info-omschr" style={{fontSize:12,color:"#475569",lineHeight:1.55,maxHeight:"10em",overflow:"hidden",display:"-webkit-box",WebkitLineClamp:7,WebkitBoxOrient:"vertical"}}>{l.omschr}</div>}
                     </div>
                     <div style={{flexShrink:0,textAlign:"right",background:"#f8fafc",borderRadius:8,padding:"10px 14px",border:"1px solid #e2e8f0"}}>
                       <div style={{fontSize:10,color:"#94a3b8",fontWeight:600}}>EENHEIDSPRIJS</div>
@@ -1257,7 +1252,7 @@ function OfferteDocument({doc, settings, ficheCache={}, producten=[]}) {
           'technischeFiches:', (l.technischeFiches||[]).map(f=>({naam:f.naam, hasData:!!f.data, dataLen:f.data?.length||0, url:f.url||''}))
         );
         return(
-        <div key={"fiche-grp-"+fi}>
+        <div key={"fiche-grp-"+fi} style={{display:"contents"}}>
           {/* Legacy: single technischeFiche - alleen als GEEN array */}
           {l.technischeFiche&&l.technischeFiche!=="[PDF]"&&l.technischeFiche.length>100&&!(l.technischeFiches||[]).length&&
             <FichePages fiche={l.technischeFiche} naam={l.naam} fichNaam={l.fichNaam} omschr={l.omschr} dc={dc} bed={bed} docNummer={doc.nummer}/>}
@@ -1268,21 +1263,7 @@ function OfferteDocument({doc, settings, ficheCache={}, producten=[]}) {
             const cached = cachedFiches.find(cf => cf.naam === f.naam) || cachedFiches[0] || null;
             const ficheData = f.data || f.url || cached?.data || null;
             if(!ficheData || ficheData.length < 100) {
-              // Geen base64 data - toon placeholder
-              return(
-                <div key={"fiche-ph-"+fi+"-"+ffi}>
-                  <div className="doc-page-lbl">Technische fiche - {f.naam||l.naam}</div>
-                  <div className="doc-page" style={{pageBreakBefore:"always"}}>
-                    <div style={{height:5,background:dc,flexShrink:0}}/>
-                    <div style={{padding:"30mm 20mm",textAlign:"center"}}>
-                      <div style={{fontSize:36,marginBottom:16}}>📋</div>
-                      <div style={{fontWeight:800,fontSize:20,color:"#1e293b",marginBottom:8}}>{l.naam}</div>
-                      <div style={{fontSize:14,color:"#94a3b8",marginBottom:8}}>{f.naam||"Technische fiche"}</div>
-                      <div style={{fontSize:12,color:"#f59e0b",padding:"8px 16px",background:"#fffbeb",borderRadius:8,display:"inline-block"}}>⚠ PDF data niet beschikbaar - product opnieuw opslaan om fiches te herstellen</div>
-                    </div>
-                  </div>
-                </div>
-              );
+              return null; // Geen data → geen lege pagina
             }
             return <FichePages key={"fiche-"+fi+"-"+ffi} fiche={ficheData} naam={l.naam} fichNaam={f.naam} omschr={l.omschr} dc={dc} bed={bed} docNummer={doc.nummer}/>;
           })}
