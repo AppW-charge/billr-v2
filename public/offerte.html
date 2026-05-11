@@ -1198,7 +1198,7 @@ function OfferteDocument({doc, settings, ficheCache={}, producten=[]}) {
                   );
                   return(
                   <tr key={i} style={l.prijs<0?{color:"#ef4444",fontStyle:"italic"}:{}}>
-                    <td><div className="qt-item-main">{l.naam}</div>{l.omschr&&<div className="qt-item-sub">{l.omschr}</div>}</td>
+                    <td><div className="qt-item-main">{l.naam}</div>{l.omschr&&sj.toonProductpagina===false&&<div className="qt-item-sub">{l.omschr}</div>}</td>
                     <td>{l.eenheid||"stuk"}</td><td className="c">{l.aantal}</td>
                     <td className="r">{fmtEuro(l.prijs)}</td>
                     <td className="r">{l.btw}%</td>
@@ -1517,7 +1517,24 @@ function App() {
       if(!d) { setError("Offerte '"+(ONR||OID)+"' niet gevonden."); return; }
       setData(d);
       // Register view
-      try { sbPost("/rest/v1/offerte_views",{offerte_id:OID,user_agent:navigator.userAgent,viewed_at:new Date().toISOString()}); } catch(_){}
+      // View registreren met retry en logging
+      (async()=>{
+        try {
+          const ok = await sbPost("/rest/v1/offerte_views",{
+            offerte_id:OID,
+            user_agent:navigator.userAgent||"unknown",
+            viewed_at:new Date().toISOString()
+          });
+          if(ok){ console.log("✅ View geregistreerd voor", OID); }
+          else {
+            console.warn("⚠️ View insert mislukt (check RLS op offerte_views)");
+            // Retry na 3 seconden
+            setTimeout(async()=>{
+              await sbPost("/rest/v1/offerte_views",{offerte_id:OID,user_agent:navigator.userAgent||"unknown",viewed_at:new Date().toISOString()});
+            }, 3000);
+          }
+        } catch(e){ console.error("❌ View logging fout:", e.message); }
+      })();
       // Load fiches
       try {
         const fr = await sbGet("/rest/v1/offerte_fiches?offerte_id=eq."+encodeURIComponent(OID)+"&select=product_id,fiches");
