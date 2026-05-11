@@ -1070,11 +1070,13 @@ function OfferteDocument({doc, settings, ficheCache={}, producten=[]}) {
 
       </>}
       {/* PAGE 2: PRODUCTINFO + TECHNISCHE FICHES */}
-      {sj.toonProductpagina!==false&&uniqueProds.length>0&&<>
-        {[...Array(Math.ceil(uniqueProds.length/5))].map((_,pageIdx)=>{
-          const pageProdList=uniqueProds.slice(pageIdx*5,(pageIdx+1)*5);
-          const totPages=Math.ceil(uniqueProds.length/5);
-          return <div key={pageIdx}>
+      {sj.toonProductpagina!==false&&uniqueProds.length>0&&(()=>{
+        const prodWeight=l=>{const n=(l.omschr||'').length;return n>350?2:n>150?1.5:1;};
+        const ppages=[];let pp=[],pw=0;
+        for(const l of uniqueProds){const lw=prodWeight(l);if(pp.length>0&&pw+lw>5){ppages.push(pp);pp=[l];pw=lw;}else{pp.push(l);pw+=lw;}}
+        if(pp.length)ppages.push(pp);
+        const totPages=ppages.length;
+        return <React.Fragment>{ppages.map((pageProdList,pageIdx)=>(<div key={pageIdx}>
         <div className="doc-page-lbl">Pagina {2+pageIdx} - Productinformatie</div>
         <div className="doc-page">
           <div style={{height:6,background:dc,borderRadius:"4px 4px 0 0",flexShrink:0}}/>
@@ -1157,7 +1159,7 @@ function OfferteDocument({doc, settings, ficheCache={}, producten=[]}) {
           </div>
           <div className="qt-footer" style={{background:dc}}><div className="qt-footer-txt"><strong>{bed.naam}</strong></div><div className="qt-footer-txt">{bed.tel} · {bed.email}</div><div className="qt-footer-txt">{bed.website}</div></div>
         </div>
-      </>}
+        </div>))}</React.Fragment>;})()}
 
       {/* PAGE 3: OFFERTEDETAIL */}
       <div className="doc-page-lbl">Pagina 3 - Offertedetail</div>
