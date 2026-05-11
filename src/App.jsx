@@ -1729,6 +1729,7 @@ tr.row-active td{border-top:2px solid #2563eb}
     display:flex!important;flex-direction:column!important;
     break-after:page!important;page-break-after:always!important;
     box-sizing:border-box!important;position:relative!important;
+    padding-bottom:6mm!important;
   }
   .doc-page:last-child{break-after:auto!important;page-break-after:auto!important}
   /* Herstel 2-kolom layout - override mobile CSS */
@@ -6947,7 +6948,7 @@ function FichePages({fiche, naam, fichNaam, omschr, dc, bed, docNummer}) {
       <div>
         <div className="doc-page-lbl">Technische fiche — {naam}</div>
         <div className="doc-page" style={{pageBreakBefore:"always"}}>
-          <div style={{height:5,background:dc,flexShrink:0}}/>
+          <div style={{height:"4mm",background:dc,flexShrink:0}}/>
           <div style={{padding:"30mm 20mm",textAlign:"center"}}>
             <div style={{fontSize:36,marginBottom:16}}>📋</div>
             <div style={{fontWeight:800,fontSize:20,color:"#1e293b",marginBottom:8}}>{naam}</div>
@@ -6974,7 +6975,7 @@ function FichePages({fiche, naam, fichNaam, omschr, dc, bed, docNummer}) {
         <div key={`fp-${i}`}>
           <div className="doc-page-lbl">Technische fiche — {naam} (pagina {i+1}/{pageImages.length})</div>
           <div className="doc-page fiche-print-page" style={{pageBreakBefore:"always",breakBefore:"page"}}>
-            <div style={{height:5,background:dc,flexShrink:0}}/>
+            <div style={{height:"4mm",background:dc,flexShrink:0}}/>
             {i === 0 && (
               <div style={{padding:"4mm 8mm 2mm",display:"flex",justifyContent:"space-between",alignItems:"center",borderBottom:"1px solid #e2e8f0"}}>
                 <div>
@@ -7208,7 +7209,7 @@ function OfferteDocument({doc, settings, ficheCache={}, producten=[]}) {
           return <div key={pageIdx}>
         <div className="doc-page-lbl">Pagina {2+pageIdx} — Productinformatie & Technische fiches</div>
         <div className="doc-page">
-          <div style={{height:6,background:dc,borderRadius:"4px 4px 0 0",flexShrink:0}}/>
+          <div style={{height:"4mm",background:dc,borderRadius:"4px 4px 0 0",flexShrink:0}}/>
           <div className="prod-page">
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end",marginBottom:6}}>
               <div>
@@ -7295,7 +7296,7 @@ function OfferteDocument({doc, settings, ficheCache={}, producten=[]}) {
       {/* PAGE 3: OFFERTEDETAIL */}
       <div className="doc-page-lbl">Pagina 3 — Offertedetail</div>
       <div className="doc-page">
-        <div style={{height:5,background:dc,flexShrink:0}}/>
+        <div style={{height:"4mm",background:dc,flexShrink:0}}/>
         <div className="qt-pg">
           <div className="qt-header">
             <div>
@@ -7374,7 +7375,7 @@ function OfferteDocument({doc, settings, ficheCache={}, producten=[]}) {
       {/* PAGE 4: VOORWAARDEN */}
       <div className="doc-page-lbl">Pagina 4 — Voorwaarden</div>
       <div className="doc-page">
-        <div style={{height:5,background:dc,flexShrink:0}}/>
+        <div style={{height:"4mm",background:dc,flexShrink:0}}/>
         <div style={{padding:"30px 36px",flex:1,overflow:"hidden"}}>
           <div style={{fontWeight:900,fontSize:18,color:dc,marginBottom:16,letterSpacing:"-.4px"}}>Algemene Verkoopsvoorwaarden & Verklaringen</div>
           <div className="legal-txt" style={{fontSize:11,lineHeight:1.6}}>{settings?.voorwaarden?.tekst||INIT_SETTINGS.voorwaarden.tekst}</div>
@@ -7405,7 +7406,7 @@ function OfferteDocument({doc, settings, ficheCache={}, producten=[]}) {
                 <div key={`fiche-ph-${fi}-${ffi}`}>
                   <div className="doc-page-lbl">Technische fiche — {f.naam||l.naam}</div>
                   <div className="doc-page" style={{pageBreakBefore:"always"}}>
-                    <div style={{height:5,background:dc,flexShrink:0}}/>
+                    <div style={{height:"4mm",background:dc,flexShrink:0}}/>
                     <div style={{padding:"30mm 20mm",textAlign:"center"}}>
                       <div style={{fontSize:36,marginBottom:16}}>📋</div>
                       <div style={{fontWeight:800,fontSize:20,color:"#1e293b",marginBottom:8}}>{l.naam}</div>
@@ -7556,7 +7557,7 @@ function FactuurDocument({doc, settings}) {
         return fctProds.length>0?(<>
           <div className="doc-page-lbl">Pagina {overvloeit?"3":"2"} — Productinformatie & Technische Fiches</div>
           <div className="doc-page">
-            <div style={{height:6,background:dc,borderRadius:"4px 4px 0 0",flexShrink:0}}/>
+            <div style={{height:"4mm",background:dc,borderRadius:"4px 4px 0 0",flexShrink:0}}/>
             <div className="prod-page">
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end",marginBottom:6}}>
                 <div>
@@ -7610,7 +7611,7 @@ function FactuurDocument({doc, settings}) {
       {settings?.voorwaarden?.tekst&&<>
       <div className="doc-page-lbl">{overvloeit?"Pagina 3":"Pagina 2"} — Verkoopsvoorwaarden</div>
       <div className="doc-page">
-        <div style={{height:5,background:dc,flexShrink:0}}/>
+        <div style={{height:"4mm",background:dc,flexShrink:0}}/>
         <div className="fct-pg2">
           <div className="fct-pg2-title" style={{color:dc}}>Algemene Verkoopsvoorwaarden</div>
           <div className="legal-txt">{settings?.voorwaarden?.tekst||INIT_SETTINGS.voorwaarden.tekst}</div>
@@ -7711,21 +7712,24 @@ function DocModal({doc,type,settings,onClose,onFactuur,onStatusOff,onStatusFact,
       const val = rootStyle.getPropertyValue(v).trim();
       if(val) pr.style.setProperty(v, val);
     });
-    // Verwijder lege doc-pages + forceer 2-kolom parties voor print
+    // Verwijder lege doc-pages + forceer layout
     pr.querySelectorAll(".doc-page").forEach(page => {
-      const txt = page.innerText || page.textContent || "";
-      if(txt.trim().length < 10) page.remove();
+      const c=(page.innerText||page.textContent||"").trim();
+      if(c.length<10){page.remove();return;}
+      page.style.setProperty("height","297mm","important");
+      page.style.setProperty("min-height","297mm","important");
+      page.style.setProperty("max-height","297mm","important");
+      page.style.setProperty("overflow","visible","important");
+      page.style.setProperty("display","flex","important");
+      page.style.setProperty("flex-direction","column","important");
+      page.style.setProperty("padding-bottom","6mm","important");
+      page.style.setProperty("box-sizing","border-box","important");
     });
-    // Forceer 2-kolom layout voor parties (mobile CSS override)
-    pr.querySelectorAll(".qt-parties").forEach(el => {
-      el.style.setProperty("display","grid","important");
-      el.style.setProperty("grid-template-columns","1fr 1fr","important");
-      el.style.setProperty("gap","22px","important");
-    });
-    // Zorg dat content niet afgesneden wordt
-    pr.querySelectorAll(".qt-pg,.prod-page,.fct-pg,.fct-pg2").forEach(el => {
-      el.style.setProperty("overflow","visible","important");
-    });
+    pr.querySelectorAll(".qt-footer").forEach(el=>{el.style.setProperty("margin-top","auto","important");el.style.setProperty("flex-shrink","0","important");});
+    pr.querySelectorAll(".qt-pg,.prod-page,.fct-pg,.fct-pg2").forEach(el=>{el.style.setProperty("flex","1","important");el.style.setProperty("overflow","visible","important");el.style.setProperty("min-height","0","important");});
+    pr.querySelectorAll(".qt-parties").forEach(el=>{el.style.setProperty("display","grid","important");el.style.setProperty("grid-template-columns","1fr 1fr","important");el.style.setProperty("gap","22px","important");});
+    pr.querySelectorAll(".qt-meta-bar").forEach(el=>{el.style.setProperty("display","grid","important");el.style.setProperty("grid-template-columns","1fr 1fr","important");});
+    pr.querySelectorAll(".qt-tbl thead").forEach(el=>{el.style.setProperty("display","table-row-group","important");});
 
     const prev = document.title;
     document.title = doc.nummer || "document";
@@ -8749,47 +8753,20 @@ function InstellingenPage({settings,setSettings,notify,onExportBackup,onImportBa
               {form.bedrijf.logo&&<button className="btn bgh btn-sm" onClick={()=>set("bedrijf","logo","")}>Verwijderen</button>}
             </div>
             {form.bedrijf.logo&&<>
-              <div style={{background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:10,padding:16,marginBottom:4}}>
-                <div style={{fontSize:11,fontWeight:700,color:"#64748b",textTransform:"uppercase",letterSpacing:".6px",marginBottom:12}}>🖼 Logo formaat — voorbeeld</div>
-                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>
-                  <div>
-                    <div style={{fontSize:10,color:"#94a3b8",fontWeight:600,marginBottom:6}}>Voorblad (wit op gekleurd)</div>
-                    <div style={{background:"linear-gradient(135deg,#1a2e4a,#2d4a6b)",borderRadius:8,padding:16,minHeight:72,display:"flex",alignItems:"flex-start"}}>
-                      <img src={form.bedrijf.logo} alt="" style={{maxWidth:form.sjabloon?.logoBreedte||140,maxHeight:form.sjabloon?.logoHoogte||52,objectFit:"contain",filter:"brightness(0) invert(1)",display:"block"}}/>
-                    </div>
-                  </div>
-                  <div>
-                    <div style={{fontSize:10,color:"#94a3b8",fontWeight:600,marginBottom:6}}>Offerte / Factuur header</div>
-                    <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:8,padding:16,minHeight:72,display:"flex",alignItems:"flex-start"}}>
-                      <img src={form.bedrijf.logo} alt="" style={{maxWidth:form.sjabloon?.logoBreedte||140,maxHeight:form.sjabloon?.logoHoogte||52,objectFit:"contain",display:"block"}}/>
-                    </div>
-                  </div>
+              <div className="fr2" style={{gap:10}}>
+                <div className="fg"><label className="fl">Breedte (px)</label>
+                  <input type="range" min={40} max={300} value={form.sjabloon?.logoBreedte||140} onChange={e=>{const v=+e.target.value;set("sjabloon","logoBreedte",v);setLObj("logo",{...form.layout?.logo,breedte:v});}} style={{width:"100%"}}/>
+                  <div style={{fontSize:11,color:"#94a3b8",textAlign:"center"}}>{form.sjabloon?.logoBreedte||140}px</div>
                 </div>
-                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
-                  <div>
-                    <label className="fl">Breedte</label>
-                    <div style={{display:"flex",alignItems:"center",gap:6}}>
-                      <input type="range" min={40} max={400} value={form.sjabloon?.logoBreedte||140} onChange={e=>{const v=+e.target.value;set("sjabloon","logoBreedte",v);setL("logo",{...form.layout?.logo,breedte:v});}} style={{flex:1}}/>
-                      <button onClick={()=>{const v=Math.max(40,(form.sjabloon?.logoBreedte||140)-10);set("sjabloon","logoBreedte",v);setL("logo",{...form.layout?.logo,breedte:v});}} style={{width:22,height:22,border:"1px solid #e2e8f0",borderRadius:4,background:"#fff",cursor:"pointer",fontWeight:700}}>−</button>
-                      <span style={{fontSize:11,fontWeight:700,minWidth:34,textAlign:"center"}}>{form.sjabloon?.logoBreedte||140}px</span>
-                      <button onClick={()=>{const v=Math.min(400,(form.sjabloon?.logoBreedte||140)+10);set("sjabloon","logoBreedte",v);setL("logo",{...form.layout?.logo,breedte:v});}} style={{width:22,height:22,border:"1px solid #e2e8f0",borderRadius:4,background:"#fff",cursor:"pointer",fontWeight:700}}>+</button>
-                    </div>
-                  </div>
-                  <div>
-                    <label className="fl">Hoogte</label>
-                    <div style={{display:"flex",alignItems:"center",gap:6}}>
-                      <input type="range" min={20} max={150} value={form.sjabloon?.logoHoogte||52} onChange={e=>{const v=+e.target.value;set("sjabloon","logoHoogte",v);setL("logo",{...form.layout?.logo,hoogte:v});}} style={{flex:1}}/>
-                      <button onClick={()=>{const v=Math.max(20,(form.sjabloon?.logoHoogte||52)-5);set("sjabloon","logoHoogte",v);setL("logo",{...form.layout?.logo,hoogte:v});}} style={{width:22,height:22,border:"1px solid #e2e8f0",borderRadius:4,background:"#fff",cursor:"pointer",fontWeight:700}}>−</button>
-                      <span style={{fontSize:11,fontWeight:700,minWidth:34,textAlign:"center"}}>{form.sjabloon?.logoHoogte||52}px</span>
-                      <button onClick={()=>{const v=Math.min(150,(form.sjabloon?.logoHoogte||52)+5);set("sjabloon","logoHoogte",v);setL("logo",{...form.layout?.logo,hoogte:v});}} style={{width:22,height:22,border:"1px solid #e2e8f0",borderRadius:4,background:"#fff",cursor:"pointer",fontWeight:700}}>+</button>
-                    </div>
-                  </div>
+                <div className="fg"><label className="fl">Hoogte (px)</label>
+                  <input type="range" min={20} max={120} value={form.sjabloon?.logoHoogte||52} onChange={e=>{const v=+e.target.value;set("sjabloon","logoHoogte",v);setLObj("logo",{...form.layout?.logo,hoogte:v});}} style={{width:"100%"}}/>
+                  <div style={{fontSize:11,color:"#94a3b8",textAlign:"center"}}>{form.sjabloon?.logoHoogte||52}px</div>
                 </div>
               </div>
               <div className="fg"><label className="fl">Positie op document</label>
                 <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
                   {[["links-boven","Links boven"],["rechts-boven","Rechts boven"],["midden-boven","Midden boven"],["links-midden","Links midden"]].map(([v,l])=>(
-                    <button key={v} className={`btn btn-sm ${(form.sjabloon?.logoPositie||"links-boven")===v?"bp":"bs"}`} onClick={()=>{set("sjabloon","logoPositie",v);setL("logo",{...form.layout?.logo,positie:v});}}>{l}</button>
+                    <button key={v} className={`btn btn-sm ${(form.sjabloon?.logoPositie||"links-boven")===v?"bp":"bs"}`} onClick={()=>{set("sjabloon","logoPositie",v);setLObj("logo",{...form.layout?.logo,positie:v});}}>{l}</button>
                   ))}
                 </div>
               </div>
@@ -9130,14 +9107,14 @@ function InstellingenPage({settings,setSettings,notify,onExportBackup,onImportBa
               {/* Logo Voorblad */}
               <div style={{marginBottom:16,padding:12,background:"#f0f9ff",border:"1px solid #bfdbfe",borderRadius:8}}>
                 <div style={{fontWeight:700,fontSize:12,color:"#1e40af",marginBottom:10,textTransform:"uppercase",letterSpacing:.5}}>📣 Voorblad Logo</div>
-                <FG label="Positie op pagina"><PosBtn val={lyt.logo?.voorblad?.positie||"links"} onChange={v=>setL("logo",{...lyt.logo,voorblad:{...(lyt.logo?.voorblad||{}),positie:v}})}/></FG>
-                <Sld label="Breedte" val={lyt.logo?.voorblad?.breedte||200} min={40} max={500} unit="px" onChange={v=>setL("logo",{...lyt.logo,voorblad:{...(lyt.logo?.voorblad||{}),breedte:v}})}/>
-                <Sld label="Hoogte" val={lyt.logo?.voorblad?.hoogte||80} min={20} max={300} unit="px" onChange={v=>setL("logo",{...lyt.logo,voorblad:{...(lyt.logo?.voorblad||{}),hoogte:v}})}/>
-                <Sld label="Ruimte boven" val={lyt.logo?.voorblad?.ruimteBoven||2} min={0} max={40} unit="mm" onChange={v=>setL("logo",{...lyt.logo,voorblad:{...(lyt.logo?.voorblad||{}),ruimteBoven:v}})}/>
+                <FG label="Positie op pagina"><PosBtn val={lyt.logo?.voorblad?.positie||"links"} onChange={v=>setLObj("logo",{...lyt.logo,voorblad:{...(lyt.logo?.voorblad||{}),positie:v}})}/></FG>
+                <Sld label="Breedte" val={lyt.logo?.voorblad?.breedte||200} min={40} max={500} unit="px" onChange={v=>setLObj("logo",{...lyt.logo,voorblad:{...(lyt.logo?.voorblad||{}),breedte:v}})}/>
+                <Sld label="Hoogte" val={lyt.logo?.voorblad?.hoogte||80} min={20} max={300} unit="px" onChange={v=>setLObj("logo",{...lyt.logo,voorblad:{...(lyt.logo?.voorblad||{}),hoogte:v}})}/>
+                <Sld label="Ruimte boven" val={lyt.logo?.voorblad?.ruimteBoven||2} min={0} max={40} unit="mm" onChange={v=>setLObj("logo",{...lyt.logo,voorblad:{...(lyt.logo?.voorblad||{}),ruimteBoven:v}})}/>
                 <FG label="Logo positie (z-index)">
                   <div style={{display:"flex",gap:6}}>
-                    <button type="button" style={{padding:"6px 14px",borderRadius:6,border:`2px solid ${(lyt.logo?.voorblad?.zIndex||10)===1?"#2563eb":"#e2e8f0"}`,background:(lyt.logo?.voorblad?.zIndex||10)===1?"#2563eb":"#fff",color:(lyt.logo?.voorblad?.zIndex||10)===1?"#fff":"#374151",fontSize:12.5,fontWeight:600,cursor:"pointer"}} onClick={()=>setL("logo",{...lyt.logo,voorblad:{...(lyt.logo?.voorblad||{}),zIndex:1}})}>🔙 Achter tekst</button>
-                    <button type="button" style={{padding:"6px 14px",borderRadius:6,border:`2px solid ${(lyt.logo?.voorblad?.zIndex||10)===10?"#2563eb":"#e2e8f0"}`,background:(lyt.logo?.voorblad?.zIndex||10)===10?"#2563eb":"#fff",color:(lyt.logo?.voorblad?.zIndex||10)===10?"#fff":"#374151",fontSize:12.5,fontWeight:600,cursor:"pointer"}} onClick={()=>setL("logo",{...lyt.logo,voorblad:{...(lyt.logo?.voorblad||{}),zIndex:10}})}>🔝 Voor tekst</button>
+                    <button type="button" style={{padding:"6px 14px",borderRadius:6,border:`2px solid ${(lyt.logo?.voorblad?.zIndex||10)===1?"#2563eb":"#e2e8f0"}`,background:(lyt.logo?.voorblad?.zIndex||10)===1?"#2563eb":"#fff",color:(lyt.logo?.voorblad?.zIndex||10)===1?"#fff":"#374151",fontSize:12.5,fontWeight:600,cursor:"pointer"}} onClick={()=>setLObj("logo",{...lyt.logo,voorblad:{...(lyt.logo?.voorblad||{}),zIndex:1}})}>🔙 Achter tekst</button>
+                    <button type="button" style={{padding:"6px 14px",borderRadius:6,border:`2px solid ${(lyt.logo?.voorblad?.zIndex||10)===10?"#2563eb":"#e2e8f0"}`,background:(lyt.logo?.voorblad?.zIndex||10)===10?"#2563eb":"#fff",color:(lyt.logo?.voorblad?.zIndex||10)===10?"#fff":"#374151",fontSize:12.5,fontWeight:600,cursor:"pointer"}} onClick={()=>setLObj("logo",{...lyt.logo,voorblad:{...(lyt.logo?.voorblad||{}),zIndex:10}})}>🔝 Voor tekst</button>
                   </div>
                 </FG>
                 {form.bedrijf?.logo&&<img src={form.bedrijf.logo} alt="" style={{maxWidth:lyt.logo?.voorblad?.breedte||200,maxHeight:lyt.logo?.voorblad?.hoogte||80,objectFit:"contain",border:"1px solid #e2e8f0",borderRadius:5,marginTop:8}}/>}
@@ -9146,14 +9123,14 @@ function InstellingenPage({settings,setSettings,notify,onExportBackup,onImportBa
               {/* Logo Offerte/Factuur */}
               <div style={{marginBottom:12,padding:12,background:"#fef2f2",border:"1px solid #fecaca",borderRadius:8}}>
                 <div style={{fontWeight:700,fontSize:12,color:"#991b1b",marginBottom:10,textTransform:"uppercase",letterSpacing:.5}}>📄 Offerte/Factuur Logo</div>
-                <FG label="Positie op pagina"><PosBtn val={lyt.logo?.offerte?.positie||"links"} onChange={v=>setL("logo",{...lyt.logo,offerte:{...(lyt.logo?.offerte||{}),positie:v}})}/></FG>
-                <Sld label="Breedte" val={lyt.logo?.offerte?.breedte||140} min={40} max={400} unit="px" onChange={v=>setL("logo",{...lyt.logo,offerte:{...(lyt.logo?.offerte||{}),breedte:v}})}/>
-                <Sld label="Hoogte" val={lyt.logo?.offerte?.hoogte||52} min={20} max={200} unit="px" onChange={v=>setL("logo",{...lyt.logo,offerte:{...(lyt.logo?.offerte||{}),hoogte:v}})}/>
-                <Sld label="Ruimte boven" val={lyt.logo?.offerte?.ruimteBoven||2} min={0} max={30} unit="mm" onChange={v=>setL("logo",{...lyt.logo,offerte:{...(lyt.logo?.offerte||{}),ruimteBoven:v}})}/>
+                <FG label="Positie op pagina"><PosBtn val={lyt.logo?.offerte?.positie||"links"} onChange={v=>setLObj("logo",{...lyt.logo,offerte:{...(lyt.logo?.offerte||{}),positie:v}})}/></FG>
+                <Sld label="Breedte" val={lyt.logo?.offerte?.breedte||140} min={40} max={400} unit="px" onChange={v=>setLObj("logo",{...lyt.logo,offerte:{...(lyt.logo?.offerte||{}),breedte:v}})}/>
+                <Sld label="Hoogte" val={lyt.logo?.offerte?.hoogte||52} min={20} max={200} unit="px" onChange={v=>setLObj("logo",{...lyt.logo,offerte:{...(lyt.logo?.offerte||{}),hoogte:v}})}/>
+                <Sld label="Ruimte boven" val={lyt.logo?.offerte?.ruimteBoven||2} min={0} max={30} unit="mm" onChange={v=>setLObj("logo",{...lyt.logo,offerte:{...(lyt.logo?.offerte||{}),ruimteBoven:v}})}/>
                 <FG label="Logo positie (z-index)">
                   <div style={{display:"flex",gap:6}}>
-                    <button type="button" style={{padding:"6px 14px",borderRadius:6,border:`2px solid ${(lyt.logo?.offerte?.zIndex||10)===1?"#2563eb":"#e2e8f0"}`,background:(lyt.logo?.offerte?.zIndex||10)===1?"#2563eb":"#fff",color:(lyt.logo?.offerte?.zIndex||10)===1?"#fff":"#374151",fontSize:12.5,fontWeight:600,cursor:"pointer"}} onClick={()=>setL("logo",{...lyt.logo,offerte:{...(lyt.logo?.offerte||{}),zIndex:1}})}>🔙 Achter tekst</button>
-                    <button type="button" style={{padding:"6px 14px",borderRadius:6,border:`2px solid ${(lyt.logo?.offerte?.zIndex||10)===10?"#2563eb":"#e2e8f0"}`,background:(lyt.logo?.offerte?.zIndex||10)===10?"#2563eb":"#fff",color:(lyt.logo?.offerte?.zIndex||10)===10?"#fff":"#374151",fontSize:12.5,fontWeight:600,cursor:"pointer"}} onClick={()=>setL("logo",{...lyt.logo,offerte:{...(lyt.logo?.offerte||{}),zIndex:10}})}>🔝 Voor tekst</button>
+                    <button type="button" style={{padding:"6px 14px",borderRadius:6,border:`2px solid ${(lyt.logo?.offerte?.zIndex||10)===1?"#2563eb":"#e2e8f0"}`,background:(lyt.logo?.offerte?.zIndex||10)===1?"#2563eb":"#fff",color:(lyt.logo?.offerte?.zIndex||10)===1?"#fff":"#374151",fontSize:12.5,fontWeight:600,cursor:"pointer"}} onClick={()=>setLObj("logo",{...lyt.logo,offerte:{...(lyt.logo?.offerte||{}),zIndex:1}})}>🔙 Achter tekst</button>
+                    <button type="button" style={{padding:"6px 14px",borderRadius:6,border:`2px solid ${(lyt.logo?.offerte?.zIndex||10)===10?"#2563eb":"#e2e8f0"}`,background:(lyt.logo?.offerte?.zIndex||10)===10?"#2563eb":"#fff",color:(lyt.logo?.offerte?.zIndex||10)===10?"#fff":"#374151",fontSize:12.5,fontWeight:600,cursor:"pointer"}} onClick={()=>setLObj("logo",{...lyt.logo,offerte:{...(lyt.logo?.offerte||{}),zIndex:10}})}>🔝 Voor tekst</button>
                   </div>
                 </FG>
                 {form.bedrijf?.logo&&<img src={form.bedrijf.logo} alt="" style={{maxWidth:lyt.logo?.offerte?.breedte||140,maxHeight:lyt.logo?.offerte?.hoogte||52,objectFit:"contain",border:"1px solid #e2e8f0",borderRadius:5,marginTop:8}}/>}
