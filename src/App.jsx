@@ -1701,11 +1701,11 @@ tr.row-active td{border-top:2px solid #2563eb}
 /* ── PRINT: verwijder browser-header (URL, datum, paginanr) ── */
 @page{
   size:A4 portrait;
-  margin:0;  /* margin:0 verwijdert de browser-header en -footer volledig */
+  margin:10mm;  /* 10mm marge = Chrome default = geen auto-schaling meer */
 }
 @media print{
   /* ═══ KRITIEK: margin:0 verwijdert browser URL + paginanummering ═══ */
-  @page{size:A4 portrait;margin:0}
+  @page{size:A4 portrait;margin:10mm}
   
   /* Kleur behouden */
   *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important;box-shadow:none!important}
@@ -1724,8 +1724,8 @@ tr.row-active td{border-top:2px solid #2563eb}
   /* ═══ Elke doc-page in print: auto hoogte, content vloeit vrij ═══ */
   .doc-page{
     box-shadow:none!important;border-radius:0!important;
-    margin:0!important;max-width:100%!important;width:210mm!important;
-    height:297mm!important;min-height:297mm!important;max-height:297mm!important;
+    margin:0 auto!important;width:190mm!important;
+    height:277mm!important;min-height:277mm!important;max-height:277mm!important;
     overflow:visible!important;
     display:flex!important;flex-direction:column!important;
     break-after:page!important;page-break-after:always!important;
@@ -1742,16 +1742,10 @@ tr.row-active td{border-top:2px solid #2563eb}
   .qt-meta-item{padding:8px 14px!important;border-right:1px solid #e2e8f0!important;border-bottom:1px solid #e2e8f0!important}
   .qt-meta-item:nth-child(2n){border-right:none!important}
   .qt-meta-item:nth-last-child(-n+2){border-bottom:none!important}
-  /* Verberg individuele footers/bars — fixed versies komen via JS */
-  .qt-footer{display:none!important}
-  .screen-accent-bar{display:none!important}
-  /* Ruimte voor fixed bars: 6px boven + 12mm onder */
-  .doc-page > .qt-pg,.doc-page > .prod-page,.doc-page > .fct-pg,.doc-page > .fct-pg2{padding-top:0!important}
+  .qt-footer{margin-top:auto!important}
   .fct-pg,.fct-pg2,.qt-pg,.prod-page{flex:1!important;overflow:visible!important;min-height:0!important}
-  /* Centrering: print-root vult beschikbare breedte, doc-pages worden gecentreerd */
-  #print-root{width:100%!important;min-width:0!important;display:block!important}
-  #print-root .doc-wrap{width:100%!important;display:flex!important;flex-direction:column!important;align-items:center!important;background:#fff!important}
-  .doc-page{margin:0 auto!important;max-width:210mm!important}
+  /* print-root breedte forceren zodat mobile CSS niet triggert */
+  #print-root{width:190mm!important;margin:0 auto!important}
   .doc-page-lbl{display:none!important}
   .doc-page > div:first-child{min-height:4mm!important}
   .screen-accent-bar{display:block!important;height:4mm!important;flex-shrink:0!important}
@@ -1759,8 +1753,8 @@ tr.row-active td{border-top:2px solid #2563eb}
   
   /* Coverpagina */
   .cov{
-    width:100%!important;height:297mm!important;
-    min-height:297mm!important;max-height:297mm!important;
+    width:100%!important;height:277mm!important;
+    min-height:277mm!important;max-height:277mm!important;
     display:grid!important;
     overflow:hidden!important;
   }
@@ -1768,38 +1762,43 @@ tr.row-active td{border-top:2px solid #2563eb}
 
   .cov-r{height:100%!important;box-sizing:border-box!important}
   
-  /* Content pagina's: compact voor 1-pagina offerte */
-  .prod-page{padding:5mm 10mm!important;box-sizing:border-box!important;flex:1!important;overflow:visible!important}
-  .fct-pg{padding:5mm 10mm!important;box-sizing:border-box!important;flex:1!important;overflow:visible!important}
-  .fct-pg2{padding:5mm 10mm!important;box-sizing:border-box!important;flex:1!important;overflow:visible!important}
-  .qt-pg{padding:3mm 8mm 2mm!important;box-sizing:border-box!important;flex:1!important;overflow:visible!important}
-  /* Compact offerte elementen */
-  .qt-header{margin-bottom:4px!important}
-  .qt-from-info{font-size:10px!important;line-height:1.3!important}
-  .qt-meta-bar{margin:4px 0!important}
-  .qt-meta-item{padding:4px 10px!important}
-  .qt-meta-lbl{font-size:9px!important}
-  .qt-meta-val{font-size:11px!important}
-  .qt-parties{margin:4px 0 6px!important;gap:8px!important}
+  /* Content pagina's — compact voor 190×277mm */
+  .prod-page{padding:5mm 8mm!important;box-sizing:border-box!important;flex:1!important;overflow:visible!important}
+  .fct-pg{padding:5mm 8mm!important;box-sizing:border-box!important;flex:1!important;overflow:visible!important}
+  .fct-pg2{padding:5mm 8mm!important;box-sizing:border-box!important;flex:1!important;overflow:visible!important}
+  /* qt-pg: compact zodat offerte op 1 A4 past */
+  .qt-pg{padding:3mm 6mm 2mm!important;box-sizing:border-box!important;flex:1!important;overflow:visible!important}
+  .qt-from-info{font-size:9.5px!important;line-height:1.3!important}
+  .qt-meta-bar{margin:3px 0!important}
+  .qt-meta-item{padding:3px 8px!important}
+  .qt-meta-lbl{font-size:8.5px!important}
+  .qt-meta-val{font-size:10.5px!important}
+  .qt-parties{margin:3px 0 5px!important;gap:6px!important}
   .qt-party-name{font-size:12px!important;margin-bottom:1px!important}
-  .qt-party-info{font-size:10px!important}
-  .qt-tbl{font-size:10px!important}
-  .qt-tbl th,.qt-tbl td{padding:2.5px 5px!important}
-  .qt-item-main{font-size:10.5px!important}
-  .qt-item-sub{font-size:9px!important}
-  .grp-hdr{font-size:10px!important;padding:3px 8px!important}
-  .grp-sub{padding:2px 8px!important;font-size:10px!important}
-  .qt-totals{margin-top:4px!important}
-  .qt-tot-row{padding:2.5px 8px!important;font-size:10.5px!important}
-  .qt-tot-row.last{padding:4px 8px!important;font-size:12px!important}
-  .qt-betaal,.qt-voorschot,.qt-notes,.qt-confirm-link{padding:4px 8px!important;font-size:10px!important;margin:2px 0!important}
-  .qt-sign{padding:4px!important;margin:2px 0!important}
-  .qt-sign-box{padding:6px!important}
-  .qt-sign-lbl{font-size:9.5px!important}
+  .qt-party-info{font-size:9.5px!important}
+  .qt-tbl{font-size:9.5px!important}
+  .qt-tbl th,.qt-tbl td{padding:2px 4px!important}
+  .qt-item-main{font-size:10px!important}
+  .qt-item-sub{font-size:8.5px!important}
+  .grp-hdr{font-size:10px!important;padding:3px 6px!important}
+  .grp-sub{padding:2px 6px!important;font-size:9.5px!important}
+  .qt-totals{margin-top:3px!important}
+  .qt-tot-row{padding:2px 6px!important;font-size:10px!important}
+  .qt-tot-row.last{padding:4px 6px!important;font-size:12px!important}
+  .qt-betaal,.qt-voorschot,.qt-notes,.qt-confirm-link{padding:3px 6px!important;font-size:9.5px!important;margin:2px 0!important}
+  .qt-sign{padding:3px!important;margin:2px 0!important}
+  .qt-sign-box{padding:5px!important}
+  .qt-sign-lbl{font-size:9px!important}
+  /* FIXED groene balken: verberg in-flow versies */
+  .qt-footer{display:none!important}
+  .screen-accent-bar{display:none!important}
+  /* Ruimte voor fixed bars */
+  .doc-page{padding-top:6px!important;padding-bottom:11mm!important}
+  .fiche-print-page{padding-top:6px!important;padding-bottom:11mm!important}
   
   /* Technische fiche pagina's */
   .fiche-print-page{
-    width:210mm!important;height:297mm!important;
+    width:190mm!important;height:277mm!important;
     overflow:hidden!important;box-sizing:border-box!important;
     break-after:page!important;page-break-after:always!important;
     display:flex!important;flex-direction:column!important;
@@ -1807,7 +1806,7 @@ tr.row-active td{border-top:2px solid #2563eb}
   .fiche-print-page:last-child{break-after:auto!important;page-break-after:auto!important}
   .fiche-print-page img{
     width:100%!important;height:auto!important;
-    max-height:270mm!important;
+    max-height:250mm!important;
     object-fit:contain!important;display:block!important;
   }
   .fiche-screen-embed{display:none!important}
@@ -7682,23 +7681,23 @@ body{margin:0;padding:0;background:#f1f5f9;font-family:Inter,Arial,sans-serif;fo
 ${styles}
 .printbar{padding:8px 12px;background:#f0f4f8;display:flex;gap:10px;align-items:center;font-family:Arial;font-size:12px;border-bottom:1px solid #e2e8f0}
 .doc-wrap{padding:0!important;background:#fff!important}
-.doc-page{box-shadow:none!important;border-radius:0!important;margin:0!important;width:210mm!important;height:297mm!important;max-height:297mm!important;display:flex!important;flex-direction:column!important;overflow:hidden!important;break-after:page;page-break-after:always}
+.doc-page{box-shadow:none!important;border-radius:0!important;margin:0 auto!important;width:190mm!important;height:277mm!important;max-height:277mm!important;display:flex!important;flex-direction:column!important;overflow:hidden!important;break-after:page;page-break-after:always}
 .doc-page:last-child{break-after:auto!important;page-break-after:auto!important}
 .doc-page-lbl{display:none!important}
-.cov{width:100%!important;height:297mm!important;max-height:297mm!important;overflow:hidden!important}
+.cov{width:100%!important;height:277mm!important;max-height:277mm!important;overflow:hidden!important}
 .qt-footer{margin-top:auto!important;flex-shrink:0!important}
 .prod-page,.qt-pg,.fct-pg,.fct-pg2{padding:8mm 12mm!important;flex:1!important;overflow:hidden!important}
 .fiche-screen-embed{display:none!important}
 .fiche-print-images{display:block!important}
-.fiche-print-page{width:210mm!important;height:297mm!important;overflow:hidden!important;display:flex!important;flex-direction:column!important;break-after:page!important}
-.fiche-print-page img{width:100%;height:auto;max-height:270mm;object-fit:contain;display:block}
-@page{size:A4 portrait;margin:0}
+.fiche-print-page{width:190mm!important;height:277mm!important;overflow:hidden!important;display:flex!important;flex-direction:column!important;break-after:page!important}
+.fiche-print-page img{width:100%;height:auto;max-height:250mm;object-fit:contain;display:block}
+@page{size:A4 portrait;margin:10mm}
 @media print{
   *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;box-shadow:none!important}
   .printbar{display:none!important}
 }
 </style></head><body>
-<div id="print-root" style="width:210mm;min-width:210mm">
+<div id="print-root" style="width:190mm;margin:0 auto">
 <div class="printbar">
   <strong style="color:#1e293b">${docNummer}</strong>
   <button onclick="window.print()" style="background:#2563eb;color:#fff;border:none;padding:5px 12px;border-radius:5px;cursor:pointer;font-size:12px;font-weight:600">🖨 Afdrukken / PDF</button>
@@ -7735,17 +7734,17 @@ function DocModal({doc,type,settings,onClose,onFactuur,onStatusOff,onStatusFact,
     const docWrap = document.querySelector(".mb-body .doc-wrap");
     if(!docWrap){ alert("Kan document niet vinden. Sluit en open het document opnieuw."); return; }
     const btn = document.getElementById("doc-print-btn");
-    if(btn){ btn.textContent = "⏳ Laden..."; btn.disabled = true; }
-    setTimeout(() => {
-    if(btn){ btn.textContent = "🖨 Afdrukken / PDF"; btn.disabled = false; }
+    if(btn){ btn.textContent="⏳ Laden..."; btn.disabled=true; }
+    setTimeout(()=>{
+    if(btn){ btn.textContent="🖨 Afdrukken / PDF"; btn.disabled=false; }
     // Gebruik print-root - CSS verbergt alles behalve dit bij afdrukken
     let pr = document.getElementById("print-root");
     if(!pr){ pr = document.createElement("div"); pr.id = "print-root"; document.body.appendChild(pr); }
 
-    // 100% breedte: past zich automatisch aan aan printbreedte (centrering via CSS)
-    pr.style.width = "100%";
-    pr.style.minWidth = "0";
-    pr.style.maxWidth = "100%";
+    // Breedte forceren zodat mobile CSS (@media max-width:768px) niet triggert
+    pr.style.width = "190mm";
+    pr.style.minWidth = "190mm";
+    pr.style.maxWidth = "190mm";
     // Kopieer de gerenderde DOM naar print-root
     pr.innerHTML = docWrap.outerHTML;
 
@@ -7759,9 +7758,9 @@ function DocModal({doc,type,settings,onClose,onFactuur,onStatusOff,onStatusFact,
     pr.querySelectorAll(".doc-page").forEach(page => {
       const c=(page.innerText||page.textContent||"").trim();
       if(c.length<10){page.remove();return;}
-      page.style.setProperty("height","297mm","important");
-      page.style.setProperty("min-height","297mm","important");
-      page.style.setProperty("max-height","297mm","important");
+      page.style.setProperty("height","277mm","important");
+      page.style.setProperty("min-height","277mm","important");
+      page.style.setProperty("max-height","277mm","important");
       page.style.setProperty("overflow","visible","important");
       page.style.setProperty("display","flex","important");
       page.style.setProperty("flex-direction","column","important");
@@ -7784,20 +7783,20 @@ function DocModal({doc,type,settings,onClose,onFactuur,onStatusOff,onStatusFact,
       setTimeout(()=>{ pr.innerHTML = ""; document.title = prev; }, 2000);
     }, 300); });
 
-    // ─── FIXED GROENE BALKEN ───
-    const firstFooter = pr.querySelector(".qt-footer");
-    const barColor = firstFooter ? (firstFooter.style.background||"#1a2e4a") : "#1a2e4a";
-    const barContent = firstFooter ? firstFooter.innerHTML : "";
-    pr.querySelectorAll(".qt-footer,.screen-accent-bar").forEach(el=>el.remove());
-    // Vaste lijn bovenaan (op elke printpagina)
-    const topBar = document.createElement("div");
-    topBar.style.cssText = `position:fixed;top:0;left:0;right:0;height:5px;background:${barColor};z-index:9999;print-color-adjust:exact;`;
-    pr.appendChild(topBar);
-    // Vaste balk onderaan met bedrijfsinfo (op elke printpagina)
-    const botBar = document.createElement("div");
-    botBar.style.cssText = `position:fixed;bottom:0;left:0;right:0;background:${barColor};padding:4px 14px;display:flex;justify-content:space-between;align-items:center;z-index:9999;print-color-adjust:exact;-webkit-print-color-adjust:exact;`;
-    if(barContent) botBar.innerHTML = barContent;
-    pr.appendChild(botBar);
+    // ─── FIXED GROENE BALKEN (verschijnen op ELKE printpagina) ───
+    const origFtr = pr.querySelector(".qt-footer");
+    const dc = origFtr ? (origFtr.style.background||origFtr.style.backgroundColor||"#1a2e4a") : "#1a2e4a";
+    const ftrHTML = origFtr ? origFtr.innerHTML : "";
+    pr.querySelectorAll(".qt-footer,.screen-accent-bar").forEach(e=>e.remove());
+    // Dunne groene lijn bovenaan
+    const topEl = document.createElement("div");
+    topEl.style.cssText = `position:fixed;top:0;left:0;right:0;height:5px;background:${dc};z-index:9999;-webkit-print-color-adjust:exact;print-color-adjust:exact;`;
+    pr.appendChild(topEl);
+    // Groene balk onderaan met bedrijfsinfo
+    const botEl = document.createElement("div");
+    botEl.style.cssText = `position:fixed;bottom:0;left:0;right:0;background:${dc};padding:3px 12px;display:flex;justify-content:space-between;align-items:center;z-index:9999;-webkit-print-color-adjust:exact;print-color-adjust:exact;box-sizing:border-box;`;
+    if(ftrHTML) botEl.innerHTML = ftrHTML;
+    pr.appendChild(botEl);
 
     if(type==="offerte") onStatusOff("afgedrukt");
     else onStatusFact("afgedrukt");
