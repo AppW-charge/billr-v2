@@ -1701,11 +1701,11 @@ tr.row-active td{border-top:2px solid #2563eb}
 /* ── PRINT: verwijder browser-header (URL, datum, paginanr) ── */
 @page{
   size:A4 portrait;
-  margin:10mm;
+  margin:0;  /* margin:0 verwijdert de browser-header en -footer volledig */
 }
 @media print{
   /* ═══ KRITIEK: margin:0 verwijdert browser URL + paginanummering ═══ */
-  @page{size:A4 portrait;margin:10mm}
+  @page{size:A4 portrait;margin:0}
   
   /* Kleur behouden */
   *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important;box-shadow:none!important}
@@ -1724,12 +1724,13 @@ tr.row-active td{border-top:2px solid #2563eb}
   /* ═══ Elke doc-page in print: auto hoogte, content vloeit vrij ═══ */
   .doc-page{
     box-shadow:none!important;border-radius:0!important;
-    margin:0 auto!important;width:190mm!important;
-    height:277mm!important;min-height:277mm!important;max-height:277mm!important;
+    margin:0!important;max-width:100%!important;width:210mm!important;
+    height:297mm!important;min-height:297mm!important;max-height:297mm!important;
     overflow:visible!important;
     display:flex!important;flex-direction:column!important;
     break-after:page!important;page-break-after:always!important;
-    box-sizing:border-box!important;padding:0!important;
+    box-sizing:border-box!important;position:relative!important;
+    padding-bottom:6mm!important;
   }
   .doc-page:last-child{break-after:auto!important;page-break-after:auto!important}
   /* Herstel 2-kolom layout - override mobile CSS */
@@ -1744,66 +1745,46 @@ tr.row-active td{border-top:2px solid #2563eb}
   .qt-footer{margin-top:auto!important}
   .fct-pg,.fct-pg2,.qt-pg,.prod-page{flex:1!important;overflow:visible!important;min-height:0!important}
   /* print-root breedte forceren zodat mobile CSS niet triggert */
-  #print-root{width:190mm!important;margin:0 auto!important}
+  #print-root{width:210mm!important;min-width:210mm!important}
   .doc-page-lbl{display:none!important}
-  .screen-accent-bar{display:block!important;height:5px!important;flex-shrink:0!important;width:100%!important}
-  .qt-footer{margin-top:auto!important;flex-shrink:0!important;display:flex!important;break-inside:avoid!important}
+  .doc-page > div:first-child{min-height:4mm!important}
+  .screen-accent-bar{display:block!important;height:4mm!important;flex-shrink:0!important}
+  .qt-footer{margin-top:auto!important;flex-shrink:0!important}
   
   /* Coverpagina */
   .cov{
-    width:100%!important;flex:1!important;height:auto!important;
-    min-height:0!important;max-height:none!important;
-    display:grid!important;overflow:hidden!important;
+    width:100%!important;height:297mm!important;
+    min-height:297mm!important;max-height:297mm!important;
+    display:grid!important;
+    overflow:hidden!important;
   }
   .cov-l{height:100%!important;min-height:100%!important;align-self:stretch!important}
 
   .cov-r{height:100%!important;box-sizing:border-box!important}
   
-  /* Content: schermgrootte behouden, ALLEEN spacing gereduceerd */
-  .prod-page{padding:8px 20px!important;box-sizing:border-box!important;flex:1!important;overflow:visible!important;min-height:0!important}
-  .fct-pg{padding:8px 20px!important;box-sizing:border-box!important;flex:1!important;overflow:visible!important;min-height:0!important}
-  .fct-pg2{padding:8px 20px!important;box-sizing:border-box!important;flex:1!important;overflow:visible!important;min-height:0!important}
-  .qt-pg{padding:6px 20px!important;box-sizing:border-box!important;flex:1!important;overflow:visible!important;min-height:0!important}
-  /* qt-header: minder witruimte onder */
-  .qt-header{margin-bottom:8px!important;padding-bottom:6px!important;border-bottom:1px solid #f0f4f8!important}
-  /* meta-bar: compacter */
-  .qt-meta-item{padding:5px 12px!important}
-  /* parties: minder ruimte */
-  .qt-parties{margin:4px 0 8px!important;gap:14px!important}
-  /* tabel: minder celpadding */
-  .qt-tbl td,.qt-tbl th{padding:3px 6px!important}
-  /* groepen */
-  .grp-hdr{padding:4px 8px!important;margin-top:6px!important}
-  .grp-hdr:first-child{margin-top:0!important}
-  .grp-sub{padding:3px 8px!important}
-  /* totalen */
-  .qt-totals{margin-top:6px!important}
-  .qt-tot-row{padding:4px 10px!important}
-  .qt-tot-row.last{padding:6px 10px!important}
-  /* betaling/voorschot/notes: compacter maar volledig zichtbaar */
-  .qt-betaal{margin-top:6px!important;padding:6px 10px!important}
-  .qt-voorschot{margin-top:4px!important;padding:6px 10px!important}
-  .qt-notes{margin-top:4px!important;padding:6px 10px!important}
-  /* handtekening: smaller min-height maar volledig zichtbaar */
-  .qt-sign{padding:4px!important;margin:4px 0!important}
-  .qt-sign-box{padding:8px!important;min-height:36px!important}
-  .qt-sign-lbl{margin-bottom:2px!important}
-  /* digitaal akkoord */
-  .qt-confirm-link{margin-top:4px!important;padding:6px 10px!important}
-  /* footer altijd onderaan */
-  .qt-footer{margin-top:auto!important;flex-shrink:0!important;break-inside:avoid!important}
+  /* Content pagina's: interne padding (omdat @page margin=0) */
+  .prod-page{padding:8mm 12mm!important;box-sizing:border-box!important;flex:1!important;overflow:visible!important}
+  .fct-pg{padding:8mm 12mm!important;box-sizing:border-box!important;flex:1!important;overflow:visible!important}
+  .qt-pg{padding:8mm 12mm!important;box-sizing:border-box!important;flex:1!important;overflow:visible!important}
+  .fct-pg2{padding:8mm 12mm!important;box-sizing:border-box!important;flex:1!important;overflow:visible!important}
+  
+  /* Footer: altijd onderaan de pagina */
+  .qt-footer{
+    margin-top:auto!important;flex-shrink:0!important;
+    break-inside:avoid!important;page-break-inside:avoid!important;
+  }
   
   /* Technische fiche pagina's */
   .fiche-print-page{
-    width:190mm!important;height:277mm!important;
-    overflow:hidden!important;box-sizing:border-box!important;margin:0 auto!important;
+    width:210mm!important;height:297mm!important;
+    overflow:hidden!important;box-sizing:border-box!important;
     break-after:page!important;page-break-after:always!important;
     display:flex!important;flex-direction:column!important;
   }
   .fiche-print-page:last-child{break-after:auto!important;page-break-after:auto!important}
   .fiche-print-page img{
     width:100%!important;height:auto!important;
-    max-height:255mm!important;
+    max-height:270mm!important;
     object-fit:contain!important;display:block!important;
   }
   .fiche-screen-embed{display:none!important}
@@ -7678,23 +7659,23 @@ body{margin:0;padding:0;background:#f1f5f9;font-family:Inter,Arial,sans-serif;fo
 ${styles}
 .printbar{padding:8px 12px;background:#f0f4f8;display:flex;gap:10px;align-items:center;font-family:Arial;font-size:12px;border-bottom:1px solid #e2e8f0}
 .doc-wrap{padding:0!important;background:#fff!important}
-.doc-page{box-shadow:none!important;border-radius:0!important;margin:0 auto!important;width:190mm!important;height:277mm!important;max-height:277mm!important;display:flex!important;flex-direction:column!important;overflow:hidden!important;break-after:page;page-break-after:always}
+.doc-page{box-shadow:none!important;border-radius:0!important;margin:0!important;width:210mm!important;height:297mm!important;max-height:297mm!important;display:flex!important;flex-direction:column!important;overflow:hidden!important;break-after:page;page-break-after:always}
 .doc-page:last-child{break-after:auto!important;page-break-after:auto!important}
 .doc-page-lbl{display:none!important}
-.cov{width:100%!important;flex:1!important;max-height:none!important;overflow:hidden!important}
+.cov{width:100%!important;height:297mm!important;max-height:297mm!important;overflow:hidden!important}
 .qt-footer{margin-top:auto!important;flex-shrink:0!important}
 .prod-page,.qt-pg,.fct-pg,.fct-pg2{padding:8mm 12mm!important;flex:1!important;overflow:hidden!important}
 .fiche-screen-embed{display:none!important}
 .fiche-print-images{display:block!important}
-.fiche-print-page{width:190mm!important;height:277mm!important;overflow:hidden!important;margin:0 auto!important;display:flex!important;flex-direction:column!important;break-after:page!important}
+.fiche-print-page{width:210mm!important;height:297mm!important;overflow:hidden!important;display:flex!important;flex-direction:column!important;break-after:page!important}
 .fiche-print-page img{width:100%;height:auto;max-height:270mm;object-fit:contain;display:block}
-@page{size:A4 portrait;margin:10mm}
+@page{size:A4 portrait;margin:0}
 @media print{
   *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;box-shadow:none!important}
   .printbar{display:none!important}
 }
 </style></head><body>
-<div id="print-root" style="width:190mm;margin:0 auto">
+<div id="print-root" style="width:210mm;min-width:210mm">
 <div class="printbar">
   <strong style="color:#1e293b">${docNummer}</strong>
   <button onclick="window.print()" style="background:#2563eb;color:#fff;border:none;padding:5px 12px;border-radius:5px;cursor:pointer;font-size:12px;font-weight:600">🖨 Afdrukken / PDF</button>
@@ -7729,56 +7710,148 @@ function DocModal({doc,type,settings,onClose,onFactuur,onStatusOff,onStatusFact,
 
   const doPrint = () => {
     const docWrap = document.querySelector(".mb-body .doc-wrap");
-    if(!docWrap){ alert("Kan document niet vinden."); return; }
+    if(!docWrap){ alert("Kan document niet vinden. Sluit en open het document opnieuw."); return; }
+
     const btn = document.getElementById("doc-print-btn");
     if(btn){ btn.textContent="⏳ Laden..."; btn.disabled=true; }
+
+    // 2.5s wachten zodat PDF-fiches volledig geladen zijn
     setTimeout(()=>{
       if(btn){ btn.textContent="🖨 Afdrukken / PDF"; btn.disabled=false; }
+
       let pr = document.getElementById("print-root");
-      if(!pr){ pr = document.createElement("div"); pr.id="print-root"; document.body.appendChild(pr); }
-      pr.style.width="190mm"; pr.style.minWidth="190mm"; pr.style.maxWidth="190mm"; pr.style.margin="0 auto";
+      if(!pr){ pr = document.createElement("div"); pr.id = "print-root"; document.body.appendChild(pr); }
+
+      // 210mm = boven 768px breakpoint, mobiele CSS triggert niet
+      pr.style.width = "210mm";
+      pr.style.minWidth = "210mm";
+      pr.style.maxWidth = "210mm";
       pr.innerHTML = docWrap.outerHTML;
-      const rs = getComputedStyle(document.documentElement);
-      ["--theme","--p","--p2","--sb-txt-rgb","--bdr","--bg","--txt"].forEach(v=>{
-        const val=rs.getPropertyValue(v).trim(); if(val) pr.style.setProperty(v,val);
+
+      const rootStyle = getComputedStyle(document.documentElement);
+      ["--theme","--p","--p2","--sb-txt-rgb","--bdr","--bg","--txt"].forEach(v => {
+        const val = rootStyle.getPropertyValue(v).trim();
+        if(val) pr.style.setProperty(v, val);
       });
-      pr.querySelectorAll(".doc-page").forEach(page=>{
-        if((page.innerText||"").trim().length<10){page.remove();return;}
-        page.style.setProperty("height","277mm","important");
-        page.style.setProperty("min-height","277mm","important");
-        page.style.setProperty("max-height","277mm","important");
+
+      // Doc-pages: vaste hoogte + flex kolom
+      pr.querySelectorAll(".doc-page").forEach(page => {
+        const c=(page.innerText||page.textContent||"").trim();
+        if(c.length<10){page.remove();return;}
+        page.style.setProperty("height","297mm","important");
+        page.style.setProperty("min-height","297mm","important");
+        page.style.setProperty("max-height","297mm","important");
         page.style.setProperty("overflow","visible","important");
         page.style.setProperty("display","flex","important");
         page.style.setProperty("flex-direction","column","important");
         page.style.setProperty("padding","0","important");
         page.style.setProperty("box-sizing","border-box","important");
       });
+
+      // Groene balkjes
       pr.querySelectorAll(".screen-accent-bar").forEach(el=>{
         el.style.setProperty("display","block","important");
         el.style.setProperty("height","5px","important");
         el.style.setProperty("flex-shrink","0","important");
       });
+
+      // Footer: altijd onderaan
       pr.querySelectorAll(".qt-footer").forEach(el=>{
         el.style.setProperty("display","flex","important");
         el.style.setProperty("margin-top","auto","important");
         el.style.setProperty("flex-shrink","0","important");
+        el.style.setProperty("position","static","important");
       });
+
+      // Content secties: vullen resterende ruimte
       pr.querySelectorAll(".qt-pg,.prod-page,.fct-pg,.fct-pg2").forEach(el=>{
         el.style.setProperty("flex","1","important");
         el.style.setProperty("overflow","visible","important");
         el.style.setProperty("min-height","0","important");
+        el.style.setProperty("padding","6px 20px","important");
+        el.style.setProperty("box-sizing","border-box","important");
       });
-      pr.querySelectorAll(".qt-parties").forEach(el=>{el.style.setProperty("display","grid","important");el.style.setProperty("grid-template-columns","1fr 1fr","important");el.style.setProperty("gap","14px","important");});
-      pr.querySelectorAll(".qt-meta-bar").forEach(el=>{el.style.setProperty("display","grid","important");el.style.setProperty("grid-template-columns","1fr 1fr","important");});
-      pr.querySelectorAll(".qt-tbl thead").forEach(el=>{el.style.setProperty("display","table-row-group","important");});
-      try{const cov=pr.querySelector(".cov");if(cov&&!cov.style.gridTemplateColumns)cov.style.gridTemplateColumns="42% 58%";}catch(_){}
-      const prev=document.title; document.title=doc.nummer||"document";
-      requestAnimationFrame(()=>setTimeout(()=>{
+
+      // ── OFFERTE SPACING: inline styles = hoogste prioriteit, wint van alle CSS ──
+      // Zodat betaling + voorschot + handtekening + digitaal akkoord ALTIJD zichtbaar zijn
+
+      pr.querySelectorAll(".qt-header").forEach(el=>{
+        el.style.setProperty("margin-bottom","8px","important");
+        el.style.setProperty("padding-bottom","6px","important");
+      });
+      pr.querySelectorAll(".qt-meta-bar").forEach(el=>{
+        el.style.setProperty("display","grid","important");
+        el.style.setProperty("grid-template-columns","1fr 1fr","important");
+        el.style.setProperty("margin-bottom","6px","important");
+      });
+      pr.querySelectorAll(".qt-meta-item").forEach(el=>{
+        el.style.setProperty("padding","5px 10px","important");
+      });
+      pr.querySelectorAll(".qt-parties").forEach(el=>{
+        el.style.setProperty("display","grid","important");
+        el.style.setProperty("grid-template-columns","1fr 1fr","important");
+        el.style.setProperty("gap","12px","important");
+        el.style.setProperty("margin","4px 0 6px","important");
+      });
+      pr.querySelectorAll(".grp-hdr").forEach((el,i)=>{
+        el.style.setProperty("padding","4px 8px","important");
+        el.style.setProperty("margin-top",i===0?"0":"5px","important");
+      });
+      pr.querySelectorAll(".grp-sub").forEach(el=>{
+        el.style.setProperty("padding","3px 8px","important");
+      });
+      pr.querySelectorAll(".qt-tbl td,.qt-tbl th").forEach(el=>{
+        el.style.setProperty("padding","3px 5px","important");
+      });
+      pr.querySelectorAll(".qt-totals").forEach(el=>{
+        el.style.setProperty("margin-top","6px","important");
+      });
+      pr.querySelectorAll(".qt-tot-row").forEach(el=>{
+        el.style.setProperty("padding","4px 10px","important");
+      });
+      pr.querySelectorAll(".qt-betaal").forEach(el=>{
+        el.style.setProperty("margin-top","5px","important");
+        el.style.setProperty("padding","5px 10px","important");
+      });
+      pr.querySelectorAll(".qt-voorschot").forEach(el=>{
+        el.style.setProperty("margin-top","4px","important");
+        el.style.setProperty("padding","5px 10px","important");
+      });
+      pr.querySelectorAll(".qt-notes").forEach(el=>{
+        el.style.setProperty("margin-top","4px","important");
+        el.style.setProperty("padding","5px 10px","important");
+      });
+      pr.querySelectorAll(".qt-sign").forEach(el=>{
+        el.style.setProperty("padding","3px","important");
+        el.style.setProperty("margin","4px 0","important");
+      });
+      pr.querySelectorAll(".qt-sign-box").forEach(el=>{
+        el.style.setProperty("padding","8px","important");
+        el.style.setProperty("min-height","32px","important");
+      });
+      pr.querySelectorAll(".qt-sign-lbl").forEach(el=>{
+        el.style.setProperty("margin-bottom","2px","important");
+      });
+      pr.querySelectorAll(".qt-confirm-link").forEach(el=>{
+        el.style.setProperty("margin-top","4px","important");
+        el.style.setProperty("padding","5px 10px","important");
+      });
+
+      pr.querySelectorAll(".qt-tbl thead").forEach(el=>{
+        el.style.setProperty("display","table-row-group","important");
+      });
+      try{const covEl=pr.querySelector(".cov");if(covEl&&!covEl.style.gridTemplateColumns)covEl.style.gridTemplateColumns="42% 58%";}catch(_){}
+
+      const prev = document.title;
+      document.title = doc.nummer || "document";
+      requestAnimationFrame(()=>{ setTimeout(()=>{
         window.print();
-        setTimeout(()=>{pr.innerHTML="";document.title=prev;},2000);
-      },300));
-      if(type==="offerte") onStatusOff("afgedrukt"); else onStatusFact("afgedrukt");
-    },2500);
+        setTimeout(()=>{ pr.innerHTML = ""; document.title = prev; }, 2000);
+      }, 300); });
+
+      if(type==="offerte") onStatusOff("afgedrukt");
+      else onStatusFact("afgedrukt");
+    }, 2500);
   };
 
   // Ctrl+P shortcut
@@ -7827,6 +7900,30 @@ function DocModal({doc,type,settings,onClose,onFactuur,onStatusOff,onStatusFact,
     : <button className="btn btn-sm" style={{background:"#7c3aed",color:"#fff",fontWeight:700}} onClick={onPeppol} title="Verstuur via Peppol">🇧🇪 Verzenden via PEPPOL</button>
 )}
           <button id="doc-print-btn" className="btn bs btn-sm" title="Afdrukken / Opslaan als PDF" onClick={doPrint}>🖨 Afdrukken / PDF</button>
+          <button className="btn bs btn-sm" style={{background:"#059669",color:"#fff",fontWeight:700}} title="Download factuur als HTML (open → Ctrl+P → Opslaan als PDF)" onClick={()=>{
+            // Genereer standalone HTML voor download
+            const docWrap = document.querySelector(".mb-body .doc-wrap");
+            if(!docWrap) return;
+            const clone = docWrap.cloneNode(true);
+            clone.querySelectorAll("button,input,select,textarea,script,.doc-page-lbl").forEach(el=>el.remove());
+            const styles = Array.from(document.styleSheets).map(s=>{try{return Array.from(s.cssRules).map(r=>r.cssText).join("\n");}catch(_){return "";}}).join("\n");
+            const html = `<!DOCTYPE html><html lang="nl"><head><meta charset="utf-8"><title>${doc.nummer}</title><style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:Inter,Arial,sans-serif;background:#f1f5f9;-webkit-print-color-adjust:exact;print-color-adjust:exact}@media print{body{background:#fff}.doc-page{box-shadow:none!important;border-radius:0!important;margin:0!important}}${styles.substring(0,60000)}</style></head><body>${clone.outerHTML}<script>window.onload=()=>{window.print();}<\/script></body></html>`;
+            const blob = new Blob([html],{type:"text/html"});
+            const url = URL.createObjectURL(blob);
+            const w = window.open(url,"_blank");
+            setTimeout(()=>URL.revokeObjectURL(url),30000);
+          }}>⬇ PDF</button>
+          <button className="btn bs btn-sm" title="Download als HTML (open in browser → Afdrukken → PDF)" onClick={()=>{
+            const docWrap=document.querySelector(".mb-body .doc-wrap");
+            if(!docWrap)return;
+            const html=buildPrintHtml(docWrap.outerHTML, doc.nummer);
+            const blob=new Blob([html],{type:"text/html"});
+            const a=document.createElement("a");
+            a.href=URL.createObjectURL(blob);
+            a.download=`${doc.nummer||"document"}.html`;
+            a.click();
+            setTimeout(()=>URL.revokeObjectURL(a.href),5000);
+          }}>⬇ HTML</button>
           <button className="xbtn" onClick={onClose}>×</button>
         </div>
       </div>
