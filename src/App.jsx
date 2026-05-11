@@ -3228,6 +3228,17 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
         return clean;
       });
 
+      // Capture rendered doc HTML from DOM when available (DocModal open)
+      let capturedDocHtml = null;
+      try {
+        const docWrap = document.querySelector(".mb-body .doc-wrap");
+        if (docWrap) {
+          const clone = docWrap.cloneNode(true);
+          clone.querySelectorAll("button,input,select,textarea,script,.doc-page-lbl").forEach(el=>el.remove());
+          capturedDocHtml = clone.outerHTML;
+        }
+      } catch(eHtml) {}
+
       const shareData = {
         ...offerte,
         lijnen: cleanLijnen,
@@ -3236,7 +3247,8 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
         _sj: { voorbladTitel:sj.voorbladTitel, handtekeningTekst:sj.handtekeningTekst, footerTekst:sj.footerTekst, toonProductpagina:sj.toonProductpagina, toonBevestigingslink:sj.toonBevestigingslink, accentKleur:sj.accentKleur },
         _lyt: { font:lyt.font, fontSize:lyt.fontSize },
         _voorwaarden: settings?.voorwaarden?.tekst || "",
-        _voorschot: settings?.voorwaarden?.voorschot || "50%"
+        _voorschot: settings?.voorwaarden?.voorschot || "50%",
+        _docHtml: capturedDocHtml
       };
 
       await sb.from('offerte_shares').upsert({ id: offerte.id, nummer: offerte.nummer, offerte_data: shareData });
