@@ -4320,8 +4320,8 @@ function Dashboard({offertes, facturen, onGoto, onNew, onFactuur, settings, offe
   const instTypesSetting = settings;
   const openOff = offertes.filter(o=>o.status==="verstuurd");
   const openFact = facturen.filter(f=>f.status!=="betaald"&&f.status!=="concept");
-  const betaald = facturen.filter(f=>f.status==="betaald").reduce((s,f)=>s+calcTotals(f.lijnen||[]).totaal,0);
-  const openstaand = openFact.reduce((s,f)=>s+calcTotals(f.lijnen||[]).totaal,0);
+  const betaald = facturen.filter(f=>f.status==="betaald").reduce((s,f)=>s+calcTotals(f.lijnen||[], BEBAT_TARIEF, f.btwRegime).totaal,0);
+  const openstaand = openFact.reduce((s,f)=>s+calcTotals(f.lijnen||[], BEBAT_TARIEF, f.btwRegime).totaal,0);
   const conv = offertes.length ? Math.round(offertes.filter(o=>["goedgekeurd","gefactureerd"].includes(o.status)).length/offertes.length*100) : 0;
   const recOff = [...offertes].sort((a,b)=>new Date(b.aangemaakt)-new Date(a.aangemaakt)).slice(0,5);
   const goedgekeurdDoorKlant=offertes.filter(o=>o.klantAkkoord&&o.status!=="gefactureerd"&&o.planStatus!=="uitgevoerd");
@@ -4442,7 +4442,7 @@ function Dashboard({offertes, facturen, onGoto, onNew, onFactuur, settings, offe
                 <div style={{fontSize:11,color:vv?"#ef4444":"#94a3b8"}}>{f.nummer} · {vv?"⚠ Vervallen":"Vervalt"} {fmtDate(f.vervaldatum)}</div>
               </div>
               <div style={{textAlign:"right"}}>
-                <div style={{fontWeight:700,fontSize:13}}>{fmtEuro(calcTotals(f.lijnen||[]).totaal)}</div>
+                <div style={{fontWeight:700,fontSize:13}}>{fmtEuro(calcTotals(f.lijnen||[], BEBAT_TARIEF, f.btwRegime).totaal)}</div>
                 <StatusBadge status={f.status} type="fact"/>
               </div>
             </div>
@@ -5404,8 +5404,8 @@ function KlantenPage({klanten,offertes,facturen,view,onEdit,onDelete}) {
   const getKlantStats = (k) => {
     const kOff = offertes.filter(o=>o.klantId===k.id);
     const kFact = facturen.filter(f=>f.klantId===k.id);
-    const betaald = kFact.filter(f=>f.status==="betaald").reduce((s,f)=>s+calcTotals(f.lijnen||[]).totaal,0);
-    const onbetaald = kFact.filter(f=>f.status!=="betaald"&&f.status!=="concept").reduce((s,f)=>s+calcTotals(f.lijnen||[]).totaal,0);
+    const betaald = kFact.filter(f=>f.status==="betaald").reduce((s,f)=>s+calcTotals(f.lijnen||[], BEBAT_TARIEF, f.btwRegime).totaal,0);
+    const onbetaald = kFact.filter(f=>f.status!=="betaald"&&f.status!=="concept").reduce((s,f)=>s+calcTotals(f.lijnen||[], BEBAT_TARIEF, f.btwRegime).totaal,0);
     const hasVervallen = kFact.some(f=>f.status==="vervallen");
     return {offAantal:kOff.length,factAantal:kFact.length,betaald,onbetaald,hasVervallen};
   };
@@ -8008,7 +8008,7 @@ function DocModal({doc,type,settings,onClose,onFactuur,onStatusOff,onStatusFact,
 // ─── FACTUUR MODAL ────────────────────────────────────────────────
 function FactuurModal({off,settings,onMaak,onClose}) {
   const [bt,setBt]=useState(settings?.voorwaarden?.betalingstermijn||14);
-  const tot=calcTotals(off.lijnen||[]);
+  const tot=calcTotals(off.lijnen||[], BEBAT_TARIEF, off.btwRegime);
   return(
     <div className="mo"><div className="mdl mmd">
       <div className="mh"><div className="mt-m">🧾 Factuur aanmaken</div><button className="xbtn" onClick={onClose}>×</button></div>
@@ -8423,7 +8423,7 @@ function EmailModal({doc,type,settings,onClose,onSend,onAcceptToken}) {
   const bed=settings?.bedrijf||INIT_SETTINGS.bedrijf;
   const sj=settings?.sjabloon||{};
   const dc=sj.accentKleur||settings?.thema?.kleur||bed.kleur||"#1a2e4a";
-  const tot=calcTotals(doc.lijnen||[]);
+  const tot=calcTotals(doc.lijnen||[], getBebatTarief(settings), doc.btwRegime);
   const ejCfg=settings?.email||{};
 
   // Accept/reject tokens voor offerte
@@ -8691,11 +8691,11 @@ function Rapportage({offertes,facturen}) {
   const now=new Date();
   const filt=(items,df)=>items.filter(x=>{const d=new Date(x[df]||x.aangemaakt);if(period==="maand")return d.getMonth()===now.getMonth()&&d.getFullYear()===now.getFullYear();if(period==="kwartaal")return Math.floor(d.getMonth()/3)===Math.floor(now.getMonth()/3)&&d.getFullYear()===now.getFullYear();if(period==="jaar")return d.getFullYear()===now.getFullYear();return true;});
   const ff=filt(facturen,"datum");const fo=filt(offertes,"aangemaakt");
-  const chartData=Array.from({length:12},(_,m)=>{const fm=facturen.filter(f=>{const d=new Date(f.datum||f.aangemaakt);return d.getMonth()===m&&d.getFullYear()===now.getFullYear();});return{naam:new Date(now.getFullYear(),m,1).toLocaleDateString("nl-BE",{month:"short"}),omzet:parseFloat(fm.reduce((s,f)=>s+calcTotals(f.lijnen||[]).totaal,0).toFixed(0)),offertes:offertes.filter(o=>{const d=new Date(o.aangemaakt);return d.getMonth()===m&&d.getFullYear()===now.getFullYear();}).length};});
+  const chartData=Array.from({length:12},(_,m)=>{const fm=facturen.filter(f=>{const d=new Date(f.datum||f.aangemaakt);return d.getMonth()===m&&d.getFullYear()===now.getFullYear();});return{naam:new Date(now.getFullYear(),m,1).toLocaleDateString("nl-BE",{month:"short"}),omzet:parseFloat(fm.reduce((s,f)=>s+calcTotals(f.lijnen||[], BEBAT_TARIEF, f.btwRegime).totaal,0).toFixed(0)),offertes:offertes.filter(o=>{const d=new Date(o.aangemaakt);return d.getMonth()===m&&d.getFullYear()===now.getFullYear();}).length};});
   return(
     <div>
       <div className="flex fca gap2 mb5">{[["maand","Deze maand"],["kwartaal","Dit kwartaal"],["jaar","Dit jaar"],["alle","Alles"]].map(([v,l])=><button key={v} className={`period-btn ${period===v?"on":""}`} onClick={()=>setPeriod(v)}>{l}</button>)}</div>
-      <div className="sg">{[{l:"Gefactureerd",v:ff.length,s:"stuks",ic:"🧾",c:"#2563eb"},{l:"Totaal gefactureerd",v:fmtEuro(ff.reduce((s,f)=>s+calcTotals(f.lijnen||[]).totaal,0)),s:"incl. BTW",ic:"💶",c:"#f59e0b"},{l:"Betaald",v:fmtEuro(ff.filter(f=>f.status==="betaald").reduce((s,f)=>s+calcTotals(f.lijnen||[]).totaal,0)),s:"ontvangen",ic:"✅",c:"#10b981"},{l:"Offertes",v:fo.length,s:"aangemaakt",ic:"📋",c:"#7c3aed"}].map((s,i)=><div key={i} className="sc" style={{"--sc":s.c,"cursor":"pointer"}}><div className="sl">{s.l}</div><div className="sv">{s.v}</div><div className="ss">{s.s}</div><div className="si">{s.ic}</div></div>)}</div>
+      <div className="sg">{[{l:"Gefactureerd",v:ff.length,s:"stuks",ic:"🧾",c:"#2563eb"},{l:"Totaal gefactureerd",v:fmtEuro(ff.reduce((s,f)=>s+calcTotals(f.lijnen||[], BEBAT_TARIEF, f.btwRegime).totaal,0)),s:"incl. BTW",ic:"💶",c:"#f59e0b"},{l:"Betaald",v:fmtEuro(ff.filter(f=>f.status==="betaald").reduce((s,f)=>s+calcTotals(f.lijnen||[], BEBAT_TARIEF, f.btwRegime).totaal,0)),s:"ontvangen",ic:"✅",c:"#10b981"},{l:"Offertes",v:fo.length,s:"aangemaakt",ic:"📋",c:"#7c3aed"}].map((s,i)=><div key={i} className="sc" style={{"--sc":s.c,"cursor":"pointer"}}><div className="sl">{s.l}</div><div className="sv">{s.v}</div><div className="ss">{s.s}</div><div className="si">{s.ic}</div></div>)}</div>
       <div className="g2">
         <div className="card"><div className="card-t" style={{marginBottom:12}}>Maandelijkse omzet {now.getFullYear()}</div>
           <ResponsiveContainer width="100%" height={220}><BarChart data={chartData}><CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9"/><XAxis dataKey="naam" tick={{fontSize:11}}/><YAxis tick={{fontSize:11}} tickFormatter={v=>"€"+v}/><Tooltip formatter={v=>fmtEuro(v)}/><Bar dataKey="omzet" fill="#2563eb" radius={[4,4,0,0]} name="Omzet"/></BarChart></ResponsiveContainer>
@@ -9926,7 +9926,7 @@ function CreditnotaModal({facturen,creditnota,settings,onSave,onClose}) {
         <div className="fg"><label className="fl">Gekoppelde factuur</label>
           <select className="fc" value={factuurId} onChange={e=>setFactuurId(e.target.value)}>
             <option value="">— Kies factuur (optioneel) —</option>
-            {facturen.filter(f=>f.status!=="concept").map(f=><option key={f.id} value={f.id}>{f.nummer} — {f.klant?.naam} — {fmtEuro(calcTotals(f.lijnen||[]).totaal)}</option>)}
+            {facturen.filter(f=>f.status!=="concept").map(f=><option key={f.id} value={f.id}>{f.nummer} — {f.klant?.naam} — {fmtEuro(calcTotals(f.lijnen||[], BEBAT_TARIEF, f.btwRegime).totaal)}</option>)}
           </select>
         </div>
         <div className="fg"><label className="fl">Reden creditnota</label><input className="fc" value={reden} onChange={e=>setReden(e.target.value)} placeholder="Bijv. fout bedrag, geannuleerde bestelling…"/></div>
@@ -9964,13 +9964,13 @@ function AanmaningenPage({facturen,aanmaningen,onVerzend,onCreate,settings}) {
   const openFact=facturen.filter(f=>["verstuurd","afgedrukt","onbetaald","vervallen"].includes(f.status));
   const getAanmaningen=fid=>aanmaningen.filter(a=>a.factuurId===fid);
   const getDagen=f=>Math.max(0,Math.floor((new Date()-new Date(f.vervaldatum))/(1000*60*60*24)));
-  const getRente=f=>{const t=calcTotals(f.lijnen||[]).totaal;const d=getDagen(f);return t*(0.01/30*d);};
+  const getRente=f=>{const t=calcTotals(f.lijnen||[], BEBAT_TARIEF, f.btwRegime).totaal;const d=getDagen(f);return t*(0.01/30*d);};
   return(
     <div>
       <div className="g2" style={{marginBottom:16}}>
         <div className="card"><div className="card-t" style={{marginBottom:10}}>📊 Overzicht</div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
-            {[["Openstaand",openFact.length,"#ef4444"],["Aanmaningen verstuurd",aanmaningen.filter(a=>a.status==="verzonden").length,"#f59e0b"],["Totaal openstaand",fmtEuro(openFact.reduce((s,f)=>s+calcTotals(f.lijnen||[]).totaal,0)),"#2563eb"]].map(([l,v,c],i)=>(
+            {[["Openstaand",openFact.length,"#ef4444"],["Aanmaningen verstuurd",aanmaningen.filter(a=>a.status==="verzonden").length,"#f59e0b"],["Totaal openstaand",fmtEuro(openFact.reduce((s,f)=>s+calcTotals(f.lijnen||[], BEBAT_TARIEF, f.btwRegime).totaal,0)),"#2563eb"]].map(([l,v,c],i)=>(
               <div key={i} style={{textAlign:"center",padding:"10px",background:"#f8fafc",borderRadius:8}}>
                 <div style={{fontWeight:800,fontSize:i===2?14:20,color:c}}>{v}</div>
                 <div style={{fontSize:10.5,color:"#64748b",marginTop:2}}>{l}</div>
@@ -9990,7 +9990,7 @@ function AanmaningenPage({facturen,aanmaningen,onVerzend,onCreate,settings}) {
         <div className="tw"><table>
           <thead><tr><th>Factuur</th><th>Klant</th><th>Bedrag</th><th>Vervaldatum</th><th>Dagen te laat</th><th>Wettelijke rente</th><th>Aanmaningen</th><th>Acties</th></tr></thead>
           <tbody>{openFact.sort((a,b)=>getDagen(b)-getDagen(a)).map(f=>{
-            const t=calcTotals(f.lijnen||[]).totaal;
+            const t=calcTotals(f.lijnen||[], BEBAT_TARIEF, f.btwRegime).totaal;
             const dagen=getDagen(f);const rente=getRente(f);
             const factAanm=getAanmaningen(f.id);
             const niveau=factAanm.length;
@@ -10028,7 +10028,7 @@ function BetalingModal({factuur,betalingen,onSave,onClose}) {
   const [datum,setDatum]=useState(today());
   const [methode,setMethode]=useState("overschrijving");
   const [ref,setRef]=useState("");
-  const totaal=calcTotals(factuur.lijnen||[]).totaal;
+  const totaal=calcTotals(factuur.lijnen||[], getBebatTarief(settings), factuur.btwRegime).totaal;
   const reedsBetaald=betalingen.reduce((s,b)=>s+b.bedrag,0);
   const nog=totaal-reedsBetaald;
   return(
@@ -10369,7 +10369,7 @@ function BTWAangiftePage({facturen,offertes,settings}) {
   // BTW grid berekeningen
   const maatstaf6=qFact.reduce((s,f)=>{const ls=f.lijnen?.filter(l=>l.btw===6)||[];return s+ls.reduce((a,l)=>a+l.prijs*l.aantal,0);},0);
   const maatstaf21=qFact.reduce((s,f)=>{const ls=f.lijnen?.filter(l=>l.btw===21)||[];return s+ls.reduce((a,l)=>a+l.prijs*l.aantal,0);},0);
-  const maatstafVerlegd=qFact.reduce((s,f)=>{if(f.btwRegime==="verlegd"){return s+calcTotals(f.lijnen||[]).subtotaal;}return s;},0);
+  const maatstafVerlegd=qFact.reduce((s,f)=>{if(f.btwRegime==="verlegd"){return s+calcTotals(f.lijnen||[], BEBAT_TARIEF, f.btwRegime).subtotaal;}return s;},0);
   const btw6=maatstaf6*0.06;
   const btw21=maatstaf21*0.21;
   const totaalOmzet=maatstaf6+maatstaf21+maatstafVerlegd;
@@ -10455,7 +10455,7 @@ function BTWAangiftePage({facturen,offertes,settings}) {
             {qFact.length===0?<div style={{color:"#94a3b8",fontSize:13,textAlign:"center",padding:"12px 0"}}>Geen facturen dit kwartaal</div>:qFact.slice(0,8).map(f=>(
               <div key={f.id} style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:"1px solid #f1f5f9",fontSize:12.5}}>
                 <div><span className="mono" style={{color:"#2563eb",fontWeight:700,fontSize:11}}>{f.nummer}</span> {f.klant?.naam}</div>
-                <strong>{fmtEuro(calcTotals(f.lijnen||[]).totaal)}</strong>
+                <strong>{fmtEuro(calcTotals(f.lijnen||[], BEBAT_TARIEF, f.btwRegime).totaal)}</strong>
               </div>
             ))}
             {qFact.length>8&&<div style={{fontSize:11.5,color:"#94a3b8",marginTop:5}}>+ {qFact.length-8} meer — exporteer voor volledig overzicht</div>}
