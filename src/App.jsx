@@ -253,14 +253,16 @@ function calcTotals(lijnen=[], bebatTarief=BEBAT_TARIEF) {
   // NOOIT van het product zelf
   const sub = lijnen.reduce((s,l)=>s+(l.prijs*l.aantal),0);
   const gr={};
+  // BEBAT BTW volgt het regime: als alle lijnen btw=0 (verlegd/medecontractant) → BEBAT ook 0%
+  const heeftBtw = lijnen.some(l=>(l.btw||0)>0);
+  const bebatBtw = heeftBtw ? BEBAT_BTW : 0;
   lijnen.forEach(l=>{
     const r=l.btw||0; // 0 als verlegd, 6 of 21 anders
     if(r>0){if(!gr[r])gr[r]=0;gr[r]+=l.prijs*l.aantal*(r/100);}
-    // BEBAT toeslag — altijd 21% BTW
+    // BEBAT toeslag — BTW volgt het regime (0% bij verlegd/medecontractant)
     if(l.bebatKg && l.bebatKg>0 && isBebatProduct(l.naam,l.cat||"")) {
       const bebatEx = l.bebatKg * l.aantal * bebatTarief;
-      if(!gr[BEBAT_BTW])gr[BEBAT_BTW]=0;
-      gr[BEBAT_BTW]+=bebatEx*(BEBAT_BTW/100);
+      if(bebatBtw>0){if(!gr[bebatBtw])gr[bebatBtw]=0;gr[bebatBtw]+=bebatEx*(bebatBtw/100);}
     }
   });
   const btw=Object.values(gr).reduce((s,v)=>s+v,0);
