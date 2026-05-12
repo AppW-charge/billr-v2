@@ -1281,18 +1281,19 @@ function OfferteDocument({doc, settings, ficheCache={}, producten=[]}) {
 
 
 function Bevestiging({offerteId, status, klantAkkoord, toonBevestigingslink}) {
+  // Alle hooks VOOR conditional returns (Rules of Hooks)
   const [fase, setFase] = useState("start");
   const [datum, setDatum] = useState("");
   const [notitie, setNotitie] = useState("");
   const [sending, setSending] = useState(false);
-  const [open, setOpen] = React.useState(false);
-
-  if(toonBevestigingslink===false) return null;
-  // Controleer ook localStorage zodat reactie persistent is na page refresh
+  const [open, setOpen] = useState(false);
   const lsKey = "offerte_reactie_" + offerteId;
-  const [gereageerd, setGereageerd] = React.useState(()=>{
+  const [gereageerd, setGereageerd] = useState(()=>{
     try { return localStorage.getItem(lsKey) || null; } catch(_){ return null; }
   });
+
+  // Nu pas conditional returns
+  if(toonBevestigingslink===false) return null;
   const isOK = status==="goedgekeurd" || klantAkkoord || gereageerd==="goedgekeurd";
   const isNOK = status==="afgewezen" || gereageerd==="afgewezen";
 
