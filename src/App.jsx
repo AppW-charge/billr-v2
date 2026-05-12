@@ -698,7 +698,7 @@ async function checkPeppolBillit(vatNumber, settings) {
 function billrToBillitOrder(factuur, settings) {
   const bed = settings?.bedrijf || {};
   const klant = factuur.klant || {};
-  const totals = calcTotals(factuur.lijnen || [], factuur.btwRegime);
+  const totals = calcTotals(factuur.lijnen || [], getBebatTarief(settings), factuur.btwRegime);
   
   // Splits adres: straatnaam + huisnummer
   const adresParts = (klant.adres || "").match(/^(.+?)\s+(\d+\S*)$/) || [null, klant.adres || "", ""];
@@ -3329,7 +3329,7 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
     window.emailjs.init(pubKey);
     
     const klantData = klanten.find(k => k.id === doc.klantId);
-    const totals = calcTotals(doc.lijnen || [], doc.btwRegime);
+    const totals = calcTotals(doc.lijnen || [], getBebatTarief(settings), doc.btwRegime);
     const bed = settings?.bedrijf || {};
     
     const templateParams = {
@@ -3430,7 +3430,7 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
     const klantData = klanten.find(k => k.id === offerte.klantId) || offerte.klant || {};
     const bed = settings?.bedrijf || {};
     const dc = settings?.sjabloon?.accentKleur || settings?.thema?.kleur || bed.kleur || "#1a2e4a";
-    const totals = calcTotals(offerte.lijnen || [], offerte.btwRegime);
+    const totals = calcTotals(offerte.lijnen || [], getBebatTarief(settings), offerte.btwRegime);
     const isVoorstel = emailType === "bevestiging";
 
     // Sla voorstel op in Supabase zodat klant via planning.html kan reageren
@@ -3568,7 +3568,7 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
     const klantData = klanten.find(k => k.id === offerte.klantId) || offerte.klant || {};
     const bed = settings?.bedrijf || {};
     const dc = settings?.sjabloon?.accentKleur || settings?.thema?.kleur || bed.kleur || "#1a2e4a";
-    const totals = calcTotals(offerte.lijnen || [], offerte.btwRegime);
+    const totals = calcTotals(offerte.lijnen || [], getBebatTarief(settings), offerte.btwRegime);
     const datumStr = planData.planDatum ? new Date(planData.planDatum+"T12:00:00").toLocaleDateString("nl-BE",{weekday:"long",day:"numeric",month:"long",year:"numeric"}) : "—";
 
     const html = `<div style="font-family:Inter,Arial,sans-serif;max-width:600px;margin:0 auto;background:#f8fafc">
@@ -3691,7 +3691,7 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
         const datumStr = new Date(offerte.planDatum + "T12:00:00").toLocaleDateString("nl-BE", {
           weekday:"long", day:"numeric", month:"long", year:"numeric"
         });
-        const totals = calcTotals(offerte.lijnen || [], offerte.btwRegime);
+        const totals = calcTotals(offerte.lijnen || [], getBebatTarief(settings), offerte.btwRegime);
 
         const html = `<div style="font-family:Inter,Arial,sans-serif;max-width:600px;margin:0 auto;background:#f8fafc">
 <div style="background:linear-gradient(135deg,${dc},${dc}cc);padding:28px 32px;text-align:center;border-radius:8px 8px 0 0">
@@ -4790,7 +4790,7 @@ function Dashboard({offertes, facturen, onGoto, onNew, onFactuur, settings, offe
 // ─── PLANNING MODAL ────────────────────────────────────────────────
 function PlanningModal({offerte, settings, klanten, planningProposals, onSave, onEmail, onConfirm, onPlanDelete, onClose}) {
   const klant = klanten?.find(k=>k.id===offerte.klantId) || offerte.klant || {};
-  const totals = calcTotals(offerte.lijnen || [], offerte.btwRegime);
+  const totals = calcTotals(offerte.lijnen || [], getBebatTarief(settings), offerte.btwRegime);
   const [planDatum, setPlanDatum] = useState(offerte.planDatum || "");
   const [planTijd, setPlanTijd] = useState(offerte.planTijd || "");
   const [planNotities, setPlanNotities] = useState(offerte.planNotities || "");
@@ -6257,7 +6257,7 @@ function FactuurWizard({klanten,producten,settings,editData,onSave,onClose,notif
   const klantList = klanten.filter(k=>!k._verwijderd&&(!klantQ||(k.naam||"").toLowerCase().includes(klantQ.toLowerCase())||(k.bedrijf||"").toLowerCase().includes(klantQ.toLowerCase()))).slice(0,20);
   const actProds = producten.filter(p=>p.actief);
   const cats = [...new Set(actProds.map(p=>p.cat))];
-  const tot = calcTotals(lijnen, getBebatTarief(settings));
+  const tot = calcTotals(lijnen, getBebatTarief(settings), btwRegime);
   const vervaldatum = addDays(datum, betalingstermijn);
 
   const btwPct = btwRegime==="verlegd"?0:btwRegime==="btw6"?6:21;
@@ -6580,7 +6580,7 @@ function OfferteWizard({klanten,producten,offertes,editData,settings,onSave,onCl
     setLijnen(p=>{const ex=p.find(l=>l.productId===prod.id);if(ex)return p.map(l=>l.productId===prod.id?{...l,aantal,groepId:gid||l.groepId}:l);return[...p,{id:uid(),productId:prod.id,naam:prod.naam,omschr:prod.omschr,prijs:prod.prijs,btw:finalBtw,aantal,eenheid:prod.eenheid||"stuk",groepId:gid,imageUrl:prod.imageUrl,specs:prod.specs,technischeFiches:prod.technischeFiches||[],technischeFiche:prod.technischeFiche||null,fichNaam:prod.fichNaam||"",bebatKg:prod.bebatKg||null,cat:prod.cat||""}];});
   };
 
-  const tot=calcTotals(lijnen, getBebatTarief(settings));
+  const tot=calcTotals(lijnen, getBebatTarief(settings), btwRegime);
   const klantList=[...klanten].filter(k=>!k._verwijderd).sort((a,b)=>new Date(b.aangemaakt)-new Date(a.aangemaakt)).filter(k=>!klantQ||(k.naam||"").toLowerCase().includes(klantQ.toLowerCase())||(k.bedrijf||"").toLowerCase().includes(klantQ.toLowerCase()));
   const stappen=[{n:1,l:"Klant"},{n:2,l:"Type"},{n:3,l:"Producten"},{n:4,l:"Details"},{n:5,l:"Voorbeeld"}];
 
@@ -7133,7 +7133,7 @@ function OfferteDocument({doc, settings, ficheCache={}, producten=[]}) {
   const klantVelden = lyt.klant?.velden || {};
   const metaBar = lyt.metaBar || {};
   const tabelOpts = lyt.tabel || {};
-  const tot = calcTotals(doc.lijnen||[], getBebatTarief(settings));
+  const tot = calcTotals(doc.lijnen||[], getBebatTarief(settings), doc.btwRegime);
   const kortingBedrag = doc.kortingType==="pct" ? tot.subtotaal*(doc.korting/100) : Number(doc.korting||0);
   const eindTot = doc.korting>0 ? tot.totaal - kortingBedrag*(1+0.21) : tot.totaal;
   const inst = INST_TYPES.find(t=>t.id===doc.installatieType);
@@ -7524,7 +7524,7 @@ function FactuurDocument({doc, settings}) {
   const sj = settings?.sjabloon || INIT_SETTINGS.sjabloon || {};
   const dc = sj.accentKleur || settings?.thema?.kleur || bed.kleur || "#1a2e4a";
   const ontwerp = sj.ontwerpFactuur || "classic";
-  const tot = calcTotals(doc.lijnen||[], getBebatTarief(settings));
+  const tot = calcTotals(doc.lijnen||[], getBebatTarief(settings), doc.btwRegime);
   const groepen = doc.groepen||[];
   const lijnenPerGroep = [...groepen.map(g=>({...g,items:(doc.lijnen||[]).filter(l=>l.groepId===g.id)})).filter(g=>g.items.length>0),{id:"rest",naam:"Producten",items:(doc.lijnen||[]).filter(l=>!groepen.find(g=>g.id===l.groepId))}].filter(g=>g.items.length>0);
   // Schat of inhoud past op 1 pagina (heuristiek: max ~22 productlijnen per pagina)
@@ -9911,7 +9911,7 @@ function CreditnotaModal({facturen,creditnota,settings,onSave,onClose}) {
   const [lijnen,setLijnen]=useState([]);
   const gelinkteFact=facturen.find(f=>f.id===factuurId);
   useEffect(()=>{if(gelinkteFact)setLijnen(gelinkteFact.lijnen?.map(l=>({...l,id:uid()}))|| []);}, [factuurId]);
-  const tot=calcTotals(lijnen, getBebatTarief(settings));
+  const tot=calcTotals(lijnen, getBebatTarief(settings), btwRegime);
   return(
     <div className="mo"><div className="mdl mlg">
       <div className="mh"><div className="mt-m">📑 Creditnota aanmaken</div><button className="xbtn" onClick={onClose}>×</button></div>
