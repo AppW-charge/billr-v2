@@ -1517,6 +1517,9 @@ function App() {
       }
       if(!d) { setError("Offerte '"+(ONR||OID)+"' niet gevonden."); return; }
       setData(d);
+      // Debug: check wat geladen is
+      console.log('🔍 Banner na load:', d._lyt?.voorbladAfbeelding ? `aanwezig (${Math.round((d._lyt.voorbladAfbeelding||'').length/1024)}KB)` : 'LEEG - geen banner in shareData');
+      console.log('🔍 toonBevestigingslink:', d._sj?.toonBevestigingslink);
       // Register view
       // View registreren met retry en logging
       (async()=>{
