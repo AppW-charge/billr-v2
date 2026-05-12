@@ -1355,25 +1355,27 @@ function Bevestiging({offerteId, status, klantAkkoord, toonBevestigingslink}) {
 
   return (
     <>
-      {/* Floating knop rechtsonder */}
-      <div style={{
-        position:"fixed", bottom:20, right:20, zIndex:9998,
-        display:"flex", flexDirection:"column", alignItems:"flex-end", gap:8
+      {/* Bevestigingskader — zichtbaar blok op pagina */}
+      {!open&&<div style={{
+        margin:"24px auto", maxWidth:820, padding:"0 8px"
       }}>
-        <button
-          onClick={()=>setOpen(true)}
-          style={{
-            background:"var(--dc,#1a2e4a)", color:"#fff",
-            border:"none", borderRadius:12,
-            padding:"14px 22px",
-            fontSize:15, fontWeight:800,
-            boxShadow:"0 4px 20px rgba(0,0,0,.3)",
-            cursor:"pointer", display:"flex", alignItems:"center", gap:10,
-            whiteSpace:"nowrap"
-          }}>
-          📋 Reageer op offerte
-        </button>
-      </div>
+        <div style={{
+          background:"#f0fdf4", border:"2px solid #10b981", borderRadius:14,
+          padding:"20px 28px", display:"flex", alignItems:"center", justifyContent:"space-between",
+          flexWrap:"wrap", gap:12
+        }}>
+          <div>
+            <div style={{fontWeight:800, fontSize:17, color:"#065f46", marginBottom:4}}>✅ Akkoord of vragen?</div>
+            <div style={{fontSize:13, color:"#047857"}}>Geef hier uw akkoord of stel een vraag over deze offerte.</div>
+          </div>
+          <button onClick={()=>setOpen(true)} style={{
+            background:"#10b981", color:"#fff", border:"none", borderRadius:10,
+            padding:"12px 28px", fontSize:15, fontWeight:800,
+            boxShadow:"0 2px 12px rgba(16,185,129,.35)",
+            cursor:"pointer", whiteSpace:"nowrap"
+          }}>📋 Reageer op offerte</button>
+        </div>
+      </div>}
 
       {/* Popup modal */}
       {open && (
