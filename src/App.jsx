@@ -3277,6 +3277,28 @@ Service: ${payload.new?.service||"?"}`, icon:"/logo.gif"}); } catch(_){}
         _voorschot: settings?.voorwaarden?.voorschot || "50%"
       };
 
+      // Comprimeer voorbladAfbeelding als ze te groot is (>200KB base64)
+      if(shareData._lyt?.voorbladAfbeelding && shareData._lyt.voorbladAfbeelding.length > 200000) {
+        try {
+          const compressed = await new Promise(resolve => {
+            const img = new Image();
+            img.onload = () => {
+              const canvas = document.createElement('canvas');
+              const maxW = 900;
+              const scale = Math.min(1, maxW / img.width);
+              canvas.width = img.width * scale;
+              canvas.height = img.height * scale;
+              canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+              resolve(canvas.toDataURL('image/jpeg', 0.82));
+            };
+            img.src = shareData._lyt.voorbladAfbeelding;
+          });
+          console.log(`🖼 Banner gecomprimeerd: ${Math.round(shareData._lyt.voorbladAfbeelding.length/1024)}KB → ${Math.round(compressed.length/1024)}KB`);
+          shareData._lyt.voorbladAfbeelding = compressed;
+        } catch(e) { console.warn('Banner compressie mislukt:', e.message); }
+      }
+      console.log('📤 ShareData _lyt.voorbladAfbeelding:', shareData._lyt?.voorbladAfbeelding ? `aanwezig (${Math.round(shareData._lyt.voorbladAfbeelding.length/1024)}KB)` : 'LEEG');
+      console.log('📤 _sj.toonBevestigingslink:', shareData._sj?.toonBevestigingslink);
       await sb.from('offerte_shares').upsert({ id: offerte.id, nummer: offerte.nummer, offerte_data: shareData });
       console.log("✅ Offerte gedeeld:", offerte.nummer);
       // offerte_fiches wordt NIET meer gevuld — fiches staan in product_fiches tabel
