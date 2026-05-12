@@ -251,9 +251,13 @@ const isBebatProduct = (naam="",cat="") => {
 function calcTotals(lijnen=[], bebatTarief=BEBAT_TARIEF, btwRegime=null) {
   const sub = lijnen.reduce((s,l)=>s+(l.prijs*l.aantal),0);
   const gr={};
-  // Als regime verlegd is → ALLE BTW is 0, ook BEBAT
-  const isVerlegd = btwRegime==="verlegd" || (!btwRegime && lijnen.length>0 && lijnen.every(l=>!l.btw||l.btw===0));
-  const bebatBtw = isVerlegd ? 0 : BEBAT_BTW;
+  // BEBAT BTW volgt het regime exact:
+  // verlegd → 0%, btw6 → 6%, btw21 → 21%, null → dominant tarief van lijnen
+  const isVerlegd = btwRegime==="verlegd";
+  const bebatBtw = isVerlegd ? 0
+    : btwRegime==="btw6" ? 6
+    : btwRegime==="btw21" ? 21
+    : lijnen.length>0 ? (lijnen.find(l=>l.btw>0)?.btw||0) : 0;
   lijnen.forEach(l=>{
     const r = isVerlegd ? 0 : (l.btw||0);
     if(r>0){if(!gr[r])gr[r]=0;gr[r]+=l.prijs*l.aantal*(r/100);}
